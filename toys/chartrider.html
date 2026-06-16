@@ -31,6 +31,10 @@ const hudEl=document.getElementById('hud'),spdEl=document.getElementById('spd'),
 function resize(){DPR=Math.min(2,devicePixelRatio||1);W=innerWidth;H=innerHeight;cv.width=W*DPR;cv.height=H*DPR;cv.style.width=W+'px';cv.style.height=H+'px';ctx.setTransform(DPR,0,0,DPR,0,0);}
 addEventListener('resize',resize);resize();
 function lerp(a,b,t){return a+(b-a)*t;} function clamp(v,a,b){return v<a?a:v>b?b:v;}
+// ===================== CORE TEST MODE =====================
+// true  → minimal ride-and-chase loop only (garage/upgrades/ranks/daily/missions/events/economy/popups OFF)
+// false → full game. Single switch. Systems are GATED, never deleted.
+const CORE_TEST_MODE = true;
 
 // ---------- procedural market terrain ----------
 // height map sampled every STEP px; generated forward as we ride. Market character:
@@ -64,7 +68,7 @@ function genSeg(){
   regimeLeft--;
   const dd=clamp((dist||0)/1800,0,1);
   // start a market-event block once we pass the scheduled distance (terrain is shaped + tagged here, ridden into later)
-  if(evGenLeft<=0 && genX>=nextEvGenX && terr.length>40){ evGenType=pickEvent(Math.floor((genX/10)/700)); evGenLeft=EVENTS[evGenType].nodes; }
+  if(!CORE_TEST_MODE && evGenLeft<=0 && genX>=nextEvGenX && terr.length>40){ evGenType=pickEvent(Math.floor((genX/10)/700)); evGenLeft=EVENTS[evGenType].nodes; }   // CORE TEST: no events
   const prevC=terr.length?terr[terr.length-1].close:baseY;
   let close, isEv=evGenLeft>0?evGenType:'';
   if(isEv){
@@ -134,7 +138,7 @@ let upg={}, career=0, buyFlash=0, buyRow=-1, rankMul=1, rankedUp=null;
 function rankIdx(c){ let i=0; for(let k=0;k<RANKS.length;k++)if(c>=RANKS[k].at)i=k; return i; }
 try{upg=JSON.parse(localStorage.getItem('cipher_upg')||'{}')||{};}catch(e){upg={};}
 try{career=+localStorage.getItem('cipher_career')||0;}catch(e){}
-function upgLvl(id){ return upg[id]||0; }
+function upgLvl(id){ return CORE_TEST_MODE ? 0 : (upg[id]||0); }   // CORE TEST: stock bike, upgrades disabled
 function rankFor(c){ let r=RANKS[0]; for(const x of RANKS)if(c>=x.at)r=x; return r; }
 function nextRank(c){ for(const x of RANKS)if(c<x.at)return x; return null; }
 function saveProg(){ try{localStorage.setItem('cipher_upg',JSON.stringify(upg));localStorage.setItem('cipher_career',career);}catch(e){} }
@@ -167,7 +171,7 @@ const MISSION_POOL=[
 ];
 let missions=[];
 function rollMissions(){ const pool=MISSION_POOL.slice(); missions=[]; for(let n=0;n<3&&pool.length;n++){ const m=pool.splice((Math.random()*pool.length)|0,1)[0]; const tgt=m.gen(); missions.push({id:m.id,target:tgt,txt:m.txt(tgt),val:m.val,rew:m.rew,done:false}); } }
-function checkMissions(){ const s={dist:dist,coins:coins,maxMult:maxMult,flips:flipsTotal,kmh:topKmh,pnl:pnl}; for(const m of missions){ if(!m.done && m.val(s)>=m.target){ m.done=true; coins+=m.rew; gflash=0.7; multPulse=1; popText('ЦЕЛЬ ✓  +◆'+m.rew); floatPop(bike.x,bike.y-34,'+◆'+m.rew,'#9ff0c8'); sfxLev(); } } }
+function checkMissions(){ if(CORE_TEST_MODE)return; const s={dist:dist,coins:coins,maxMult:maxMult,flips:flipsTotal,kmh:topKmh,pnl:pnl}; for(const m of missions){ if(!m.done && m.val(s)>=m.target){ m.done=true; coins+=m.rew; gflash=0.7; multPulse=1; popText('ЦЕЛЬ ✓  +◆'+m.rew); floatPop(bike.x,bike.y-34,'+◆'+m.rew,'#9ff0c8'); sfxLev(); } } }
 
 // ---------- sound (procedural WebAudio) ----------
 let actx,eng,engGain,master,engLP,engOscs;
@@ -235,7 +239,7 @@ function reset(){
   PHYS.POW=BASE_PHYS.POW*(1+0.08*upgLvl('eng'));         // ДВИЖОК → top speed/accel (+8%/lvl)
   PHYS.AIRTQ=BASE_PHYS.AIRTQ*(1+0.14*upgLvl('air'));     // ВОЗД.КОНТРОЛЬ → faster air rotation (+14%/lvl)
   PHYS.LOOP=BASE_PHYS.LOOP+0.06*upgLvl('grip');          // СЦЕПЛЕНИЕ → more loop/endo forgiveness
-  rankMul=1+0.07*rankIdx(career); rankedUp=null;          // higher trader rank → bigger profits (compounding)
+  rankMul=CORE_TEST_MODE?1:1+0.07*rankIdx(career); rankedUp=null;   // CORE TEST: no rank profit multiplier
   baseY=H*0.6; terr=[]; genX=0; walk=0; regimeLeft=0; lastHazIdx=-99;
   evGenType=''; evGenLeft=0; nextEvGenX=3000; curEvType=''; evBanner=''; evBannerT=0; evGlow=0; evBonus=0; lastWarnX=-1; evWarnType='';   // first event ~300m (onboarding breathing room)
   for(let i=0;i<Math.ceil(W/STEP)+8;i++)genSeg();
@@ -248,7 +252,7 @@ function reset(){
   stars=[]; for(let i=0;i<90;i++)stars.push({x:Math.random()*W,y:Math.random()*H*0.7,z:0.2+Math.random()*0.6,s:Math.random()*1.6+0.4});
   document.getElementById('hint').innerHTML=(TOUCH?'<b>ГАЗ</b> · <b>ТОРМОЗ</b> · <b>⤴ ПРЫЖОК</b> — кнопки внизу':'<b>ПРОБЕЛ/→ газ</b> · ↓/← тормоз · <b>↑ прыжок</b>')+' · в воздухе наклоняй и крути';
 }
-function toTitle(){ reset(); screen='title'; checkDaily(); }
+function toTitle(){ reset(); screen='title'; if(!CORE_TEST_MODE)checkDaily(); }
 const UI={}; // button rects in screen space, refreshed each draw for hit-testing
 function hit(p,r){ return r&&p.x>=r.x&&p.x<=r.x+r.w&&p.y>=r.y&&p.y<=r.y+r.h; }
 function toggleMute(){ muted=!muted; if(master)master.gain.value=muted?0:0.42; saveMeta(); }
@@ -375,7 +379,7 @@ function update(){
   while(genX < bike.x + W + 200) genSeg();
   dist=Math.max(dist,Math.floor(bike.x/10));
   // depth milestones: every 500m a gem reward (deeper = more) → going deeper directly funds upgrades
-  if(dist>=lastMile+500){ lastMile=Math.floor(dist/500)*500; const rew=20+Math.floor(lastMile/500)*10; coins+=rew; gflash=0.5; multPulse=1; popText('ГЛУБИНА '+lastMile+'м  +◆'+rew); floatPop(bike.x,bike.y-40,'+◆'+rew,'#9ff0c8'); sfxLev(); }
+  if(!CORE_TEST_MODE && dist>=lastMile+500){ lastMile=Math.floor(dist/500)*500; const rew=20+Math.floor(lastMile/500)*10; coins+=rew; gflash=0.5; multPulse=1; popText('ГЛУБИНА '+lastMile+'м  +◆'+rew); floatPop(bike.x,bike.y-40,'+◆'+rew,'#9ff0c8'); sfxLev(); }
   if(!newDepth && (best||0)>0 && dist>best){ newDepth=true; gflash=0.6; popText('★ НОВАЯ ГЛУБИНА!'); }
   // market-era biome by distance + entry banner
   const zi2=Math.floor((dist||0)/700);
@@ -423,14 +427,14 @@ function update(){
   if(bike.onG&&bike.vx>9) shake=Math.max(shake,Math.min(3.2,(bike.vx-9)*0.45));
 }
 let flipAcc=0, flipCount=0, popMsg='', popT=0;
-function popText(m){popMsg=m;popT=1;}
-function floatPop(x,y,txt,col){ if(!floats)floats=[]; floats.push({x:x,y:y,txt:txt,col:col,vy:-0.9,life:1}); }
+function popText(m){ if(CORE_TEST_MODE)return; popMsg=m;popT=1;}                                        // CORE TEST: no score popups
+function floatPop(x,y,txt,col){ if(CORE_TEST_MODE)return; if(!floats)floats=[]; floats.push({x:x,y:y,txt:txt,col:col,vy:-0.9,life:1}); }
 function activateBoost(){ if((boost||0)<1||boosting>0||screen!=='play')return; boost=0; boosting=Math.round(56*(1+0.22*upgLvl('pump'))); if(bike)bike.vx=Math.max(bike.vx,18); rush=1; shake=6; gflash=0.5; multPulse=1; popText('⚡ PUMP!'); sfxLev(); buzz(35); }
 function resolveEvent(type){ if(screen!=='play')return;          // payoff when the bike clears an event block
   if(type==='rally'){ const r=Math.round(evBonus); coins+=3; popText('ПАМП-РАЛЛИ  +$'+r.toLocaleString('en-US')); floatPop(bike.x,bike.y-34,'+◆3','#9ff0c8'); gflash=0.7; multPulse=1; sfxAir(); }
   else if(type==='whale'){ wave=Math.min(wave, bike.x-W*0.9); const r=Math.round(160*mult); pnl+=r; boost=Math.min(1,(boost||0)+0.25); popText('ОТОРВАЛСЯ ОТ КИТА  +$'+r.toLocaleString('en-US')); floatPop(bike.x,bike.y-34,'+$'+r,'#9ff0c8'); gflash=0.6; sfxLev(); }
   else if(type==='flash'){ wave=Math.min(wave, bike.x-W*0.95); const r=Math.round(280*mult); pnl+=r; coins+=2; popText('КУПИЛ ДНО  +$'+r.toLocaleString('en-US')); floatPop(bike.x,bike.y-34,'+$'+r,'#ffd678'); gflash=0.7; multPulse=1; sfxAir(); } }
-function wipeout(reason){ deathBy=reason||'crash'; screen='dead'; shake=20; flash=1; sfxCrash(); buzz((reason==='wave')?[70,40,110]:[50,30,70]); for(let i=0;i<28;i++)parts.push({x:bike.x,y:bike.y,vx:(Math.random()-0.5)*8,vy:-Math.random()*6,life:1,r:Math.random()*3+1}); if(dist>best){best=dist;try{localStorage.setItem('cipher_run_best',best);}catch(e){}} pnl=Math.floor(pnl); if(pnl>bestPnl){bestPnl=pnl;try{localStorage.setItem('cipher_best_pnl',bestPnl);}catch(e){}} bank+=coins; const oi=rankIdx(career); career+=pnl; const ni=rankIdx(career); if(ni>oi){ let bonus=0; for(let r=oi+1;r<=ni;r++)bonus+=RANKS[r].rew; bank+=bonus; rankedUp={rank:RANKS[ni],bonus:bonus}; sfxRankUp(); buzz([25,50,25,70]); } saveProg(); saveMeta(); }
+function wipeout(reason){ deathBy=reason||'crash'; screen='dead'; shake=20; flash=1; sfxCrash(); buzz((reason==='wave')?[70,40,110]:[50,30,70]); for(let i=0;i<28;i++)parts.push({x:bike.x,y:bike.y,vx:(Math.random()-0.5)*8,vy:-Math.random()*6,life:1,r:Math.random()*3+1}); if(dist>best){best=dist;try{localStorage.setItem('cipher_run_best',best);}catch(e){}} pnl=Math.floor(pnl); if(!CORE_TEST_MODE){ if(pnl>bestPnl){bestPnl=pnl;try{localStorage.setItem('cipher_best_pnl',bestPnl);}catch(e){}} bank+=coins; const oi=rankIdx(career); career+=pnl; const ni=rankIdx(career); if(ni>oi){ let bonus=0; for(let r=oi+1;r<=ni;r++)bonus+=RANKS[r].rew; bank+=bonus; rankedUp={rank:RANKS[ni],bonus:bonus}; sfxRankUp(); buzz([25,50,25,70]); } saveProg(); saveMeta(); } }   // CORE TEST: only the distance record is saved; economy frozen
 
 // ---------- render (Alto-style dusk, layered) ----------
 function skyGrad(){
@@ -618,7 +622,7 @@ function draw(){
     ctx.textAlign='left'; UI.boost={x:bx-12,y:by-24,w:bw+24,h:42}; }
   else UI.boost=null;
   // new-zone (biome) banner
-  if(biomeBannerT>0 && (screen==='play'||screen==='paused')){ const a=clamp(Math.min(biomeBannerT*3,(1-biomeBannerT)*5+0.3,1),0,1); ctx.globalAlpha=a; ctx.textAlign='center';
+  if(!CORE_TEST_MODE && biomeBannerT>0 && (screen==='play'||screen==='paused')){ const a=clamp(Math.min(biomeBannerT*3,(1-biomeBannerT)*5+0.3,1),0,1); ctx.globalAlpha=a; ctx.textAlign='center';
     ctx.fillStyle='#9fb0d0'; ctx.font='600 10px ui-monospace,monospace'; ctx.fillText('▲ НОВАЯ ЗОНА',W/2,H*0.25-20);
     ctx.fillStyle='#eafaff'; ctx.font='800 23px ui-monospace,monospace'; ctx.shadowColor='rgba(130,200,255,0.6)'; ctx.shadowBlur=12; ctx.fillText(biomeBanner,W/2,H*0.25+7); ctx.shadowBlur=0; ctx.globalAlpha=1; ctx.textAlign='left'; }
   // market-event screen tint (top+bottom bars in the event colour) + big telegraph banner
@@ -634,12 +638,12 @@ function draw(){
   ctx.textAlign='right'; ctx.font='10px ui-monospace,monospace';
   if(screen==='play'||screen==='paused'){ const lvl2=Math.floor(cam.y/70)*70; for(let gy=lvl2;gy<cam.y+H;gy+=70){ const sy=gy-cam.y; if(sy<70||sy>H-30)continue; const price=Math.round(42000+(baseY-gy)*6.2); ctx.fillStyle='rgba(150,180,220,0.28)'; ctx.fillText('$'+price.toLocaleString('en-US'),W-12,sy-3); } }
   // live price tag at the bike's level
-  const lp=Math.round(42000+(baseY-bike.y)*6.2); const tk=document.getElementById('ticker'); tk.textContent='BTC  $'+lp.toLocaleString('en-US');
+  const lp=Math.round(42000+(baseY-bike.y)*6.2); const tk=document.getElementById('ticker'); tk.textContent=CORE_TEST_MODE?'CORE TEST':('BTC  $'+lp.toLocaleString('en-US'));
   ctx.textAlign='left';
   // pop text
   if(popT>0.01){popT-=0.02;ctx.globalAlpha=Math.min(1,popT*2);ctx.fillStyle='#ffd678';ctx.font='600 20px ui-monospace,monospace';ctx.textAlign='center';ctx.fillText(popMsg,W/2,H*0.34);ctx.globalAlpha=1;}
   // LEVERAGE badge — pulses & shifts cyan→green as it grows
-  if(mult>1.05 && screen!=='dead'){ const g3=clamp((mult-1)/7,0,1), col=mix([90,225,255],[120,255,170],clamp(g3*1.4,0,1));
+  if(!CORE_TEST_MODE && mult>1.05 && screen!=='dead'){ const g3=clamp((mult-1)/7,0,1), col=mix([90,225,255],[120,255,170],clamp(g3*1.4,0,1));
     ctx.save(); ctx.textAlign='center'; ctx.translate(W/2,116); const sc=1+(multPulse||0)*0.55; ctx.scale(sc,sc);
     ctx.font='800 26px ui-monospace,monospace'; ctx.shadowColor=col; ctx.shadowBlur=12+(multPulse||0)*18; ctx.fillStyle=col; ctx.fillText('×'+mult.toFixed(1),0,0); ctx.shadowBlur=0;
     ctx.font='600 9px ui-monospace,monospace'; ctx.fillStyle='rgba(200,220,240,0.72)'; ctx.fillText('LEVERAGE',0,12); ctx.restore(); ctx.textAlign='left'; }
@@ -647,12 +651,17 @@ function draw(){
   if(screen==='dead'){ ctx.fillStyle='rgba(8,6,18,0.66)';ctx.fillRect(0,0,W,H); ctx.textAlign='center';
     if(rankedUp){ ctx.fillStyle='rgba(255,214,120,'+(0.72+0.28*Math.sin(t*0.2))+')'; ctx.font='800 21px ui-monospace,monospace'; ctx.shadowColor='#ffd678'; ctx.shadowBlur=16; ctx.fillText(rankedUp.rank.e+'  НОВЫЙ РАНГ: '+rankedUp.rank.n+'!',W/2,H*0.205); ctx.shadowBlur=0; ctx.fillStyle='#9ff0c8'; ctx.font='800 15px ui-monospace,monospace'; ctx.fillText('+◆'+rankedUp.bonus+'   ·   +'+Math.round((rankIdx(career))*7)+'% к профиту',W/2,H*0.205+25); }
     ctx.fillStyle='#ff7a8a';ctx.font='700 30px ui-monospace,monospace';ctx.fillText(deathBy==='wave'?'ПОЙМАН ДАМПОМ':deathBy==='loop'?'ОПРОКИНУЛСЯ':deathBy==='endo'?'ЧЕРЕЗ РУЛЬ':'LIQUIDATED',W/2,H*0.34);
+    if(CORE_TEST_MODE){
+      const nb=dist>=(best||0);
+      ctx.fillStyle=nb?'#ffd678':'#9ff0c8';ctx.font='800 46px ui-monospace,monospace';ctx.fillText(dist+' m',W/2,H*0.34+58);
+      ctx.fillStyle=nb?'#ffd678':'#7a8bb0';ctx.font='700 14px ui-monospace,monospace';ctx.fillText(nb?'★ НОВЫЙ РЕКОРД':'рекорд  '+(best||0)+' m',W/2,H*0.34+90);
+    } else {
     const isBest=pnl>=bestPnl&&pnl>0;
     ctx.fillStyle=isBest?'#ffd678':'#9ff0c8';ctx.font='800 42px ui-monospace,monospace';ctx.fillText('$'+Math.floor(pnl).toLocaleString('en-US'),W/2,H*0.34+54);
     ctx.fillStyle=newDepth?'#9ff0c8':'#cdbef0';ctx.font=(newDepth?'800 ':'')+'13px ui-monospace,monospace';ctx.fillText(dist+'м'+(newDepth?'  ★ НОВАЯ ГЛУБИНА':'   ·   ⛏ рекорд '+(best||0)+'м')+'    ◆'+coins+'   ×'+maxMult.toFixed(1),W/2,H*0.34+84);
     ctx.fillStyle=isBest?'#ffd678':'#7a6f9a';ctx.fillText((isBest?'★ NEW BEST   $':'BEST   $')+bestPnl.toLocaleString('en-US'),W/2,H*0.34+108);
     ctx.fillStyle='#9ff0c8';ctx.font='700 12px ui-monospace,monospace';ctx.fillText('◆ +'+coins+'  в банк  (◆ '+bank+')',W/2,H*0.34+130);
-    { const tip=deathBy==='wave'?'🛡 качай ЩИТ ОТ ВОЛНЫ — оторвёшься от дампа':(deathBy==='loop'||deathBy==='endo')?'◎ качай СЦЕПЛЕНИЕ — прощает кувырки':deathBy==='crash'?'◎ качай СЦЕПЛЕНИЕ — мягче посадки':'⚙ качай ДВИЖОК — быстрее уедешь'; ctx.fillStyle='#9fd0ea';ctx.font='11px ui-monospace,monospace';ctx.fillText(tip,W/2,H*0.34+150); }
+    { const tip=deathBy==='wave'?'🛡 качай ЩИТ ОТ ВОЛНЫ — оторвёшься от дампа':(deathBy==='loop'||deathBy==='endo')?'◎ качай СЦЕПЛЕНИЕ — прощает кувырки':deathBy==='crash'?'◎ качай СЦЕПЛЕНИЕ — мягче посадки':'⚙ качай ДВИЖОК — быстрее уедешь'; ctx.fillStyle='#9fd0ea';ctx.font='11px ui-monospace,monospace';ctx.fillText(tip,W/2,H*0.34+150); } }
     ctx.fillStyle='#6effc0';ctx.font='13px ui-monospace,monospace';ctx.fillText('коснись — снова',W/2,H*0.34+172); }
   // crash-readability: landing-angle gauge above the bike (telegraphs the failure)
   if(screen==='play' && !bike.onG){ const grd=terrainAt(bike.x), gap=(grd.y-40)-bike.y;
@@ -693,9 +702,9 @@ function draw(){
   // hud DOM
   const playing=(screen==='play'||screen==='paused');
   hudEl.style.opacity=playing?'1':'0'; spdEl.style.opacity=playing?'1':'0'; hintEl.style.opacity=(screen==='play'&&!TOUCH)?'1':'0';   // on touch the visible buttons replace the text hint
-  document.getElementById('pnl').textContent='$'+Math.floor(pnl).toLocaleString('en-US');
+  document.getElementById('pnl').textContent=CORE_TEST_MODE?(dist+' m'):('$'+Math.floor(pnl).toLocaleString('en-US'));   // CORE TEST: distance is the score
   document.getElementById('dist').textContent=dist;
-  document.getElementById('coins').textContent='◆ '+coins;
+  document.getElementById('coins').textContent=CORE_TEST_MODE?('★ рекорд '+(best||0)+'m'):('◆ '+coins);
   document.getElementById('kmh').textContent=Math.round(bike.vx*12);
   const m=document.getElementById('mood'); const slope=terrainAt(bike.x+40).y-terrainAt(bike.x).y;
   m.textContent=slope<-6?'▲ bull run':slope>6?'▼ crash':'— sideways —'; m.style.color=slope<-6?'#6effc0':slope>6?'#ff7a8a':'#cdbef0';
@@ -708,16 +717,17 @@ function drawMenus(){
     const og=ctx.createLinearGradient(0,0,0,H); og.addColorStop(0,'rgba(6,5,16,0.62)'); og.addColorStop(0.38,'rgba(6,5,16,0.04)'); og.addColorStop(0.72,'rgba(6,5,16,0.12)'); og.addColorStop(1,'rgba(6,5,16,0.9)'); ctx.fillStyle=og; ctx.fillRect(0,0,W,H);
     ctx.fillStyle='#eafaff'; ctx.font='800 33px ui-monospace,monospace'; ctx.shadowColor='rgba(80,220,255,0.55)'; ctx.shadowBlur=16; ctx.fillText('CHART RUNNER',W/2,H*0.155); ctx.shadowBlur=0;
     ctx.fillStyle='#9fb0d0'; ctx.font='11px ui-monospace,monospace'; ctx.fillText('оседлай график · набери ПЛЕЧО · не словив ликвидацию',W/2,H*0.155+22);
-    ctx.fillStyle='#ffd678'; ctx.font='700 15px ui-monospace,monospace'; ctx.fillText('BEST  $'+bestPnl.toLocaleString('en-US')+'   ·   ⛏ '+(best||0)+'м',W/2,H*0.155+50);
-    ctx.fillStyle='#9ff0c8'; ctx.font='13px ui-monospace,monospace'; ctx.fillText('банк  ◆ '+bank,W/2,H*0.155+70);
-    { const ri=rankIdx(career), rk=RANKS[ri], nr=RANKS[ri+1], yy=H*0.155+90;
+    ctx.fillStyle='#ffd678'; ctx.font='700 15px ui-monospace,monospace'; ctx.fillText(CORE_TEST_MODE?('⛏ РЕКОРД  '+(best||0)+' m'):('BEST  $'+bestPnl.toLocaleString('en-US')+'   ·   ⛏ '+(best||0)+'м'),W/2,H*0.155+50);
+    if(!CORE_TEST_MODE) ctx.fillStyle='#9ff0c8'; if(!CORE_TEST_MODE) ctx.font='13px ui-monospace,monospace'; if(!CORE_TEST_MODE) ctx.fillText('банк  ◆ '+bank,W/2,H*0.155+70);
+    if(!CORE_TEST_MODE){ const ri=rankIdx(career), rk=RANKS[ri], nr=RANKS[ri+1], yy=H*0.155+90;
       ctx.fillStyle='#bfe0ff'; ctx.font='700 13px ui-monospace,monospace'; ctx.fillText(rk.e+'  '+rk.n,W/2,yy);
       if(nr){ const prog=clamp((career-rk.at)/(nr.at-rk.at),0,1), bw=214, bx=W/2-bw/2, by=yy+11;
         ctx.fillStyle='rgba(30,40,62,0.75)'; if(ctx.roundRect){ctx.beginPath();ctx.roundRect(bx,by,bw,7,3.5);ctx.fill();}else ctx.fillRect(bx,by,bw,7);
         ctx.fillStyle='rgba(120,220,255,0.92)'; if(ctx.roundRect){ctx.beginPath();ctx.roundRect(bx,by,Math.max(3,bw*prog),7,3.5);ctx.fill();}else ctx.fillRect(bx,by,bw*prog,7);
         ctx.fillStyle='rgba(180,200,230,0.72)'; ctx.font='10px ui-monospace,monospace'; ctx.fillText('до '+nr.e+' '+nr.n+': $'+Math.max(0,nr.at-career).toLocaleString('en-US')+'  ▸ +◆'+nr.rew,W/2,by+20); } }
-    UI.garage={x:W-112,y:18,w:94,h:38}; ctx.fillStyle='rgba(34,54,46,0.72)'; if(ctx.roundRect){ctx.beginPath();ctx.roundRect(UI.garage.x,UI.garage.y,94,38,10);ctx.fill();ctx.strokeStyle='rgba(120,255,180,0.65)';ctx.lineWidth=1.5;ctx.stroke();}else ctx.fillRect(UI.garage.x,UI.garage.y,94,38);
-    ctx.fillStyle='#9ff0c8'; ctx.font='800 13px ui-monospace,monospace'; ctx.fillText('🔧 ГАРАЖ',UI.garage.x+47,UI.garage.y+24);
+    if(CORE_TEST_MODE){ UI.garage=null; }
+    else { UI.garage={x:W-112,y:18,w:94,h:38}; ctx.fillStyle='rgba(34,54,46,0.72)'; if(ctx.roundRect){ctx.beginPath();ctx.roundRect(UI.garage.x,UI.garage.y,94,38,10);ctx.fill();ctx.strokeStyle='rgba(120,255,180,0.65)';ctx.lineWidth=1.5;ctx.stroke();}else ctx.fillRect(UI.garage.x,UI.garage.y,94,38);
+      ctx.fillStyle='#9ff0c8'; ctx.font='800 13px ui-monospace,monospace'; ctx.fillText('🔧 ГАРАЖ',UI.garage.x+47,UI.garage.y+24); }
     const b=BIKES[selBike], own=owned.indexOf(selBike)>=0, ay=H*0.45;
     UI.left={x:W/2-148,y:ay-26,w:46,h:52}; UI.right={x:W/2+102,y:ay-26,w:46,h:52};
     ctx.fillStyle='rgba(190,215,245,0.85)'; ctx.font='800 30px ui-monospace,monospace'; ctx.fillText('‹',UI.left.x+23,ay+10); ctx.fillText('›',UI.right.x+23,ay+10);
@@ -731,9 +741,11 @@ function drawMenus(){
     panel(UI.action.x,UI.action.y,210,48, own?'rgba(120,255,180,0.85)':(bank>=b.cost?'rgba(255,214,120,0.85)':'rgba(150,150,170,0.45)'), own?'rgba(36,120,84,0.3)':(bank>=b.cost?'rgba(150,110,30,0.28)':'rgba(80,80,96,0.22)'));
     ctx.fillStyle=own?'#9ff0c8':(bank>=b.cost?'#ffd678':'#9092a6'); ctx.font='700 16px ui-monospace,monospace';
     ctx.fillText(own?'▶  ПОЕХАЛИ':('РАЗБЛОКИРОВАТЬ  ◆'+b.cost),W/2,UI.action.y+30);
+    if(CORE_TEST_MODE){ ctx.fillStyle='#7a8bb0'; ctx.font='600 10px ui-monospace,monospace'; ctx.fillText('— CORE TEST · только езда и погоня —',W/2,UI.action.y+84); }
+    else {
     ctx.fillStyle='#7a8bb0'; ctx.font='600 10px ui-monospace,monospace'; ctx.fillText('— ЦЕЛИ ЗАБЕГА —',W/2,UI.action.y+78);
     ctx.fillStyle='#c6d4ee'; ctx.font='12px ui-monospace,monospace';
-    for(let i=0;i<missions.length;i++) ctx.fillText('◆'+missions[i].rew+'   '+missions[i].txt,W/2,UI.action.y+98+i*19);
+    for(let i=0;i<missions.length;i++) ctx.fillText('◆'+missions[i].rew+'   '+missions[i].txt,W/2,UI.action.y+98+i*19); }
     if(dailyBonusT>0){ dailyBonusT-=0.006; const a=clamp(Math.min(dailyBonusT*4,1),0,1); ctx.globalAlpha=a; ctx.fillStyle='#ffd678'; ctx.font='800 16px ui-monospace,monospace'; ctx.shadowColor='#ffd678'; ctx.shadowBlur=14; ctx.fillText('🎁 ЕЖЕДНЕВНЫЙ БОНУС  +◆'+dailyBonus,W/2,H*0.36); ctx.shadowBlur=0; ctx.globalAlpha=1; }
     UI.mute=null; UI.pause=null;
   } else if(screen==='paused'){
@@ -743,8 +755,10 @@ function drawMenus(){
     UI.mute={x:W/2-105,y:H*0.40+58,w:210,h:40}; panel(UI.mute.x,UI.mute.y,210,40,'rgba(150,170,210,0.45)'); ctx.fillStyle='#bcd0ee'; ctx.font='13px ui-monospace,monospace'; ctx.fillText(muted?'ЗВУК:  ВЫКЛ':'ЗВУК:  ВКЛ',W/2,UI.mute.y+25);
     UI.quit={x:W/2-105,y:H*0.40+110,w:210,h:40}; panel(UI.quit.x,UI.quit.y,210,40,'rgba(255,120,140,0.55)'); ctx.fillStyle='#ff9fb0'; ctx.font='700 14px ui-monospace,monospace'; ctx.fillText('✕  В МЕНЮ',W/2,UI.quit.y+25);
   } else if(screen==='dead'){
+    if(CORE_TEST_MODE){ UI.dgarage=null; UI.menu={x:W/2-90,y:H*0.34+198,w:180,h:44}; panel(UI.menu.x,UI.menu.y,180,44,'rgba(150,170,210,0.5)'); ctx.fillStyle='#bcd0ee'; ctx.font='13px ui-monospace,monospace'; ctx.fillText('≡  МЕНЮ',W/2,UI.menu.y+27); }
+    else {
     UI.menu={x:W/2-150,y:H*0.34+198,w:140,h:44}; panel(UI.menu.x,UI.menu.y,140,44,'rgba(150,170,210,0.5)'); ctx.fillStyle='#bcd0ee'; ctx.font='13px ui-monospace,monospace'; ctx.fillText('≡  МЕНЮ',UI.menu.x+70,UI.menu.y+27);
-    UI.dgarage={x:W/2+10,y:H*0.34+198,w:140,h:44}; panel(UI.dgarage.x,UI.dgarage.y,140,44,'rgba(120,255,180,0.7)','rgba(34,54,46,0.5)'); ctx.fillStyle='#9ff0c8'; ctx.font='800 13px ui-monospace,monospace'; ctx.fillText('🔧 ГАРАЖ',UI.dgarage.x+70,UI.dgarage.y+27);
+    UI.dgarage={x:W/2+10,y:H*0.34+198,w:140,h:44}; panel(UI.dgarage.x,UI.dgarage.y,140,44,'rgba(120,255,180,0.7)','rgba(34,54,46,0.5)'); ctx.fillStyle='#9ff0c8'; ctx.font='800 13px ui-monospace,monospace'; ctx.fillText('🔧 ГАРАЖ',UI.dgarage.x+70,UI.dgarage.y+27); }
   } else if(screen==='garage'){
     ctx.fillStyle='rgba(6,5,16,0.94)'; ctx.fillRect(0,0,W,H);
     ctx.fillStyle='#eafaff'; ctx.font='800 24px ui-monospace,monospace'; ctx.fillText('🔧 ГАРАЖ',W/2,46);
