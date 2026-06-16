@@ -1,0 +1,223 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>TOY — Signal v3 (hunters)</title>
+<style>
+  html,body{margin:0;height:100%;background:#05070b;overflow:hidden;
+    font-family:ui-monospace,SFMono-Regular,Menlo,monospace;cursor:crosshair;}
+  canvas{display:block;}
+  #hud{position:fixed;top:14px;left:16px;color:#5f7488;font-size:12px;
+    letter-spacing:.12em;line-height:1.7;pointer-events:none;user-select:none;}
+  #hud b{color:#9fe9ff;font-weight:600;}
+  #hud .big{color:#e8f6ff;font-size:13px;letter-spacing:.18em;}
+  .bar{position:fixed;right:16px;width:150px;height:8px;border:1px solid #1d2a38;border-radius:4px;overflow:hidden;}
+  .bar > i{display:block;height:100%;width:0%;}
+  #visbar{top:18px;} #visbar > i{background:#3fb0ff;}
+  .lbl{position:fixed;right:174px;font-size:10px;letter-spacing:.18em;color:#3c4c5e;text-align:right;white-space:nowrap;}
+  #visl{top:16px;}
+  #decoy{position:fixed;top:40px;right:16px;font-size:11px;letter-spacing:.14em;color:#7dffb0;user-select:none;}
+  #decoy.cd{color:#3c4c5e;}
+  #hint{position:fixed;bottom:16px;left:0;width:100%;text-align:center;
+    color:#3c4c5e;font-size:11px;letter-spacing:.16em;pointer-events:none;user-select:none;}
+  #hint b{color:#7fd6ff;} #hint .d{color:#ff7d94;} #hint .g{color:#7dffb0;}
+  #big{position:fixed;top:40%;left:0;width:100%;text-align:center;color:#e8f6ff;
+    font-size:22px;letter-spacing:.3em;opacity:0;pointer-events:none;}
+</style>
+</head>
+<body>
+<canvas id="c"></canvas>
+<div id="hud">
+  <div class="big">SIGNAL</div>
+  <div>extractions <b id="runs">0</b></div>
+  <div>hunters <b id="hcount">2</b></div>
+  <div>shards <b id="shards">0/3</b></div>
+  <div id="state">— hidden</div>
+</div>
+<div class="lbl" id="visl">VISIBILITY</div>
+<div class="bar" id="visbar"><i></i></div>
+<div id="decoy">◇ DECOY [SPACE]</div>
+<div id="big"></div>
+<div id="hint"><b>HOLD</b> move &amp; glow &nbsp;·&nbsp; <b>RELEASE</b> go dark &nbsp;·&nbsp; <span class="g">[SPACE]</span> throw a decoy &nbsp;·&nbsp; grab 3 shards, reach the gate &nbsp;·&nbsp; <span class="d">they chase your signal</span></div>
+<script>
+const cv=document.getElementById('c'), ctx=cv.getContext('2d');
+let W,H,DPR;
+function resize(){ DPR=Math.min(2,window.devicePixelRatio||1); W=innerWidth;H=innerHeight;
+  cv.width=W*DPR;cv.height=H*DPR;cv.style.width=W+'px';cv.style.height=H+'px'; ctx.setTransform(DPR,0,0,DPR,0,0); }
+addEventListener('resize',resize); resize();
+
+// ---- tuning ----
+const VIS_THRESH=0.32, SPEED_VIS=6;
+const SENSE_R=210;          // how close a hunter must be to hear your glow
+const CAP_R=22;             // physical capture radius (contact = caught, even in the dark)
+const PATROL=1.15, SEARCH=2.0, HUNT=2.55;
+const DECOY_LIFE=120, DECOY_CD=170, DECOY_SENSE=290, DECOY_STR=1.0;
+
+// ---- state ----
+let player, hunters, decoy=null, decoyCd=0, shards, gate, runs=0;
+let rings=[], flash=0, shake=0, big={t:0,txt:'',c:'#7dffb0'};
+let mouse={x:0,y:0,inside:false}, hold=false;
+
+addEventListener('mousemove',e=>{mouse.x=e.clientX;mouse.y=e.clientY;mouse.inside=true;});
+addEventListener('mouseleave',()=>{mouse.inside=false;hold=false;});
+addEventListener('mousedown',e=>{if(e.button===0){hold=true;resumeAudio();}});
+addEventListener('mouseup',e=>{if(e.button===0)hold=false;});
+addEventListener('contextmenu',e=>e.preventDefault());
+addEventListener('keydown',e=>{ if(e.code==='Space'){e.preventDefault();throwDecoy();} if(e.key==='r'||e.key==='R')init(); });
+addEventListener('touchstart',e=>{hold=true;const t=e.touches[0];mouse.x=t.clientX;mouse.y=t.clientY;mouse.inside=true;resumeAudio();e.preventDefault();},{passive:false});
+addEventListener('touchmove',e=>{const t=e.touches[0];mouse.x=t.clientX;mouse.y=t.clientY;e.preventDefault();},{passive:false});
+addEventListener('touchend',()=>hold=false);
+
+function rnd(a,b){return a+Math.random()*(b-a);}
+function dist(a,b){return Math.hypot(a.x-b.x,a.y-b.y);}
+
+function init(){ runs=0; player={x:W*0.5,y:H*0.9,vx:0,vy:0,vis:0}; hunters=[]; decoy=null; decoyCd=0;
+  for(let i=0;i<2;i++) addHunter(); spawnRound(); }
+function addHunter(){ hunters.push({x:rnd(W*0.2,W*0.8),y:rnd(H*0.3,H*0.6),vx:0,vy:0,mode:'patrol',
+  wander:{x:rnd(W*0.15,W*0.85),y:rnd(H*0.2,H*0.65)}, lastSeen:null, alert:0, lost:0}); }
+function spawnRound(){
+  shards=[]; for(let i=0;i<3;i++) shards.push({x:rnd(W*0.12,W*0.88),y:rnd(H*0.22,H*0.62),got:false,pulse:Math.random()*6});
+  gate={x:W*0.5,y:H*0.1,r:46};
+  player.x=W*0.5; player.y=H*0.9; player.vx=player.vy=0; player.vis=0;
+}
+function shardsGot(){ return shards.filter(s=>s.got).length; }
+function gateOpen(){ return shardsGot()>=3; }
+
+// ---- audio ----
+let actx;
+function resumeAudio(){ try{actx=actx||new(window.AudioContext||window.webkitAudioContext)(); if(actx.state==='suspended')actx.resume();}catch(e){} }
+function beep(f,dur,vol,type){ try{ actx=actx||new(window.AudioContext||window.webkitAudioContext)();
+  const o=actx.createOscillator(),g=actx.createGain(); o.frequency.value=f;o.type=type||'sine';
+  g.gain.setValueAtTime(0.0001,actx.currentTime); g.gain.exponentialRampToValueAtTime(vol,actx.currentTime+0.01);
+  g.gain.exponentialRampToValueAtTime(0.0001,actx.currentTime+dur);
+  o.connect(g).connect(actx.destination);o.start();o.stop(actx.currentTime+dur+0.02);}catch(e){} }
+
+function throwDecoy(){ if(decoyCd>0||!mouse.inside) return; decoy={x:mouse.x,y:mouse.y,life:DECOY_LIFE}; decoyCd=DECOY_CD;
+  beep(660,0.12,0.08,'triangle'); for(let i=0;i<10;i++){const a=Math.random()*6.28;rings.push({x:decoy.x,y:decoy.y,r:6,life:0.8,c:'125,255,176'});} }
+
+function showBig(t,c){ big.t=45; big.txt=t; big.c=c||'#7dffb0'; }
+
+function update(){
+  // ---- player ----
+  if(hold && mouse.inside){ const dx=mouse.x-player.x,dy=mouse.y-player.y; player.vx+=dx*0.010;player.vy+=dy*0.010; player.vx*=0.88;player.vy*=0.88; }
+  else { player.vx*=0.74; player.vy*=0.74; }
+  player.x+=player.vx; player.y+=player.vy;
+  player.x=Math.max(12,Math.min(W-12,player.x)); player.y=Math.max(12,Math.min(H-12,player.y));
+  const speed=Math.hypot(player.vx,player.vy);
+  const target=Math.min(1,speed/SPEED_VIS);
+  player.vis += (target>player.vis?(target-player.vis)*0.4:(target-player.vis)*0.085);
+  player.vis=Math.max(0,Math.min(1,player.vis));
+  const lit=player.vis>VIS_THRESH;
+  if(lit && speed>0.5 && Math.random()<player.vis*0.5) rings.push({x:player.x,y:player.y,r:6,life:1,c:'150,220,255'});
+
+  // ---- decoy ----
+  if(decoy){ decoy.life--; if(decoy.life<=0) decoy=null; }
+  if(decoyCd>0) decoyCd--;
+
+  // ---- hunters: react to signal ----
+  for(const h of hunters){
+    const dP=dist(h,player), dD=decoy?dist(h,decoy):1e9;
+    let tgt,mode;
+    if(decoy && dD<DECOY_SENSE){ tgt={x:decoy.x,y:decoy.y}; mode='decoy'; h.lastSeen={x:decoy.x,y:decoy.y}; }
+    else if(lit && dP<SENSE_R){ tgt={x:player.x,y:player.y}; mode='hunt'; h.lastSeen={x:player.x,y:player.y};
+      if(h.mode!=='hunt'){ h.alert=1; beep(940,0.06,0.05,'square'); } }
+    else if((h.mode==='hunt'||h.mode==='decoy'||h.mode==='search') && h.lastSeen){ mode='search'; tgt=h.lastSeen;
+      if(dist(h,h.lastSeen)<26){ mode='patrol'; h.wander={x:rnd(W*0.12,W*0.88),y:rnd(H*0.18,H*0.66)}; h.lastSeen=null; } }
+    else { mode='patrol'; if(!h.wander||dist(h,h.wander)<30) h.wander={x:rnd(W*0.12,W*0.88),y:rnd(H*0.18,H*0.66)}; tgt=h.wander; }
+    h.mode=mode;
+    const spd = mode==='patrol'?PATROL : mode==='search'?SEARCH : HUNT;
+    const a=Math.atan2(tgt.y-h.y,tgt.x-h.x);
+    h.vx+=Math.cos(a)*spd*0.16; h.vy+=Math.sin(a)*spd*0.16;
+    // mild separation so they fan out
+    for(const o of hunters){ if(o===h)continue; const d=dist(h,o); if(d<46&&d>0){ h.vx+=(h.x-o.x)/d*0.25; h.vy+=(h.y-o.y)/d*0.25; } }
+    const sp=Math.hypot(h.vx,h.vy); if(sp>spd){ h.vx=h.vx/sp*spd; h.vy=h.vy/sp*spd; }
+    h.x+=h.vx; h.y+=h.vy;
+    if(h.x<14||h.x>W-14){h.vx*=-1;h.x=Math.max(14,Math.min(W-14,h.x));}
+    if(h.y<14||h.y>H-14){h.vy*=-1;h.y=Math.max(14,Math.min(H-14,h.y));}
+    h.alert*=0.94;
+    if(dP<CAP_R){ caught(); }
+  }
+
+  // ---- shards & gate ----
+  for(const s of shards){ s.pulse+=0.05; if(!s.got && dist(player,s)<20){ s.got=true; beep(1046,0.1,0.08); showBig(shardsGot()+'/3',(shardsGot()>=3?'#7dffb0':'#ffe18c'));
+    for(let i=0;i<12;i++){const a=Math.random()*6.28,sp=1+Math.random()*3;rings.push({x:s.x,y:s.y,r:4,life:0.7,c:'255,225,140'});} } }
+  if(gateOpen() && dist(player,gate)<gate.r){ runs++; beep(1320,0.14,0.1);beep(1760,0.16,0.06); showBig('EXTRACTED','#7dffb0');
+    if(hunters.length<6) addHunter(); spawnRound(); }
+
+  for(const r of rings){ r.r+=2.4; r.life-=0.03; } rings=rings.filter(r=>r.life>0);
+  flash*=0.88; shake*=0.85; if(big.t>0)big.t--;
+}
+
+function caught(){ flash=1; shake=18; beep(120,0.25,0.12,'square');beep(90,0.3,0.1,'square'); showBig('CAUGHT','#ff6d84');
+  player.x=W*0.5;player.y=H*0.9;player.vx=player.vy=0;player.vis=0; decoy=null;
+  for(const h of hunters){ h.mode='patrol'; h.lastSeen=null; h.wander={x:rnd(W*0.12,W*0.88),y:rnd(H*0.18,H*0.66)}; } }
+
+function draw(){
+  ctx.setTransform(DPR,0,0,DPR,0,0); ctx.fillStyle='#05070b'; ctx.fillRect(0,0,W,H);
+  ctx.translate((Math.random()-0.5)*shake,(Math.random()-0.5)*shake);
+  ctx.globalCompositeOperation='lighter';
+
+  // gate
+  const og=gateOpen();
+  ctx.strokeStyle=og?'rgba(125,255,176,0.85)':'rgba(90,120,140,0.35)'; ctx.lineWidth=2;
+  ctx.beginPath(); ctx.arc(gate.x,gate.y,gate.r,0,7); ctx.stroke();
+  ctx.fillStyle=og?'rgba(125,255,176,0.10)':'rgba(90,120,140,0.04)'; ctx.beginPath(); ctx.arc(gate.x,gate.y,gate.r,0,7); ctx.fill();
+  ctx.fillStyle=og?'rgba(125,255,176,0.7)':'rgba(120,150,170,0.5)'; ctx.font='10px monospace'; ctx.textAlign='center';
+  ctx.fillText(og?'▲ GATE':'LOCKED',gate.x,gate.y+3);
+
+  // shards
+  for(const s of shards){ if(s.got)continue; const pr=8+Math.sin(s.pulse)*2;
+    ctx.fillStyle='rgba(255,220,120,0.16)'; ctx.beginPath();ctx.arc(s.x,s.y,pr+7,0,7);ctx.fill();
+    ctx.fillStyle='rgba(255,225,140,0.95)'; ctx.beginPath();ctx.arc(s.x,s.y,pr*0.5,0,7);ctx.fill();
+    ctx.strokeStyle='rgba(255,225,140,0.7)';ctx.lineWidth=1.4;ctx.beginPath();ctx.arc(s.x,s.y,pr,0,7);ctx.stroke(); }
+
+  // rings (signal + decoy + pickup)
+  for(const r of rings){ ctx.strokeStyle=`rgba(${r.c},${r.life*0.5})`;ctx.lineWidth=1.5;ctx.beginPath();ctx.arc(r.x,r.y,r.r,0,7);ctx.stroke(); }
+
+  // decoy beacon
+  if(decoy){ const a=decoy.life/DECOY_LIFE;
+    ctx.fillStyle=`rgba(125,255,176,${0.18*a})`; ctx.beginPath();ctx.arc(decoy.x,decoy.y,20+ (1-a)*10,0,7);ctx.fill();
+    ctx.fillStyle=`rgba(160,255,200,${0.9*a})`; ctx.beginPath();ctx.arc(decoy.x,decoy.y,5,0,7);ctx.fill(); }
+
+  // hunters
+  for(const h of hunters){
+    const col = h.mode==='hunt'?'255,70,90' : h.mode==='decoy'?'255,180,80' : h.mode==='search'?'255,140,60' : '90,200,210';
+    // sense ring (awareness radius) — fainter when calm
+    const senseA = (h.mode==='patrol')?0.05:0.12;
+    ctx.strokeStyle=`rgba(${col},${senseA})`; ctx.lineWidth=1; ctx.beginPath();ctx.arc(h.x,h.y,SENSE_R,0,7);ctx.stroke();
+    // search line to last seen
+    if(h.mode==='search'&&h.lastSeen){ ctx.strokeStyle=`rgba(${col},0.3)`;ctx.setLineDash([4,5]);ctx.beginPath();ctx.moveTo(h.x,h.y);ctx.lineTo(h.lastSeen.x,h.lastSeen.y);ctx.stroke();ctx.setLineDash([]); }
+    // body
+    ctx.fillStyle=`rgba(${col},0.18)`; ctx.beginPath();ctx.arc(h.x,h.y,16,0,7);ctx.fill();
+    ctx.fillStyle=`rgba(${col},0.95)`; ctx.beginPath();ctx.arc(h.x,h.y,6,0,7);ctx.fill();
+    // status glyph
+    ctx.fillStyle=`rgba(${col},0.95)`; ctx.font='bold 13px monospace';
+    if(h.mode==='hunt'||h.alert>0.3) ctx.fillText('!',h.x,h.y-14);
+    else if(h.mode==='search') ctx.fillText('?',h.x,h.y-14);
+  }
+
+  // player
+  const v=player.vis, hue=200-v*200;
+  ctx.fillStyle=`hsla(${hue},100%,${30+v*45}%,${0.10+v*0.35})`; ctx.beginPath();ctx.arc(player.x,player.y,10+v*26,0,7);ctx.fill();
+  ctx.fillStyle=`hsla(${hue},100%,${60+v*30}%,${0.55+v*0.45})`; ctx.beginPath();ctx.arc(player.x,player.y,5+v*3,0,7);ctx.fill();
+
+  ctx.globalCompositeOperation='source-over';
+  if(flash>0.01){ ctx.fillStyle=`rgba(255,40,70,${flash*0.4})`; ctx.fillRect(-60,-60,W+120,H+120); }
+
+  // hud
+  document.querySelector('#visbar > i').style.width=(v*100)+'%';
+  document.querySelector('#visbar > i').style.background=v>VIS_THRESH?'#ff9a3d':'#3fb0ff';
+  document.getElementById('runs').textContent=runs;
+  document.getElementById('hcount').textContent=hunters.length;
+  document.getElementById('shards').textContent=shardsGot()+'/3';
+  document.getElementById('state').innerHTML=v>VIS_THRESH?'<b style="color:#ff9a3d">◉ exposed</b>':'<b style="color:#3fb0ff">— hidden</b>';
+  const de=document.getElementById('decoy'); if(decoyCd>0){de.classList.add('cd');de.textContent='◇ DECOY '+Math.ceil(decoyCd/60)+'s';}else{de.classList.remove('cd');de.textContent='◇ DECOY [SPACE]';}
+  const be=document.getElementById('big'); be.textContent=big.txt; be.style.opacity=big.t>0?Math.min(1,big.t/20):0; be.style.color=big.c;
+}
+
+function loop(){ update(); draw(); requestAnimationFrame(loop); }
+init(); requestAnimationFrame(loop);
+</script>
+</body>
+</html>

@@ -1,0 +1,152 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 1080 1920" role="img" aria-label="CryptoBill mobile game concept">
+  <defs>
+    <pattern id="grid" width="42" height="42" patternUnits="userSpaceOnUse">
+      <path d="M42 0H0V42" fill="none" stroke="#deddd5" stroke-width="2"/>
+    </pattern>
+    <linearGradient id="profit" x1="0" x2="1" y1="0" y2="0">
+      <stop offset="0" stop-color="#0b7f58"/>
+      <stop offset="1" stop-color="#22b673"/>
+    </linearGradient>
+    <linearGradient id="loss" x1="0" x2="1" y1="0" y2="0">
+      <stop offset="0" stop-color="#d14a36"/>
+      <stop offset="1" stop-color="#f08a5b"/>
+    </linearGradient>
+    <filter id="softShadow" x="-20%" y="-20%" width="140%" height="140%">
+      <feDropShadow dx="0" dy="18" stdDeviation="18" flood-color="#171716" flood-opacity=".16"/>
+    </filter>
+    <style>
+      .bg { fill: #f7f7f3; }
+      .ink { fill: #171716; }
+      .muted { fill: #68665f; }
+      .panel { fill: #ffffff; stroke: #d7d6ce; stroke-width: 3; }
+      .paper { fill: #fbfbf8; stroke: #d7d6ce; stroke-width: 3; }
+      .tiny { font: 700 24px Inter, Arial, sans-serif; letter-spacing: 0; }
+      .label { font: 800 29px Inter, Arial, sans-serif; letter-spacing: 0; }
+      .body { font: 600 31px Inter, Arial, sans-serif; letter-spacing: 0; }
+      .h1 { font: 900 58px Inter, Arial, sans-serif; letter-spacing: 0; }
+      .h2 { font: 900 42px Inter, Arial, sans-serif; letter-spacing: 0; }
+      .num { font: 900 52px Inter, Arial, sans-serif; letter-spacing: 0; }
+      .mono { font: 800 26px ui-monospace, SFMono-Regular, Menlo, monospace; letter-spacing: 0; }
+      .green { fill: #17875a; }
+      .red { fill: #c94231; }
+      .amber { fill: #bd7b16; }
+      .cyan { fill: #087e8b; }
+      .violet { fill: #6556c7; }
+      .line { fill: none; stroke-linecap: round; stroke-linejoin: round; }
+    </style>
+  </defs>
+
+  <rect width="1080" height="1920" class="bg"/>
+  <rect width="1080" height="1920" fill="url(#grid)" opacity=".82"/>
+  <rect x="44" y="38" width="992" height="1844" rx="58" fill="#1f1f1d" filter="url(#softShadow)"/>
+  <rect x="64" y="58" width="952" height="1804" rx="44" fill="#f7f7f3"/>
+
+  <rect x="92" y="96" width="896" height="154" rx="22" class="panel"/>
+  <rect x="122" y="126" width="94" height="94" rx="18" fill="#232321"/>
+  <rect x="138" y="144" width="62" height="42" rx="7" fill="#f7f7f3"/>
+  <path d="M147 174l12-13 11 8 18-21" class="line" stroke="#087e8b" stroke-width="7"/>
+  <rect x="138" y="194" width="62" height="9" rx="4" fill="#c78116"/>
+  <text x="244" y="151" class="tiny muted">CRYPTO CAREER TYCOON</text>
+  <text x="244" y="209" class="h1 ink">CryptoBill</text>
+  <rect x="756" y="119" width="93" height="96" rx="16" class="paper"/>
+  <text x="779" y="151" class="tiny muted">WEEK</text>
+  <text x="782" y="197" class="h2 ink">7</text>
+  <rect x="864" y="119" width="94" height="96" rx="16" class="paper"/>
+  <path d="M898 170a24 24 0 1 0 8-18" class="line" stroke="#171716" stroke-width="8"/>
+  <path d="M894 148h28" class="line" stroke="#171716" stroke-width="8"/>
+
+  <rect x="92" y="278" width="896" height="178" rx="22" class="panel"/>
+  <line x1="316" y1="278" x2="316" y2="456" stroke="#d7d6ce" stroke-width="3"/>
+  <line x1="540" y1="278" x2="540" y2="456" stroke="#d7d6ce" stroke-width="3"/>
+  <line x1="764" y1="278" x2="764" y2="456" stroke="#d7d6ce" stroke-width="3"/>
+  <text x="122" y="330" class="tiny muted">BTC</text>
+  <text x="122" y="381" class="h2 ink">$72K</text>
+  <text x="122" y="424" class="mono green">+4.8%</text>
+  <text x="346" y="330" class="tiny muted">SOL</text>
+  <text x="346" y="381" class="h2 ink">$181</text>
+  <text x="346" y="424" class="mono green">+9.3%</text>
+  <text x="570" y="330" class="tiny muted">MEME</text>
+  <text x="570" y="381" class="h2 ink">$0.008</text>
+  <text x="570" y="424" class="mono red">-18%</text>
+  <text x="794" y="330" class="tiny muted">LP APY</text>
+  <text x="794" y="381" class="h2 ink">64%</text>
+  <text x="794" y="424" class="mono amber">RISK 61</text>
+
+  <rect x="92" y="488" width="896" height="486" rx="24" class="panel"/>
+  <text x="124" y="548" class="tiny muted">PORTFOLIO</text>
+  <text x="124" y="612" class="num ink">$42,780</text>
+  <rect x="760" y="522" width="168" height="82" rx="16" fill="#e5f6ed" stroke="#b7dec8" stroke-width="3"/>
+  <text x="787" y="556" class="tiny green">NET WORTH</text>
+  <text x="786" y="591" class="label green">+312%</text>
+
+  <rect x="124" y="648" width="804" height="246" rx="20" fill="#fbfbf8" stroke="#d7d6ce" stroke-width="3"/>
+  <path d="M154 832H898M154 774H898M154 716H898" stroke="#e5e3db" stroke-width="3"/>
+  <path d="M154 816C214 806 232 772 290 782C352 793 373 735 431 746C498 759 509 690 576 704C648 719 661 634 731 657C792 677 831 616 898 587" class="line" stroke="url(#profit)" stroke-width="12"/>
+  <circle cx="898" cy="587" r="15" fill="#171716"/>
+  <rect x="124" y="914" width="246" height="38" rx="12" fill="#e5f6ed"/>
+  <rect x="390" y="914" width="224" height="38" rx="12" fill="#ffe5df"/>
+  <rect x="634" y="914" width="294" height="38" rx="12" fill="#fff1cf"/>
+  <text x="144" y="940" class="tiny green">SPOT $18.2K</text>
+  <text x="410" y="940" class="tiny red">MEMES $6.4K</text>
+  <text x="654" y="940" class="tiny amber">DEFI VAULTS $18.1K</text>
+
+  <rect x="92" y="1008" width="422" height="338" rx="24" class="panel"/>
+  <text x="124" y="1068" class="tiny muted">MARKET FEED</text>
+  <rect x="124" y="1104" width="358" height="84" rx="14" fill="#d9f3f5"/>
+  <rect x="124" y="1104" width="9" height="84" rx="4" fill="#087e8b"/>
+  <text x="151" y="1139" class="label ink">ETF bid returns</text>
+  <text x="151" y="1175" class="body muted">Majors catch a steady bid.</text>
+  <rect x="124" y="1210" width="358" height="84" rx="14" fill="#fff1cf"/>
+  <rect x="124" y="1210" width="9" height="84" rx="4" fill="#c78116"/>
+  <text x="151" y="1245" class="label ink">Memes rotate</text>
+  <text x="151" y="1281" class="body muted">High upside, ugly rugs.</text>
+
+  <rect x="546" y="1008" width="442" height="338" rx="24" class="panel"/>
+  <text x="578" y="1068" class="tiny muted">OPERATOR</text>
+  <text x="578" y="1123" class="h2 ink">Alpha Operator</text>
+  <text x="578" y="1176" class="tiny muted">SKILL</text>
+  <rect x="700" y="1155" width="238" height="18" rx="9" fill="#ecebe5"/>
+  <rect x="700" y="1155" width="166" height="18" rx="9" fill="#188958"/>
+  <text x="578" y="1232" class="tiny muted">SECURITY</text>
+  <rect x="700" y="1211" width="238" height="18" rx="9" fill="#ecebe5"/>
+  <rect x="700" y="1211" width="118" height="18" rx="9" fill="#087e8b"/>
+  <text x="578" y="1288" class="tiny muted">STRESS</text>
+  <rect x="700" y="1267" width="238" height="18" rx="9" fill="#ecebe5"/>
+  <rect x="700" y="1267" width="188" height="18" rx="9" fill="#c78116"/>
+
+  <rect x="92" y="1378" width="896" height="318" rx="24" class="panel"/>
+  <text x="124" y="1437" class="tiny muted">ACTIONS</text>
+  <g>
+    <rect x="124" y="1470" width="190" height="174" rx="18" fill="#f8fffb" stroke="#cde7d8" stroke-width="3"/>
+    <text x="150" y="1524" class="tiny green">SPOT</text>
+    <text x="150" y="1577" class="h2 ink">Buy</text>
+    <text x="150" y="1620" class="body muted">majors</text>
+  </g>
+  <g>
+    <rect x="336" y="1470" width="190" height="174" rx="18" fill="#fff8f6" stroke="#f3c9bf" stroke-width="3"/>
+    <text x="362" y="1524" class="tiny red">MEMES</text>
+    <text x="362" y="1577" class="h2 ink">Ape</text>
+    <text x="362" y="1620" class="body muted">small cap</text>
+  </g>
+  <g>
+    <rect x="548" y="1470" width="190" height="174" rx="18" fill="#fffdf5" stroke="#ead7a4" stroke-width="3"/>
+    <text x="574" y="1524" class="tiny amber">DEFI</text>
+    <text x="574" y="1577" class="h2 ink">Farm</text>
+    <text x="574" y="1620" class="body muted">yield</text>
+  </g>
+  <g>
+    <rect x="760" y="1470" width="190" height="174" rx="18" fill="#f5fbff" stroke="#b9dee4" stroke-width="3"/>
+    <text x="786" y="1524" class="tiny cyan">SECURITY</text>
+    <text x="786" y="1577" class="h2 ink">Shield</text>
+    <text x="786" y="1620" class="body muted">wallet</text>
+  </g>
+
+  <rect x="92" y="1728" width="600" height="92" rx="22" class="paper"/>
+  <text x="124" y="1783" class="label muted">Energy</text>
+  <circle cx="248" cy="1774" r="17" fill="#188958"/>
+  <circle cx="296" cy="1774" r="17" fill="#188958"/>
+  <circle cx="344" cy="1774" r="17" fill="#ecebe5" stroke="#d7d6ce" stroke-width="3"/>
+  <text x="418" y="1783" class="label amber">Risk is rising</text>
+  <rect x="720" y="1728" width="268" height="92" rx="22" fill="#232321"/>
+  <text x="785" y="1787" class="h2" fill="#ffffff">Next week</text>
+</svg>

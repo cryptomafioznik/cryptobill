@@ -1,0 +1,348 @@
+<!doctype html>
+<html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+    <title>CIPHER — The Floor Is Other People</title>
+    <style>
+      :root {
+        --bg0: #06080f; --bg1: #0d1322; --panel: rgba(20,28,46,0.72); --line: rgba(255,255,255,0.08);
+        --ink: #eef3ff; --muted: #8090b3; --em: #2fe6a8; --red: #ff5d73; --gold: #ffd35e; --blue: #5b8cff; --violet: #a78bfa;
+        font-family: "Inter", ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
+      }
+      * { box-sizing: border-box; margin: 0; padding: 0; -webkit-tap-highlight-color: transparent; }
+      html, body { height: 100%; overflow: hidden; }
+      body { display: grid; place-items: center; background: #04060c; color: var(--ink); user-select: none; touch-action: manipulation; }
+      .stage {
+        position: relative; width: min(460px, 100vw); height: min(960px, 100vh); overflow: hidden;
+        background: radial-gradient(120% 70% at 50% -10%, rgba(91,140,255,0.16), transparent 60%), linear-gradient(180deg, var(--bg1), var(--bg0));
+        display: flex; flex-direction: column;
+      }
+      .stage.flash { animation: redflash 0.5s ease; }
+      @keyframes redflash { 0% { box-shadow: inset 0 0 0 2000px rgba(255,93,115,0.32); } 100% { box-shadow: inset 0 0 0 2000px transparent; } }
+      .stage.shake { animation: shk 0.5s cubic-bezier(.36,.07,.19,.97); }
+      @keyframes shk { 10%,90%{transform:translateX(-1px)} 20%,80%{transform:translateX(2px)} 30%,50%,70%{transform:translateX(-5px)} 40%,60%{transform:translateX(5px)} }
+
+      /* top bar */
+      .top { padding: 14px 16px 8px; display: flex; flex-direction: column; gap: 8px; z-index: 4; }
+      .coinrow { display: flex; align-items: center; justify-content: space-between; }
+      .coin { display: flex; align-items: center; gap: 9px; }
+      .coin .badge { width: 34px; height: 34px; border-radius: 50%; display: grid; place-items: center; font-size: 1.1rem; background: linear-gradient(160deg, var(--gold), #e0992a); box-shadow: 0 0 18px rgba(255,211,94,0.4); }
+      .coin .nm { font-weight: 900; font-size: 1.05rem; letter-spacing: -0.01em; }
+      .coin .sub { font-size: 0.64rem; color: var(--muted); font-weight: 700; letter-spacing: 0.04em; }
+      .timer { font-weight: 800; font-size: 0.82rem; color: var(--muted); font-variant-numeric: tabular-nums; }
+      .greedwrap { display: flex; align-items: center; gap: 8px; }
+      .greedwrap span { font-size: 0.6rem; font-weight: 800; letter-spacing: 0.1em; text-transform: uppercase; color: var(--muted); }
+      .greed { flex: 1; height: 6px; border-radius: 999px; background: rgba(255,255,255,0.07); overflow: hidden; }
+      .greed > i { display: block; height: 100%; width: 0; border-radius: 999px; background: var(--blue); transition: width .25s, background .4s; }
+
+      /* chart */
+      .chartwrap { position: relative; flex: 1.1; margin: 0 12px; min-height: 0; }
+      #chart { position: absolute; inset: 0; width: 100%; height: 100%; }
+      .pricetag { position: absolute; right: 10px; top: 8px; text-align: right; z-index: 3; }
+      .pricetag .p { font-size: 1.9rem; font-weight: 900; letter-spacing: -0.02em; text-shadow: 0 0 24px rgba(47,230,168,0.5); }
+      .pricetag .chg { font-size: 0.85rem; font-weight: 800; }
+
+      /* crowd feed */
+      .crowd { margin: 8px 12px 0; z-index: 4; }
+      .avatars { display: flex; gap: 6px; margin-bottom: 7px; flex-wrap: wrap; }
+      .av { position: relative; width: 30px; height: 30px; border-radius: 9px; display: grid; place-items: center; font-size: 0.95rem; background: rgba(255,255,255,0.05); border: 1.5px solid transparent; transition: border-color .3s, opacity .3s, filter .3s; }
+      .av.in { border-color: var(--em); box-shadow: 0 0 10px rgba(47,230,168,0.4); }
+      .av.out { opacity: 0.4; filter: grayscale(0.7); }
+      .av.rug { border-color: var(--red); box-shadow: 0 0 12px rgba(255,93,115,0.6); }
+      .feed { height: 92px; overflow: hidden; display: flex; flex-direction: column-reverse; gap: 4px; font-size: 0.78rem; line-height: 1.25; mask-image: linear-gradient(180deg, transparent, #000 22%); }
+      .feed .ln { color: #c3ccdf; }
+      .feed .ln b { color: var(--ink); }
+      .feed .ln.green b { color: var(--em); }
+      .feed .ln.red b { color: var(--red); }
+      .feed .ln.warn { color: var(--gold); font-weight: 800; }
+      .feed .ln.rug { color: var(--red); font-weight: 900; }
+
+      /* your panel */
+      .you { margin: 8px 12px 14px; padding: 12px; border-radius: 16px; background: var(--panel); border: 1px solid var(--line); backdrop-filter: blur(8px); z-index: 4; }
+      .bagrow { display: flex; align-items: flex-end; justify-content: space-between; margin-bottom: 10px; }
+      .bag .lbl { font-size: 0.6rem; font-weight: 800; letter-spacing: 0.14em; text-transform: uppercase; color: var(--muted); }
+      .bag .val { font-size: 1.7rem; font-weight: 900; letter-spacing: -0.02em; }
+      .bag .pl { font-size: 0.82rem; font-weight: 800; }
+      .cash { text-align: right; }
+      .cash .lbl { font-size: 0.6rem; font-weight: 800; letter-spacing: 0.1em; text-transform: uppercase; color: var(--muted); }
+      .cash .val { font-size: 0.98rem; font-weight: 800; }
+      .btns { display: grid; grid-template-columns: 1fr 1fr; gap: 10px; }
+      .btn { padding: 16px; border: 0; border-radius: 13px; font-weight: 900; font-size: 1.05rem; cursor: pointer; transition: transform .12s, opacity .2s; }
+      .btn:active { transform: scale(0.96); }
+      .btn:disabled { opacity: 0.35; cursor: not-allowed; }
+      .buy { color: #042417; background: linear-gradient(180deg, #4dffc0, var(--em)); box-shadow: 0 10px 28px rgba(47,230,168,0.35); }
+      .sell { color: #2a0710; background: linear-gradient(180deg, #ff8093, var(--red)); box-shadow: 0 10px 28px rgba(255,93,115,0.32); }
+
+      .float { position: absolute; left: 50%; top: 40%; transform: translateX(-50%); z-index: 8; font-size: 1.8rem; font-weight: 900; opacity: 0; pointer-events: none; }
+      .float.go { animation: fl 1.1s ease forwards; }
+      @keyframes fl { 0%{opacity:0;transform:translate(-50%,8px) scale(.8)} 15%{opacity:1} 100%{opacity:0;transform:translate(-50%,-70px) scale(1.1)} }
+
+      /* overlays */
+      .ov { position: absolute; inset: 0; z-index: 10; display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 14px; padding: 26px; text-align: center; background: radial-gradient(120% 90% at 50% 40%, rgba(6,8,15,0.4), rgba(6,8,15,0.88)); backdrop-filter: blur(3px); }
+      .ov.hidden { display: none; }
+      .ov h1 { font-size: 2.1rem; font-weight: 900; line-height: 1.04; letter-spacing: -0.02em; }
+      .ov .tag { color: var(--muted); font-size: 0.95rem; max-width: 300px; line-height: 1.45; }
+      .ov .big { font-size: 3.4rem; font-weight: 900; }
+      .cta { margin-top: 6px; padding: 15px 30px; border: 0; border-radius: 999px; font-weight: 900; font-size: 1.05rem; color: #042417; background: linear-gradient(180deg,#4dffc0,var(--em)); box-shadow: 0 12px 34px rgba(47,230,168,.4); cursor: pointer; animation: bob 1.6s ease-in-out infinite; }
+      @keyframes bob { 0%,100%{transform:translateY(0)} 50%{transform:translateY(-5px)} }
+      .board { width: 100%; max-width: 320px; display: flex; flex-direction: column; gap: 5px; margin-top: 4px; }
+      .brow { display: flex; align-items: center; gap: 9px; padding: 8px 11px; border-radius: 10px; background: rgba(255,255,255,0.04); font-size: 0.86rem; font-weight: 700; }
+      .brow.me { background: rgba(91,140,255,0.16); border: 1px solid rgba(91,140,255,0.4); }
+      .brow .rk { width: 18px; color: var(--muted); font-weight: 900; }
+      .brow .who { flex: 1; text-align: left; display: flex; align-items: center; gap: 7px; }
+      .brow .res { font-weight: 900; }
+      .ideo { color: var(--violet); font-size: 0.82rem; font-weight: 700; max-width: 300px; line-height: 1.4; }
+    </style>
+  </head>
+  <body>
+    <div class="stage" id="stage">
+      <div class="top">
+        <div class="coinrow">
+          <div class="coin"><div class="badge">🐸</div><div><div class="nm">$WAGMI</div><div class="sub">memecoin carnival · live round</div></div></div>
+          <div class="timer" id="timer">0:00</div>
+        </div>
+        <div class="greedwrap"><span>greed</span><div class="greed"><i id="greed"></i></div></div>
+      </div>
+
+      <div class="chartwrap">
+        <canvas id="chart"></canvas>
+        <div class="pricetag"><div class="p" id="price">$0.00</div><div class="chg" id="chg"></div></div>
+      </div>
+
+      <div class="crowd">
+        <div class="avatars" id="avatars"></div>
+        <div class="feed" id="feed"></div>
+      </div>
+
+      <div class="you">
+        <div class="bagrow">
+          <div class="bag"><div class="lbl">Your bag</div><div class="val" id="bag">$0</div><div class="pl" id="pl"></div></div>
+          <div class="cash"><div class="lbl">Cash</div><div class="val" id="cash">$1,000</div></div>
+        </div>
+        <div class="btns">
+          <button class="btn buy" id="buyBtn">APE IN</button>
+          <button class="btn sell" id="sellBtn" disabled>DUMP</button>
+        </div>
+      </div>
+
+      <div class="float" id="float"></div>
+
+      <div class="ov" id="ready">
+        <h1>The floor is<br />other people.</h1>
+        <p class="tag">A memecoin just launched. The crowd is piling in. Ride the pump — but one of them is the <b style="color:var(--red)">Dev</b>, and he <i>will</i> rug. <b style="color:var(--em)">Dump before he does.</b></p>
+        <button class="cta" id="startBtn">Enter the round</button>
+      </div>
+
+      <div class="ov hidden" id="result">
+        <div class="lbl" style="font-size:.62rem;letter-spacing:.16em;text-transform:uppercase;color:var(--muted)">You walked away with</div>
+        <div class="big" id="finalCash">$0</div>
+        <h1 id="verdict" style="font-size:1.5rem"></h1>
+        <div class="board" id="board"></div>
+        <div class="ideo" id="ideo"></div>
+        <button class="cta" id="againBtn">Run it back</button>
+      </div>
+    </div>
+
+    <script>
+      // ---------- sound ----------
+      let A;
+      function blip(f, d, type = "sine", g = 0.05, when = 0, to = null) {
+        try { if (!A) A = new (window.AudioContext || window.webkitAudioContext)(); if (A.state === "suspended") A.resume();
+          const o = A.createOscillator(), v = A.createGain(); o.type = type; o.connect(v); v.connect(A.destination);
+          const t = A.currentTime + when; o.frequency.setValueAtTime(f, t); if (to) o.frequency.exponentialRampToValueAtTime(to, t + d);
+          v.gain.setValueAtTime(0, t); v.gain.linearRampToValueAtTime(g, t + 0.01); v.gain.exponentialRampToValueAtTime(0.0001, t + d); o.start(t); o.stop(t + d + 0.02);
+        } catch (e) {}
+      }
+      const S = {
+        buy() { blip(420, 0.08, "triangle", 0.05); blip(560, 0.09, "triangle", 0.04, 0.05); },
+        sell() { blip(720, 0.1, "sine", 0.06); blip(1040, 0.13, "sine", 0.05, 0.06); blip(1320, 0.16, "sine", 0.04, 0.13); },
+        rug() { blip(220, 0.5, "sawtooth", 0.07, 0, 60); blip(140, 0.6, "square", 0.05, 0.06, 50); },
+        tick() { blip(900, 0.03, "sine", 0.015); },
+      };
+
+      // ---------- chart ----------
+      const cv = document.getElementById("chart"), cx = cv.getContext("2d");
+      let CW, CH, DPR;
+      function fit() { const r = cv.getBoundingClientRect(); DPR = Math.min(2, devicePixelRatio || 1); cv.width = r.width * DPR; cv.height = r.height * DPR; cx.setTransform(DPR, 0, 0, DPR, 0, 0); CW = r.width; CH = r.height; }
+
+      // ---------- round data ----------
+      const DURATION = 56; // seconds
+      // price multiplier keyframes (starts at 1x = $0.0010)
+      const KF = [[0,1],[6,1.5],[12,2.8],[18,4.6],[24,7],[30,10.6],[36,13.6],[40,15.2],[43,16],[46,14.6],[50,13.9],[52.5,13.6],[53.4,13.2],[54,6],[55,2.4],[56,1.9]];
+      const RUG_T = 53.5;
+      const BASE = 0.0010;
+      function mult(t) { t = Math.max(0, Math.min(DURATION, t)); for (let i = 0; i < KF.length - 1; i++) { const [t0,m0]=KF[i],[t1,m1]=KF[i+1]; if (t <= t1) { const k=(t-t0)/(t1-t0||1); return m0+(m1-m0)*k; } } return KF[KF.length-1][1]; }
+      function priceAt(t) { return BASE * mult(t); }
+
+      const BOTS = [
+        { name: "whale.alice", av: "🐳", inT: 4, outT: 41, amt: 5000 },
+        { name: "degen.jeff", av: "🦍", inT: 2, outT: 99, amt: 1200 },     // bag holder (never exits → rugged)
+        { name: "ser.rug", av: "😈", inT: 0, outT: RUG_T, amt: 8000, dev: true },
+        { name: "paperhands", av: "🧻", inT: 10, outT: 20, amt: 900 },
+        { name: "ape.anon", av: "🐒", inT: 16, outT: 44, amt: 1500 },
+        { name: "fomo.kid", av: "😅", inT: 38, outT: 99, amt: 1100 },      // late FOMO → rugged
+      ];
+      const SCRIPT = [
+        { t: 2, c: "🦍 <b>degen.jeff</b> aped in — “so early ser”", k: "green", who: "degen.jeff", st: "in" },
+        { t: 4, c: "🐳 <b>whale.alice</b> bought BIG", k: "green", who: "whale.alice", st: "in" },
+        { t: 8, c: "chat: WAGMI 🚀🚀", k: "" },
+        { t: 10, c: "🧻 <b>paperhands</b> bought", k: "green", who: "paperhands", st: "in" },
+        { t: 16, c: "🐒 <b>ape.anon</b> aped", k: "green", who: "ape.anon", st: "in" },
+        { t: 20, c: "🧻 <b>paperhands</b> sold — “taking profit”", k: "red", who: "paperhands", st: "out" },
+        { t: 24, c: "chat: WE’RE NOT SELLING 💎🙌", k: "" },
+        { t: 30, c: "chat: 100X INCOMING 🤑", k: "" },
+        { t: 36, c: "chat: this is the one ser 🔥", k: "" },
+        { t: 38, c: "😅 <b>fomo.kid</b> FOMO’d in near the top", k: "green", who: "fomo.kid", st: "in" },
+        { t: 41, c: "🐳 <b>whale.alice</b> SOLD — “thanks for the exit liq”", k: "red", who: "whale.alice", st: "out" },
+        { t: 44, c: "🐒 <b>ape.anon</b> took profit (clean exit)", k: "red", who: "ape.anon", st: "out" },
+        { t: 48, c: "chat: why’s it slowing… 👀", k: "" },
+        { t: 51, c: "⚠ DEV WALLET IS MOVING…", k: "warn" },
+        { t: RUG_T, c: "💀 <b>ser.rug</b> (DEV) DUMPED EVERYTHING — RUGGED", k: "rug", who: "ser.rug", st: "rug" },
+        { t: 54.4, c: "chat: NOOO 😭 / “I’m still in” / rekt", k: "red" },
+      ];
+
+      // ---------- state ----------
+      let t, started, ended, pUnits, pCash, hist, greed, scriptIdx, raf, lastReal, peakBag, boughtAt;
+      const el = (id) => document.getElementById(id);
+      const fmt = (v) => "$" + Math.round(v).toLocaleString("en-US");
+      const fmtP = (v) => "$" + v.toFixed(v < 0.01 ? 5 : 4);
+
+      function reset() {
+        t = 0; started = false; ended = false; pUnits = 0; pCash = 1000; hist = []; greed = 0; scriptIdx = 0; peakBag = 0; boughtAt = 0;
+        BOTS.forEach((b) => { b._in = false; b._out = false; b.units = 0; b.cash = b.amt; });
+        el("feed").innerHTML = ""; el("float").className = "float";
+        el("avatars").innerHTML = BOTS.map((b, i) => `<div class="av" id="av${i}" title="${b.name}">${b.av}</div>`).join("");
+        el("buyBtn").disabled = false; el("sellBtn").disabled = true; el("buyBtn").textContent = "APE IN";
+        render();
+      }
+      function start() { reset(); started = true; el("ready").classList.add("hidden"); el("result").classList.add("hidden"); lastReal = performance.now(); loop(performance.now()); }
+
+      function botAct(b, i) {
+        const pr = priceAt(t);
+        if (!b._in && t >= b.inT) { b._in = true; b.units = b.cash / pr; b.cash = 0; el("av" + i)?.classList.add("in"); }
+        if (b._in && !b._out && t >= b.outT) { b._out = true; b.cash = b.units * pr; b.units = 0; const av = el("av" + i); av?.classList.remove("in"); av?.classList.add(b.dev ? "rug" : "out"); }
+      }
+
+      function pushFeed(html, k) { const d = document.createElement("div"); d.className = "ln " + (k || ""); d.innerHTML = html; el("feed").appendChild(d); while (el("feed").children.length > 7) el("feed").removeChild(el("feed").firstChild); }
+
+      function doRug() {
+        S.rug(); const st = el("stage"); st.classList.add("flash", "shake"); setTimeout(() => st.classList.remove("flash", "shake"), 520);
+      }
+
+      function update(dt) {
+        if (!started || ended) return;
+        t += dt;
+        // script events
+        while (scriptIdx < SCRIPT.length && t >= SCRIPT[scriptIdx].t) {
+          const e = SCRIPT[scriptIdx]; pushFeed(e.c, e.k);
+          if (e.st && e.who) { const i = BOTS.findIndex((b) => b.name === e.who); const av = el("av" + i); if (av) { av.classList.remove("in", "out", "rug"); av.classList.add(e.st); } }
+          if (e.k === "rug") doRug();
+          scriptIdx++;
+        }
+        BOTS.forEach(botAct);
+        const pr = priceAt(t);
+        hist.push({ t, p: pr });
+        greed = Math.max(0, Math.min(100, (mult(t) / 16) * 100));
+        if (pUnits > 0) peakBag = Math.max(peakBag, pUnits * pr);
+        if (t >= DURATION) finish();
+      }
+
+      function render() {
+        const pr = priceAt(Math.min(t, DURATION));
+        // chart
+        cx.clearRect(0, 0, CW, CH);
+        if (hist.length > 1) {
+          const maxP = Math.max(...hist.map((h) => h.p)) * 1.08, minP = Math.min(...hist.map((h) => h.p)) * 0.96;
+          const x = (i) => (i / Math.max(hist.length - 1, 1)) * CW;
+          const y = (p) => CH - 8 - ((p - minP) / Math.max(maxP - minP, 1e-9)) * (CH - 24);
+          const up = !(t > RUG_T);
+          const col = up ? "#2fe6a8" : "#ff5d73";
+          const grad = cx.createLinearGradient(0, 0, 0, CH);
+          grad.addColorStop(0, up ? "rgba(47,230,168,0.28)" : "rgba(255,93,115,0.28)"); grad.addColorStop(1, "rgba(0,0,0,0)");
+          cx.beginPath(); hist.forEach((h, i) => (i ? cx.lineTo(x(i), y(h.p)) : cx.moveTo(x(i), y(h.p))));
+          cx.lineTo(x(hist.length - 1), CH); cx.lineTo(0, CH); cx.closePath(); cx.fillStyle = grad; cx.fill();
+          cx.beginPath(); hist.forEach((h, i) => (i ? cx.lineTo(x(i), y(h.p)) : cx.moveTo(x(i), y(h.p))));
+          cx.strokeStyle = col; cx.lineWidth = 3; cx.lineJoin = "round"; cx.shadowColor = col; cx.shadowBlur = 14; cx.stroke(); cx.shadowBlur = 0;
+          const lx = x(hist.length - 1), ly = y(hist[hist.length - 1].p);
+          cx.fillStyle = col; cx.beginPath(); cx.arc(lx, ly, 4.5, 0, 7); cx.fill();
+        }
+        // price + change
+        el("price").textContent = fmtP(pr);
+        const chgPct = (mult(Math.min(t, DURATION)) - 1) * 100;
+        const ch = el("chg"); ch.textContent = (chgPct >= 0 ? "+" : "") + Math.round(chgPct) + "%"; ch.style.color = chgPct >= 0 ? "var(--em)" : "var(--red)";
+        el("price").style.color = t > RUG_T ? "var(--red)" : "var(--ink)";
+        // greed
+        el("greed").style.width = greed + "%";
+        el("greed").style.background = greed > 75 ? "var(--red)" : greed > 45 ? "var(--gold)" : "var(--blue)";
+        // timer
+        const left = Math.max(0, DURATION - t); el("timer").textContent = "0:" + String(Math.floor(left)).padStart(2, "0");
+        // your bag
+        const bagV = pUnits * pr; el("bag").textContent = fmt(bagV); el("cash").textContent = fmt(pCash);
+        const plEl = el("pl");
+        if (pUnits > 0 && boughtAt > 0) { const pct = ((pr / boughtAt) - 1) * 100; plEl.textContent = (pct >= 0 ? "▲ +" : "▼ ") + Math.round(pct) + "%"; plEl.style.color = pct >= 0 ? "var(--em)" : "var(--red)"; }
+        else plEl.textContent = "";
+      }
+
+      function loop(now) {
+        const dt = Math.min(0.05, (now - lastReal) / 1000); lastReal = now;
+        update(dt); render();
+        if (!ended) raf = requestAnimationFrame(loop);
+      }
+
+      function ape() {
+        if (ended || pCash <= 0 || pUnits > 0) return;
+        const pr = priceAt(t); pUnits = pCash / pr; boughtAt = pr; pCash = 0; S.buy();
+        el("buyBtn").disabled = true; el("sellBtn").disabled = false;
+        floatTxt("APED IN", "var(--em)");
+      }
+      function dump() {
+        if (ended || pUnits <= 0) return;
+        const pr = priceAt(t); pCash += pUnits * pr; const gained = pUnits * pr; pUnits = 0; S.sell();
+        el("sellBtn").disabled = true;
+        floatTxt("+" + fmt(gained), "var(--em)");
+        for (let i = 0; i < 1; i++) {}
+      }
+      function floatTxt(txt, col) { const f = el("float"); f.textContent = txt; f.style.color = col; f.classList.remove("go"); void f.offsetWidth; f.classList.add("go"); }
+
+      function finish() {
+        ended = true; cancelAnimationFrame(raf);
+        const prEnd = priceAt(DURATION);
+        if (pUnits > 0) { pCash += pUnits * prEnd; pUnits = 0; } // forced settle (you held the bag)
+        // rank lobby
+        const entries = BOTS.map((b) => ({ name: b.name, av: b.av, dev: b.dev, cash: b._out ? b.cash : b.units * prEnd + b.cash }));
+        entries.push({ name: "you", av: "🫵", me: true, cash: pCash });
+        entries.sort((a, b) => b.cash - a.cash);
+        const rank = entries.findIndex((e) => e.me) + 1;
+        const profit = pCash - 1000;
+        // verdict
+        let verdict, vcol;
+        if (peakBag > 0 && pCash >= peakBag * 0.7) { verdict = "Clean exit. You dumped on them. 🤑"; vcol = "var(--em)"; }
+        else if (profit > 50) { verdict = "You made it out green."; vcol = "var(--em)"; }
+        else if (pCash >= 990) { verdict = "You barely escaped."; vcol = "var(--gold)"; }
+        else { verdict = "Rugged. You were the bag. 💀"; vcol = "var(--red)"; }
+        el("finalCash").textContent = fmt(pCash); el("finalCash").style.color = profit >= 0 ? "var(--em)" : "var(--red)";
+        el("verdict").textContent = verdict; el("verdict").style.color = vcol;
+        el("board").innerHTML = entries.map((e, i) => `<div class="brow ${e.me ? "me" : ""}"><span class="rk">#${i + 1}</span><span class="who">${e.av} ${e.name}${e.dev ? " <span style='color:var(--red);font-size:.7rem'>DEV</span>" : ""}</span><span class="res" style="color:${e.cash >= 1000 ? "var(--em)" : "var(--red)"}">${fmt(e.cash)}</span></div>`).join("");
+        el("ideo").textContent = pCash >= 1000 ? "The Dev chose Control. You read the crowd and got free. — Freedom +1" : "The Dev fed on the believers — and you were one. The machine wins again.";
+        setTimeout(() => el("result").classList.remove("hidden"), 700);
+      }
+
+      // ---------- wire ----------
+      el("startBtn").addEventListener("click", start);
+      el("againBtn").addEventListener("click", start);
+      el("buyBtn").addEventListener("click", ape);
+      el("sellBtn").addEventListener("click", dump);
+      window.addEventListener("resize", () => { fit(); render(); });
+
+      // debug hook (preview tabs pause rAF)
+      window.__cipher = {
+        start, reset,
+        stepTo(target, action) { if (!started) { reset(); started = true; } while (t < target && !ended) { update(0.05); if (action && action.t != null && t >= action.t && !action.done) { action.done = true; action.fn(); } } render(); return { t: +t.toFixed(1), price: priceAt(t), bag: Math.round(pUnits * priceAt(t)), cash: Math.round(pCash), greed: Math.round(greed), ended }; },
+        ape, dump, get() { return { t: +t.toFixed(1), price: priceAt(t), bag: Math.round(pUnits * priceAt(t)), cash: Math.round(pCash), ended }; },
+      };
+
+      fit(); reset();
+    </script>
+  </body>
+</html>

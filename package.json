@@ -1,0 +1,10 @@
+{
+  "name": "cryptobill",
+  "version": "0.2.0",
+  "private": true,
+  "type": "module",
+  "description": "Virtual crypto career roguelite — game-first prototype",
+  "scripts": {
+    "sim": "node tools/sim.js"
+  }
+}

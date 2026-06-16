@@ -1,0 +1,231 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>TOY — Signal v2</title>
+<style>
+  html,body{margin:0;height:100%;background:#05070b;overflow:hidden;
+    font-family:ui-monospace,SFMono-Regular,Menlo,monospace;cursor:crosshair;}
+  canvas{display:block;}
+  #hud{position:fixed;top:14px;left:16px;color:#5f7488;font-size:12px;
+    letter-spacing:.12em;line-height:1.7;pointer-events:none;user-select:none;}
+  #hud b{color:#9fe9ff;font-weight:600;}
+  #hud .big{color:#e8f6ff;font-size:13px;letter-spacing:.18em;}
+  .bar{position:fixed;right:16px;width:150px;height:8px;border:1px solid #1d2a38;border-radius:4px;overflow:hidden;}
+  .bar > i{display:block;height:100%;width:0%;}
+  #visbar{top:18px;} #visbar > i{background:#3fb0ff;}
+  #detbar{top:48px;} #detbar > i{background:#ff3d5e;}
+  .lbl{position:fixed;right:174px;font-size:10px;letter-spacing:.18em;color:#3c4c5e;text-align:right;white-space:nowrap;}
+  #visl{top:16px;} #detl{top:46px;}
+  #hint{position:fixed;bottom:16px;left:0;width:100%;text-align:center;
+    color:#3c4c5e;font-size:11px;letter-spacing:.18em;pointer-events:none;user-select:none;}
+  #hint b{color:#7fd6ff;} #hint .d{color:#ff7d94;}
+  #big{position:fixed;top:42%;left:0;width:100%;text-align:center;color:#e8f6ff;
+    font-size:22px;letter-spacing:.3em;opacity:0;pointer-events:none;transition:opacity .2s;}
+</style>
+</head>
+<body>
+<canvas id="c"></canvas>
+<div id="hud">
+  <div class="big">SIGNAL</div>
+  <div>runs <b id="runs">0</b></div>
+  <div>watchers <b id="beams">1</b></div>
+  <div id="state">— hidden</div>
+</div>
+<div class="lbl" id="visl">VISIBILITY</div>
+<div class="bar" id="visbar"><i></i></div>
+<div class="lbl" id="detl">DETECTION</div>
+<div class="bar" id="detbar"><i></i></div>
+<div id="big"></div>
+<div id="hint"><b>HOLD</b> to move &amp; glow &nbsp;·&nbsp; <b>RELEASE</b> to brake &amp; vanish &nbsp;·&nbsp; reach the <span style="color:#7dffb0">gate</span> &nbsp;·&nbsp; <span class="d">they only see you when you glow</span></div>
+<script>
+const cv=document.getElementById('c'), ctx=cv.getContext('2d');
+let W,H,DPR;
+function resize(){
+  DPR=Math.min(2,window.devicePixelRatio||1);
+  W=innerWidth;H=innerHeight;
+  cv.width=W*DPR;cv.height=H*DPR;cv.style.width=W+'px';cv.style.height=H+'px';
+  ctx.setTransform(DPR,0,0,DPR,0,0);
+}
+addEventListener('resize',()=>{resize();if(player)reposition();}); resize();
+
+// ---- tuning ----
+const VIS_THRESH=0.32;     // below this you are invisible to beams
+const SPEED_VIS=6;         // speed that maps to full visibility (slow creep stays dark)
+const DET_RISE=0.045, DET_FALL=0.03;   // ~0.35s of exposure before caught
+
+// ---- state ----
+let player=null, mouse={x:0,y:0,inside:false}, hold=false;
+let scanners=[], gate=null, rings=[], runs=0, det=0;
+let flash=0, shake=0, safePulse=0, big={t:0,txt:''};
+
+addEventListener('mousemove',e=>{mouse.x=e.clientX;mouse.y=e.clientY;mouse.inside=true;});
+addEventListener('mouseleave',()=>{mouse.inside=false;hold=false;});
+addEventListener('mousedown',()=>{hold=true;resumeAudio();});
+addEventListener('mouseup',()=>{hold=false;});
+addEventListener('touchstart',e=>{hold=true;const t=e.touches[0];mouse.x=t.clientX;mouse.y=t.clientY;mouse.inside=true;resumeAudio();e.preventDefault();},{passive:false});
+addEventListener('touchmove',e=>{const t=e.touches[0];mouse.x=t.clientX;mouse.y=t.clientY;e.preventDefault();},{passive:false});
+addEventListener('touchend',()=>{hold=false;});
+
+function reposition(){ if(gate) gate.y=H*0.12; }
+function init(){
+  player={x:W*0.5,y:H*0.86,vx:0,vy:0,vis:0};
+  runs=0; det=0; scanners=[]; gate=null;
+  placeGate(0); addBeam(); addBeam===addBeam; // 1 watcher to start
+}
+function placeGate(n){
+  const side = n%2===0 ? 0.5 : (n%4===1?0.25:0.75);
+  gate={x:W*side, y:H*0.12, r:46};
+}
+function addBeam(){
+  // beams live in the contested middle band; spread across width
+  const i=scanners.length;
+  const xs=[0.5,0.28,0.72,0.4,0.6];
+  const x=W*(xs[i%xs.length]);
+  const y=H*(0.40+0.08*((i%3)-1));
+  const dir = i%2===0?1:-1;
+  scanners.push({x,y,ang:Math.random()*6.28,spd:dir*(0.009+0.004*i),arc:0.34,range:Math.max(W,H)*0.62,hot:0});
+}
+
+// ---- audio ----
+let actx;
+function resumeAudio(){ try{ actx=actx||new(window.AudioContext||window.webkitAudioContext)(); if(actx.state==='suspended')actx.resume(); }catch(e){} }
+function beep(f,dur,vol,type){
+  try{ actx=actx||new(window.AudioContext||window.webkitAudioContext)();
+    const o=actx.createOscillator(),g=actx.createGain();
+    o.frequency.value=f; o.type=type||'sine';
+    g.gain.setValueAtTime(0.0001,actx.currentTime);
+    g.gain.exponentialRampToValueAtTime(vol,actx.currentTime+0.01);
+    g.gain.exponentialRampToValueAtTime(0.0001,actx.currentTime+dur);
+    o.connect(g).connect(actx.destination);o.start();o.stop(actx.currentTime+dur+0.02);
+  }catch(e){}
+}
+
+function angDiff(a,b){let d=((a-b)%6.283+9.4248)%6.283-3.1416;return Math.abs(d);}
+
+function update(){
+  // movement: hold => pursue cursor (emit). release => hard brake (go dark).
+  if(hold && mouse.inside){
+    const dx=mouse.x-player.x, dy=mouse.y-player.y;
+    player.vx += dx*0.010; player.vy += dy*0.010;
+    player.vx*=0.88; player.vy*=0.88;
+  } else {
+    player.vx*=0.74; player.vy*=0.74;   // brake
+  }
+  player.x+=player.vx; player.y+=player.vy;
+  player.x=Math.max(12,Math.min(W-12,player.x));
+  player.y=Math.max(12,Math.min(H-12,player.y));
+  const speed=Math.hypot(player.vx,player.vy);
+
+  // visibility: tied to actual speed -> creep is dim, dash is bright. fades slow.
+  const target=Math.min(1, speed/SPEED_VIS);
+  player.vis += (target>player.vis ? (target-player.vis)*0.4 : (target-player.vis)*0.085);
+  player.vis=Math.max(0,Math.min(1,player.vis));
+  const lit = player.vis>VIS_THRESH;
+
+  if(lit && speed>0.5 && Math.random()<player.vis*0.5) rings.push({x:player.x,y:player.y,r:6,life:1});
+
+  // beams sweep; detection only accrues when you're LIT and inside a cone
+  let inBeam=false;
+  for(const s of scanners){
+    s.ang+=s.spd;
+    const dx=player.x-s.x, dy=player.y-s.y, dist=Math.hypot(dx,dy);
+    const cover = dist<s.range && angDiff(Math.atan2(dy,dx),s.ang)<s.arc;
+    if(cover){ inBeam=true; if(lit) s.hot=1; }
+  }
+  if(inBeam && lit){ det+=DET_RISE; if(det>0.6&&Math.random()<0.3)beep(300+det*200,0.05,0.05,'sawtooth'); }
+  else det-=DET_FALL;
+  det=Math.max(0,Math.min(1,det));
+  if(det>=1) caught();
+  // "blind beam" teach: in a beam but dark -> visible shield pulse
+  if(inBeam && !lit) safePulse=Math.min(1,safePulse+0.2); else safePulse*=0.9;
+
+  // reach the gate
+  if(Math.hypot(player.x-gate.x,player.y-gate.y)<gate.r){
+    runs++; beep(1320,0.14,0.1); beep(1760,0.16,0.06);
+    showBig('EXTRACTED');
+    if(scanners.length<5) addBeam();
+    placeGate(runs);
+    player.x=W*0.5; player.y=H*0.86; player.vx=player.vy=0; player.vis=0; det=0;
+  }
+
+  for(const r of rings){ r.r+=2.4; r.life-=0.03; }
+  rings=rings.filter(r=>r.life>0);
+  for(const s of scanners){ if(s.hot)s.hot*=0.9; }
+  flash*=0.88; shake*=0.85; if(big.t>0)big.t--;
+}
+
+function caught(){
+  flash=1; shake=18; beep(120,0.25,0.12,'square'); beep(90,0.3,0.1,'square');
+  showBig('CAUGHT');
+  // soft reset of the run: back to start, beams stay, count is unchanged
+  player.x=W*0.5; player.y=H*0.86; player.vx=player.vy=0; player.vis=0; det=0;
+}
+function showBig(t){ big.t=45; big.txt=t; }
+
+function draw(){
+  ctx.setTransform(DPR,0,0,DPR,0,0);
+  ctx.fillStyle='#05070b'; ctx.fillRect(0,0,W,H);
+  ctx.translate((Math.random()-0.5)*shake,(Math.random()-0.5)*shake);
+  ctx.globalCompositeOperation='lighter';
+
+  // gate
+  ctx.strokeStyle='rgba(125,255,176,0.7)'; ctx.lineWidth=2;
+  ctx.beginPath(); ctx.arc(gate.x,gate.y,gate.r,0,7); ctx.stroke();
+  ctx.fillStyle='rgba(125,255,176,0.07)';
+  ctx.beginPath(); ctx.arc(gate.x,gate.y,gate.r,0,7); ctx.fill();
+  ctx.fillStyle='rgba(125,255,176,0.6)'; ctx.font='10px monospace'; ctx.textAlign='center';
+  ctx.fillText('GATE',gate.x,gate.y+3);
+
+  // beams
+  for(const s of scanners){
+    const hot=s.hot||0;
+    const g=ctx.createRadialGradient(s.x,s.y,0,s.x,s.y,s.range);
+    g.addColorStop(0,`rgba(255,${120-hot*100},${130-hot*90},${0.14+hot*0.22})`);
+    g.addColorStop(1,'rgba(255,40,70,0)');
+    ctx.fillStyle=g;
+    ctx.beginPath(); ctx.moveTo(s.x,s.y); ctx.arc(s.x,s.y,s.range,s.ang-s.arc,s.ang+s.arc); ctx.closePath(); ctx.fill();
+    ctx.fillStyle=`rgba(255,${90-hot*60},${120-hot*60},0.9)`;
+    ctx.beginPath(); ctx.arc(s.x,s.y,5,0,7); ctx.fill();
+    ctx.fillStyle='rgba(255,80,110,0.13)';
+    ctx.beginPath(); ctx.arc(s.x,s.y,13,0,7); ctx.fill();
+  }
+
+  for(const r of rings){ ctx.strokeStyle=`rgba(150,220,255,${r.life*0.5})`; ctx.lineWidth=1.5; ctx.beginPath(); ctx.arc(r.x,r.y,r.r,0,7); ctx.stroke(); }
+
+  // player: brightness == visibility
+  const v=player.vis, hue=200-v*200;
+  ctx.fillStyle=`hsla(${hue},100%,${30+v*45}%,${0.10+v*0.35})`;
+  ctx.beginPath(); ctx.arc(player.x,player.y,10+v*26,0,7); ctx.fill();
+  ctx.fillStyle=`hsla(${hue},100%,${60+v*30}%,${0.55+v*0.45})`;
+  ctx.beginPath(); ctx.arc(player.x,player.y,5+v*3,0,7); ctx.fill();
+  // detection ring while being locked
+  if(det>0.02){ ctx.strokeStyle=`rgba(255,60,90,${det})`; ctx.lineWidth=2;
+    ctx.beginPath(); ctx.arc(player.x,player.y,16,-1.57,-1.57+det*6.283); ctx.stroke(); }
+  // "blind beam" shield teach
+  if(safePulse>0.02){ ctx.strokeStyle=`rgba(130,230,255,${safePulse*0.7})`; ctx.lineWidth=1.5;
+    ctx.beginPath(); ctx.arc(player.x,player.y,14+safePulse*4,0,7); ctx.stroke(); }
+
+  ctx.globalCompositeOperation='source-over';
+  if(flash>0.01){ ctx.fillStyle=`rgba(255,40,70,${flash*0.4})`; ctx.fillRect(-60,-60,W+120,H+120); }
+
+  // hud
+  document.querySelector('#visbar > i').style.width=(v*100)+'%';
+  document.querySelector('#visbar > i').style.background = v>VIS_THRESH?'#ff9a3d':'#3fb0ff';
+  document.querySelector('#detbar > i').style.width=(det*100)+'%';
+  document.getElementById('runs').textContent=runs;
+  document.getElementById('beams').textContent=scanners.length;
+  const st=document.getElementById('state');
+  st.innerHTML = v>VIS_THRESH?'<b style="color:#ff9a3d">◉ exposed</b>':'<b style="color:#3fb0ff">— hidden</b>';
+  const be=document.getElementById('big');
+  be.textContent=big.txt; be.style.opacity = big.t>0?Math.min(1,big.t/20):0;
+  be.style.color = big.txt==='CAUGHT'?'#ff6d84':'#7dffb0';
+}
+
+function loop(){ update(); draw(); requestAnimationFrame(loop); }
+init();
+requestAnimationFrame(loop);
+</script>
+</body>
+</html>
