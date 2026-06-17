@@ -46,7 +46,7 @@ function lerp(a,b,t){return a+(b-a)*t;} function clamp(v,a,b){return v<a?a:v>b?b
 // false → full game. Single switch. Systems are GATED, never deleted.
 const CORE_TEST_MODE = true;
 // build stamp — bump on every change so a phone refresh can confirm it loaded fresh code (cache!)
-const BUILD = '2026-06-17 · b4';
+const BUILD = '2026-06-17 · b5';
 
 // ---------- procedural market terrain ----------
 // height map sampled every STEP px; generated forward as we ride. Market character:
@@ -123,22 +123,24 @@ const TOUCH=('ontouchstart' in window)||navigator.maxTouchPoints>0;
 // РАВНЫ текущим, поэтому появление этого блока само по себе ничего в игре не изменило.
 const TUNE = {
   gravity:      0.85,    // 1. гравитация — притяжение вниз за кадр
-  acceleration: 0.52,    // 2. ускорение — тяга двигателя на земле (accel-стат байка её домножает)
+  acceleration: 0.46,    // 2. ускорение — тяга двигателя (GD: тяжелее/медленнее, не ракета; accel-стат байка домножает)
   brake:        0.90,    // 3. сила тормоза — vx *= это при торможении (МЕНЬШЕ = тормозит сильнее)
   jump:         12.5,    // 4. сила прыжка — импульс хопа с земли
   airControl:   0.014,   // 5. контроль в воздухе — момент вращения/сальто в полёте
   camFollow:    0.08,    // 6. слежение камеры — плавность по вертикали за байком (больше = резче/нервнее)
-  waveSpeed:    2.4,     // 7. скорость волны — базовая скорость погони дампа
-  waveAccel:    1.0,     // 8. ускорение волны — как сильно дамп разгоняется с дистанцией (×1 = как сейчас)
-  terrainSteep: 1.0,     // 9. крутизна рельефа — множитель холмистости (×1 = как сейчас, >1 круче, <1 положе)
+  waveSpeed:    1.1,     // 7. скорость волны — базовая скорость дампа (GD: погоня = мягкий БЭКСТОП, не даёт стоять; вызов — в рельефе)
+  waveAccel:    0.4,     // 8. ускорение волны — как сильно дамп разгоняется с дистанцией (мягко — аккуратной езде есть воздух)
+  terrainSteep: 1.2,     // 9. крутизна рельефа — множитель холмистости (GD: гнарли, но подъём проходим феррингом)
   obstacleFreq: 1.0,     // 10. частота препятствий — множитель плотности sell-wall (×1 = как сейчас, 0 = нет)
-  easeInDist:   600,     // 11. «мягкий въезд» (м): за сколько сложность/волна доходят до полной (Alto-онбординг; больше = дольше прощает)
-  loopForgive:  1.8,     // 12. порог опрокидывания НА СТАРТЕ (рад): как сильно можно задрать нос в начале до loop-out (спадает к PHYS.LOOP за easeInDist)
+  easeInDist:   300,     // 11. «мягкий въезд» (м): за сколько сложность/волна доходят до полной (короче = скилл нужен рано)
+  loopForgive:  1.4,     // 12. порог опрокидывания НА СТАРТЕ (рад): меньше = газ вслепую быстрее опрокидывает (спадает к PHYS.LOOP)
+  climbLift:    3.0,     // 13. GD-ЯДРО: насколько газ задирает нос НА ПОДЪЁМЕ (больше = дозируй газ или кувырок — баланс-скилл)
+  slopePull:    0.32,    // 14. импульс по склону: подъём гасит скорость, спуск разгоняет (больше = надо НЕСТИ momentum в горку)
 };
 // ---- физика байка (двухколёсная: тангаж → вилли / loop-out / endo + импульс); ключевые крутилки тянет из TUNE ----
 const PHYS={ GRAV:TUNE.gravity, DX:26, DY:27.5,           // гравитация(↑TUNE), полубаза, высота ЦТ над колёсами
-  POW:TUNE.acceleration, GACC:0.26, DRAG:0.990, BRK:TUNE.brake,   // тяга(↑TUNE), гравитация-по-склону (импульс), drag→предел скорости (~17), тормоз(↑TUNE)
-  GP:0.032, ENGTQ:0.0044, BRKTQ:0.018, CLIMB:2.6, // тангаж-возврат-к-склону, газ-нос-вверх, тормоз-нос-вниз, множ. подъёма (дозируй газ на крутом или loop out)
+  POW:TUNE.acceleration, GACC:TUNE.slopePull, DRAG:0.990, BRK:TUNE.brake,   // тяга(↑TUNE), импульс-по-склону(↑TUNE), drag→предел скорости, тормоз(↑TUNE)
+  GP:0.032, ENGTQ:0.0044, BRKTQ:0.018, CLIMB:TUNE.climbLift, // тангаж-возврат-к-склону, газ-нос-вверх, тормоз-нос-вниз, множ. подъёма(↑TUNE: дозируй газ или loop out)
   AIRTQ:TUNE.airControl, ANGD:0.88, AVMAX:0.6, LOOP:1.3, STICK:5, JUMP:TUNE.jump }; // момент-сальто(↑TUNE), демпфер, кламп, угол loop/endo, прилипание, хоп(↑TUNE)
 const BASE_PHYS={POW:PHYS.POW, AIRTQ:PHYS.AIRTQ, LOOP:PHYS.LOOP};   // frozen base — upgrades scale from this each run (no compounding)
 
