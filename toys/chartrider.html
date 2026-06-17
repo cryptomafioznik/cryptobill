@@ -18,6 +18,15 @@
   #hud,#spd,#hint{opacity:0;}
   #hint{position:fixed;bottom:14px;left:0;width:100%;text-align:center;color:#7a6f9a;font-size:11px;letter-spacing:.16em;pointer-events:none;}
   #hint b{color:#ffd98a;}
+  /* ---- mobile debug overlay (tap to collapse) ---- */
+  #dbg{position:fixed;top:3px;left:50%;transform:translateX(-50%);z-index:60;
+    font:600 11px/1.4 ui-monospace,SFMono-Regular,Menlo,monospace;color:#cfe0f4;text-align:center;white-space:nowrap;
+    background:rgba(8,10,22,0.6);border:1px solid rgba(120,180,230,0.22);border-radius:9px;
+    padding:4px 10px;pointer-events:auto;text-shadow:0 1px 3px rgba(0,0,0,.65);}
+  #dbg.min{padding:2px 7px;font-size:13px;opacity:.5;border-color:rgba(120,180,230,0.12);}
+  #dbg b{color:#eafaff;font-weight:800;}
+  #dbg .lab{color:#8595b8;font-weight:600;}
+  #dbg .w-ok{color:#7ef0b0;} #dbg .w-warn{color:#ffd070;} #dbg .w-bad{color:#ff8a9a;font-weight:800;}
 </style>
 </head>
 <body>
@@ -25,6 +34,7 @@
 <div id="hud"><div class="tk" id="ticker">BTC / SIGNAL</div><div class="pnl" id="pnl">$0</div><div class="sub">dist <b id="dist">0</b>m · <span id="coins" class="up">◆ 0</span></div></div>
 <div id="spd"><div id="mood">— bull run —</div><div><b id="kmh">0</b> km/h</div></div>
 <div id="hint"></div>
+<div id="dbg"></div>
 <script>
 const cv=document.getElementById('c'),ctx=cv.getContext('2d');let W,H,DPR;
 const hudEl=document.getElementById('hud'),spdEl=document.getElementById('spd'),hintEl=document.getElementById('hint');
@@ -35,6 +45,8 @@ function lerp(a,b,t){return a+(b-a)*t;} function clamp(v,a,b){return v<a?a:v>b?b
 // true  → minimal ride-and-chase loop only (garage/upgrades/ranks/daily/missions/events/economy/popups OFF)
 // false → full game. Single switch. Systems are GATED, never deleted.
 const CORE_TEST_MODE = true;
+// build stamp — bump on every change so a phone refresh can confirm it loaded fresh code (cache!)
+const BUILD = '2026-06-17 · b2';
 
 // ---------- procedural market terrain ----------
 // height map sampled every STEP px; generated forward as we ride. Market character:
@@ -294,6 +306,7 @@ addEventListener('keydown',e=>{
   else if(k==='Shift'){ if(screen==='play')activateBoost(); }
   else if((k==='r'||k==='R')&&screen==='dead')reset();
   else if(k==='m'||k==='M')toggleMute();
+  else if(k==='f'||k==='F')dbgToggle();   // toggle debug overlay
 });
 addEventListener('keyup',e=>{ if(GAS_KEYS[e.key])down=false; else if(BRK_KEYS[e.key])brake=false; });
 addEventListener('mousedown',e=>{ const z=pointerDown(ptFromEvent(e)); if(z==='gas')down=true; else if(z==='brake')brake=true; });
@@ -747,6 +760,7 @@ function drawMenus(){
     ctx.fillStyle='#c6d4ee'; ctx.font='12px ui-monospace,monospace';
     for(let i=0;i<missions.length;i++) ctx.fillText('◆'+missions[i].rew+'   '+missions[i].txt,W/2,UI.action.y+98+i*19); }
     if(dailyBonusT>0){ dailyBonusT-=0.006; const a=clamp(Math.min(dailyBonusT*4,1),0,1); ctx.globalAlpha=a; ctx.fillStyle='#ffd678'; ctx.font='800 16px ui-monospace,monospace'; ctx.shadowColor='#ffd678'; ctx.shadowBlur=14; ctx.fillText('🎁 ЕЖЕДНЕВНЫЙ БОНУС  +◆'+dailyBonus,W/2,H*0.36); ctx.shadowBlur=0; ctx.globalAlpha=1; }
+    ctx.fillStyle='rgba(125,140,180,0.55)'; ctx.font='10px ui-monospace,monospace'; ctx.fillText('build '+BUILD,W/2,H-12);   // confirm a fresh load on the phone (cache check)
     UI.mute=null; UI.pause=null;
   } else if(screen==='paused'){
     ctx.fillStyle='rgba(6,5,16,0.62)'; ctx.fillRect(0,0,W,H);
@@ -786,7 +800,26 @@ function drawMenus(){
   }
   ctx.textAlign='left';
 }
-function loop(){ if(screen==='play')update(); draw(); musicTick(); requestAnimationFrame(loop); }
+// ---------- mobile debug overlay (FPS / speed / distance / dump gap / state / mode / build) ----------
+let _fpsT=performance.now(), _fpsN=0, _fps=0;
+const dbgEl=document.getElementById('dbg');
+let dbgMin=false; try{ dbgMin=localStorage.getItem('cipher_dbg')==='0'; }catch(e){}
+dbgEl.classList.toggle('min',dbgMin);
+function dbgToggle(){ dbgMin=!dbgMin; dbgEl.classList.toggle('min',dbgMin); try{localStorage.setItem('cipher_dbg',dbgMin?'0':'1');}catch(e){} if(dbgMin)dbgEl.innerHTML='🐞'; }
+dbgEl.addEventListener('touchstart',e=>{ e.stopPropagation(); e.preventDefault(); dbgToggle(); },{passive:false});  // tap overlay to collapse/expand (don't drive the bike)
+dbgEl.addEventListener('mousedown',e=>{ e.stopPropagation(); dbgToggle(); });
+function dbgTick(){
+  _fpsN++; const now=performance.now(); if(now-_fpsT>=500){ _fps=Math.round(_fpsN*1000/(now-_fpsT)); _fpsN=0; _fpsT=now; }
+  if(dbgMin){ if(dbgEl.innerHTML!=='🐞')dbgEl.innerHTML='🐞'; return; }
+  const vx=bike?bike.vx:0, kmh=Math.round(vx*12);
+  let state; if(screen==='dead')state='CRASHED'; else if(screen==='title')state='TITLE'; else if(screen==='paused')state='PAUSED'; else if(screen==='garage')state='GARAGE'; else state=(bike&&bike.onG)?'GROUNDED':'AIR';
+  const gapPx=bike?(bike.x-wave):0, gapM=Math.round(gapPx/10);
+  const wc=gapPx<W*0.45?'w-bad':gapPx<W*0.72?'w-warn':'w-ok';   // dump proximity: red close / amber / green
+  dbgEl.innerHTML='🐞 <b>'+_fps+'</b>fps · <b>'+kmh+'</b>км/ч <span class="lab">'+vx.toFixed(1)+'vx</span><br>'
+    +'<b>'+(dist||0)+'</b>m · дамп <span class="'+wc+'">'+gapM+'m</span><br>'
+    +'<span class="lab">'+state+' · CORE '+(CORE_TEST_MODE?'ON':'OFF')+' · '+BUILD+'</span>';
+}
+function loop(){ if(screen==='play')update(); draw(); musicTick(); dbgTick(); requestAnimationFrame(loop); }
 function shakeApply(){} // (shake folded into camera draw via translate jitter)
 toTitle();
 // apply shake in draw by jittering before skyGrad
