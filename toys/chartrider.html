@@ -46,7 +46,7 @@ function lerp(a,b,t){return a+(b-a)*t;} function clamp(v,a,b){return v<a?a:v>b?b
 // false → full game. Single switch. Systems are GATED, never deleted.
 const CORE_TEST_MODE = true;
 // build stamp — bump on every change so a phone refresh can confirm it loaded fresh code (cache!)
-const BUILD = '2026-06-17 · b11';
+const BUILD = '2026-06-17 · b12';
 
 // ---------- procedural market terrain ----------
 // height map sampled every STEP px; generated forward as we ride. Market character:
@@ -129,31 +129,31 @@ function terrainAt(x){ // interpolated height + slope at world x
 let bike, cam, t, coins, dist, best, screen, wipe, parts, stars, dust, shake, flash, daycycle, trail, streaks, mult, pnl, bestPnl, airT, nearMissed, hitstop, gflash, floats, multPulse, maxMult, lean, rush, prevVx, wave, waveSpd, deathBy, boost, boosting, zone, biomeBanner, biomeBannerT, BSKY, BLINE, BRIDGE, lastMile, newDepth;
 try{best=+localStorage.getItem('cipher_run_best')||0;}catch(e){}
 try{bestPnl=+localStorage.getItem('cipher_best_pnl')||0;}catch(e){}
-let down=false, brake=false, jumpReq=0, jumpCd=0, coyote=0, jumpGrace=0, activeTouches={};   // jumpReq = buffered-press TTL; coyote = grace to still jump after leaving ground; jumpGrace = clean-arc window after a jump
+let down=false, brake=false, jumpReq=0, jumpCd=0, coyote=0, jumpGrace=0, activeTouches={}, touchLowY={};   // jumpReq = buffered press; coyote = grace after leaving ground; jumpGrace = clean-arc window; touchLowY = per-touch low point for swipe-up = jump
 const TOUCH=('ontouchstart' in window)||navigator.maxTouchPoints>0;
 // ===================== TUNE — единый источник «крутилок фила» (core ride feel) =====================
 // Меняешь число здесь → жёсткий рефреш на телефоне → вся игра берёт его. Значения по умолчанию
 // РАВНЫ текущим, поэтому появление этого блока само по себе ничего в игре не изменило.
 const TUNE = {
   gravity:      0.85,    // 1. гравитация — притяжение вниз за кадр
-  acceleration: 0.54,    // 2. ускорение — тяга (хватает ЗАЕХАТЬ на любой подъём — фикс тупика; accel-стат байка домножает)
+  acceleration: 0.50,    // 2. ускорение — тяга (хватает заехать с импульсом, но требовательно; accel-стат байка домножает)
   brake:        0.90,    // 3. сила тормоза — vx *= это при торможении (МЕНЬШЕ = тормозит сильнее)
   jump:         13.0,    // 4. сила прыжка — импульс хопа (чуть выше — пропасти посильнее)
   airControl:   0.014,   // 5. контроль в воздухе — момент вращения/сальто в полёте
   camFollow:    0.08,    // 6. слежение камеры — плавность по вертикали за байком (больше = резче/нервнее)
   waveSpeed:    1.1,     // 7. скорость волны — базовая скорость дампа (мягкий БЭКСТОП; вызов — в рельефе)
   waveAccel:    0.5,     // 8. ускорение волны — насколько дамп разгоняется с дистанцией
-  terrainSteep: 1.45,    // 9. ПОЛНАЯ крутизна рельефа (глубоко по дистанции). Растёт от steepEarly за steepRamp
+  terrainSteep: 1.8,     // 9. ПОЛНАЯ крутизна рельефа (глубоко по дистанции, жёстко). Растёт от steepEarly за steepRamp
   obstacleFreq: 1.0,     // 10. частота препятствий — множитель плотности sell-wall (×1 = как сейчас, 0 = нет)
-  easeInDist:   650,     // 11. «мягкий въезд» (м): за сколько loop-forgiveness + волна доходят до полной (длиннее = дольше прощает)
-  loopForgive:  1.9,     // 12. порог опрокидывания НА СТАРТЕ (рад): высоко = старт ОЧЕНЬ прощает, спадает к PHYS.LOOP за easeInDist
-  climbLift:    2.7,     // 13. газ задирает нос НА ПОДЪЁМЕ (дозируй газ или кувырок) — кусает на КРУТЫХ (поздних) подъёмах
-  slopePull:    0.24,    // 14. импульс по склону (МЕНЬШЕ = подъём меньше гасит скорость → всегда можно заехать; больше = надо нести momentum)
-  gapEvery:     340,     // 15. ПРОПАСТИ: ср. дистанция между провалами (м); реже = моменты, а не молотилка (0 = выкл)
-  gapStart:     360,     // 16. первая пропасть только ПОСЛЕ этой дистанции (м) — чистый посильный старт
-  pitchHold:    0.031,   // 17. самовыравнивание тангажа к склону (МЕНЬШЕ = «типпи»/тонус; 0.031 = мягко прощает)
-  steepEarly:   0.6,     // 18. множитель крутизны НА СТАРТЕ (пологий поток для новичка — «легко начать»)
-  steepRamp:    800,     // 19. дистанция (м), за которую крутизна растёт steepEarly → terrainSteep («трудно мастерить» дальше)
+  easeInDist:   350,     // 11. «мягкий въезд» (м): за сколько loop-forgiveness + волна доходят до полной (короче = скилл нужен рано)
+  loopForgive:  1.5,     // 12. порог опрокидывания НА СТАРТЕ (рад): ниже = надо балансировать уже с начала, спадает к PHYS.LOOP
+  climbLift:    3.0,     // 13. газ задирает нос НА ПОДЪЁМЕ (дозируй газ или кувырок) — баланс-скилл
+  slopePull:    0.28,    // 14. импульс по склону (больше = подъём сильнее гасит скорость → надо НЕСТИ momentum; меньше = легче)
+  gapEvery:     280,     // 15. ПРОПАСТИ: ср. дистанция между провалами (м); чаще = больше прыжков (0 = выкл)
+  gapStart:     240,     // 16. первая пропасть после этой дистанции (м) — вызов уже рано
+  pitchHold:    0.028,   // 17. самовыравнивание тангажа к склону (МЕНЬШЕ = «типпи»/тонус газ-тормоз; больше = прощает)
+  steepEarly:   1.1,     // 18. множитель крутизны НА СТАРТЕ (ЖЁСТКО с первой секунды — цепляет скиллом сразу, не тапалка)
+  steepRamp:    600,     // 19. дистанция (м), за которую крутизна растёт steepEarly → terrainSteep (ещё жёстче дальше)
 };
 // ---- физика байка (двухколёсная: тангаж → вилли / loop-out / endo + импульс); ключевые крутилки тянет из TUNE ----
 const PHYS={ GRAV:TUNE.gravity, DX:26, DY:27.5,           // гравитация(↑TUNE), полубаза, высота ЦТ над колёсами
@@ -300,7 +300,7 @@ function reset(){
   zone=-1; biomeBanner=''; biomeBannerT=0; BSKY=['rgb(20,16,48)','rgb(46,30,78)','rgb(150,80,110)','rgb(230,150,110)']; BLINE='228,250,255'; BRIDGE='60,40,90'; rollMissions();
   parts=[]; dust=[]; trail=[]; streaks=[]; floats=[];
   stars=[]; for(let i=0;i<90;i++)stars.push({x:Math.random()*W,y:Math.random()*H*0.7,z:0.2+Math.random()*0.6,s:Math.random()*1.6+0.4});
-  document.getElementById('hint').innerHTML=(TOUCH?'<b>ГАЗ</b> · <b>ТОРМОЗ</b> · <b>⤴ ПРЫЖОК</b> — кнопки внизу':'<b>ПРОБЕЛ/→ газ</b> · ↓/← тормоз · <b>↑ прыжок</b>')+' · в воздухе наклоняй и крути';
+  document.getElementById('hint').innerHTML=(TOUCH?'<b>ГАЗ</b> справа · <b>ТОРМОЗ</b> слева · <b>ПРЫЖОК</b> — свайп вверх или кнопка':'<b>ПРОБЕЛ/→ газ</b> · ↓/← тормоз · <b>↑ прыжок</b>')+' · в воздухе наклоняй и крути';
 }
 function toTitle(){ reset(); screen='title'; if(!CORE_TEST_MODE)checkDaily(); }
 const UI={}; // button rects in screen space, refreshed each draw for hit-testing
@@ -349,10 +349,12 @@ addEventListener('keydown',e=>{
 addEventListener('keyup',e=>{ if(GAS_KEYS[e.key])down=false; else if(BRK_KEYS[e.key])brake=false; });
 addEventListener('mousedown',e=>{ const z=pointerDown(ptFromEvent(e)); if(z==='gas')down=true; else if(z==='brake')brake=true; });
 addEventListener('mouseup',()=>{down=false;brake=false;});
-addEventListener('touchstart',e=>{ for(const tch of e.changedTouches){ const r=cv.getBoundingClientRect(),p={x:tch.clientX-r.left,y:tch.clientY-r.top},z=pointerDown(p); if(z==='gas'||z==='brake')activeTouches[tch.identifier]=z; } applyTouches(); e.preventDefault(); },{passive:false});
-addEventListener('touchmove',e=>{ for(const tch of e.changedTouches){ if(activeTouches[tch.identifier]!==undefined){ const r=cv.getBoundingClientRect(); activeTouches[tch.identifier]=((tch.clientX-r.left)>W*0.46)?'gas':'brake'; } } applyTouches(); e.preventDefault(); },{passive:false});
-addEventListener('touchend',e=>{ for(const tch of e.changedTouches)delete activeTouches[tch.identifier]; applyTouches(); e.preventDefault(); },{passive:false});
-addEventListener('touchcancel',e=>{ for(const tch of e.changedTouches)delete activeTouches[tch.identifier]; applyTouches(); },{passive:false});
+addEventListener('touchstart',e=>{ for(const tch of e.changedTouches){ const r=cv.getBoundingClientRect(),p={x:tch.clientX-r.left,y:tch.clientY-r.top},z=pointerDown(p); touchLowY[tch.identifier]=p.y; if(z==='gas'||z==='brake')activeTouches[tch.identifier]=z; } applyTouches(); e.preventDefault(); },{passive:false});
+addEventListener('touchmove',e=>{ for(const tch of e.changedTouches){ const r=cv.getBoundingClientRect(), cy=tch.clientY-r.top;
+    if(touchLowY[tch.identifier]!==undefined){ if(cy>touchLowY[tch.identifier]) touchLowY[tch.identifier]=cy; else if(touchLowY[tch.identifier]-cy>45){ requestJump(); touchLowY[tch.identifier]=cy; } }   // SWIPE UP anywhere = jump (no reaching for a button)
+    if(activeTouches[tch.identifier]!==undefined){ activeTouches[tch.identifier]=((tch.clientX-r.left)>W*0.46)?'gas':'brake'; } } applyTouches(); e.preventDefault(); },{passive:false});
+addEventListener('touchend',e=>{ for(const tch of e.changedTouches){ delete activeTouches[tch.identifier]; delete touchLowY[tch.identifier]; } applyTouches(); e.preventDefault(); },{passive:false});
+addEventListener('touchcancel',e=>{ for(const tch of e.changedTouches){ delete activeTouches[tch.identifier]; delete touchLowY[tch.identifier]; } applyTouches(); },{passive:false});
 
 function update(){
   if(hitstop>0){ hitstop--; return; }   // brief freeze for impact punch
@@ -760,7 +762,7 @@ function draw(){
   if(screen==='play'){ UI.pause={x:W-40,y:14,w:26,h:26}; ctx.fillStyle='rgba(20,22,40,0.45)'; ctx.fillRect(W-40,14,26,26); ctx.strokeStyle='rgba(150,180,220,0.5)'; ctx.lineWidth=1; ctx.strokeRect(W-40,14,26,26); ctx.fillStyle='rgba(200,220,245,0.85)'; ctx.fillRect(W-32,20,4,14); ctx.fillRect(W-24,20,4,14); } else UI.pause=null;
   // ---- on-screen touch controls: visible, responsive verbs (gas / brake / jump) ----
   if((TOUCH||window.__forceTouchUI) && screen==='play'){
-    UI.gas={x:W-112,y:H-104,w:96,h:74}; UI.brk={x:16,y:H-104,w:96,h:74}; UI.jump={x:W/2-52,y:H-160,w:104,h:60};
+    UI.gas={x:W-112,y:H-104,w:96,h:74}; UI.brk={x:16,y:H-104,w:96,h:74}; UI.jump={x:W-120,y:H-194,w:104,h:54};   // jump moved to the RIGHT (above gas) — reachable by the gas thumb; + swipe-up anywhere
     const pad=(r,lab,on,c,fs)=>{ ctx.fillStyle='rgba('+c+','+(on?0.34:0.13)+')'; if(ctx.roundRect){ctx.beginPath();ctx.roundRect(r.x,r.y,r.w,r.h,13);ctx.fill();ctx.strokeStyle='rgba('+c+','+(on?1:0.5)+')';ctx.lineWidth=on?2.4:1.4;ctx.stroke();}else{ctx.fillRect(r.x,r.y,r.w,r.h);}
       ctx.fillStyle='rgba('+c+','+(on?1:0.78)+')'; ctx.font='800 '+(fs||13)+'px ui-monospace,monospace'; ctx.textAlign='center'; ctx.fillText(lab,r.x+r.w/2,r.y+r.h/2+5); ctx.textAlign='left'; };
     pad(UI.brk,'ТОРМОЗ',brake,'150,180,230');
