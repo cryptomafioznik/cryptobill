@@ -46,7 +46,7 @@ function lerp(a,b,t){return a+(b-a)*t;} function clamp(v,a,b){return v<a?a:v>b?b
 // false → full game. Single switch. Systems are GATED, never deleted.
 const CORE_TEST_MODE = true;
 // build stamp — bump on every change so a phone refresh can confirm it loaded fresh code (cache!)
-const BUILD = '2026-06-17 · b3';
+const BUILD = '2026-06-17 · b4';
 
 // ---------- procedural market terrain ----------
 // height map sampled every STEP px; generated forward as we ride. Market character:
@@ -132,6 +132,8 @@ const TUNE = {
   waveAccel:    1.0,     // 8. ускорение волны — как сильно дамп разгоняется с дистанцией (×1 = как сейчас)
   terrainSteep: 1.0,     // 9. крутизна рельефа — множитель холмистости (×1 = как сейчас, >1 круче, <1 положе)
   obstacleFreq: 1.0,     // 10. частота препятствий — множитель плотности sell-wall (×1 = как сейчас, 0 = нет)
+  easeInDist:   600,     // 11. «мягкий въезд» (м): за сколько сложность/волна доходят до полной (Alto-онбординг; больше = дольше прощает)
+  loopForgive:  1.8,     // 12. порог опрокидывания НА СТАРТЕ (рад): как сильно можно задрать нос в начале до loop-out (спадает к PHYS.LOOP за easeInDist)
 };
 // ---- физика байка (двухколёсная: тангаж → вилли / loop-out / endo + импульс); ключевые крутилки тянет из TUNE ----
 const PHYS={ GRAV:TUNE.gravity, DX:26, DY:27.5,           // гравитация(↑TUNE), полубаза, высота ЦТ над колёсами
@@ -385,7 +387,7 @@ function update(){
   }
   // loop-out / endo: over-rotate while grounded = crash (the GD skill — too much gas on a climb loops you backward)
   if(grounded && rel<-0.45 && dist>25) tut('climb','▲ КРУТО? ОТПУСТИ ГАЗ — НЕ ОПРОКИНЕШЬСЯ');   // teach feathering before the first loop-out
-  const loopThresh = lerp(1.55, P.LOOP, clamp((dist||0)/300,0,1));   // a bit forgiving for the first ~300m (onboarding), then full — input matters early
+  const loopThresh = lerp(TUNE.loopForgive, P.LOOP, clamp((dist||0)/TUNE.easeInDist,0,1));   // Alto on-ramp: forgiving early, eases to full over easeInDist — mastery ceiling unchanged
   if(grounded && screen==='play' && Math.abs(rel)>loopThresh){ wipeout(rel<0?'loop':'endo'); }
   // coins along terrain
   const magR=36*(1+0.40*upgLvl('mag')); const ci=Math.floor(bike.x/STEP); for(let k=ci-3;k<=ci+3;k++){ const c=terr[k]; if(c&&c.coin){ const cx=c.x,cy=c.y-30; if(Math.hypot(cx-bike.x,cy-bike.y)<magR){ c.coin=false; coins++; sfxCoin(); boost=Math.min(1,(boost||0)+0.04); const gv=Math.round(25*mult); pnl+=gv; floatPop(cx,cy,'+$'+gv,'#ffd678'); for(let z=0;z<8;z++)parts.push({x:cx,y:cy,vx:(Math.random()-0.5)*3.5,vy:-Math.random()*3-1,life:1,gold:1,r:2});} } }
@@ -417,7 +419,7 @@ function update(){
   if((boost||0)>=1 && screen==='play') tut('pump','⚡ PUMP ЗАРЯЖЕН — '+('ontouchstart'in window?'ТАПНИ ШКАЛУ':'SHIFT')+' ЧТОБ ОТОРВАТЬСЯ');
   if(tutT>0) tutT-=0.0062;
   // chasing LIQUIDATION wave (the dump): ramps with distance + biome, caps its lead so it always looms; catch = death
-  waveSpd = (TUNE.waveSpeed + (Math.min((dist||0)/150, 4.8) + Math.max(0,((dist||0)-700)/620))*TUNE.waveAccel) * BIOMES[(((zone||0)%BIOMES.length)+BIOMES.length)%BIOMES.length].wave * (curEvType==='whale'?1.75:1) * lerp(0.72,1,clamp((dist||0)/300,0,1)) * (1-0.07*upgLvl('wave'));   // ramps, then keeps creeping past 700m (no cap) → an eventual wall that ДВИЖОК/ЩИТ push deeper   // re-tuned for the heavier momentum bike; surges during a whale dump
+  waveSpd = (TUNE.waveSpeed + (Math.min((dist||0)/150, 4.8) + Math.max(0,((dist||0)-700)/620))*TUNE.waveAccel) * BIOMES[(((zone||0)%BIOMES.length)+BIOMES.length)%BIOMES.length].wave * (curEvType==='whale'?1.75:1) * lerp(0.6,1,clamp((dist||0)/TUNE.easeInDist,0,1)) * (1-0.07*upgLvl('wave'));   // ramps, then keeps creeping past 700m (no cap) → an eventual wall that ДВИЖОК/ЩИТ push deeper   // re-tuned for the heavier momentum bike; surges during a whale dump
   wave += waveSpd;
   const leadCap = W*lerp(0.92, 0.36, clamp((dist||0)/320,0,1));   // dump closes in over the first ~320m → then a constant chase (front sits at the left edge)
   if(bike.x - wave > leadCap) wave = bike.x - leadCap;
@@ -705,7 +707,7 @@ function draw(){
   if(screen==='play' && bike.onG){
     const sa=Math.atan2(terrainAt(bike.x+PHYS.DX).y-terrainAt(bike.x-PHYS.DX).y,2*PHYS.DX);
     let rl=bike.ang-sa; while(rl>Math.PI)rl-=6.283; while(rl<-Math.PI)rl+=6.283;
-    const dn=clamp((Math.abs(rl)-0.7)/(PHYS.LOOP-0.7),0,1);
+    const dn=clamp((Math.abs(rl)-0.6)/(PHYS.LOOP-0.6),0,1);
     if(dn>0.06){ const sxx=bike.x-cam.x, syy=bike.y-cam.y-44, pul=0.55+0.45*Math.sin(t*0.5);
       ctx.save(); ctx.textAlign='center'; ctx.shadowColor='#ff3050'; ctx.shadowBlur=8*dn;
       ctx.fillStyle='rgba(255,'+Math.round(150-110*dn)+',80,'+(0.45+0.55*dn*pul)+')'; ctx.font='800 '+(16+10*dn)+'px ui-monospace,monospace';
