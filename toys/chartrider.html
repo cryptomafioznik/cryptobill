@@ -46,7 +46,7 @@ function lerp(a,b,t){return a+(b-a)*t;} function clamp(v,a,b){return v<a?a:v>b?b
 // false → full game. Single switch. Systems are GATED, never deleted.
 const CORE_TEST_MODE = true;
 // build stamp — bump on every change so a phone refresh can confirm it loaded fresh code (cache!)
-const BUILD = '2026-06-17 · b9';
+const BUILD = '2026-06-17 · b11';
 
 // ---------- procedural market terrain ----------
 // height map sampled every STEP px; generated forward as we ride. Market character:
@@ -70,7 +70,7 @@ const EVENTS={
   flash:{ nodes:13, gapM:290, warn:'ФЛЕШ-КРАХ', icon:'⚠', col:'255,140,70', kind:'bad' },     // the floor drops away — survive the plunge, "buy the dip"
 };
 let evGenType='', evGenLeft=0, nextEvGenX=2600;                 // terrain-generation scheduler
-let gapLeft=0, nextGapX=1800, gapBaseY=0, gapLandFlat=0, overGap=false, gapFxT=0, gapFxMsg='';   // GAPS (chasms to jump): generation + fair-landing + clear-reward state
+let gapLeft=0, nextGapX=1800, gapBaseY=0, gapLandFlat=0, overGap=false, gapLipNow=0, gapFarX=0, gapFxT=0, gapFxMsg='';   // GAPS: gen + fair-landing + clear state; gapLipNow/gapFarX = lip level & far-edge x of the gap being crossed
 let curEvType='', evBanner='', evBannerT=0, evColor='90,240,150', evGlow=0, evBonus=0, lastWarnX=-1, evWarnType=''; // bike-side event state
 function pickEvent(gz){ const z=((gz%5)+5)%5, r=Math.random();
   if(z===2) return r<0.55?'rally':(r<0.82?'flash':'whale');     // Эйфория: pumps
@@ -291,7 +291,7 @@ function reset(){
   rankMul=CORE_TEST_MODE?1:1+0.07*rankIdx(career); rankedUp=null;   // CORE TEST: no rank profit multiplier
   baseY=H*0.6; terr=[]; genX=0; walk=0; regimeLeft=0; lastHazIdx=-99;
   evGenType=''; evGenLeft=0; nextEvGenX=3000; curEvType=''; evBanner=''; evBannerT=0; evGlow=0; evBonus=0; lastWarnX=-1; evWarnType='';   // first event ~300m (onboarding breathing room)
-  gapLeft=0; nextGapX=TUNE.gapStart*10; gapLandFlat=0; overGap=false; gapFxT=0;   // GAPS: first chasm after gapStart
+  gapLeft=0; nextGapX=TUNE.gapStart*10; gapLandFlat=0; overGap=false; gapLipNow=0; gapFarX=0; gapFxT=0;   // GAPS: first chasm after gapStart
   for(let i=0;i<Math.ceil(W/STEP)+8;i++)genSeg();
   bike={x:60,y:terrainAt(60).y-27.5,vx:0,vy:0,ang:terrainAt(60).ang,angV:0,onG:true,wheel:0};
   cam={x:bike.x-W*0.5,y:bike.y-H*0.46}; t=0; coins=0; dist=0; lastMile=0; newDepth=false; wipe=0; screen='play'; shake=0; flash=0; popT=0; daycycle=Math.random()*6.28;
@@ -418,8 +418,13 @@ function update(){
   const magR=36*(1+0.40*upgLvl('mag')); const ci=Math.floor(bike.x/STEP); for(let k=ci-3;k<=ci+3;k++){ const c=terr[k]; if(c&&c.coin){ const cx=c.x,cy=c.y-30; if(Math.hypot(cx-bike.x,cy-bike.y)<magR){ c.coin=false; coins++; sfxCoin(); boost=Math.min(1,(boost||0)+0.04); const gv=Math.round(25*mult); pnl+=gv; floatPop(cx,cy,'+$'+gv,'#ffd678'); for(let z=0;z<8;z++)parts.push({x:cx,y:cy,vx:(Math.random()-0.5)*3.5,vy:-Math.random()*3-1,life:1,gold:1,r:2});} } }
   // ---- GAPS: chasm = jump it. Drop into it = death; clear it & land safely = reward ----
   { const gn=terr[ci];
-    if(gn && gn.gap){ if(screen==='play' && (bike.onG || bike.y > gn.lipY+54)) wipeout('gap'); else overGap=true; }   // dropped well below the lip = fell in (forgiving margin — jump is doable)
-    else if(overGap && bike.onG && screen==='play'){ overGap=false; boost=Math.min(1,(boost||0)+0.2); shake=Math.max(shake,7); gflash=0.6; gapFxT=1; gapFxMsg='ПРОПАСТЬ ✓'; sfxAir(); buzz(22); }   // cleared & landed
+    if(gn && gn.gap){
+      if(screen==='play' && (bike.onG || bike.y > gn.lipY+54)) wipeout('gap');   // grounded on the chasm/wall, or fell deep → death
+      else { overGap=true; gapLipNow=gn.lipY; let fe=ci; while(terr[fe]&&terr[fe].gap)fe++; gapFarX=(terr[fe]?terr[fe].x:fe*STEP); }   // airborne over the chasm; remember its far edge
+    } else if(overGap && screen==='play'){
+      if(!bike.onG && bike.x > gapFarX+STEP){ overGap=false; boost=Math.min(1,(boost||0)+0.2); shake=Math.max(shake,7); gflash=0.6; gapFxT=1; gapFxMsg='ПРОПАСТЬ ✓'; sfxAir(); buzz(22); }   // flew clear PAST the far edge → cleared (lands normally wherever)
+      else if(bike.onG){ overGap=false; if(bike.y > gapLipNow+22) wipeout('gap'); else { boost=Math.min(1,(boost||0)+0.2); shake=Math.max(shake,7); gflash=0.6; gapFxT=1; gapFxMsg='ПРОПАСТЬ ✓'; sfxAir(); buzz(22); } }   // landed: on the track top = clear, low on the wall = death
+    }
     for(let k=ci+1;k<=ci+5;k++){ if(terr[k]&&terr[k].gap){ if(bike.onG) tut('gapj','⤴ ПРОПАСТЬ — РАЗГОНИСЬ и ПРЫГНИ'+(TOUCH?'':' (↑)')); break; } } }
   // hazards: on the ground they wreck your momentum; clear them in the air to DODGE
   for(let k=ci-1;k<=ci+1;k++){ const c=terr[k]; if(c&&c.haz&&!c.hazHit&&Math.abs(c.x-bike.x)<15){ c.hazHit=true;
