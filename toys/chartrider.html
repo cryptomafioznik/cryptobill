@@ -46,7 +46,7 @@ function lerp(a,b,t){return a+(b-a)*t;} function clamp(v,a,b){return v<a?a:v>b?b
 // false → full game. Single switch. Systems are GATED, never deleted.
 const CORE_TEST_MODE = true;
 // build stamp — bump on every change so a phone refresh can confirm it loaded fresh code (cache!)
-const BUILD = '2026-06-17 · b12';
+const BUILD = '2026-06-18 · b13';
 
 // ---------- procedural market terrain ----------
 // height map sampled every STEP px; generated forward as we ride. Market character:
@@ -129,7 +129,9 @@ function terrainAt(x){ // interpolated height + slope at world x
 let bike, cam, t, coins, dist, best, screen, wipe, parts, stars, dust, shake, flash, daycycle, trail, streaks, mult, pnl, bestPnl, airT, nearMissed, hitstop, gflash, floats, multPulse, maxMult, lean, rush, prevVx, wave, waveSpd, deathBy, boost, boosting, zone, biomeBanner, biomeBannerT, BSKY, BLINE, BRIDGE, lastMile, newDepth;
 try{best=+localStorage.getItem('cipher_run_best')||0;}catch(e){}
 try{bestPnl=+localStorage.getItem('cipher_best_pnl')||0;}catch(e){}
-let down=false, brake=false, jumpReq=0, jumpCd=0, coyote=0, jumpGrace=0, activeTouches={}, touchLowY={};   // jumpReq = buffered press; coyote = grace after leaving ground; jumpGrace = clean-arc window; touchLowY = per-touch low point for swipe-up = jump
+let down=false, brake=false, jumpReq=0, jumpCd=0, coyote=0, jumpGrace=0, activeTouches={}, touchLowY={};   // jumpReq = buffered press; coyote/jumpGrace = jump grace windows; touchLowY = per-touch low point for swipe-up
+let leanX=0, ctrlId=null, ctrlOX=0, leanKeyL=false, leanKeyR=false;   // ONE-TOUCH scheme: hold = gas, release = coast, swipe up = jump, drag L/R = analog lean (leanX -1..1)
+const LEANRANGE=58;   // px of horizontal drag from the touch origin for full lean
 const TOUCH=('ontouchstart' in window)||navigator.maxTouchPoints>0;
 // ===================== TUNE — единый источник «крутилок фила» (core ride feel) =====================
 // Меняешь число здесь → жёсткий рефреш на телефоне → вся игра берёт его. Значения по умолчанию
@@ -154,12 +156,16 @@ const TUNE = {
   pitchHold:    0.028,   // 17. самовыравнивание тангажа к склону (МЕНЬШЕ = «типпи»/тонус газ-тормоз; больше = прощает)
   steepEarly:   1.1,     // 18. множитель крутизны НА СТАРТЕ (ЖЁСТКО с первой секунды — цепляет скиллом сразу, не тапалка)
   steepRamp:    600,     // 19. дистанция (м), за которую крутизна растёт steepEarly → terrainSteep (ещё жёстче дальше)
+  leanGround:   0.07,    // 20. сила НАКЛОНА (драг влево-вправо) на земле — аналоговый баланс (выше = управляемее; подобрано свипом)
+  leanAir:      0.018,   // 21. сила наклона в воздухе — аналоговое вращение/доворот к посадке
+  destab:       0.004,   // 22. дестабилизация скорость×склон: быстрый подъём кренит назад, спуск — носом вниз → держи наклоном (баланс-скилл)
 };
 // ---- физика байка (двухколёсная: тангаж → вилли / loop-out / endo + импульс); ключевые крутилки тянет из TUNE ----
 const PHYS={ GRAV:TUNE.gravity, DX:26, DY:27.5,           // гравитация(↑TUNE), полубаза, высота ЦТ над колёсами
   POW:TUNE.acceleration, GACC:TUNE.slopePull, DRAG:0.990, BRK:TUNE.brake,   // тяга(↑TUNE), импульс-по-склону(↑TUNE), drag→предел скорости, тормоз(↑TUNE)
   GP:TUNE.pitchHold, ENGTQ:0.0044, BRKTQ:0.018, CLIMB:TUNE.climbLift, // тангаж-возврат-к-склону(↑TUNE), газ-нос-вверх, тормоз-нос-вниз, множ. подъёма(↑TUNE: дозируй газ или loop out)
-  AIRTQ:TUNE.airControl, ANGD:0.88, AVMAX:0.6, LOOP:1.3, STICK:5, JUMP:TUNE.jump }; // момент-сальто(↑TUNE), демпфер, кламп, угол loop/endo, прилипание, хоп(↑TUNE)
+  AIRTQ:TUNE.airControl, ANGD:0.88, AVMAX:0.6, LOOP:1.3, STICK:5, JUMP:TUNE.jump, // момент-сальто, демпфер, кламп, угол loop/endo, прилипание, хоп
+  LEANGND:TUNE.leanGround, LEANAIR:TUNE.leanAir, DESTAB:TUNE.destab }; // наклон на земле/в воздухе + дестабилизация (новая lean-схема управления)
 const BASE_PHYS={POW:PHYS.POW, AIRTQ:PHYS.AIRTQ, LOOP:PHYS.LOOP};   // frozen base — upgrades scale from this each run (no compounding)
 
 // ---------- meta: gem bank, bikes, missions ----------
@@ -296,11 +302,11 @@ function reset(){
   bike={x:60,y:terrainAt(60).y-27.5,vx:0,vy:0,ang:terrainAt(60).ang,angV:0,onG:true,wheel:0};
   cam={x:bike.x-W*0.5,y:bike.y-H*0.46}; t=0; coins=0; dist=0; lastMile=0; newDepth=false; wipe=0; screen='play'; shake=0; flash=0; popT=0; daycycle=Math.random()*6.28;
   mult=1; pnl=0; airT=0; nearMissed=false; hitstop=0; gflash=0; multPulse=0; maxMult=1; flipCount=0; flipAcc=0;
-  flipsTotal=0; topKmh=0; lastLandDiff=0; lean=0; rush=0; prevVx=0; down=false; brake=false; jumpReq=0; jumpCd=0; coyote=0; jumpGrace=0; activeTouches={}; wave=bike.x-W*0.95; waveSpd=0; deathBy=''; boost=0; boosting=0;
+  flipsTotal=0; topKmh=0; lastLandDiff=0; lean=0; rush=0; prevVx=0; down=false; brake=false; jumpReq=0; jumpCd=0; coyote=0; jumpGrace=0; activeTouches={}; leanX=0; ctrlId=null; leanKeyL=false; leanKeyR=false; wave=bike.x-W*0.95; waveSpd=0; deathBy=''; boost=0; boosting=0;
   zone=-1; biomeBanner=''; biomeBannerT=0; BSKY=['rgb(20,16,48)','rgb(46,30,78)','rgb(150,80,110)','rgb(230,150,110)']; BLINE='228,250,255'; BRIDGE='60,40,90'; rollMissions();
   parts=[]; dust=[]; trail=[]; streaks=[]; floats=[];
   stars=[]; for(let i=0;i<90;i++)stars.push({x:Math.random()*W,y:Math.random()*H*0.7,z:0.2+Math.random()*0.6,s:Math.random()*1.6+0.4});
-  document.getElementById('hint').innerHTML=(TOUCH?'<b>ГАЗ</b> справа · <b>ТОРМОЗ</b> слева · <b>ПРЫЖОК</b> — свайп вверх или кнопка':'<b>ПРОБЕЛ/→ газ</b> · ↓/← тормоз · <b>↑ прыжок</b>')+' · в воздухе наклоняй и крути';
+  document.getElementById('hint').innerHTML=(TOUCH?'<b>удерживай</b> = газ · <b>влево-вправо</b> = наклон · <b>свайп вверх</b> = прыжок':'<b>ПРОБЕЛ</b> газ · <b>←/→</b> наклон · <b>↑</b> прыжок')+' · отпустил — катишься';
 }
 function toTitle(){ reset(); screen='title'; if(!CORE_TEST_MODE)checkDaily(); }
 const UI={}; // button rects in screen space, refreshed each draw for hit-testing
@@ -327,18 +333,23 @@ function pointerDown(p){
   if(hit(p,UI.pause)){ screen='paused'; sfxClick(); return null; }
   if(UI.jump && hit(p,UI.jump)){ requestJump(); return null; }                  // tap JUMP button
   if((boost||0)>=1 && hit(p,UI.boost)){ activateBoost(); return null; }         // tap charged PUMP meter to boost
-  return (p.x>W*0.46) ? 'gas' : 'brake';   // held control — forgiving halves (visible pedals are just anchors)
+  return 'ctrl';   // anywhere in the play area = control finger (hold = gas, drag = lean)
 }
 function requestJump(){ if(screen==='play' && bike) jumpReq=8; }   // buffer the press for 8 frames (forgiving timing at gap edges); update() fires it if grounded or within coyote grace
 function applyTouches(){ let g=false,b=false; for(const id in activeTouches){ const z=activeTouches[id]; if(z==='gas')g=true; else if(z==='brake')b=true; } down=g; brake=b; }
 function ptFromEvent(e){ const r=cv.getBoundingClientRect(), s=(e.touches&&e.touches[0])?e.touches[0]:e; return {x:(s.clientX||0)-r.left,y:(s.clientY||0)-r.top}; }
-const GAS_KEYS={' ':1,'ArrowRight':1,'d':1,'D':1};
-const BRK_KEYS={'ArrowDown':1,'ArrowLeft':1,'s':1,'S':1,'a':1,'A':1};
+const GAS_KEYS={' ':1};                              // hold = gas (release = coast)
+const LEANL_KEYS={'ArrowLeft':1,'a':1,'A':1};        // lean nose UP / back
+const LEANR_KEYS={'ArrowRight':1,'d':1,'D':1};       // lean nose DOWN / forward
 const JUMP_KEYS={'ArrowUp':1,'w':1,'W':1};
+const BRK_KEYS={'ArrowDown':1,'s':1,'S':1};          // optional active brake (desktop)
+function updLeanKeys(){ leanX=(leanKeyR?1:0)-(leanKeyL?1:0); }
 addEventListener('keydown',e=>{
   const k=e.key;
   if(GAS_KEYS[k]){ resumeAudio(); if(screen==='play')down=true; else if(screen==='title'||screen==='dead')reset(); e.preventDefault(); }
   else if(JUMP_KEYS[k]){ resumeAudio(); if(screen==='play')requestJump(); else if(screen==='title'||screen==='dead')reset(); e.preventDefault(); }
+  else if(LEANL_KEYS[k]){ if(screen==='play'){leanKeyL=true;updLeanKeys();} e.preventDefault(); }
+  else if(LEANR_KEYS[k]){ if(screen==='play'){leanKeyR=true;updLeanKeys();} e.preventDefault(); }
   else if(BRK_KEYS[k]){ if(screen==='play')brake=true; e.preventDefault(); }
   else if(k==='Escape'||k==='p'||k==='P'){ if(screen==='play')screen='paused'; else if(screen==='paused')screen='play'; }
   else if(k==='Shift'){ if(screen==='play')activateBoost(); }
@@ -346,15 +357,19 @@ addEventListener('keydown',e=>{
   else if(k==='m'||k==='M')toggleMute();
   else if(k==='f'||k==='F')dbgToggle();   // toggle debug overlay
 });
-addEventListener('keyup',e=>{ if(GAS_KEYS[e.key])down=false; else if(BRK_KEYS[e.key])brake=false; });
-addEventListener('mousedown',e=>{ const z=pointerDown(ptFromEvent(e)); if(z==='gas')down=true; else if(z==='brake')brake=true; });
-addEventListener('mouseup',()=>{down=false;brake=false;});
-addEventListener('touchstart',e=>{ for(const tch of e.changedTouches){ const r=cv.getBoundingClientRect(),p={x:tch.clientX-r.left,y:tch.clientY-r.top},z=pointerDown(p); touchLowY[tch.identifier]=p.y; if(z==='gas'||z==='brake')activeTouches[tch.identifier]=z; } applyTouches(); e.preventDefault(); },{passive:false});
-addEventListener('touchmove',e=>{ for(const tch of e.changedTouches){ const r=cv.getBoundingClientRect(), cy=tch.clientY-r.top;
-    if(touchLowY[tch.identifier]!==undefined){ if(cy>touchLowY[tch.identifier]) touchLowY[tch.identifier]=cy; else if(touchLowY[tch.identifier]-cy>45){ requestJump(); touchLowY[tch.identifier]=cy; } }   // SWIPE UP anywhere = jump (no reaching for a button)
-    if(activeTouches[tch.identifier]!==undefined){ activeTouches[tch.identifier]=((tch.clientX-r.left)>W*0.46)?'gas':'brake'; } } applyTouches(); e.preventDefault(); },{passive:false});
-addEventListener('touchend',e=>{ for(const tch of e.changedTouches){ delete activeTouches[tch.identifier]; delete touchLowY[tch.identifier]; } applyTouches(); e.preventDefault(); },{passive:false});
-addEventListener('touchcancel',e=>{ for(const tch of e.changedTouches){ delete activeTouches[tch.identifier]; delete touchLowY[tch.identifier]; } applyTouches(); },{passive:false});
+addEventListener('keyup',e=>{ const k=e.key; if(GAS_KEYS[k])down=false; else if(BRK_KEYS[k])brake=false; else if(LEANL_KEYS[k]){leanKeyL=false;updLeanKeys();} else if(LEANR_KEYS[k]){leanKeyR=false;updLeanKeys();} });
+addEventListener('mousedown',e=>{ const p=ptFromEvent(e),z=pointerDown(p); if(z==='ctrl'){ down=true; ctrlId='mouse'; ctrlOX=p.x; leanX=0; } });
+addEventListener('mousemove',e=>{ if(ctrlId==='mouse'){ const p=ptFromEvent(e); leanX=clamp((p.x-ctrlOX)/LEANRANGE,-1,1); } });
+addEventListener('mouseup',()=>{ if(ctrlId==='mouse')ctrlId=null; down=false; leanX=0; brake=false; });
+addEventListener('touchstart',e=>{ for(const tch of e.changedTouches){ const r=cv.getBoundingClientRect(),p={x:tch.clientX-r.left,y:tch.clientY-r.top},z=pointerDown(p); touchLowY[tch.identifier]=p.y;
+    if(z==='ctrl'){ if(ctrlId===null){ ctrlId=tch.identifier; ctrlOX=p.x; leanX=0; } down=true; } }   // hold anywhere = gas; first finger = the lean stick
+  e.preventDefault(); },{passive:false});
+addEventListener('touchmove',e=>{ for(const tch of e.changedTouches){ const r=cv.getBoundingClientRect(), cx=tch.clientX-r.left, cy=tch.clientY-r.top;
+    if(touchLowY[tch.identifier]!==undefined){ if(cy>touchLowY[tch.identifier]) touchLowY[tch.identifier]=cy; else if(touchLowY[tch.identifier]-cy>45){ requestJump(); touchLowY[tch.identifier]=cy; } }   // swipe up = jump
+    if(tch.identifier===ctrlId){ leanX=clamp((cx-ctrlOX)/LEANRANGE,-1,1); } }   // drag L/R = analog lean
+  e.preventDefault(); },{passive:false});
+addEventListener('touchend',e=>{ for(const tch of e.changedTouches){ delete touchLowY[tch.identifier]; if(tch.identifier===ctrlId){ ctrlId=null; leanX=0; } } down=(ctrlId!==null); e.preventDefault(); },{passive:false});
+addEventListener('touchcancel',e=>{ for(const tch of e.changedTouches){ delete touchLowY[tch.identifier]; if(tch.identifier===ctrlId){ ctrlId=null; leanX=0; } } down=(ctrlId!==null); },{passive:false});
 
 function update(){
   if(hitstop>0){ hitstop--; return; }   // brief freeze for impact punch
@@ -376,16 +391,16 @@ function update(){
     bike.vx += P.GACC*Math.sin(supA);                                  // gravity along slope = real momentum (climb bleeds, descent builds)
     if(down) bike.vx += P.POW*BK().accel;
     if(brake) bike.vx *= P.BRK;
-    const noseUp = down ? P.ENGTQ*(1+Math.max(0,-supA)*P.CLIMB) : 0;    // throttle lifts the nose — MORE on a climb (loop-out risk)
-    const noseDn = brake ? P.BRKTQ : 0;                                // brake drives the nose down (endo risk on descents)
-    bike.angV += -P.GP*Math.sin(bike.ang-supA) - noseUp + noseDn;       // pitch = pendulum toward the slope + weight transfer
+    bike.angV += -P.GP*Math.sin(bike.ang-supA)                         // self-stabilize toward the slope
+               + leanX*P.LEANGND                                        // player LEAN (drag L/R): right = nose down, left = nose up — the balance control
+               + bike.vx*Math.sin(supA)*P.DESTAB;                       // speed×slope destabilizes (fast climb kicks the nose UP, descent DOWN) → counter it with lean
     bike.wheel += bike.vx*0.08;
     if(bike.vx>3&&t%2===0)dust.push({x:bike.x-14,y:bike.y+18,vx:-bike.vx*0.18-Math.random(),vy:-Math.random()*1.2,life:1,r:Math.random()*2+1});
   } else {
     bike.y += bike.vy;                                                 // airborne projectile
-    if(jumpGrace){ if(brake)bike.angV+=P.AIRTQ; else { const la=terrainAt(bike.x+Math.max(20,bike.vx*6)).ang; bike.angV+=(la-bike.ang)*0.02; } }   // jump arc (until landing): brake still doverts nose-down, but GAS no longer auto-backflips → clean controllable jump
-    else if(down)bike.angV-=P.AIRTQ; else if(brake)bike.angV+=P.AIRTQ;       // free air (crest launches): gas = backflip, brake = frontflip
-    else { const la=terrainAt(bike.x+Math.max(20,bike.vx*6)).ang; bike.angV+=(la-bike.ang)*0.004; } // coast = auto-level to landing
+    if(Math.abs(leanX)>0.06){ bike.angV += leanX*P.LEANAIR; }                                                       // analog air rotation via LEAN (drag) — flips & landing aim; no more gas-coupled flip
+    else if(jumpGrace){ const la=terrainAt(bike.x+Math.max(20,bike.vx*6)).ang; bike.angV+=(la-bike.ang)*0.02; }     // just jumped, not steering → clean controllable arc
+    else { const la=terrainAt(bike.x+Math.max(20,bike.vx*6)).ang; bike.angV+=(la-bike.ang)*0.006; }                 // no input → gentle auto-level to landing
     bike.wheel += 0.3;
   }
   bike.vx*=P.DRAG; if(bike.vx<0)bike.vx*=0.95;                          // drag (emergent top speed, no hard cap) + roll-back resistance
@@ -760,14 +775,17 @@ function draw(){
       ctx.fillText(rl<0?'⟲':'⟳',sxx,syy); ctx.shadowBlur=0; ctx.restore(); ctx.textAlign='left'; } }
   // pause button (top-right) while playing
   if(screen==='play'){ UI.pause={x:W-40,y:14,w:26,h:26}; ctx.fillStyle='rgba(20,22,40,0.45)'; ctx.fillRect(W-40,14,26,26); ctx.strokeStyle='rgba(150,180,220,0.5)'; ctx.lineWidth=1; ctx.strokeRect(W-40,14,26,26); ctx.fillStyle='rgba(200,220,245,0.85)'; ctx.fillRect(W-32,20,4,14); ctx.fillRect(W-24,20,4,14); } else UI.pause=null;
-  // ---- on-screen touch controls: visible, responsive verbs (gas / brake / jump) ----
+  // ---- on-screen controls: HOLD anywhere = gas · drag L/R = lean · swipe up = jump ----
   if((TOUCH||window.__forceTouchUI) && screen==='play'){
-    UI.gas={x:W-112,y:H-104,w:96,h:74}; UI.brk={x:16,y:H-104,w:96,h:74}; UI.jump={x:W-120,y:H-194,w:104,h:54};   // jump moved to the RIGHT (above gas) — reachable by the gas thumb; + swipe-up anywhere
+    UI.gas=null; UI.brk=null; UI.jump={x:W-118,y:H-188,w:104,h:52};
     const pad=(r,lab,on,c,fs)=>{ ctx.fillStyle='rgba('+c+','+(on?0.34:0.13)+')'; if(ctx.roundRect){ctx.beginPath();ctx.roundRect(r.x,r.y,r.w,r.h,13);ctx.fill();ctx.strokeStyle='rgba('+c+','+(on?1:0.5)+')';ctx.lineWidth=on?2.4:1.4;ctx.stroke();}else{ctx.fillRect(r.x,r.y,r.w,r.h);}
-      ctx.fillStyle='rgba('+c+','+(on?1:0.78)+')'; ctx.font='800 '+(fs||13)+'px ui-monospace,monospace'; ctx.textAlign='center'; ctx.fillText(lab,r.x+r.w/2,r.y+r.h/2+5); ctx.textAlign='left'; };
-    pad(UI.brk,'ТОРМОЗ',brake,'150,180,230');
-    pad(UI.gas,'ГАЗ',down,'120,255,180');
-    pad(UI.jump,'⤴ ПРЫЖОК',jumpReq||(!bike.onG&&jumpCd>0), jumpCd>0?'130,150,180':'255,210,120', 14);
+      ctx.fillStyle='rgba('+c+','+(on?1:0.78)+')'; ctx.font='800 '+(fs||13)+'px ui-monospace,monospace'; ctx.textAlign='center'; ctx.fillText(lab,r.x+r.w/2,r.y+r.h/2+6); ctx.textAlign='left'; };
+    pad(UI.jump,'⤴',jumpReq||(!bike.onG&&jumpCd>0), jumpCd>0?'130,150,180':'255,210,120', 20);
+    // lean indicator: track + dot (analog lean), glows green while gas is held
+    const lw=152, lx=W/2-lw/2, ly=H-40;
+    ctx.fillStyle=down?'rgba(120,255,180,0.45)':'rgba(150,180,220,0.28)'; ctx.fillRect(lx,ly,lw,4);
+    ctx.fillStyle='rgba(120,200,255,0.95)'; ctx.shadowColor='#3ea0ff'; ctx.shadowBlur=6; ctx.beginPath(); ctx.arc(lx+lw/2+(leanX||0)*(lw/2-7), ly+2, 8, 0, 7); ctx.fill(); ctx.shadowBlur=0;
+    ctx.fillStyle='rgba(160,180,210,0.55)'; ctx.font='700 9px ui-monospace,monospace'; ctx.textAlign='center'; ctx.fillText(down?'◀ НАКЛОН ▶':'удерживай = газ · ◀ наклон ▶ · свайп↑ прыжок', W/2, ly-9); ctx.textAlign='left';
   } else { UI.gas=null; UI.brk=null; UI.jump=null; }
   // engine audio tracks speed
   if(eng&&engOscs){ const v=bike?bike.vx:0, f=40+v*8+(down?16:0);
