@@ -46,7 +46,7 @@ function lerp(a,b,t){return a+(b-a)*t;} function clamp(v,a,b){return v<a?a:v>b?b
 // false → full game. Single switch. Systems are GATED, never deleted.
 const CORE_TEST_MODE = true;
 // build stamp — bump on every change so a phone refresh can confirm it loaded fresh code (cache!)
-const BUILD = '2026-06-17 · b6';
+const BUILD = '2026-06-17 · b7';
 
 // ---------- procedural market terrain ----------
 // height map sampled every STEP px; generated forward as we ride. Market character:
@@ -70,6 +70,7 @@ const EVENTS={
   flash:{ nodes:13, gapM:290, warn:'ФЛЕШ-КРАХ', icon:'⚠', col:'255,140,70', kind:'bad' },     // the floor drops away — survive the plunge, "buy the dip"
 };
 let evGenType='', evGenLeft=0, nextEvGenX=2600;                 // terrain-generation scheduler
+let gapLeft=0, nextGapX=1800, gapBaseY=0, overGap=false, gapFxT=0, gapFxMsg='';   // GAPS (chasms to jump): generation + clear-reward state
 let curEvType='', evBanner='', evBannerT=0, evColor='90,240,150', evGlow=0, evBonus=0, lastWarnX=-1, evWarnType=''; // bike-side event state
 function pickEvent(gz){ const z=((gz%5)+5)%5, r=Math.random();
   if(z===2) return r<0.55?'rally':(r<0.82?'flash':'whale');     // Эйфория: pumps
@@ -99,13 +100,23 @@ function genSeg(){
     close = clamp(baseY + walk + roll, 70, H*0.95);
     if(terr.length<16){ const e=terr.length/16; close=lerp(baseY, close, e*e); walk*=0.7; }   // flat starting ramp eases the bike in
   }
+  // ---- GAPS: a chasm you must JUMP (core skill obstacle of varying width) ----
+  let isGap=false, gapLip=0;
+  if(!isEv){
+    if(gapLeft>0){ isGap=true; gapLip=gapBaseY; close=H*0.99; gapLeft--; if(gapLeft<=0) walk=gapBaseY-baseY; }   // chasm floor (deep = void); restore level for a fair landing
+    else if(TUNE.gapEvery>0 && genX>=nextGapX && genX>1600 && terr.length>20 && regime!=='pump' && regime!=='crash'){
+      gapBaseY=close; gapLeft=3+((Math.random()*5)|0);   // 3-7 chasm nodes ahead; THIS node stays solid = the takeoff lip
+      nextGapX=genX + TUNE.gapEvery*10 + Math.random()*1400;
+    }
+  }
   let open = terr.length ? terr[terr.length-1].close : close;
+  if(terr.length && terr[terr.length-1].gap) open=close;   // no giant candle bridging out of a chasm
   const up=close<open, top=Math.min(open,close), bot=Math.max(open,close), wick=4+Math.random()*14;
   const hzRate=(0.024+clamp((dist||0)/1800,0,1)*0.028)*TUNE.obstacleFreq;   // sparse for onboarding → denser deep into the run (×TUNE.obstacleFreq)
-  const haz=(!isEv && genX>1200 && regime!=='pump' && regime!=='crash' && (terr.length-lastHazIdx)>=10 && Math.random()<hzRate); // no sell-walls inside event blocks; none in the first ~120m (onboarding) — then jump them
+  const haz=(!isEv && !isGap && genX>1200 && regime!=='pump' && regime!=='crash' && (terr.length-lastHazIdx)>=10 && Math.random()<hzRate); // no sell-walls in events/gaps; none in the first ~120m
   if(haz) lastHazIdx=terr.length;
-  const coin = isEv==='rally' ? (Math.random()<0.55) : (!haz && !isEv && Math.random()<0.2);   // rally rains gems
-  terr.push({x:genX, y:close, open, close, hi:top-wick, lo:bot+wick*0.6, up, haz:haz, coin:coin, ev:isEv}); genX+=STEP;
+  const coin = isEv==='rally' ? (Math.random()<0.55) : (!haz && !isEv && !isGap && Math.random()<0.2);   // rally rains gems
+  terr.push({x:genX, y:close, open, close, hi:top-wick, lo:bot+wick*0.6, up, haz:haz, coin:coin, ev:isEv, gap:isGap, lipY:gapLip}); genX+=STEP;
 }
 function terrainAt(x){ // interpolated height + slope at world x
   const i=Math.floor(x/STEP); if(i<0||i+1>=terr.length) return {y:baseY,ang:0};
@@ -116,7 +127,7 @@ function terrainAt(x){ // interpolated height + slope at world x
 let bike, cam, t, coins, dist, best, screen, wipe, parts, stars, dust, shake, flash, daycycle, trail, streaks, mult, pnl, bestPnl, airT, nearMissed, hitstop, gflash, floats, multPulse, maxMult, lean, rush, prevVx, wave, waveSpd, deathBy, boost, boosting, zone, biomeBanner, biomeBannerT, BSKY, BLINE, BRIDGE, lastMile, newDepth;
 try{best=+localStorage.getItem('cipher_run_best')||0;}catch(e){}
 try{bestPnl=+localStorage.getItem('cipher_best_pnl')||0;}catch(e){}
-let down=false, brake=false, jumpReq=false, jumpCd=0, activeTouches={};
+let down=false, brake=false, jumpReq=0, jumpCd=0, coyote=0, activeTouches={};   // jumpReq = buffered-press TTL (frames); coyote = grace frames to still jump after leaving ground
 const TOUCH=('ontouchstart' in window)||navigator.maxTouchPoints>0;
 // ===================== TUNE — единый источник «крутилок фила» (core ride feel) =====================
 // Меняешь число здесь → жёсткий рефреш на телефоне → вся игра берёт его. Значения по умолчанию
@@ -136,6 +147,7 @@ const TUNE = {
   loopForgive:  1.4,     // 12. порог опрокидывания НА СТАРТЕ (рад): меньше = газ вслепую быстрее опрокидывает (спадает к PHYS.LOOP)
   climbLift:    3.0,     // 13. GD-ЯДРО: насколько газ задирает нос НА ПОДЪЁМЕ (больше = дозируй газ или кувырок — баланс-скилл)
   slopePull:    0.32,    // 14. импульс по склону: подъём гасит скорость, спуск разгоняет (больше = надо НЕСТИ momentum в горку)
+  gapEvery:     260,     // 15. ПРОПАСТИ: средняя дистанция между провалами (м), которые надо ПЕРЕПРЫГНУТЬ — новый навык (0 = выкл)
 };
 // ---- физика байка (двухколёсная: тангаж → вилли / loop-out / endo + импульс); ключевые крутилки тянет из TUNE ----
 const PHYS={ GRAV:TUNE.gravity, DX:26, DY:27.5,           // гравитация(↑TUNE), полубаза, высота ЦТ над колёсами
@@ -273,11 +285,12 @@ function reset(){
   rankMul=CORE_TEST_MODE?1:1+0.07*rankIdx(career); rankedUp=null;   // CORE TEST: no rank profit multiplier
   baseY=H*0.6; terr=[]; genX=0; walk=0; regimeLeft=0; lastHazIdx=-99;
   evGenType=''; evGenLeft=0; nextEvGenX=3000; curEvType=''; evBanner=''; evBannerT=0; evGlow=0; evBonus=0; lastWarnX=-1; evWarnType='';   // first event ~300m (onboarding breathing room)
+  gapLeft=0; nextGapX=1800; overGap=false; gapFxT=0;   // GAPS: first chasm ~180m in
   for(let i=0;i<Math.ceil(W/STEP)+8;i++)genSeg();
   bike={x:60,y:terrainAt(60).y-27.5,vx:0,vy:0,ang:terrainAt(60).ang,angV:0,onG:true,wheel:0};
   cam={x:bike.x-W*0.5,y:bike.y-H*0.46}; t=0; coins=0; dist=0; lastMile=0; newDepth=false; wipe=0; screen='play'; shake=0; flash=0; popT=0; daycycle=Math.random()*6.28;
   mult=1; pnl=0; airT=0; nearMissed=false; hitstop=0; gflash=0; multPulse=0; maxMult=1; flipCount=0; flipAcc=0;
-  flipsTotal=0; topKmh=0; lastLandDiff=0; lean=0; rush=0; prevVx=0; down=false; brake=false; jumpReq=false; jumpCd=0; activeTouches={}; wave=bike.x-W*0.95; waveSpd=0; deathBy=''; boost=0; boosting=0;
+  flipsTotal=0; topKmh=0; lastLandDiff=0; lean=0; rush=0; prevVx=0; down=false; brake=false; jumpReq=0; jumpCd=0; coyote=0; activeTouches={}; wave=bike.x-W*0.95; waveSpd=0; deathBy=''; boost=0; boosting=0;
   zone=-1; biomeBanner=''; biomeBannerT=0; BSKY=['rgb(20,16,48)','rgb(46,30,78)','rgb(150,80,110)','rgb(230,150,110)']; BLINE='228,250,255'; BRIDGE='60,40,90'; rollMissions();
   parts=[]; dust=[]; trail=[]; streaks=[]; floats=[];
   stars=[]; for(let i=0;i<90;i++)stars.push({x:Math.random()*W,y:Math.random()*H*0.7,z:0.2+Math.random()*0.6,s:Math.random()*1.6+0.4});
@@ -310,7 +323,7 @@ function pointerDown(p){
   if((boost||0)>=1 && hit(p,UI.boost)){ activateBoost(); return null; }         // tap charged PUMP meter to boost
   return (p.x>W*0.46) ? 'gas' : 'brake';   // held control — forgiving halves (visible pedals are just anchors)
 }
-function requestJump(){ if(screen==='play' && bike && bike.onG && jumpCd<=0) jumpReq=true; }
+function requestJump(){ if(screen==='play' && bike) jumpReq=8; }   // buffer the press for 8 frames (forgiving timing at gap edges); update() fires it if grounded or within coyote grace
 function applyTouches(){ let g=false,b=false; for(const id in activeTouches){ const z=activeTouches[id]; if(z==='gas')g=true; else if(z==='brake')b=true; } down=g; brake=b; }
 function ptFromEvent(e){ const r=cv.getBoundingClientRect(), s=(e.touches&&e.touches[0])?e.touches[0]:e; return {x:(s.clientX||0)-r.left,y:(s.clientY||0)-r.top}; }
 const GAS_KEYS={' ':1,'ArrowRight':1,'d':1,'D':1};
@@ -346,10 +359,12 @@ function update(){
   const supA=Math.atan2(gyf-gyr, 2*DX), targetY=(gyr+gyf)*0.5 - DY;   // slope the bike rests at; CG height when seated
   bike.vy += P.GRAV;
   let grounded = (bike.y + bike.vy >= targetY - P.STICK);             // cling to the ground unless it drops away faster than STICK (kills micro-launches, keeps real ramps)
+  if(grounded) coyote=8; else if(coyote>0) coyote--;                  // coyote grace: still jumpable briefly after a gap edge launches you early
   if(jumpCd>0)jumpCd--;
-  if(jumpReq){ if(grounded && jumpCd<=0){ bike.vy=-P.JUMP; grounded=false; jumpCd=16; airT=0; nearMissed=false; shake=Math.max(shake,3); for(let e=0;e<7;e++)dust.push({x:bike.x-10+Math.random()*20,y:bike.y+24,vx:(Math.random()-0.5)*2.4,vy:-Math.random()*2,life:1,r:Math.random()*2.4+1}); sfxAir(); } jumpReq=false; }   // on-demand hop
+  if(jumpReq>0){ if((grounded||coyote>0) && jumpCd<=0){ bike.vy=-P.JUMP; grounded=false; coyote=0; jumpReq=0; jumpCd=16; airT=0; nearMissed=false; shake=Math.max(shake,3); for(let e=0;e<7;e++)dust.push({x:bike.x-10+Math.random()*20,y:bike.y+24,vx:(Math.random()-0.5)*2.4,vy:-Math.random()*2,life:1,r:Math.random()*2.4+1}); sfxAir(); } else jumpReq--; }   // on-demand hop (buffered + coyote)
   if(grounded){
-    bike.y = targetY; bike.vy = bike.vx*Math.tan(clamp(supA,-1.2,1.2)); // seat on ground; store follow-rate so crests launch
+    const _ahead=terr[Math.floor((bike.x+DX)/STEP)];                  // gap edge ahead? launch flat (slight up), don't follow the cliff down
+    bike.y = targetY; bike.vy = (_ahead&&_ahead.gap) ? Math.min(bike.vy,-1.5) : bike.vx*Math.tan(clamp(supA,-1.2,1.2)); // seat on ground; store follow-rate so crests launch
     bike.vx += P.GACC*Math.sin(supA);                                  // gravity along slope = real momentum (climb bleeds, descent builds)
     if(down) bike.vx += P.POW*BK().accel;
     if(brake) bike.vx *= P.BRK;
@@ -393,6 +408,11 @@ function update(){
   if(grounded && screen==='play' && Math.abs(rel)>loopThresh){ wipeout(rel<0?'loop':'endo'); }
   // coins along terrain
   const magR=36*(1+0.40*upgLvl('mag')); const ci=Math.floor(bike.x/STEP); for(let k=ci-3;k<=ci+3;k++){ const c=terr[k]; if(c&&c.coin){ const cx=c.x,cy=c.y-30; if(Math.hypot(cx-bike.x,cy-bike.y)<magR){ c.coin=false; coins++; sfxCoin(); boost=Math.min(1,(boost||0)+0.04); const gv=Math.round(25*mult); pnl+=gv; floatPop(cx,cy,'+$'+gv,'#ffd678'); for(let z=0;z<8;z++)parts.push({x:cx,y:cy,vx:(Math.random()-0.5)*3.5,vy:-Math.random()*3-1,life:1,gold:1,r:2});} } }
+  // ---- GAPS: chasm = jump it. Drop into it = death; clear it & land safely = reward ----
+  { const gn=terr[ci];
+    if(gn && gn.gap){ if(screen==='play' && (bike.onG || bike.y > gn.lipY+38)) wipeout('gap'); else overGap=true; }   // dropped below the lip = fell in (must JUMP, not coast)
+    else if(overGap && bike.onG && screen==='play'){ overGap=false; boost=Math.min(1,(boost||0)+0.2); shake=Math.max(shake,7); gflash=0.6; gapFxT=1; gapFxMsg='ПРОПАСТЬ ✓'; sfxAir(); buzz(22); }   // cleared & landed
+    for(let k=ci+1;k<=ci+5;k++){ if(terr[k]&&terr[k].gap){ if(bike.onG) tut('gapj','⤴ ПРОПАСТЬ — РАЗГОНИСЬ и ПРЫГНИ'+(TOUCH?'':' (↑)')); break; } } }
   // hazards: on the ground they wreck your momentum; clear them in the air to DODGE
   for(let k=ci-1;k<=ci+1;k++){ const c=terr[k]; if(c&&c.haz&&!c.hazHit&&Math.abs(c.x-bike.x)<15){ c.hazHit=true;
     if(bike.onG){ bike.vx*=0.4; shake=9; hitstop=3; mult=Math.max(1,mult-0.8); flash=0.45; popText('REKT!'); floatPop(bike.x,bike.y-28,'-темп','#ff6a86'); sfxCrash(); buzz(45); }
@@ -522,21 +542,28 @@ function draw(){
   const gf=ctx.createLinearGradient(0,cam.y+H*0.12,0,cam.y+H); gf.addColorStop(0,'rgba(34,38,64,1)'); gf.addColorStop(0.5,'rgba(18,18,42,1)'); gf.addColorStop(1,'rgba(6,5,16,1)'); ctx.fillStyle=gf; ctx.fill();
   // ---- candle backdrop (dim squares) — chart texture, secondary to the track ----
   const cw=STEP*0.66;
-  for(let i=i0;i<=i1;i++){ const c=terr[i]; if(!c)continue; const col=c.up?'74,214,176':'232,84,116';
+  for(let i=i0;i<=i1;i++){ const c=terr[i]; if(!c||c.gap)continue; const col=c.up?'74,214,176':'232,84,116';
     ctx.strokeStyle='rgba('+col+',0.16)';ctx.lineWidth=1;ctx.beginPath();ctx.moveTo(c.x,c.hi);ctx.lineTo(c.x,c.lo);ctx.stroke();
     const by=Math.min(c.open,c.close), bh=Math.max(2,Math.abs(c.close-c.open));
     ctx.fillStyle='rgba('+col+',0.2)'; ctx.fillRect(c.x-cw/2,by,cw,bh);
     ctx.strokeStyle='rgba('+col+',0.32)';ctx.lineWidth=1;ctx.strokeRect(c.x-cw/2,by,cw,bh); }
   // ---- the RIDE LINE (the track): slope-colored glow + crisp flowing top ----
   ctx.lineCap='round'; ctx.lineJoin='round';
-  for(let i=i0;i<i1;i++){ const a=terr[i],b=terr[i+1]; if(!a||!b)continue; const climb=b.y<a.y-1,drop=b.y>a.y+1;
+  for(let i=i0;i<i1;i++){ const a=terr[i],b=terr[i+1]; if(!a||!b||a.gap||b.gap)continue; const climb=b.y<a.y-1,drop=b.y>a.y+1;
     const col=climb?'90,240,180':drop?'255,110,140':'120,185,215';
     ctx.strokeStyle='rgba('+col+',0.5)'; ctx.lineWidth=6; ctx.shadowColor='rgba('+col+',0.9)'; ctx.shadowBlur=12;
     ctx.beginPath(); ctx.moveTo(a.x,a.y); ctx.lineTo(b.x,b.y); ctx.stroke(); }
   ctx.shadowBlur=0;
-  ctx.beginPath(); for(let i=i0;i<=i1;i++){ const c=terr[i]; i===i0?ctx.moveTo(c.x,c.y):ctx.lineTo(c.x,c.y); }
+  ctx.beginPath(); let _pen=false; for(let i=i0;i<=i1;i++){ const c=terr[i]; if(!c||c.gap){ _pen=false; continue; } if(!_pen){ctx.moveTo(c.x,c.y);_pen=true;} else ctx.lineTo(c.x,c.y); }   // break the line across chasms
   ctx.strokeStyle='rgba('+BLINE+',0.95)'; ctx.lineWidth=2.6; ctx.shadowColor='rgba('+BLINE+',0.7)'; ctx.shadowBlur=8; ctx.stroke(); ctx.shadowBlur=0;
   ctx.lineCap='butt'; ctx.lineJoin='miter';
+  // ---- GAPS: void edges (red takeoff lip / green landing lip) + telegraph ----
+  for(let i=i0;i<i1;i++){ const a=terr[i],b=terr[i+1]; if(!a||!b)continue;
+    if(!a.gap && b.gap){ ctx.strokeStyle='rgba(255,80,92,0.95)'; ctx.lineWidth=3.4; ctx.shadowColor='#ff3050'; ctx.shadowBlur=12;
+      ctx.beginPath(); ctx.moveTo(a.x,a.y-4); ctx.lineTo(a.x,a.y+46); ctx.stroke(); ctx.shadowBlur=0;
+      if(a.x>bike.x){ ctx.fillStyle='rgba(255,95,105,'+(0.5+0.4*Math.sin(t*0.3))+')'; ctx.textAlign='center'; ctx.font='800 13px ui-monospace,monospace'; ctx.fillText('⚠ ПРОПАСТЬ',a.x+24,a.y-30); ctx.textAlign='left'; } }
+    if(a.gap && !b.gap){ ctx.strokeStyle='rgba(120,255,180,0.9)'; ctx.lineWidth=3.4; ctx.shadowColor='#3effa0'; ctx.shadowBlur=10;
+      ctx.beginPath(); ctx.moveTo(b.x,b.y-4); ctx.lineTo(b.x,b.y+46); ctx.stroke(); ctx.shadowBlur=0; } }
   // hazards: red spiked sell-wall barriers on the track
   for(let i=i0;i<=i1;i++){ const c=terr[i]; if(c&&c.haz&&!c.hazHit){ ctx.save(); ctx.translate(c.x,c.y);
     ctx.fillStyle='rgba(255,60,80,0.22)'; ctx.strokeStyle='rgba(255,72,92,0.95)'; ctx.lineWidth=2; ctx.shadowColor='#ff3050'; ctx.shadowBlur=10;
@@ -674,6 +701,8 @@ function draw(){
   ctx.textAlign='left';
   // pop text
   if(popT>0.01){popT-=0.02;ctx.globalAlpha=Math.min(1,popT*2);ctx.fillStyle='#ffd678';ctx.font='600 20px ui-monospace,monospace';ctx.textAlign='center';ctx.fillText(popMsg,W/2,H*0.34);ctx.globalAlpha=1;}
+  // gap-clear reward (works in CORE mode — core skill feedback, not gated)
+  if(gapFxT>0){ gapFxT-=0.02; ctx.globalAlpha=Math.min(1,gapFxT*2); ctx.fillStyle='#9ff0c8'; ctx.font='800 23px ui-monospace,monospace'; ctx.textAlign='center'; ctx.shadowColor='#3effa0'; ctx.shadowBlur=14; ctx.fillText(gapFxMsg,W/2,H*0.3); ctx.shadowBlur=0; ctx.globalAlpha=1; ctx.textAlign='left'; }
   // LEVERAGE badge — pulses & shifts cyan→green as it grows
   if(!CORE_TEST_MODE && mult>1.05 && screen!=='dead'){ const g3=clamp((mult-1)/7,0,1), col=mix([90,225,255],[120,255,170],clamp(g3*1.4,0,1));
     ctx.save(); ctx.textAlign='center'; ctx.translate(W/2,116); const sc=1+(multPulse||0)*0.55; ctx.scale(sc,sc);
@@ -682,7 +711,7 @@ function draw(){
   // dead overlay
   if(screen==='dead'){ ctx.fillStyle='rgba(8,6,18,0.66)';ctx.fillRect(0,0,W,H); ctx.textAlign='center';
     if(rankedUp){ ctx.fillStyle='rgba(255,214,120,'+(0.72+0.28*Math.sin(t*0.2))+')'; ctx.font='800 21px ui-monospace,monospace'; ctx.shadowColor='#ffd678'; ctx.shadowBlur=16; ctx.fillText(rankedUp.rank.e+'  НОВЫЙ РАНГ: '+rankedUp.rank.n+'!',W/2,H*0.205); ctx.shadowBlur=0; ctx.fillStyle='#9ff0c8'; ctx.font='800 15px ui-monospace,monospace'; ctx.fillText('+◆'+rankedUp.bonus+'   ·   +'+Math.round((rankIdx(career))*7)+'% к профиту',W/2,H*0.205+25); }
-    ctx.fillStyle='#ff7a8a';ctx.font='700 30px ui-monospace,monospace';ctx.fillText(deathBy==='wave'?'ПОЙМАН ДАМПОМ':deathBy==='loop'?'ОПРОКИНУЛСЯ':deathBy==='endo'?'ЧЕРЕЗ РУЛЬ':'LIQUIDATED',W/2,H*0.34);
+    ctx.fillStyle='#ff7a8a';ctx.font='700 30px ui-monospace,monospace';ctx.fillText(deathBy==='wave'?'ПОЙМАН ДАМПОМ':deathBy==='loop'?'ОПРОКИНУЛСЯ':deathBy==='endo'?'ЧЕРЕЗ РУЛЬ':deathBy==='gap'?'УПАЛ В ПРОПАСТЬ':'LIQUIDATED',W/2,H*0.34);
     if(CORE_TEST_MODE){
       const nb=dist>=(best||0);
       ctx.fillStyle=nb?'#ffd678':'#9ff0c8';ctx.font='800 46px ui-monospace,monospace';ctx.fillText(dist+' m',W/2,H*0.34+58);
