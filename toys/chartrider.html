@@ -46,7 +46,7 @@ function lerp(a,b,t){return a+(b-a)*t;} function clamp(v,a,b){return v<a?a:v>b?b
 // false → full game. Single switch. Systems are GATED, never deleted.
 const CORE_TEST_MODE = true;
 // build stamp — bump on every change so a phone refresh can confirm it loaded fresh code (cache!)
-const BUILD = '2026-06-18 · b16';
+const BUILD = '2026-06-18 · b17';
 
 // ---------- procedural market terrain ----------
 // height map sampled every STEP px; generated forward as we ride. Market character:
@@ -149,8 +149,8 @@ const TUNE = {
   obstacleFreq: 1.0,     // 10. частота препятствий — множитель плотности sell-wall (×1 = как сейчас, 0 = нет)
   easeInDist:   350,     // 11. «мягкий въезд» (м): за сколько loop-forgiveness + волна доходят до полной (короче = скилл нужен рано)
   loopForgive:  1.8,     // 12. порог опрокидывания НА СТАРТЕ (рад): высокий = стойки на колесе держатся; спадает к PHYS.LOOP
-  climbLift:    3.0,     // 13. газ задирает нос НА ПОДЪЁМЕ (дозируй газ или кувырок) — баланс-скилл
-  slopePull:    0.28,    // 14. импульс по склону (больше = подъём сильнее гасит скорость → надо НЕСТИ momentum; меньше = легче)
+  climbLift:    13,      // 13. ЭНДУРО: газ КОЗЛИТ перед на крутом подъёме — дозируй газ + вес вперёд, иначе опрокид. Высокий = подъём активный/felt (пассивный газ лупится ~186м, скилл 426м)
+  slopePull:    0.34,    // 14. импульс по склону (больше = крутой подъём сильно гасит скорость → надо НЕСТИ momentum, иначе глохнешь и скатываешься)
   gapEvery:     280,     // 15. ПРОПАСТИ: ср. дистанция между провалами (м); чаще = больше прыжков (0 = выкл)
   gapStart:     240,     // 16. первая пропасть после этой дистанции (м) — вызов уже рано
   pitchHold:    0.024,   // 17. самовыравнивание тангажа к склону (= «пружина» к склону; чуть мягче, чтобы наклон дотягивал до вилли/стоппи)
@@ -394,6 +394,7 @@ function update(){
     bike.angV += -P.GP*Math.sin(bike.ang-supA)                         // self-stabilize toward the slope
                + leanX*P.LEANGND                                        // player LEAN (drag L/R): right = nose down, left = nose up — the balance control
                + bike.vx*Math.sin(supA)*P.DESTAB;                       // speed×slope destabilizes (fast climb kicks the nose UP, descent DOWN) → counter it with lean
+    if(down && supA<-0.22) bike.angV += -P.ENGTQ*P.CLIMB*(-supA-0.22)*clamp(bike.vx/7,0.4,1.4);   // ENDURO: power POPS the front on a STEEP climb → feather the gas + lean forward (weight) to keep climbing, or loop out
     bike.wheel += bike.vx*0.08;
     if(bike.vx>3&&t%2===0)dust.push({x:bike.x-14,y:bike.y+18,vx:-bike.vx*0.18-Math.random(),vy:-Math.random()*1.2,life:1,r:Math.random()*2+1});
   } else {
