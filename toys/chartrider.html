@@ -46,7 +46,7 @@ function lerp(a,b,t){return a+(b-a)*t;} function clamp(v,a,b){return v<a?a:v>b?b
 // false → full game. Single switch. Systems are GATED, never deleted.
 const CORE_TEST_MODE = true;
 // build stamp — bump on every change so a phone refresh can confirm it loaded fresh code (cache!)
-const BUILD = '2026-06-18 · b28';
+const BUILD = '2026-06-18 · b29';
 
 // ---------- procedural market terrain ----------
 // height map sampled every STEP px; generated forward as we ride. Market character:
@@ -160,14 +160,14 @@ const TUNE = {
   obstacleFreq: 1.0,     // 10. частота препятствий — множитель плотности sell-wall (×1 = как сейчас, 0 = нет)
   easeInDist:   350,     // 11. «мягкий въезд» (м): за сколько loop-forgiveness + волна доходят до полной (короче = скилл нужен рано)
   loopForgive:  1.8,     // 12. порог опрокидывания НА СТАРТЕ (рад): высокий = стойки на колесе держатся; спадает к PHYS.LOOP
-  climbLift:    9,       // 13. ЭНДУРО: газ козлит перед на крутом подъёме — дозируй газ + вес вперёд. Мягче (9), т.к. скорость ниже — успеваешь корректировать, баланс-скилл остаётся
+  climbLift:    20,      // 13. ЭНДУРО-СКИЛЛ (ядро): газ КОЗЛИТ перед на крутом → зажал газ без веса = ОПРОКИД (loop). Чтобы лезть: газ + ВЕС ВПЕРЁД (драг вправо/нос вниз), как в GD/Trials/реале. Симой: 9=зажал-газ-проезжает(скучно), 20=зажал-лупит/вес-вперёд-лезет. БОЛЬШЕ = жёстче требует вес
   slopePull:    0.20,    // 14. импульс по склону (НИЖЕ = склон меньше гасит → байк ЛЕЗЕТ в горку за счёт тяги/сцепления, не глохнет; выше = надо нести momentum)
   gapEvery:     280,     // 15. ПРОПАСТИ: ср. дистанция между провалами (м); чаще = больше прыжков (0 = выкл)
   gapStart:     240,     // 16. первая пропасть после этой дистанции (м) — вызов уже рано
   pitchHold:    0.024,   // 17. самовыравнивание тангажа к склону (= «пружина» к склону; чуть мягче, чтобы наклон дотягивал до вилли/стоппи)
   steepEarly:   0.85,    // 18. множитель крутизны НА СТАРТЕ (положе на старте, проходимо; растёт к terrainSteep за steepRamp)
   steepRamp:    600,     // 19. дистанция (м), за которую крутизна растёт steepEarly → terrainSteep (ещё жёстче дальше)
-  climbCap:     0.9,     // 19b. КЭП КРУТИЗНЫ ПОДЪЁМА (рад): генератор НЕ делает круче этого ВВЕРХ. 0.86→0.9 (горки ещё круче по просьбе; ещё ниже физ-потолка тяги 1.08 — проверено симой что медленный байк лезет). Спуски/пропасти не трогает. Замерено: реальные крутые серии ≤16 узлов → байк лезет ~2-3с (min vx ~2), без кувырка/затыка. Физ-потолок тяги HODLER ≈1.08 (выше — глохнет); 0.9 ползёт на искусств. 60-узл. стене >25с. БОЛЬШЕ = круче/злее (до ~0.95), МЕНЬШЕ = пологее
+  climbCap:     0.82,    // 19b. КЭП КРУТИЗНЫ ПОДЪЁМА (рад): генератор НЕ делает круче этого. 0.82 — круто, требует вес-вперёд (с climbLift 20 «зажал газ» лупит). Ниже физ-потолка тяги 1.08. Спуски/пропасти не трогает. Замерено: реальные крутые серии ≤16 узлов → байк лезет ~2-3с (min vx ~2), без кувырка/затыка. Физ-потолок тяги HODLER ≈1.08 (выше — глохнет); 0.9 ползёт на искусств. 60-узл. стене >25с. БОЛЬШЕ = круче/злее (до ~0.95), МЕНЬШЕ = пологее
   leanGround:   0.028,   // 20. сила НАКЛОНА (драг влево-вправо): 0.020→0.028 — ЧУВСТВИТЕЛЬНЕЕ (от тебя больше зависит; быстрее в вилли/стоппи, но и перекрутить легче = скилл)
   leanAir:      0.022,   // 21. сила наклона в воздухе — аналоговое вращение (0.015→0.022, чувствительнее: доворот к посадке + флипы)
   destab:       0.0018,  // 22. дестабилизация скорость×склон: подъём кренит назад, спуск — носом вниз → держи наклоном (мягко, наклон легко перекрывает)
@@ -453,6 +453,7 @@ function update(){
     if(bike.vx>3&&t%2===0)dust.push({x:bike.x-14,y:bike.y+18,vx:-bike.vx*0.18-Math.random(),vy:-Math.random()*1.2,life:1,r:Math.random()*2+1});
   } else {
     bike.y += bike.vy;                                                 // airborne projectile
+    if(bike.vy>0 && bike.y>targetY && !(terr[Math.floor(bike.x/STEP)]&&terr[Math.floor(bike.x/STEP)].gap)) bike.y=targetY;   // never punch THROUGH the surface on a fast landing (the 1-frame "sank into the track"); gaps fall freely
     if(Math.abs(leanX)>0.06){ bike.angV += leanX*P.LEANAIR; }                                                       // analog air rotation via LEAN (drag) — flips & landing aim; no more gas-coupled flip
     else if(jumpGrace){ const la=terrainAt(bike.x+Math.max(20,bike.vx*6)).ang; bike.angV+=(la-bike.ang)*0.02; }     // just jumped, not steering → clean controllable arc
     else { const la=terrainAt(bike.x+Math.max(20,bike.vx*6)).ang; bike.angV+=(la-bike.ang)*0.006; }                 // no input → gentle auto-level to landing
