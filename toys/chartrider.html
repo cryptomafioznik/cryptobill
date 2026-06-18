@@ -46,7 +46,7 @@ function lerp(a,b,t){return a+(b-a)*t;} function clamp(v,a,b){return v<a?a:v>b?b
 // false → full game. Single switch. Systems are GATED, never deleted.
 const CORE_TEST_MODE = true;
 // build stamp — bump on every change so a phone refresh can confirm it loaded fresh code (cache!)
-const BUILD = '2026-06-18 · b19';
+const BUILD = '2026-06-18 · b20';
 
 // ---------- procedural market terrain ----------
 // height map sampled every STEP px; generated forward as we ride. Market character:
@@ -100,6 +100,12 @@ function genSeg(){
     const roll = (Math.sin(genX*0.0048)*64 + Math.sin(genX*0.0091+1.3)*40 + Math.sin(genX*0.019+0.6)*16)*(1+dd*0.4)*((regime==='pump'||regime==='crash')?0.6:1)*steepNow;   // long SUSTAINED hills of varying size
     close = clamp(baseY + walk + roll, 70, H*0.95);
     if(terr.length<16){ const e=terr.length/16; close=lerp(baseY, close, e*e); walk*=0.7; }   // flat starting ramp eases the bike in
+    // CLIMB-SLOPE CAP: a real enduro lugs up steep grades; a near-vertical wall just stalls (torque < gravity).
+    // Cap how much the price-line can RISE per node (climb = close ABOVE prev on screen = smaller y) so every
+    // climb stays steep-but-grindable. Descents & gaps untouched. Re-derive walk so the generator can't "bank"
+    // an un-drawable deficit and spring it as a wall a few nodes later.
+    const maxRise = Math.tan(TUNE.climbCap)*STEP;
+    if(prevC - close > maxRise){ close = prevC - maxRise; walk = close - baseY - roll; }
   }
   // ---- GAPS: a chasm you must JUMP (core skill obstacle of varying width) ----
   let isGap=false, gapLip=0;
@@ -156,6 +162,7 @@ const TUNE = {
   pitchHold:    0.024,   // 17. самовыравнивание тангажа к склону (= «пружина» к склону; чуть мягче, чтобы наклон дотягивал до вилли/стоппи)
   steepEarly:   0.85,    // 18. множитель крутизны НА СТАРТЕ (положе на старте, проходимо; растёт к terrainSteep за steepRamp)
   steepRamp:    600,     // 19. дистанция (м), за которую крутизна растёт steepEarly → terrainSteep (ещё жёстче дальше)
+  climbCap:     0.8,     // 19b. КЭП КРУТИЗНЫ ПОДЪЁМА (рад): генератор НЕ делает круче этого ВВЕРХ. Спуски/пропасти не трогает. Замерено: реальные крутые серии ≤16 узлов → байк лезет ~2-3с (min vx ~2), без кувырка/затыка. Физ-потолок тяги HODLER ≈1.08 (выше — глохнет); 0.9 ползёт на искусств. 60-узл. стене >25с. БОЛЬШЕ = круче/злее (до ~0.95), МЕНЬШЕ = пологее
   leanGround:   0.020,   // 20. сила НАКЛОНА (драг влево-вправо): чуть НИЖЕ pitchHold → полный наклон УДЕРЖИВАЕТ ~1.0 рад (вилли назад / стоппи вперёд), стабильно, не flip
   leanAir:      0.015,   // 21. сила наклона в воздухе — аналоговое вращение (доворот к посадке + флипы)
   destab:       0.0018,  // 22. дестабилизация скорость×склон: подъём кренит назад, спуск — носом вниз → держи наклоном (мягко, наклон легко перекрывает)
