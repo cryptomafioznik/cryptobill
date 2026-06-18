@@ -46,7 +46,7 @@ function lerp(a,b,t){return a+(b-a)*t;} function clamp(v,a,b){return v<a?a:v>b?b
 // false → full game. Single switch. Systems are GATED, never deleted.
 const CORE_TEST_MODE = true;
 // build stamp — bump on every change so a phone refresh can confirm it loaded fresh code (cache!)
-const BUILD = '2026-06-18 · b22';
+const BUILD = '2026-06-18 · b23';
 
 // ---------- procedural market terrain ----------
 // height map sampled every STEP px; generated forward as we ride. Market character:
@@ -181,6 +181,9 @@ try{bank=+localStorage.getItem('cipher_bank')||0;}catch(e){}
 try{owned=JSON.parse(localStorage.getItem('cipher_owned')||'[0]')||[0];}catch(e){owned=[0];}
 try{selBike=+localStorage.getItem('cipher_bike')||0;}catch(e){}
 try{muted=localStorage.getItem('cipher_muted')==='1';}catch(e){}
+let pumpSide='left', settingsRet='title';   // PUMP button side (right-hander → left, configurable for lefties); settingsRet = screen to return to from settings
+try{pumpSide=localStorage.getItem('cipher_pumpside')||'left';}catch(e){}
+function savePumpSide(){ try{localStorage.setItem('cipher_pumpside',pumpSide);}catch(e){} }
 // ---- onboarding: one-time contextual coach hints (shown once ever, per id) ----
 let seenTut={}; try{seenTut=JSON.parse(localStorage.getItem('cipher_tut2')||'{}')||{};}catch(e){seenTut={};}
 let tutText='', tutT=0;
@@ -326,6 +329,7 @@ function pointerDown(p){
     if(hit(p,UI.left)){ selBike=(selBike+BIKES.length-1)%BIKES.length; saveMeta(); sfxClick(); return; }
     if(hit(p,UI.right)){ selBike=(selBike+1)%BIKES.length; saveMeta(); sfxClick(); return; }
     if(hit(p,UI.mute)){ toggleMute(); sfxClick(); return; }
+    if(hit(p,UI.settings)){ settingsRet='title'; screen='settings'; sfxClick(); return; }
     const b=BIKES[selBike];
     if(owned.indexOf(selBike)<0){ if(bank>=b.cost){ bank-=b.cost; owned.push(selBike); saveMeta(); sfxLev(); } else sfxClick(); return; }
     reset(); sfxClick(); return;
@@ -335,7 +339,18 @@ function pointerDown(p){
     if(UI.upgRows) for(let i=0;i<UI.upgRows.length;i++){ if(hit(p,UI.upgRows[i])){ const u=UPGRADES[i], lvl=upgLvl(u.id), cost=upgCost(u.id,lvl); if(lvl<u.max && bank>=cost){ bank-=cost; upg[u.id]=lvl+1; saveProg(); saveMeta(); sfxLev(); blip(1300,0.07,'triangle',0.12); buyFlash=1; buyRow=i; } else sfxClick(); return; } }
     return;
   }
-  if(screen==='paused'){ if(hit(p,UI.quit)) toTitle(); else screen='play'; sfxClick(); return; }
+  if(screen==='paused'){
+    if(hit(p,UI.mute)){ toggleMute(); sfxClick(); return; }
+    if(UI.pset && hit(p,UI.pset)){ settingsRet='paused'; screen='settings'; sfxClick(); return; }
+    if(hit(p,UI.quit)){ toTitle(); sfxClick(); return; }
+    screen='play'; sfxClick(); return;   // tap elsewhere = resume
+  }
+  if(screen==='settings'){
+    if(hit(p,UI.setPump)){ pumpSide=(pumpSide==='left')?'right':'left'; savePumpSide(); sfxClick(); return; }
+    if(hit(p,UI.setMute)){ toggleMute(); sfxClick(); return; }
+    if(hit(p,UI.setBack)){ screen=settingsRet||'title'; sfxClick(); return; }
+    return;
+  }
   if(screen==='dead'){ if(hit(p,UI.dgarage)){ screen='garage'; sfxClick(); return; } if(hit(p,UI.menu)) toTitle(); else reset(); sfxClick(); return; }
   if(hit(p,UI.pause)){ screen='paused'; sfxClick(); return null; }
   if(UI.pumpBtn && hit(p,UI.pumpBtn)){ activateBoost(); return null; }          // tap PUMP button (jump lives on swipe-up now)
@@ -552,7 +567,7 @@ function farCandles(par,baseY,alpha){ // distant blurred candle skyline — adds
     ctx.fillRect(sx, baseY-hgt, fs*0.62, hgt); }
 }
 function draw(){
-  if(screen==='garage'){ ctx.fillStyle='#0a0a1a'; ctx.fillRect(0,0,W,H); hudEl.style.opacity='0'; spdEl.style.opacity='0'; hintEl.style.opacity='0'; drawMenus(); return; }   // menu-only: skip the whole world render (was redrawing the full game every frame → stutter)
+  if(screen==='garage'||screen==='settings'){ ctx.fillStyle='#0a0a1a'; ctx.fillRect(0,0,W,H); hudEl.style.opacity='0'; spdEl.style.opacity='0'; hintEl.style.opacity='0'; drawMenus(); return; }   // menu-only: skip the whole world render (was redrawing the full game every frame → stutter)
   { const ZL=700, zf=(dist||0)/ZL, zi=Math.floor(zf)%BIOMES.length, zn=(zi+1)%BIOMES.length, fr=zf-Math.floor(zf), tb=clamp((fr-0.86)/0.14,0,1), A=BIOMES[zi], Bz=BIOMES[zn];
     BSKY=[mix(A.sky[0],Bz.sky[0],tb),mix(A.sky[1],Bz.sky[1],tb),mix(A.sky[2],Bz.sky[2],tb),mix(A.sky[3],Bz.sky[3],tb)];
     BLINE=lerp3(A.line,Bz.line,tb).join(','); BRIDGE=lerp3(A.ridge,Bz.ridge,tb).join(','); }
@@ -793,7 +808,7 @@ function draw(){
   if((TOUCH||window.__forceTouchUI) && screen==='play'){
     UI.gas=null; UI.brk=null; UI.jump=null;
     // PUMP button — replaces the redundant jump button (jump is on swipe-up). Fills as it charges, glows when ready, tap to surge.
-    UI.pumpBtn={x:W-118,y:H-188,w:104,h:52};
+    UI.pumpBtn={x:(pumpSide==='right'?W-118:14),y:H-188,w:104,h:52};   // side configurable in settings (right-hander → left hand taps PUMP)
     { const r=UI.pumpBtn, bf=clamp(boost||0,0,1), ready=bf>=1, active=boosting>0, c=(ready||active)?'120,255,180':'90,170,235';
       const rr=(x,y,w,h)=>{ ctx.beginPath(); if(ctx.roundRect)ctx.roundRect(x,y,w,h,13); else ctx.rect(x,y,w,h); };
       rr(r.x,r.y,r.w,r.h); ctx.fillStyle='rgba('+c+','+((ready||active)?0.30:0.12)+')'; ctx.fill();
@@ -844,6 +859,7 @@ function drawMenus(){
     if(CORE_TEST_MODE){ UI.garage=null; }
     else { UI.garage={x:W-112,y:18,w:94,h:38}; ctx.fillStyle='rgba(34,54,46,0.72)'; if(ctx.roundRect){ctx.beginPath();ctx.roundRect(UI.garage.x,UI.garage.y,94,38,10);ctx.fill();ctx.strokeStyle='rgba(120,255,180,0.65)';ctx.lineWidth=1.5;ctx.stroke();}else ctx.fillRect(UI.garage.x,UI.garage.y,94,38);
       ctx.fillStyle='#9ff0c8'; ctx.font='800 13px ui-monospace,monospace'; ctx.fillText('🔧 ГАРАЖ',UI.garage.x+47,UI.garage.y+24); }
+    UI.settings={x:16,y:16,w:46,h:38}; ctx.fillStyle='rgba(30,40,62,0.6)'; if(ctx.roundRect){ctx.beginPath();ctx.roundRect(UI.settings.x,UI.settings.y,46,38,10);ctx.fill();ctx.strokeStyle='rgba(150,180,220,0.5)';ctx.lineWidth=1.4;ctx.stroke();}else ctx.fillRect(UI.settings.x,UI.settings.y,46,38); ctx.fillStyle='#cfe0ff'; ctx.font='20px ui-monospace,monospace'; ctx.fillText('⚙',UI.settings.x+23,UI.settings.y+26);
     const b=BIKES[selBike], own=owned.indexOf(selBike)>=0, ay=H*0.45;
     UI.left={x:W/2-148,y:ay-26,w:46,h:52}; UI.right={x:W/2+102,y:ay-26,w:46,h:52};
     ctx.fillStyle='rgba(190,215,245,0.85)'; ctx.font='800 30px ui-monospace,monospace'; ctx.fillText('‹',UI.left.x+23,ay+10); ctx.fillText('›',UI.right.x+23,ay+10);
@@ -870,7 +886,8 @@ function drawMenus(){
     ctx.fillStyle='#eafaff'; ctx.font='800 28px ui-monospace,monospace'; ctx.fillText('ПАУЗА',W/2,H*0.34);
     UI.resume={x:W/2-105,y:H*0.40,w:210,h:46}; panel(UI.resume.x,UI.resume.y,210,46,'rgba(120,255,180,0.8)','rgba(36,120,84,0.28)'); ctx.fillStyle='#9ff0c8'; ctx.font='700 16px ui-monospace,monospace'; ctx.fillText('▶  ПРОДОЛЖИТЬ',W/2,UI.resume.y+29);
     UI.mute={x:W/2-105,y:H*0.40+58,w:210,h:40}; panel(UI.mute.x,UI.mute.y,210,40,'rgba(150,170,210,0.45)'); ctx.fillStyle='#bcd0ee'; ctx.font='13px ui-monospace,monospace'; ctx.fillText(muted?'ЗВУК:  ВЫКЛ':'ЗВУК:  ВКЛ',W/2,UI.mute.y+25);
-    UI.quit={x:W/2-105,y:H*0.40+110,w:210,h:40}; panel(UI.quit.x,UI.quit.y,210,40,'rgba(255,120,140,0.55)'); ctx.fillStyle='#ff9fb0'; ctx.font='700 14px ui-monospace,monospace'; ctx.fillText('✕  В МЕНЮ',W/2,UI.quit.y+25);
+    UI.pset={x:W/2-105,y:H*0.40+110,w:210,h:40}; panel(UI.pset.x,UI.pset.y,210,40,'rgba(150,170,210,0.45)'); ctx.fillStyle='#bcd0ee'; ctx.font='13px ui-monospace,monospace'; ctx.fillText('⚙  НАСТРОЙКИ',W/2,UI.pset.y+25);
+    UI.quit={x:W/2-105,y:H*0.40+162,w:210,h:40}; panel(UI.quit.x,UI.quit.y,210,40,'rgba(255,120,140,0.55)'); ctx.fillStyle='#ff9fb0'; ctx.font='700 14px ui-monospace,monospace'; ctx.fillText('✕  В МЕНЮ',W/2,UI.quit.y+25);
   } else if(screen==='dead'){
     if(CORE_TEST_MODE){ UI.dgarage=null; UI.menu={x:W/2-90,y:H*0.34+198,w:180,h:44}; panel(UI.menu.x,UI.menu.y,180,44,'rgba(150,170,210,0.5)'); ctx.fillStyle='#bcd0ee'; ctx.font='13px ui-monospace,monospace'; ctx.fillText('≡  МЕНЮ',W/2,UI.menu.y+27); }
     else {
@@ -899,6 +916,20 @@ function drawMenus(){
     }
     ctx.textAlign='center';
     UI.gback={x:W/2-90,y:H-74,w:180,h:46}; panel(UI.gback.x,UI.gback.y,180,46,'rgba(150,170,210,0.6)'); ctx.fillStyle='#cfe0ff'; ctx.font='700 15px ui-monospace,monospace'; ctx.fillText('←  НАЗАД',W/2,UI.gback.y+29);
+    UI.mute=null; UI.pause=null;
+  } else if(screen==='settings'){
+    ctx.fillStyle='rgba(6,5,16,0.96)'; ctx.fillRect(0,0,W,H);
+    ctx.fillStyle='#eafaff'; ctx.font='800 24px ui-monospace,monospace'; ctx.fillText('⚙ НАСТРОЙКИ',W/2,H*0.17);
+    ctx.fillStyle='#8fa0c4'; ctx.font='10px ui-monospace,monospace'; ctx.fillText('УДЕРЖАНИЕ = газ · ДРАГ = наклон · СВАЙП↑ = прыжок',W/2,H*0.17+24);
+    const cx=W/2, cw=280;
+    const yA=H*0.31; UI.setPump={x:cx-cw/2,y:yA,w:cw,h:58}; panel(UI.setPump.x,UI.setPump.y,cw,58,'rgba(120,200,255,0.6)');
+    ctx.fillStyle='#9fb6dc'; ctx.font='700 11px ui-monospace,monospace'; ctx.fillText('КНОПКА PUMP (РЫВОК)',cx,yA+20);
+    ctx.fillStyle='#9ff0c8'; ctx.font='800 18px ui-monospace,monospace'; ctx.fillText(pumpSide==='left'?'◀  СЛЕВА':'СПРАВА  ▶',cx,yA+44);
+    const yB=yA+74; UI.setMute={x:cx-cw/2,y:yB,w:cw,h:46}; panel(UI.setMute.x,UI.setMute.y,cw,46,'rgba(150,170,210,0.45)');
+    ctx.fillStyle='#bcd0ee'; ctx.font='14px ui-monospace,monospace'; ctx.fillText(muted?'ЗВУК:   ВЫКЛ':'ЗВУК:   ВКЛ',cx,yB+28);
+    ctx.fillStyle='rgba(150,170,200,0.62)'; ctx.font='600 10px ui-monospace,monospace'; ctx.fillText('правша → PUMP СЛЕВА · левша → СПРАВА',cx,yB+70);
+    ctx.fillStyle='rgba(125,140,180,0.5)'; ctx.font='10px ui-monospace,monospace'; ctx.fillText('— кнопочная схема для новичков скоро —',cx,yB+88);
+    UI.setBack={x:cx-90,y:H-96,w:180,h:46}; panel(UI.setBack.x,UI.setBack.y,180,46,'rgba(150,170,210,0.6)'); ctx.fillStyle='#cfe0ff'; ctx.font='700 15px ui-monospace,monospace'; ctx.fillText('←  НАЗАД',cx,UI.setBack.y+29);
     UI.mute=null; UI.pause=null;
   }
   ctx.textAlign='left';
