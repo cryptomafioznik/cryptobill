@@ -46,7 +46,7 @@ function lerp(a,b,t){return a+(b-a)*t;} function clamp(v,a,b){return v<a?a:v>b?b
 // false → full game. Single switch. Systems are GATED, never deleted.
 const CORE_TEST_MODE = true;
 // build stamp — bump on every change so a phone refresh can confirm it loaded fresh code (cache!)
-const BUILD = '2026-06-18 · b23';
+const BUILD = '2026-06-18 · b24';
 
 // ---------- procedural market terrain ----------
 // height map sampled every STEP px; generated forward as we ride. Market character:
@@ -655,7 +655,7 @@ function draw(){
   if(trail.length>1){ for(let i=1;i<trail.length;i++){ const a=i/trail.length; ctx.strokeStyle='rgba(47,230,255,'+(a*0.5)+')'; ctx.lineWidth=a*5; ctx.shadowColor='#2fe6ff'; ctx.shadowBlur=a*10; ctx.beginPath(); ctx.moveTo(trail[i-1].x,trail[i-1].y); ctx.lineTo(trail[i].x,trail[i].y); ctx.stroke(); } ctx.shadowBlur=0; }
   // ---- the rider + machine (readable silhouette, neon-rimmed) ----
   if(screen!=='dead'){
-    ctx.save(); ctx.translate(bike.x,bike.y); ctx.rotate(bike.ang); ctx.translate(0,12);
+    ctx.save(); ctx.translate(bike.x,bike.y); ctx.rotate(bike.ang); ctx.translate(0,-1);   // seat the TIRE CONTACT on the price line (was +12 → wheels buried ~13px "in the track"); -1 aligns wheel-bottom with the CG-implied ground (bike.y = lineY-DY)
     const B=BK();
     // contact shadow on the ground
     ctx.fillStyle='rgba(0,0,0,0.4)'; ctx.beginPath(); ctx.ellipse(0,29,30,4.5,0,0,7); ctx.fill();
