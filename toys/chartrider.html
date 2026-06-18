@@ -46,7 +46,7 @@ function lerp(a,b,t){return a+(b-a)*t;} function clamp(v,a,b){return v<a?a:v>b?b
 // false → full game. Single switch. Systems are GATED, never deleted.
 const CORE_TEST_MODE = true;
 // build stamp — bump on every change so a phone refresh can confirm it loaded fresh code (cache!)
-const BUILD = '2026-06-18 · b17';
+const BUILD = '2026-06-18 · b18';
 
 // ---------- procedural market terrain ----------
 // height map sampled every STEP px; generated forward as we ride. Market character:
@@ -434,14 +434,20 @@ function update(){
   if(grounded && screen==='play' && Math.abs(rel)>loopThresh){ wipeout(rel<0?'loop':'endo'); }
   // coins along terrain
   const magR=36*(1+0.40*upgLvl('mag')); const ci=Math.floor(bike.x/STEP); for(let k=ci-3;k<=ci+3;k++){ const c=terr[k]; if(c&&c.coin){ const cx=c.x,cy=c.y-30; if(Math.hypot(cx-bike.x,cy-bike.y)<magR){ c.coin=false; coins++; sfxCoin(); boost=Math.min(1,(boost||0)+0.04); const gv=Math.round(25*mult); pnl+=gv; floatPop(cx,cy,'+$'+gv,'#ffd678'); for(let z=0;z<8;z++)parts.push({x:cx,y:cy,vx:(Math.random()-0.5)*3.5,vy:-Math.random()*3-1,life:1,gold:1,r:2});} } }
-  // ---- GAPS: chasm = jump it. Drop into it = death; clear it & land safely = reward ----
+  // ---- GAPS: jump them. The FRONT WHEEL can catch the far edge & scrabble up (enduro) — you only fall in on a real miss ----
   { const gn=terr[ci];
     if(gn && gn.gap){
-      if(screen==='play' && (bike.onG || bike.y > gn.lipY+54)) wipeout('gap');   // grounded on the chasm/wall, or fell deep → death
-      else { overGap=true; gapLipNow=gn.lipY; let fe=ci; while(terr[fe]&&terr[fe].gap)fe++; gapFarX=(terr[fe]?terr[fe].x:fe*STEP); }   // airborne over the chasm; remember its far edge
+      let fe=ci; while(terr[fe]&&terr[fe].gap)fe++; gapFarX=(terr[fe]?terr[fe].x:fe*STEP); gapLipNow=gn.lipY; overGap=true;   // airborne over the chasm
+      const landY=terr[fe]?terr[fe].y:gn.lipY, fwx=bike.x+DX, fwy=bike.y+DY;                                      // landing LIP height + FRONT wheel position
+      if(!bike.onG && bike.vy>=-1 && fwx>=gapFarX-12){                                                            // front wheel reaching the far edge
+        if(fwy>landY-16 && fwy<landY+66){                                                                        // wheel within reach of the lip → GRAB it & scrabble up
+          bike.x=gapFarX+4; bike.y=terrainAt(bike.x).y-DY; bike.vy=0; bike.onG=true; bike.vx*=0.8; bike.angV*=0.45; overGap=false;
+          gapFxT=1; gapFxMsg='ЗАЦЕПИЛ КРАЙ!'; boost=Math.min(1,(boost||0)+0.12); gflash=0.45; shake=Math.max(shake,6); sfxAir(); buzz(16);
+        } else if(fwy>=landY+66 && screen==='play') wipeout('gap');                                              // front wheel below the lip's reach = missed → fell in
+      } else if(screen==='play' && (bike.onG || bike.y>gn.lipY+95)) wipeout('gap');                              // grounded on the chasm floor or fell deep before reaching the edge
     } else if(overGap && screen==='play'){
-      if(!bike.onG && bike.x > gapFarX+STEP){ overGap=false; boost=Math.min(1,(boost||0)+0.2); shake=Math.max(shake,7); gflash=0.6; gapFxT=1; gapFxMsg='ПРОПАСТЬ ✓'; sfxAir(); buzz(22); }   // flew clear PAST the far edge → cleared (lands normally wherever)
-      else if(bike.onG){ overGap=false; if(bike.y > gapLipNow+22) wipeout('gap'); else { boost=Math.min(1,(boost||0)+0.2); shake=Math.max(shake,7); gflash=0.6; gapFxT=1; gapFxMsg='ПРОПАСТЬ ✓'; sfxAir(); buzz(22); } }   // landed: on the track top = clear, low on the wall = death
+      if(!bike.onG && bike.x>gapFarX+STEP){ overGap=false; boost=Math.min(1,(boost||0)+0.2); shake=Math.max(shake,7); gflash=0.6; gapFxT=1; gapFxMsg='ПРОПАСТЬ ✓'; sfxAir(); buzz(22); }   // flew clear past the far edge
+      else if(bike.onG){ overGap=false; boost=Math.min(1,(boost||0)+0.18); shake=Math.max(shake,6); gflash=0.5; gapFxT=1; gapFxMsg='ПРОПАСТЬ ✓'; sfxAir(); buzz(20); }   // landed on the landing (cling caught it) → cleared
     }
     for(let k=ci+1;k<=ci+5;k++){ if(terr[k]&&terr[k].gap){ if(bike.onG) tut('gapj','⤴ ПРОПАСТЬ — РАЗГОНИСЬ и ПРЫГНИ'+(TOUCH?'':' (↑)')); break; } } }
   // hazards: on the ground they wreck your momentum; clear them in the air to DODGE
