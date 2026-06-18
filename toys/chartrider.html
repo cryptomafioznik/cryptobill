@@ -46,7 +46,7 @@ function lerp(a,b,t){return a+(b-a)*t;} function clamp(v,a,b){return v<a?a:v>b?b
 // false → full game. Single switch. Systems are GATED, never deleted.
 const CORE_TEST_MODE = true;
 // build stamp — bump on every change so a phone refresh can confirm it loaded fresh code (cache!)
-const BUILD = '2026-06-18 · b21';
+const BUILD = '2026-06-18 · b22';
 
 // ---------- procedural market terrain ----------
 // height map sampled every STEP px; generated forward as we ride. Market character:
@@ -338,8 +338,8 @@ function pointerDown(p){
   if(screen==='paused'){ if(hit(p,UI.quit)) toTitle(); else screen='play'; sfxClick(); return; }
   if(screen==='dead'){ if(hit(p,UI.dgarage)){ screen='garage'; sfxClick(); return; } if(hit(p,UI.menu)) toTitle(); else reset(); sfxClick(); return; }
   if(hit(p,UI.pause)){ screen='paused'; sfxClick(); return null; }
-  if(UI.jump && hit(p,UI.jump)){ requestJump(); return null; }                  // tap JUMP button
-  if((boost||0)>=1 && hit(p,UI.boost)){ activateBoost(); return null; }         // tap charged PUMP meter to boost
+  if(UI.pumpBtn && hit(p,UI.pumpBtn)){ activateBoost(); return null; }          // tap PUMP button (jump lives on swipe-up now)
+  if((boost||0)>=1 && UI.boost && hit(p,UI.boost)){ activateBoost(); return null; } // tapping the charged meter also fires (forgiving)
   return 'ctrl';   // anywhere in the play area = control finger (hold = gas, drag = lean)
 }
 function requestJump(){ if(screen==='play' && bike) jumpReq=8; }   // buffer the press for 8 frames (forgiving timing at gap edges); update() fires it if grounded or within coyote grace
@@ -482,7 +482,7 @@ function update(){
   if(zi2!==zone){ zone=zi2; biomeBanner=BIOMES[zi2%BIOMES.length].name; biomeBannerT=1; }
   if(biomeBannerT>0) biomeBannerT-=0.012;
   if(evBannerT>0) evBannerT-=0.0095;
-  if((boost||0)>=1 && screen==='play') tut('pump','⚡ PUMP ЗАРЯЖЕН — '+('ontouchstart'in window?'ТАПНИ ШКАЛУ':'SHIFT')+' ЧТОБ ОТОРВАТЬСЯ');
+  if((boost||0)>=1 && screen==='play') tut('pump','⚡ PUMP ЗАРЯЖЕН — '+('ontouchstart'in window?'ЖМИ ⚡PUMP':'SHIFT')+' ЧТОБ ОТОРВАТЬСЯ');
   if(tutT>0) tutT-=0.0062;
   // chasing LIQUIDATION wave (the dump): ramps with distance + biome, caps its lead so it always looms; catch = death
   waveSpd = (TUNE.waveSpeed + (Math.min((dist||0)/150, 4.8) + Math.max(0,((dist||0)-700)/620))*TUNE.waveAccel) * BIOMES[(((zone||0)%BIOMES.length)+BIOMES.length)%BIOMES.length].wave * (curEvType==='whale'?1.75:1) * lerp(0.6,1,clamp((dist||0)/TUNE.easeInDist,0,1)) * (1-0.07*upgLvl('wave'));   // ramps, then keeps creeping past 700m (no cap) → an eventual wall that ДВИЖОК/ЩИТ push deeper   // re-tuned for the heavier momentum bike; surges during a whale dump
@@ -713,8 +713,8 @@ function draw(){
   if(screen==='play'){ const wgap=bike.x-wave, dang=clamp(1-wgap/(W*0.62),0,1);
     if(dang>0.02){ const rv=ctx.createLinearGradient(0,0,W*0.55,0); rv.addColorStop(0,'rgba(225,28,52,'+(0.4*dang)+')'); rv.addColorStop(1,'rgba(225,28,52,0)'); ctx.fillStyle=rv; ctx.fillRect(0,0,W*0.55,H); }
     if(dang>0.45){ ctx.fillStyle='rgba(255,80,100,'+(0.55+0.45*Math.sin(t*0.45))+')'; ctx.font='800 15px ui-monospace,monospace'; ctx.textAlign='center'; ctx.fillText('⚠ ДАМП НАСТИГАЕТ',W/2,H*0.18); ctx.textAlign='left'; } }
-  // BOOST (PUMP) meter — charges from tricks, spend to surge ahead of the dump
-  if(screen==='play'){ const bw=150,bx=W/2-bw/2,by=H-58,bf=clamp(boost||0,0,1);
+  // BOOST (PUMP) gauge — on touch the PUMP button carries charge+control; keep this slim gauge only on desktop (Shift to fire)
+  if(screen==='play' && !(TOUCH||window.__forceTouchUI)){ const bw=150,bx=W/2-bw/2,by=H-58,bf=clamp(boost||0,0,1);
     ctx.fillStyle='rgba(20,24,40,0.55)'; ctx.fillRect(bx,by,bw,9);
     const bc=(bf>=1)?'120,255,180':'90,200,255'; ctx.fillStyle='rgba('+bc+',0.9)'; ctx.fillRect(bx,by,bw*bf,9);
     ctx.strokeStyle='rgba(150,180,220,0.4)'; ctx.lineWidth=1; ctx.strokeRect(bx,by,bw,9);
@@ -791,16 +791,24 @@ function draw(){
   if(screen==='play'){ UI.pause={x:W-40,y:14,w:26,h:26}; ctx.fillStyle='rgba(20,22,40,0.45)'; ctx.fillRect(W-40,14,26,26); ctx.strokeStyle='rgba(150,180,220,0.5)'; ctx.lineWidth=1; ctx.strokeRect(W-40,14,26,26); ctx.fillStyle='rgba(200,220,245,0.85)'; ctx.fillRect(W-32,20,4,14); ctx.fillRect(W-24,20,4,14); } else UI.pause=null;
   // ---- on-screen controls: HOLD anywhere = gas · drag L/R = lean · swipe up = jump ----
   if((TOUCH||window.__forceTouchUI) && screen==='play'){
-    UI.gas=null; UI.brk=null; UI.jump={x:W-118,y:H-188,w:104,h:52};
-    const pad=(r,lab,on,c,fs)=>{ ctx.fillStyle='rgba('+c+','+(on?0.34:0.13)+')'; if(ctx.roundRect){ctx.beginPath();ctx.roundRect(r.x,r.y,r.w,r.h,13);ctx.fill();ctx.strokeStyle='rgba('+c+','+(on?1:0.5)+')';ctx.lineWidth=on?2.4:1.4;ctx.stroke();}else{ctx.fillRect(r.x,r.y,r.w,r.h);}
-      ctx.fillStyle='rgba('+c+','+(on?1:0.78)+')'; ctx.font='800 '+(fs||13)+'px ui-monospace,monospace'; ctx.textAlign='center'; ctx.fillText(lab,r.x+r.w/2,r.y+r.h/2+6); ctx.textAlign='left'; };
-    pad(UI.jump,'⤴',jumpReq||(!bike.onG&&jumpCd>0), jumpCd>0?'130,150,180':'255,210,120', 20);
+    UI.gas=null; UI.brk=null; UI.jump=null;
+    // PUMP button — replaces the redundant jump button (jump is on swipe-up). Fills as it charges, glows when ready, tap to surge.
+    UI.pumpBtn={x:W-118,y:H-188,w:104,h:52};
+    { const r=UI.pumpBtn, bf=clamp(boost||0,0,1), ready=bf>=1, active=boosting>0, c=(ready||active)?'120,255,180':'90,170,235';
+      const rr=(x,y,w,h)=>{ ctx.beginPath(); if(ctx.roundRect)ctx.roundRect(x,y,w,h,13); else ctx.rect(x,y,w,h); };
+      rr(r.x,r.y,r.w,r.h); ctx.fillStyle='rgba('+c+','+((ready||active)?0.30:0.12)+')'; ctx.fill();
+      if(!ready&&!active){ ctx.save(); rr(r.x,r.y,r.w,r.h); ctx.clip(); ctx.fillStyle='rgba('+c+',0.26)'; ctx.fillRect(r.x,r.y,r.w*bf,r.h); ctx.restore(); }   // charge fill 0→100%
+      const glow=ready?(0.6+0.4*Math.sin(t*0.3)):1; rr(r.x,r.y,r.w,r.h); ctx.strokeStyle='rgba('+c+','+((ready||active)?glow:0.5)+')'; ctx.lineWidth=(ready||active)?2.6:1.4; ctx.stroke();
+      ctx.fillStyle='rgba('+c+','+((ready||active)?1:0.72)+')'; ctx.textAlign='center';
+      ctx.font='800 17px ui-monospace,monospace'; ctx.fillText(active?'⚡GO':(ready?'⚡PUMP':'⚡'), r.x+r.w/2, r.y+r.h/2+((ready||active)?2:5));
+      if(!ready&&!active){ ctx.font='700 9px ui-monospace,monospace'; ctx.fillStyle='rgba('+c+',0.7)'; ctx.fillText(Math.round(bf*100)+'%', r.x+r.w/2, r.y+r.h/2+16); }
+      ctx.textAlign='left'; }
     // lean indicator: track + dot (analog lean), glows green while gas is held
     const lw=152, lx=W/2-lw/2, ly=H-40;
     ctx.fillStyle=down?'rgba(120,255,180,0.45)':'rgba(150,180,220,0.28)'; ctx.fillRect(lx,ly,lw,4);
     ctx.fillStyle='rgba(120,200,255,0.95)'; ctx.shadowColor='#3ea0ff'; ctx.shadowBlur=6; ctx.beginPath(); ctx.arc(lx+lw/2+(leanX||0)*(lw/2-7), ly+2, 8, 0, 7); ctx.fill(); ctx.shadowBlur=0;
     ctx.fillStyle='rgba(160,180,210,0.55)'; ctx.font='700 9px ui-monospace,monospace'; ctx.textAlign='center'; ctx.fillText(down?'◀ НАКЛОН ▶':'удерживай = газ · ◀ наклон ▶ · свайп↑ прыжок', W/2, ly-9); ctx.textAlign='left';
-  } else { UI.gas=null; UI.brk=null; UI.jump=null; }
+  } else { UI.gas=null; UI.brk=null; UI.jump=null; UI.pumpBtn=null; }
   // engine audio tracks speed
   if(eng&&engOscs){ const v=bike?bike.vx:0, f=40+v*8+(down?16:0);
     engOscs[0].frequency.value=f; engOscs[1].frequency.value=f*2.01; engOscs[2].frequency.value=f*1.006;
