@@ -46,7 +46,7 @@ function lerp(a,b,t){return a+(b-a)*t;} function clamp(v,a,b){return v<a?a:v>b?b
 // false → full game. Single switch. Systems are GATED, never deleted.
 const CORE_TEST_MODE = true;
 // build stamp — bump on every change so a phone refresh can confirm it loaded fresh code (cache!)
-const BUILD = '2026-06-19 · b36';
+const BUILD = '2026-06-19 · b37';
 
 // ---------- procedural market terrain ----------
 // height map sampled every STEP px; generated forward as we ride. Market character:
@@ -199,6 +199,10 @@ const TUNE = {
   ledgeStepN:   2,       // 26. ступеней в «лестнице» (1-2 для старта; протектор-площадка 2 узла, чтоб байк сел между стенками)
   ledgeGrab:    20,      // 27. ПРОЩЕНИЕ лофта (px): насколько ниже верха кромки переднее колесо ещё «цепляет» и заезжает. БОЛЬШЕ = легче поймать тайминг
   ledgeSlam:    9.0,     // 28. влетел в стенку БЕЗ лофта быстрее этого = ЭНДО через руль (реал: слэм без подъёма = кувырок). Медленнее = ЗАГЛОХ у стенки (подними перед или дамп догонит). Высоко (>круиз 7.2) → обычная скорость = заглох, не смерть
+  // ---- ПРОЩЕНИЕ ПРЫЖКА У ОБРЫВА (b37): окно прыжка на кромке слишком узкое для рук (сим: чисто только в −40..+20px ≈ 10 кадров) → расширяем, чтобы решал СКИЛЛ-тайминг, не кадр-перфект ----
+  jumpBuf:      14,      // 29. буфер прыжка (кадров): нажал в воздухе — помним столько и стреляем при касании. 8→14 = терпит лаг свайпа
+  gapCoyote:    16,      // 30. coyote У ОБРЫВА (кадров): на кромке держим окно — прыжок стреляет даже если нажал ПОЗЖЕ кромки (расширяет поздний край окна). Обычный coyote = 8
+  swipeJump:    32,      // 31. порог свайпа-вверх для прыжка (px): 45→32 = жест регистрируется быстрее (меньше лаг до прыжка). Ниже = чувствительнее (но риск случайного прыжка от наклона)
 };
 // ---- физика байка (двухколёсная: тангаж → вилли / loop-out / endo + импульс); ключевые крутилки тянет из TUNE ----
 const PHYS={ GRAV:TUNE.gravity, DX:26, DY:27.5,           // гравитация(↑TUNE), полубаза, высота ЦТ над колёсами
@@ -407,7 +411,7 @@ function pointerDown(p){
   if(UI.leanRBtn && hit(p,UI.leanRBtn)) return 'leanR';
   return 'none';
 }
-function requestJump(){ if(screen==='play' && bike) jumpReq=8; }   // buffer the press for 8 frames (forgiving timing at gap edges); update() fires it if grounded or within coyote grace
+function requestJump(){ if(screen==='play' && bike) jumpReq=TUNE.jumpBuf; }   // buffer the press (TUNE.jumpBuf frames — forgiving timing at gap edges); update() fires it if grounded or within coyote grace
 function recompute(){ let g=false,b=false,lL=false,lR=false; for(const id in activeTouches){ const z=activeTouches[id]; if(z==='gas')g=true; else if(z==='brake')b=true; else if(z==='leanL')lL=true; else if(z==='leanR')lR=true; } down=g; brake=b; if(ctrlScheme==='btn4') leanX=(lR?1:0)-(lL?1:0); }   // button schemes derive held state (btn2 lean handled per-frame in update; tilt by gyro)
 function ptFromEvent(e){ const r=cv.getBoundingClientRect(), s=(e.touches&&e.touches[0])?e.touches[0]:e; return {x:(s.clientX||0)-r.left,y:(s.clientY||0)-r.top}; }
 const GAS_KEYS={' ':1};                              // hold = gas (release = coast)
@@ -440,7 +444,7 @@ addEventListener('touchstart',e=>{ for(const tch of e.changedTouches){ const r=c
     else if(z==='gas'||z==='brake'||z==='leanL'||z==='leanR'){ activeTouches[tch.identifier]=z; recompute(); } }   // button schemes: a finger holds a control button
   e.preventDefault(); },{passive:false});
 addEventListener('touchmove',e=>{ if(ctrlScheme==='gestures'){ for(const tch of e.changedTouches){ const r=cv.getBoundingClientRect(), cx=tch.clientX-r.left, cy=tch.clientY-r.top;
-    if(touchLowY[tch.identifier]!==undefined){ if(cy>touchLowY[tch.identifier]) touchLowY[tch.identifier]=cy; else if(touchLowY[tch.identifier]-cy>45){ requestJump(); touchLowY[tch.identifier]=cy; } }   // swipe up = jump
+    if(touchLowY[tch.identifier]!==undefined){ if(cy>touchLowY[tch.identifier]) touchLowY[tch.identifier]=cy; else if(touchLowY[tch.identifier]-cy>TUNE.swipeJump){ requestJump(); touchLowY[tch.identifier]=cy; } }   // swipe up = jump (TUNE.swipeJump px — lower = registers faster)
     if(tch.identifier===ctrlId){ leanX=clamp((cx-ctrlOX)/LEANRANGE,-1,1); } } }   // drag L/R = analog lean (gestures only; buttons are held)
   e.preventDefault(); },{passive:false});
 addEventListener('touchend',e=>{ for(const tch of e.changedTouches){ delete touchLowY[tch.identifier];
@@ -471,7 +475,7 @@ function update(){
   const supA=Math.atan2(gyf-gyr, 2*DX), targetY=(gyr+gyf)*0.5 - DY;   // slope the bike rests at; CG height when seated
   bike.vy += P.GRAV;
   let grounded = (bike.y + bike.vy >= targetY - P.STICK);             // cling to the ground unless it drops away faster than STICK (kills micro-launches, keeps real ramps)
-  if(grounded) coyote=8; else if(coyote>0) coyote--;                  // coyote grace: still jumpable briefly after a gap edge launches you early
+  if(grounded) coyote=gapNear?TUNE.gapCoyote:8; else if(coyote>0) coyote--;   // coyote grace: still jumpable after a gap edge launches you early — WIDER at gap lips (TUNE.gapCoyote) so a late swipe still fires
   if(jumpCd>0)jumpCd--;
   if(jumpReq>0){ if((grounded||coyote>0) && jumpCd<=0){ bike.vy=-P.JUMP; grounded=false; coyote=0; jumpReq=0; jumpCd=16; airT=0; nearMissed=false; bike.angV*=0.3; jumpGrace=1; shake=Math.max(shake,3); for(let e=0;e<7;e++)dust.push({x:bike.x-10+Math.random()*20,y:bike.y+24,vx:(Math.random()-0.5)*2.4,vy:-Math.random()*2,life:1,r:Math.random()*2.4+1}); sfxAir(); } else jumpReq--; }   // on-demand hop (buffered + coyote)
   // CENTRIPETAL LAUNCH: at speed over a convex crest/kicker the bike can't hug the curve → it FLIES OFF (a real physics object, not glued to the line) — this is "байк не приклеен"
@@ -493,6 +497,7 @@ function update(){
     bike.y += bike.vy;                                                 // airborne projectile
     if(bike.vy>0 && bike.y>targetY && !(terr[Math.floor(bike.x/STEP)]&&terr[Math.floor(bike.x/STEP)].gap)) bike.y=targetY;   // never punch THROUGH the surface on a fast landing (the 1-frame "sank into the track"); gaps fall freely
     if(Math.abs(leanX)>0.06){ bike.angV += leanX*P.LEANAIR; }                                                       // analog air rotation via LEAN (drag) — flips & landing aim; no more gas-coupled flip
+    else if(overGap||gapNear){ bike.angV += (0-bike.ang)*0.06; }                                                     // jumping off a gap lip / over a chasm + not steering → actively FLATTEN so you take off & land on your wheels (kills the gap-jump loop/crash; you can still flip by holding lean)
     else if(jumpGrace){ const la=terrainAt(bike.x+Math.max(20,bike.vx*6)).ang; bike.angV+=(la-bike.ang)*0.02; }     // just jumped, not steering → clean controllable arc
     else { const la=terrainAt(bike.x+Math.max(20,bike.vx*6)).ang; bike.angV+=(la-bike.ang)*0.025; }                 // no input → auto-level to the landing slope (un-commanded crest launches land on their wheels; commanded air = leanX for flips)
     bike.wheel += 0.3;
@@ -532,11 +537,11 @@ function update(){
     if(gn && gn.gap){
       let fe=ci; while(terr[fe]&&terr[fe].gap)fe++; gapFarX=(terr[fe]?terr[fe].x:fe*STEP); gapLipNow=gn.lipY; overGap=true;   // airborne over the chasm
       const landY=terr[fe]?terr[fe].y:gn.lipY, fwx=bike.x+DX, fwy=bike.y+DY;                                      // landing LIP height + FRONT wheel position
-      if(!bike.onG && bike.vy>=-1 && fwx>=gapFarX-12){                                                            // front wheel reaching the far edge
-        if(fwy>landY-16 && fwy<landY+66){                                                                        // wheel within reach of the lip → GRAB it & scrabble up
+      if(!bike.onG && bike.vy>=-1 && fwx>=gapFarX-24){                                                            // front wheel reaching the far edge (wider reach = catch near-misses)
+        if(fwy>landY-24 && fwy<landY+96){                                                                        // wheel within reach of the lip → GRAB it & scrabble up (generous window: a jump that ALMOST makes it still catches the edge)
           bike.x=gapFarX+4; bike.y=terrainAt(bike.x).y-DY; bike.vy=0; bike.onG=true; bike.vx*=0.8; bike.angV*=0.45; overGap=false;
           gapFxT=1; gapFxMsg='ЗАЦЕПИЛ КРАЙ!'; boost=Math.min(1,(boost||0)+0.12); gflash=0.45; shake=Math.max(shake,6); sfxAir(); buzz(16);
-        } else if(fwy>=landY+66 && screen==='play') wipeout('gap');                                              // front wheel below the lip's reach = missed → fell in
+        } else if(fwy>=landY+96 && screen==='play') wipeout('gap');                                              // front wheel below the lip's reach = missed → fell in
       } else if(screen==='play' && (bike.onG || bike.y>gn.lipY+95)) wipeout('gap');                              // grounded on the chasm floor or fell deep before reaching the edge
     } else if(overGap && screen==='play'){
       if(!bike.onG && bike.x>gapFarX+STEP){ overGap=false; boost=Math.min(1,(boost||0)+0.2); shake=Math.max(shake,7); gflash=0.6; gapFxT=1; gapFxMsg='ПРОПАСТЬ ✓'; sfxAir(); buzz(22); }   // flew clear past the far edge
@@ -700,7 +705,8 @@ function draw(){
   for(let i=i0;i<i1;i++){ const a=terr[i],b=terr[i+1]; if(!a||!b)continue;
     if(!a.gap && b.gap){ ctx.strokeStyle='rgba(255,80,92,0.95)'; ctx.lineWidth=3.4; ctx.shadowColor='#ff3050'; ctx.shadowBlur=12;
       ctx.beginPath(); ctx.moveTo(a.x,a.y-4); ctx.lineTo(a.x,a.y+46); ctx.stroke(); ctx.shadowBlur=0;
-      if(a.x>bike.x){ ctx.fillStyle='rgba(255,95,105,'+(0.5+0.4*Math.sin(t*0.3))+')'; ctx.textAlign='center'; ctx.font='800 13px ui-monospace,monospace'; ctx.fillText('⚠ ПРОПАСТЬ',a.x+24,a.y-30); ctx.textAlign='left'; } }
+      if(a.x>bike.x){ ctx.fillStyle='rgba(255,95,105,'+(0.5+0.4*Math.sin(t*0.3))+')'; ctx.textAlign='center'; ctx.font='800 13px ui-monospace,monospace'; ctx.fillText('⚠ ПРОПАСТЬ',a.x+24,a.y-30); ctx.textAlign='left'; }
+      if(bike.onG && a.x>bike.x-12 && a.x<bike.x+62){ ctx.fillStyle='rgba(130,255,180,'+(0.55+0.45*Math.sin(t*0.55))+')'; ctx.textAlign='center'; ctx.font='800 17px ui-monospace,monospace'; ctx.shadowColor='#3effa0'; ctx.shadowBlur=12; ctx.fillText('⤴ ПРЫГАЙ!',a.x-4,a.y-52); ctx.shadowBlur=0; ctx.textAlign='left'; } }
     if(a.gap && !b.gap){ ctx.strokeStyle='rgba(120,255,180,0.9)'; ctx.lineWidth=3.4; ctx.shadowColor='#3effa0'; ctx.shadowBlur=10;
       ctx.beginPath(); ctx.moveTo(b.x,b.y-4); ctx.lineTo(b.x,b.y+46); ctx.stroke(); ctx.shadowBlur=0; } }
   // ---- LEDGES: bright vertical step face + "▲ УСТУП" telegraph (loft the front to climb it) ----
