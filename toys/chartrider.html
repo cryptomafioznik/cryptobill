@@ -46,7 +46,7 @@ function lerp(a,b,t){return a+(b-a)*t;} function clamp(v,a,b){return v<a?a:v>b?b
 // false → full game. Single switch. Systems are GATED, never deleted.
 const CORE_TEST_MODE = true;
 // build stamp — bump on every change so a phone refresh can confirm it loaded fresh code (cache!)
-const BUILD = '2026-06-18 · b34';
+const BUILD = '2026-06-18 · b35';
 
 // ---------- procedural market terrain ----------
 // height map sampled every STEP px; generated forward as we ride. Market character:
@@ -78,6 +78,7 @@ const EVENTS={
 };
 let evGenType='', evGenLeft=0, nextEvGenX=2600;                 // terrain-generation scheduler
 let gapLeft=0, nextGapX=1800, gapBaseY=0, gapLandFlat=0, overGap=false, gapLipNow=0, gapFarX=0, gapFxT=0, gapFxMsg='';   // GAPS: gen + fair-landing + clear state; gapLipNow/gapFarX = lip level & far-edge x of the gap being crossed
+let gapRunup=0, gapRampLeft=0, gapPrevY=0, gapRampBot=0;   // gap FEATURE phases: descent run-up (build speed) → kicker ramp (launch) → chasm → land below the lip
 let curEvType='', evBanner='', evBannerT=0, evColor='90,240,150', evGlow=0, evBonus=0, lastWarnX=-1, evWarnType=''; // bike-side event state
 function pickEvent(gz){ const z=((gz%5)+5)%5, r=Math.random();
   if(z===2) return r<0.55?'rally':(r<0.82?'flash':'whale');     // Эйфория: pumps
@@ -118,11 +119,12 @@ function genSeg(){
   // ---- GAPS: a chasm you must JUMP (core skill obstacle of varying width) ----
   let isGap=false, gapLip=0;
   if(!isEv){
-    if(gapLeft>0){ isGap=true; gapLip=gapBaseY; close=H*0.99; gapLeft--; if(gapLeft<=0){ walk=gapBaseY-baseY; gapLandFlat=2; } }   // chasm floor (deep = void); restore level + flag a fair landing
-    else if(gapLandFlat>0){ close=lerp(close, gapBaseY, 0.7); walk=close-baseY; gapLandFlat--; }   // flatten the 2 landing nodes right after a chasm → fair, not a wall
-    else if(TUNE.gapEvery>0 && genX>=nextGapX && genX>TUNE.gapStart*10 && terr.length>20 && regime!=='pump' && regime!=='crash' && (prevC-close)<11){   // FAIR: only on a flat/downhill takeoff (runway + speed to clear it) — never mid-steep-climb; else defer to the next flatter node (nextGapX unchanged → retries)
-      gapBaseY=close; gapLeft=3+((Math.random()*2)|0);   // 3-4 node chasm — too wide for the ramp alone at flat speed → you must JUMP (or carry descent-momentum); THIS node = takeoff lip
-      nextGapX=genX + TUNE.gapEvery*10 + Math.random()*1400;
+    if(gapRunup>0){ const k=6-gapRunup; close=clamp(gapPrevY + k*13, 70, H*0.86); walk=close-baseY; gapRunup--; if(gapRunup<=0){ gapRampBot=close; gapRampLeft=3; } }   // DESCENT run-up: build speed before the jump (always fast at the lip, even right after a climb)
+    else if(gapRampLeft>0){ const k=4-gapRampLeft; close=clamp(gapRampBot - k*22, 70, H*0.95); walk=close-baseY; gapRampLeft--; if(gapRampLeft<=0){ gapLeft=3+((Math.random()*2)|0); gapBaseY=gapRampBot; } }   // KICKER RAMP up (visible trampoline) → lip is the top; land back at the run-up bottom (below the lip = extra air)
+    else if(gapLeft>0){ isGap=true; gapLip=gapBaseY; close=H*0.99; gapLeft--; if(gapLeft<=0){ walk=gapBaseY-baseY; gapLandFlat=2; } }   // chasm floor; land at the run-up bottom (lower than the lip)
+    else if(gapLandFlat>0){ close=lerp(close, gapBaseY, 0.7); walk=close-baseY; gapLandFlat--; }   // flatten the landing
+    else if(TUNE.gapEvery>0 && genX>=nextGapX && genX>TUNE.gapStart*10 && terr.length>20 && regime!=='pump' && regime!=='crash' && lastRegime!=='bull'){   // schedule a gap FEATURE (not mid-climb); the run-up handles the takeoff
+      gapPrevY=close; gapRunup=5; nextGapX=genX + TUNE.gapEvery*10 + Math.random()*1400;   // start: descent run-up first
     }
   }
   let open = terr.length ? terr[terr.length-1].close : close;
@@ -334,7 +336,7 @@ function reset(){
   rankMul=CORE_TEST_MODE?1:1+0.07*rankIdx(career); rankedUp=null;   // CORE TEST: no rank profit multiplier
   baseY=H*0.6; terr=[]; genX=0; walk=0; regimeLeft=0; lastHazIdx=-99;
   evGenType=''; evGenLeft=0; nextEvGenX=3000; curEvType=''; evBanner=''; evBannerT=0; evGlow=0; evBonus=0; lastWarnX=-1; evWarnType='';   // first event ~300m (onboarding breathing room)
-  gapLeft=0; nextGapX=TUNE.gapStart*10; gapLandFlat=0; overGap=false; gapLipNow=0; gapFarX=0; gapFxT=0;   // GAPS: first chasm after gapStart
+  gapLeft=0; nextGapX=TUNE.gapStart*10; gapLandFlat=0; overGap=false; gapLipNow=0; gapFarX=0; gapFxT=0; gapRunup=0; gapRampLeft=0;   // GAPS: first chasm after gapStart
   for(let i=0;i<Math.ceil(W/STEP)+8;i++)genSeg();
   bike={x:60,y:terrainAt(60).y-27.5,vx:0,vy:0,ang:terrainAt(60).ang,angV:0,onG:true,wheel:0};
   cam={x:bike.x-W*0.5,y:bike.y-H*0.46}; t=0; coins=0; dist=0; lastMile=0; newDepth=false; wipe=0; screen='play'; shake=0; flash=0; popT=0; daycycle=Math.random()*6.28;
