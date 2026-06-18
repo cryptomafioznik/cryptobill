@@ -46,7 +46,7 @@ function lerp(a,b,t){return a+(b-a)*t;} function clamp(v,a,b){return v<a?a:v>b?b
 // false → full game. Single switch. Systems are GATED, never deleted.
 const CORE_TEST_MODE = true;
 // build stamp — bump on every change so a phone refresh can confirm it loaded fresh code (cache!)
-const BUILD = '2026-06-18 · b26';
+const BUILD = '2026-06-18 · b27';
 
 // ---------- procedural market terrain ----------
 // height map sampled every STEP px; generated forward as we ride. Market character:
@@ -112,8 +112,8 @@ function genSeg(){
   if(!isEv){
     if(gapLeft>0){ isGap=true; gapLip=gapBaseY; close=H*0.99; gapLeft--; if(gapLeft<=0){ walk=gapBaseY-baseY; gapLandFlat=2; } }   // chasm floor (deep = void); restore level + flag a fair landing
     else if(gapLandFlat>0){ close=lerp(close, gapBaseY, 0.7); walk=close-baseY; gapLandFlat--; }   // flatten the 2 landing nodes right after a chasm → fair, not a wall
-    else if(TUNE.gapEvery>0 && genX>=nextGapX && genX>TUNE.gapStart*10 && terr.length>20 && regime!=='pump' && regime!=='crash'){
-      gapBaseY=close; gapLeft=2+((Math.random()*(2+clamp((genX/10)/700,0,1)*2))|0);   // narrower (2-3 early → 2-5 deep) so the slower bike can clear them; THIS node = takeoff lip
+    else if(TUNE.gapEvery>0 && genX>=nextGapX && genX>TUNE.gapStart*10 && terr.length>20 && regime!=='pump' && regime!=='crash' && (prevC-close)<11){   // FAIR: only on a flat/downhill takeoff (runway + speed to clear it) — never mid-steep-climb; else defer to the next flatter node (nextGapX unchanged → retries)
+      gapBaseY=close; gapLeft=2+((Math.random()*(1+clamp((genX/10)/700,0,1)*2))|0);   // narrower (2 early → 2-4 deep) so the slower torquey bike clears them; THIS node = takeoff lip
       nextGapX=genX + TUNE.gapEvery*10 + Math.random()*1400;
     }
   }
@@ -144,8 +144,9 @@ const TOUCH=('ontouchstart' in window)||navigator.maxTouchPoints>0;
 // РАВНЫ текущим, поэтому появление этого блока само по себе ничего в игре не изменило.
 const TUNE = {
   gravity:      0.85,    // 1. гравитация — притяжение вниз за кадр
-  acceleration: 0.42,    // 2. ускорение — тяга (ниже = не слишком быстро; хватает заехать с импульсом; accel-стат байка домножает)
+  acceleration: 0.55,    // 2. ТЯГА/момент — 0.42→0.55: грунт под КРУЧЕ-подъёмы (лезет 0.9-рад на vx~2.2, не глохнет). Топ-скорость держит низкой drag → медленный, но тяговитый = эндуро. accel-стат байка домножает
   brake:        0.90,    // 3. сила тормоза — vx *= это при торможении (МЕНЬШЕ = тормозит сильнее)
+  drag:         0.966,   // 3b. ПОТОЛОК СКОРОСТИ (vx*=drag/кадр): 0.978→0.966 → круиз ~8→6.6 (тише темп). Режет РОВНУЮ скорость, не тягу в горку → с поднятым acceleration байк МЕДЛЕННЫЙ, но ЛЕЗЕТ круче. НИЖЕ = ещё медленнее
   jump:         15.0,    // 4. сила прыжка — импульс хопа (выше — пропасти перепрыгиваются на сниженной скорости)
   pumpForce:    0.09,    // 4b. PUMP — МЯГКИЙ постоянный толчок/кадр во время рывка (НЕ резкий скачок до vx18, от которого выкидывало). Помогает, не выбрасывает. Больше = тянет сильнее
   pumpDur:      120,     // 4c. PUMP — длительность рывка в кадрах (дольше + плавно, ×апгрейд PUMP). Был резкий ~56-кадровый скачок — теперь плавный разгон
@@ -164,14 +165,14 @@ const TUNE = {
   pitchHold:    0.024,   // 17. самовыравнивание тангажа к склону (= «пружина» к склону; чуть мягче, чтобы наклон дотягивал до вилли/стоппи)
   steepEarly:   0.85,    // 18. множитель крутизны НА СТАРТЕ (положе на старте, проходимо; растёт к terrainSteep за steepRamp)
   steepRamp:    600,     // 19. дистанция (м), за которую крутизна растёт steepEarly → terrainSteep (ещё жёстче дальше)
-  climbCap:     0.86,    // 19b. КЭП КРУТИЗНЫ ПОДЪЁМА (рад): генератор НЕ делает круче этого ВВЕРХ. 0.8→0.86 (подъёмы БОЛЬШЕ/круче по просьбе; ещё ниже физ-потолка 1.08). Спуски/пропасти не трогает. Замерено: реальные крутые серии ≤16 узлов → байк лезет ~2-3с (min vx ~2), без кувырка/затыка. Физ-потолок тяги HODLER ≈1.08 (выше — глохнет); 0.9 ползёт на искусств. 60-узл. стене >25с. БОЛЬШЕ = круче/злее (до ~0.95), МЕНЬШЕ = пологее
+  climbCap:     0.9,     // 19b. КЭП КРУТИЗНЫ ПОДЪЁМА (рад): генератор НЕ делает круче этого ВВЕРХ. 0.86→0.9 (горки ещё круче по просьбе; ещё ниже физ-потолка тяги 1.08 — проверено симой что медленный байк лезет). Спуски/пропасти не трогает. Замерено: реальные крутые серии ≤16 узлов → байк лезет ~2-3с (min vx ~2), без кувырка/затыка. Физ-потолок тяги HODLER ≈1.08 (выше — глохнет); 0.9 ползёт на искусств. 60-узл. стене >25с. БОЛЬШЕ = круче/злее (до ~0.95), МЕНЬШЕ = пологее
   leanGround:   0.028,   // 20. сила НАКЛОНА (драг влево-вправо): 0.020→0.028 — ЧУВСТВИТЕЛЬНЕЕ (от тебя больше зависит; быстрее в вилли/стоппи, но и перекрутить легче = скилл)
   leanAir:      0.022,   // 21. сила наклона в воздухе — аналоговое вращение (0.015→0.022, чувствительнее: доворот к посадке + флипы)
   destab:       0.0018,  // 22. дестабилизация скорость×склон: подъём кренит назад, спуск — носом вниз → держи наклоном (мягко, наклон легко перекрывает)
 };
 // ---- физика байка (двухколёсная: тангаж → вилли / loop-out / endo + импульс); ключевые крутилки тянет из TUNE ----
 const PHYS={ GRAV:TUNE.gravity, DX:26, DY:27.5,           // гравитация(↑TUNE), полубаза, высота ЦТ над колёсами
-  POW:TUNE.acceleration, GACC:TUNE.slopePull, DRAG:0.978, BRK:TUNE.brake,   // тяга(↑TUNE), импульс-по-склону(↑TUNE), drag→ПОТОЛОК скорости ниже (медленнее, успеваешь корректировать) — тяга в горку остаётся, тормоз(↑TUNE)
+  POW:TUNE.acceleration, GACC:TUNE.slopePull, DRAG:TUNE.drag, BRK:TUNE.brake,   // тяга(↑TUNE), импульс-по-склону(↑TUNE), drag→ПОТОЛОК скорости ниже (медленнее, успеваешь корректировать) — тяга в горку остаётся, тормоз(↑TUNE)
   GP:TUNE.pitchHold, ENGTQ:0.0044, BRKTQ:0.018, CLIMB:TUNE.climbLift, // тангаж-возврат-к-склону(↑TUNE), газ-нос-вверх, тормоз-нос-вниз, множ. подъёма(↑TUNE: дозируй газ или loop out)
   AIRTQ:TUNE.airControl, ANGD:0.78, AVMAX:0.5, LOOP:1.7, STICK:5, JUMP:TUNE.jump, // момент-сальто, ДЕМПФЕР (плавно), кламп, угол loop/endo=1.7 (вилли/стоппи ДЕРЖАТСЯ, кувырок только при реальном перекруте), прилипание, хоп
   LEANGND:TUNE.leanGround, LEANAIR:TUNE.leanAir, DESTAB:TUNE.destab }; // наклон на земле/в воздухе + дестабилизация (новая lean-схема управления)
@@ -428,7 +429,9 @@ function update(){
   // physics
   const P=PHYS, DX=P.DX, DY=P.DY, wasG=bike.onG;
   // --- sample terrain under both wheels → rest slope + ground-follow target ---
-  const gyr=terrainAt(bike.x-DX).y, gyf=terrainAt(bike.x+DX).y;
+  const gyr=terrainAt(bike.x-DX).y; let gyf=terrainAt(bike.x+DX).y;
+  const _gi=Math.floor((bike.x+DX)/STEP), gapNear=!!((terr[_gi]&&terr[_gi].gap)||(terr[_gi+1]&&terr[_gi+1].gap));   // chasm within ~1.5 nodes ahead?
+  if(gapNear) gyf=gyr;                                                // BUGFIX: the front sample read the chasm floor as a steep down-slope BEFORE the lip → sank the bike into the gap (this is why gaps felt unfair). Keep it level at the lip so it launches OFF the edge, not into it.
   const supA=Math.atan2(gyf-gyr, 2*DX), targetY=(gyr+gyf)*0.5 - DY;   // slope the bike rests at; CG height when seated
   bike.vy += P.GRAV;
   let grounded = (bike.y + bike.vy >= targetY - P.STICK);             // cling to the ground unless it drops away faster than STICK (kills micro-launches, keeps real ramps)
@@ -436,8 +439,7 @@ function update(){
   if(jumpCd>0)jumpCd--;
   if(jumpReq>0){ if((grounded||coyote>0) && jumpCd<=0){ bike.vy=-P.JUMP; grounded=false; coyote=0; jumpReq=0; jumpCd=16; airT=0; nearMissed=false; bike.angV*=0.3; jumpGrace=1; shake=Math.max(shake,3); for(let e=0;e<7;e++)dust.push({x:bike.x-10+Math.random()*20,y:bike.y+24,vx:(Math.random()-0.5)*2.4,vy:-Math.random()*2,life:1,r:Math.random()*2.4+1}); sfxAir(); } else jumpReq--; }   // on-demand hop (buffered + coyote)
   if(grounded){
-    const _ahead=terr[Math.floor((bike.x+DX)/STEP)];                  // gap edge ahead? launch flat (slight up), don't follow the cliff down
-    bike.y = targetY; bike.vy = (_ahead&&_ahead.gap) ? Math.min(bike.vy,-1.5) : bike.vx*Math.tan(clamp(supA,-1.2,1.2)); // seat on ground; store follow-rate so crests launch
+    bike.y = targetY; bike.vy = gapNear ? -Math.max(7, bike.vx*1.1) : bike.vx*Math.tan(clamp(supA,-1.2,1.2)); // gap edge = a KICKER (beats STICK(5) → real auto-launch over the chasm + air); tap jump for an even bigger hop
     bike.vx += P.GACC*Math.sin(supA);                                  // gravity along slope = real momentum (climb bleeds, descent builds)
     if(down) bike.vx += P.POW*BK().accel;
     if(brake) bike.vx *= P.BRK;
@@ -568,7 +570,7 @@ function update(){
 let flipAcc=0, flipCount=0, popMsg='', popT=0;
 function popText(m){ if(CORE_TEST_MODE)return; popMsg=m;popT=1;}                                        // CORE TEST: no score popups
 function floatPop(x,y,txt,col){ if(CORE_TEST_MODE)return; if(!floats)floats=[]; floats.push({x:x,y:y,txt:txt,col:col,vy:-0.9,life:1}); }
-function activateBoost(){ if((boost||0)<1||boosting>0||screen!=='play')return; boost=0; boosting=Math.round(TUNE.pumpDur*(1+0.22*upgLvl('pump'))); if(bike)bike.vx+=2; rush=1; shake=4; gflash=0.4; multPulse=1; popText('⚡ PUMP!'); sfxLev(); buzz(28); }   // small instant nudge + long gentle push (see TUNE.pumpForce/pumpDur); no more vx-snap-to-18
+function activateBoost(){ if((boost||0)<1||boosting>0||screen!=='play')return; boost=0; boosting=Math.round(TUNE.pumpDur*(1+0.22*upgLvl('pump'))); if(bike){ bike.vx+=2; bike.wheel+=4; for(let e=0;e<12;e++)dust.push({x:bike.x-24+Math.random()*10,y:bike.y+22,vx:-(2+Math.random()*4.5),vy:-Math.random()*2.2,life:1,r:Math.random()*2.6+1.5}); } rush=1; shake=4; gflash=0.4; multPulse=1; popText('⚡ PUMP!'); sfxLev(); buzz(28); }   // wheelspin roost on launch (traction-break juice)   // small instant nudge + long gentle push (see TUNE.pumpForce/pumpDur); no more vx-snap-to-18
 function resolveEvent(type){ if(screen!=='play')return;          // payoff when the bike clears an event block
   if(type==='rally'){ const r=Math.round(evBonus); coins+=3; popText('ПАМП-РАЛЛИ  +$'+r.toLocaleString('en-US')); floatPop(bike.x,bike.y-34,'+◆3','#9ff0c8'); gflash=0.7; multPulse=1; sfxAir(); }
   else if(type==='whale'){ wave=Math.min(wave, bike.x-W*0.9); const r=Math.round(160*mult); pnl+=r; boost=Math.min(1,(boost||0)+0.25); popText('ОТОРВАЛСЯ ОТ КИТА  +$'+r.toLocaleString('en-US')); floatPop(bike.x,bike.y-34,'+$'+r,'#9ff0c8'); gflash=0.6; sfxLev(); }
@@ -694,7 +696,7 @@ function draw(){
       const ff=ctx.createLinearGradient(-28,0,-28-fl,0); ff.addColorStop(0,'rgba(255,210,130,0.85)'); ff.addColorStop(0.5,'rgba(255,120,80,0.45)'); ff.addColorStop(1,'rgba(255,120,80,0)');
       ctx.fillStyle=ff; ctx.beginPath(); ctx.moveTo(-26,3); ctx.lineTo(-28-fl,9); ctx.lineTo(-28-fl,18); ctx.lineTo(-26,22); ctx.closePath(); ctx.fill(); ctx.restore(); }
     // dirt roost kicked up when throttling
-    if(down&&bike.onG){ for(let e=0;e<3;e++){ ctx.fillStyle='rgba(190,160,120,'+(0.22*Math.random())+')'; ctx.beginPath(); ctx.arc(-30-Math.random()*12,16+Math.random()*7,2+Math.random()*3,0,7); ctx.fill(); } }
+    if(down&&bike.onG){ const n=bike.vx<3?6:3; for(let e=0;e<n;e++){ ctx.fillStyle='rgba(190,160,120,'+(0.22*Math.random())+')'; ctx.beginPath(); ctx.arc(-30-Math.random()*12,16+Math.random()*7,2+Math.random()*3,0,7); ctx.fill(); } }   // more roost when launching from low speed (wheelspin/traction-break)
     // ===== WHEELS: big knobby dirt tires =====
     for(const wx of [-27,27]){
       const wg=ctx.createRadialGradient(wx-3,11,1,wx,15.5,13); wg.addColorStop(0,'#1a1e28'); wg.addColorStop(1,'#05060c');
@@ -848,10 +850,10 @@ function draw(){
       if(!ready&&!active){ ctx.font='700 9px ui-monospace,monospace'; ctx.fillStyle='rgba('+c+',0.7)'; ctx.fillText(Math.round(bf*100)+'%', r.x+r.w/2, r.y+r.h/2+15); }
       ctx.textAlign='left'; };
     if(ctrlScheme==='gestures'){
-      // PUMP + JUMP buttons as a pair on the configured side (jump back by request; swipe-up still works too); mirrors with handedness
-      const pw=92, ph=52, py=H-190;
-      if(pumpSide==='left'){ UI.pumpBtn={x:14,y:py,w:pw,h:ph}; UI.jumpBtn={x:14+pw+8,y:py,w:pw,h:ph}; }
-      else { UI.pumpBtn={x:W-14-pw,y:py,w:pw,h:ph}; UI.jumpBtn={x:W-14-pw-8-pw,y:py,w:pw,h:ph}; }
+      // PUMP + JUMP STACKED on the configured side (jump UNDER pump — compact, one column; swipe-up still works); mirrors with handedness
+      const pw=106, ph=46, px=(pumpSide==='left')?14:W-14-pw;
+      UI.pumpBtn={x:px,y:H-208,w:pw,h:ph};            // PUMP on top
+      UI.jumpBtn={x:px,y:H-208+ph+8,w:pw,h:ph};       // JUMP under it
       drawPump(UI.pumpBtn);
       ctlBtn(UI.jumpBtn,'⤴ ПРЫЖОК', jumpReq||(bike&&!bike.onG&&jumpCd>0), '255,210,120', 13);
       const lw=152, lx=W/2-lw/2, ly=H-40;   // analog lean indicator
