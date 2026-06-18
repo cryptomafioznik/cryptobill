@@ -46,7 +46,7 @@ function lerp(a,b,t){return a+(b-a)*t;} function clamp(v,a,b){return v<a?a:v>b?b
 // false → full game. Single switch. Systems are GATED, never deleted.
 const CORE_TEST_MODE = true;
 // build stamp — bump on every change so a phone refresh can confirm it loaded fresh code (cache!)
-const BUILD = '2026-06-18 · b32';
+const BUILD = '2026-06-18 · b33';
 
 // ---------- procedural market terrain ----------
 // height map sampled every STEP px; generated forward as we ride. Market character:
@@ -154,7 +154,7 @@ const TUNE = {
   gravity:      0.85,    // 1. гравитация — притяжение вниз за кадр
   acceleration: 0.55,    // 2. ТЯГА/момент — 0.42→0.55: грунт под КРУЧЕ-подъёмы (лезет 0.9-рад на vx~2.2, не глохнет). Топ-скорость держит низкой drag → медленный, но тяговитый = эндуро. accel-стат байка домножает
   brake:        0.90,    // 3. сила тормоза — vx *= это при торможении (МЕНЬШЕ = тормозит сильнее)
-  drag:         0.954,   // 3b. ПОТОЛОК СКОРОСТИ (vx*=drag/кадр): 0.966→0.954 → круиз ~6.6→5 (эндуро = ТЯГА/контроль, НЕ скорость). Режет ровную скорость, не тягу в горку. Бонус: ниже скорость = мягче отрывы/посадки = меньше краш-зацепов
+  drag:         0.969,   // 3b. ПОТОЛОК СКОРОСТИ НА РОВНОМ (vx*=drag/кадр): 0.969 → ровно ~7.2 (быстро). СКОРОСТЬ СИТУАТИВНА, не глобальна: на ровном/спуске быстро, на КРУТОЙ горе медленно САМО (гравитация GACC·sin гасит скорость) — как в реале. Раньше 0.954=медленно ВЕЗДЕ (ошибка). НИЖЕ = медленнее ровный
   jump:         15.0,    // 4. сила прыжка — импульс хопа (выше — пропасти перепрыгиваются на сниженной скорости)
   pumpForce:    0.09,    // 4b. PUMP — МЯГКИЙ постоянный толчок/кадр во время рывка (НЕ резкий скачок до vx18, от которого выкидывало). Помогает, не выбрасывает. Больше = тянет сильнее
   pumpDur:      120,     // 4c. PUMP — длительность рывка в кадрах (дольше + плавно, ×апгрейд PUMP). Был резкий ~56-кадровый скачок — теперь плавный разгон
@@ -502,7 +502,7 @@ function update(){
   // loop-out / endo: over-rotate while grounded = crash (the GD skill — too much gas on a climb loops you backward)
   if(grounded && rel<-0.45 && dist>25) tut('climb','▲ КРУТО? ОТПУСТИ ГАЗ — НЕ ОПРОКИНЕШЬСЯ');   // teach feathering before the first loop-out
   const loopThresh = lerp(TUNE.loopForgive, P.LOOP, clamp((dist||0)/TUNE.easeInDist,0,1));   // Alto on-ramp: forgiving early, eases to full over easeInDist — mastery ceiling unchanged
-  if(grounded && screen==='play' && Math.abs(rel)>loopThresh){ wipeout(rel<0?'loop':'endo'); }
+  if(grounded && screen==='play'){ if(rel<-loopThresh) wipeout('loop'); else if(rel>loopThresh && supA>-0.3) wipeout('endo'); }   // ENDO (nose digs forward) only on flat/descent — on a steep CLIMB the hill is in front, you can't nose-dive, so weight-forward is SAFE (only LOOP-backward is the risk). matches real enduro
   // coins along terrain
   const magR=36*(1+0.40*upgLvl('mag')); const ci=Math.floor(bike.x/STEP); for(let k=ci-3;k<=ci+3;k++){ const c=terr[k]; if(c&&c.coin){ const cx=c.x,cy=c.y-30; if(Math.hypot(cx-bike.x,cy-bike.y)<magR){ c.coin=false; coins++; sfxCoin(); boost=Math.min(1,(boost||0)+0.04); const gv=Math.round(25*mult); pnl+=gv; floatPop(cx,cy,'+$'+gv,'#ffd678'); for(let z=0;z<8;z++)parts.push({x:cx,y:cy,vx:(Math.random()-0.5)*3.5,vy:-Math.random()*3-1,life:1,gold:1,r:2});} } }
   // ---- GAPS: jump them. The FRONT WHEEL can catch the far edge & scrabble up (enduro) — you only fall in on a real miss ----
