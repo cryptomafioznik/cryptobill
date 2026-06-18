@@ -46,7 +46,7 @@ function lerp(a,b,t){return a+(b-a)*t;} function clamp(v,a,b){return v<a?a:v>b?b
 // false → full game. Single switch. Systems are GATED, never deleted.
 const CORE_TEST_MODE = true;
 // build stamp — bump on every change so a phone refresh can confirm it loaded fresh code (cache!)
-const BUILD = '2026-06-18 · b24';
+const BUILD = '2026-06-18 · b25';
 
 // ---------- procedural market terrain ----------
 // height map sampled every STEP px; generated forward as we ride. Market character:
@@ -184,6 +184,15 @@ try{muted=localStorage.getItem('cipher_muted')==='1';}catch(e){}
 let pumpSide='left', settingsRet='title';   // PUMP button side (right-hander → left, configurable for lefties); settingsRet = screen to return to from settings
 try{pumpSide=localStorage.getItem('cipher_pumpside')||'left';}catch(e){}
 function savePumpSide(){ try{localStorage.setItem('cipher_pumpside',pumpSide);}catch(e){} }
+// ---- control schemes: player picks in settings (gestures = his default; buttons/tilt for newcomers — widen the audience) ----
+const SCHEMES=['gestures','btn2','btn4','tilt'];
+const SCHEME_NAME={gestures:'ЖЕСТЫ',btn2:'2 КНОПКИ',btn4:'4 КНОПКИ',tilt:'НАКЛОН ТЕЛЕФОНА'};
+const SCHEME_DESC={gestures:'держишь = газ · драг = наклон · свайп↑ = прыжок',btn2:'газ / тормоз — наклон делает сам газ-тормоз',btn4:'газ/тормоз + кнопки наклона НОС↑ / НОС↓',tilt:'газ/тормоз + наклон ТЕЛЕФОНА (гироскоп)'};
+let ctrlScheme='gestures'; try{ctrlScheme=localStorage.getItem('cipher_ctrlscheme')||'gestures'; if(SCHEMES.indexOf(ctrlScheme)<0)ctrlScheme='gestures';}catch(e){}
+function saveScheme(){ try{localStorage.setItem('cipher_ctrlscheme',ctrlScheme);}catch(e){} }
+let tiltReady=false;   // device-orientation lean (tilt scheme); needs a user-gesture permission on iOS
+function enableTilt(){ if(tiltReady)return; const add=()=>{ tiltReady=true; addEventListener('deviceorientation',ev=>{ if(ctrlScheme==='tilt'&&screen==='play'){ leanX=clamp((ev.gamma||0)/26,-1,1); } }); };
+  try{ if(typeof DeviceOrientationEvent!=='undefined' && typeof DeviceOrientationEvent.requestPermission==='function'){ DeviceOrientationEvent.requestPermission().then(s=>{ if(s==='granted')add(); }).catch(()=>{}); } else add(); }catch(e){} }
 // ---- onboarding: one-time contextual coach hints (shown once ever, per id) ----
 let seenTut={}; try{seenTut=JSON.parse(localStorage.getItem('cipher_tut2')||'{}')||{};}catch(e){seenTut={};}
 let tutText='', tutT=0;
@@ -346,6 +355,7 @@ function pointerDown(p){
     screen='play'; sfxClick(); return;   // tap elsewhere = resume
   }
   if(screen==='settings'){
+    if(hit(p,UI.setScheme)){ ctrlScheme=SCHEMES[(SCHEMES.indexOf(ctrlScheme)+1)%SCHEMES.length]; saveScheme(); down=false;brake=false;leanX=0;activeTouches={};ctrlId=null; if(ctrlScheme==='tilt')enableTilt(); sfxClick(); return; }
     if(hit(p,UI.setPump)){ pumpSide=(pumpSide==='left')?'right':'left'; savePumpSide(); sfxClick(); return; }
     if(hit(p,UI.setMute)){ toggleMute(); sfxClick(); return; }
     if(hit(p,UI.setBack)){ screen=settingsRet||'title'; sfxClick(); return; }
@@ -353,12 +363,18 @@ function pointerDown(p){
   }
   if(screen==='dead'){ if(hit(p,UI.dgarage)){ screen='garage'; sfxClick(); return; } if(hit(p,UI.menu)) toTitle(); else reset(); sfxClick(); return; }
   if(hit(p,UI.pause)){ screen='paused'; sfxClick(); return null; }
-  if(UI.pumpBtn && hit(p,UI.pumpBtn)){ activateBoost(); return null; }          // tap PUMP button (jump lives on swipe-up now)
-  if((boost||0)>=1 && UI.boost && hit(p,UI.boost)){ activateBoost(); return null; } // tapping the charged meter also fires (forgiving)
-  return 'ctrl';   // anywhere in the play area = control finger (hold = gas, drag = lean)
+  if(UI.pumpBtn && hit(p,UI.pumpBtn)){ activateBoost(); return 'tap'; }          // tap PUMP button
+  if((boost||0)>=1 && UI.boost && hit(p,UI.boost)){ activateBoost(); return 'tap'; } // charged meter (desktop) also fires
+  if(UI.jumpBtn && hit(p,UI.jumpBtn)){ requestJump(); return 'tap'; }            // tap JUMP button (button schemes)
+  if(ctrlScheme==='gestures') return 'ctrl';                                     // gestures: hold anywhere = gas, drag = lean, swipe up = jump
+  if(UI.gasBtn && hit(p,UI.gasBtn)) return 'gas';                                // button schemes: a finger only acts when it lands on a control button
+  if(UI.brkBtn && hit(p,UI.brkBtn)) return 'brake';
+  if(UI.leanLBtn && hit(p,UI.leanLBtn)) return 'leanL';
+  if(UI.leanRBtn && hit(p,UI.leanRBtn)) return 'leanR';
+  return 'none';
 }
 function requestJump(){ if(screen==='play' && bike) jumpReq=8; }   // buffer the press for 8 frames (forgiving timing at gap edges); update() fires it if grounded or within coyote grace
-function applyTouches(){ let g=false,b=false; for(const id in activeTouches){ const z=activeTouches[id]; if(z==='gas')g=true; else if(z==='brake')b=true; } down=g; brake=b; }
+function recompute(){ let g=false,b=false,lL=false,lR=false; for(const id in activeTouches){ const z=activeTouches[id]; if(z==='gas')g=true; else if(z==='brake')b=true; else if(z==='leanL')lL=true; else if(z==='leanR')lR=true; } down=g; brake=b; if(ctrlScheme==='btn4') leanX=(lR?1:0)-(lL?1:0); }   // button schemes derive held state (btn2 lean handled per-frame in update; tilt by gyro)
 function ptFromEvent(e){ const r=cv.getBoundingClientRect(), s=(e.touches&&e.touches[0])?e.touches[0]:e; return {x:(s.clientX||0)-r.left,y:(s.clientY||0)-r.top}; }
 const GAS_KEYS={' ':1};                              // hold = gas (release = coast)
 const LEANL_KEYS={'ArrowLeft':1,'a':1,'A':1};        // lean nose UP / back
@@ -380,22 +396,32 @@ addEventListener('keydown',e=>{
   else if(k==='f'||k==='F')dbgToggle();   // toggle debug overlay
 });
 addEventListener('keyup',e=>{ const k=e.key; if(GAS_KEYS[k])down=false; else if(BRK_KEYS[k])brake=false; else if(LEANL_KEYS[k]){leanKeyL=false;updLeanKeys();} else if(LEANR_KEYS[k]){leanKeyR=false;updLeanKeys();} });
-addEventListener('mousedown',e=>{ const p=ptFromEvent(e),z=pointerDown(p); if(z==='ctrl'){ down=true; ctrlId='mouse'; ctrlOX=p.x; leanX=0; } });
-addEventListener('mousemove',e=>{ if(ctrlId==='mouse'){ const p=ptFromEvent(e); leanX=clamp((p.x-ctrlOX)/LEANRANGE,-1,1); } });
-addEventListener('mouseup',()=>{ if(ctrlId==='mouse')ctrlId=null; down=false; leanX=0; brake=false; });
+addEventListener('mousedown',e=>{ const p=ptFromEvent(e),z=pointerDown(p);
+  if(ctrlScheme==='gestures'){ if(z==='ctrl'){ down=true; ctrlId='mouse'; ctrlOX=p.x; leanX=0; } }
+  else if(z==='gas'||z==='brake'||z==='leanL'||z==='leanR'){ activeTouches['mouse']=z; recompute(); } });
+addEventListener('mousemove',e=>{ if(ctrlScheme==='gestures'&&ctrlId==='mouse'){ const p=ptFromEvent(e); leanX=clamp((p.x-ctrlOX)/LEANRANGE,-1,1); } });
+addEventListener('mouseup',()=>{ if(ctrlScheme==='gestures'){ if(ctrlId==='mouse')ctrlId=null; down=false; leanX=0; brake=false; } else { delete activeTouches['mouse']; recompute(); } });
 addEventListener('touchstart',e=>{ for(const tch of e.changedTouches){ const r=cv.getBoundingClientRect(),p={x:tch.clientX-r.left,y:tch.clientY-r.top},z=pointerDown(p); touchLowY[tch.identifier]=p.y;
-    if(z==='ctrl'){ if(ctrlId===null){ ctrlId=tch.identifier; ctrlOX=p.x; leanX=0; } down=true; } }   // hold anywhere = gas; first finger = the lean stick
+    if(ctrlScheme==='gestures'){ if(z==='ctrl'){ if(ctrlId===null){ ctrlId=tch.identifier; ctrlOX=p.x; leanX=0; } down=true; } }   // hold anywhere = gas; first finger = the lean stick
+    else if(z==='gas'||z==='brake'||z==='leanL'||z==='leanR'){ activeTouches[tch.identifier]=z; recompute(); } }   // button schemes: a finger holds a control button
   e.preventDefault(); },{passive:false});
-addEventListener('touchmove',e=>{ for(const tch of e.changedTouches){ const r=cv.getBoundingClientRect(), cx=tch.clientX-r.left, cy=tch.clientY-r.top;
+addEventListener('touchmove',e=>{ if(ctrlScheme==='gestures'){ for(const tch of e.changedTouches){ const r=cv.getBoundingClientRect(), cx=tch.clientX-r.left, cy=tch.clientY-r.top;
     if(touchLowY[tch.identifier]!==undefined){ if(cy>touchLowY[tch.identifier]) touchLowY[tch.identifier]=cy; else if(touchLowY[tch.identifier]-cy>45){ requestJump(); touchLowY[tch.identifier]=cy; } }   // swipe up = jump
-    if(tch.identifier===ctrlId){ leanX=clamp((cx-ctrlOX)/LEANRANGE,-1,1); } }   // drag L/R = analog lean
+    if(tch.identifier===ctrlId){ leanX=clamp((cx-ctrlOX)/LEANRANGE,-1,1); } } }   // drag L/R = analog lean (gestures only; buttons are held)
   e.preventDefault(); },{passive:false});
-addEventListener('touchend',e=>{ for(const tch of e.changedTouches){ delete touchLowY[tch.identifier]; if(tch.identifier===ctrlId){ ctrlId=null; leanX=0; } } down=(ctrlId!==null); e.preventDefault(); },{passive:false});
-addEventListener('touchcancel',e=>{ for(const tch of e.changedTouches){ delete touchLowY[tch.identifier]; if(tch.identifier===ctrlId){ ctrlId=null; leanX=0; } } down=(ctrlId!==null); },{passive:false});
+addEventListener('touchend',e=>{ for(const tch of e.changedTouches){ delete touchLowY[tch.identifier];
+    if(ctrlScheme==='gestures'){ if(tch.identifier===ctrlId){ ctrlId=null; leanX=0; } }
+    else if(activeTouches[tch.identifier]){ delete activeTouches[tch.identifier]; recompute(); } }
+  if(ctrlScheme==='gestures') down=(ctrlId!==null); e.preventDefault(); },{passive:false});
+addEventListener('touchcancel',e=>{ for(const tch of e.changedTouches){ delete touchLowY[tch.identifier];
+    if(ctrlScheme==='gestures'){ if(tch.identifier===ctrlId){ ctrlId=null; leanX=0; } }
+    else if(activeTouches[tch.identifier]){ delete activeTouches[tch.identifier]; recompute(); } }
+  if(ctrlScheme==='gestures') down=(ctrlId!==null); },{passive:false});
 
 function update(){
   if(hitstop>0){ hitstop--; return; }   // brief freeze for impact punch
   if(boosting>0)boosting--;
+  if(ctrlScheme==='btn2'){ leanX = brake ? 1 : (down ? -clamp(1.1-(bike?bike.vx:0)/9,0,1)*0.6 : 0); }   // Hill Climb feel: gas pops the nose (wheelie) at low speed, brake noses down — pitch comes from gas/brake
   t++; daycycle+=0.0009;
   // physics
   const P=PHYS, DX=P.DX, DY=P.DY, wasG=bike.onG;
@@ -806,24 +832,46 @@ function draw(){
   if(screen==='play'){ UI.pause={x:W-40,y:14,w:26,h:26}; ctx.fillStyle='rgba(20,22,40,0.45)'; ctx.fillRect(W-40,14,26,26); ctx.strokeStyle='rgba(150,180,220,0.5)'; ctx.lineWidth=1; ctx.strokeRect(W-40,14,26,26); ctx.fillStyle='rgba(200,220,245,0.85)'; ctx.fillRect(W-32,20,4,14); ctx.fillRect(W-24,20,4,14); } else UI.pause=null;
   // ---- on-screen controls: HOLD anywhere = gas · drag L/R = lean · swipe up = jump ----
   if((TOUCH||window.__forceTouchUI) && screen==='play'){
-    UI.gas=null; UI.brk=null; UI.jump=null;
-    // PUMP button — replaces the redundant jump button (jump is on swipe-up). Fills as it charges, glows when ready, tap to surge.
-    UI.pumpBtn={x:(pumpSide==='right'?W-118:14),y:H-188,w:104,h:52};   // side configurable in settings (right-hander → left hand taps PUMP)
-    { const r=UI.pumpBtn, bf=clamp(boost||0,0,1), ready=bf>=1, active=boosting>0, c=(ready||active)?'120,255,180':'90,170,235';
-      const rr=(x,y,w,h)=>{ ctx.beginPath(); if(ctx.roundRect)ctx.roundRect(x,y,w,h,13); else ctx.rect(x,y,w,h); };
+    UI.gas=null; UI.brk=null; UI.jump=null; UI.gasBtn=null; UI.brkBtn=null; UI.leanLBtn=null; UI.leanRBtn=null; UI.jumpBtn=null;
+    const mir=(pumpSide==='right');                       // lefty → mirror the whole control cluster
+    const MX=(x,w)=>mir?(W-x-w):x;                         // x given in right-hander coords
+    const rr=(x,y,w,h)=>{ ctx.beginPath(); if(ctx.roundRect)ctx.roundRect(x,y,w,h,13); else ctx.rect(x,y,w,h); };
+    const ctlBtn=(r,label,active,col,fs)=>{ rr(r.x,r.y,r.w,r.h); ctx.fillStyle='rgba('+col+','+(active?0.34:0.12)+')'; ctx.fill(); rr(r.x,r.y,r.w,r.h); ctx.strokeStyle='rgba('+col+','+(active?1:0.5)+')'; ctx.lineWidth=active?2.6:1.4; ctx.stroke(); ctx.fillStyle='rgba('+col+','+(active?1:0.82)+')'; ctx.font='800 '+(fs||16)+'px ui-monospace,monospace'; ctx.textAlign='center'; ctx.fillText(label,r.x+r.w/2,r.y+r.h/2+5); ctx.textAlign='left'; };
+    const drawPump=(r)=>{ const bf=clamp(boost||0,0,1), ready=bf>=1, active=boosting>0, c=(ready||active)?'120,255,180':'90,170,235';
       rr(r.x,r.y,r.w,r.h); ctx.fillStyle='rgba('+c+','+((ready||active)?0.30:0.12)+')'; ctx.fill();
-      if(!ready&&!active){ ctx.save(); rr(r.x,r.y,r.w,r.h); ctx.clip(); ctx.fillStyle='rgba('+c+',0.26)'; ctx.fillRect(r.x,r.y,r.w*bf,r.h); ctx.restore(); }   // charge fill 0→100%
+      if(!ready&&!active){ ctx.save(); rr(r.x,r.y,r.w,r.h); ctx.clip(); ctx.fillStyle='rgba('+c+',0.26)'; ctx.fillRect(r.x,r.y,r.w*bf,r.h); ctx.restore(); }
       const glow=ready?(0.6+0.4*Math.sin(t*0.3)):1; rr(r.x,r.y,r.w,r.h); ctx.strokeStyle='rgba('+c+','+((ready||active)?glow:0.5)+')'; ctx.lineWidth=(ready||active)?2.6:1.4; ctx.stroke();
       ctx.fillStyle='rgba('+c+','+((ready||active)?1:0.72)+')'; ctx.textAlign='center';
-      ctx.font='800 17px ui-monospace,monospace'; ctx.fillText(active?'⚡GO':(ready?'⚡PUMP':'⚡'), r.x+r.w/2, r.y+r.h/2+((ready||active)?2:5));
-      if(!ready&&!active){ ctx.font='700 9px ui-monospace,monospace'; ctx.fillStyle='rgba('+c+',0.7)'; ctx.fillText(Math.round(bf*100)+'%', r.x+r.w/2, r.y+r.h/2+16); }
-      ctx.textAlign='left'; }
-    // lean indicator: track + dot (analog lean), glows green while gas is held
-    const lw=152, lx=W/2-lw/2, ly=H-40;
-    ctx.fillStyle=down?'rgba(120,255,180,0.45)':'rgba(150,180,220,0.28)'; ctx.fillRect(lx,ly,lw,4);
-    ctx.fillStyle='rgba(120,200,255,0.95)'; ctx.shadowColor='#3ea0ff'; ctx.shadowBlur=6; ctx.beginPath(); ctx.arc(lx+lw/2+(leanX||0)*(lw/2-7), ly+2, 8, 0, 7); ctx.fill(); ctx.shadowBlur=0;
-    ctx.fillStyle='rgba(160,180,210,0.55)'; ctx.font='700 9px ui-monospace,monospace'; ctx.textAlign='center'; ctx.fillText(down?'◀ НАКЛОН ▶':'удерживай = газ · ◀ наклон ▶ · свайп↑ прыжок', W/2, ly-9); ctx.textAlign='left';
-  } else { UI.gas=null; UI.brk=null; UI.jump=null; UI.pumpBtn=null; }
+      ctx.font='800 15px ui-monospace,monospace'; ctx.fillText(active?'⚡GO':(ready?'⚡PUMP':'⚡'), r.x+r.w/2, r.y+r.h/2+((ready||active)?2:3));
+      if(!ready&&!active){ ctx.font='700 9px ui-monospace,monospace'; ctx.fillStyle='rgba('+c+',0.7)'; ctx.fillText(Math.round(bf*100)+'%', r.x+r.w/2, r.y+r.h/2+15); }
+      ctx.textAlign='left'; };
+    if(ctrlScheme==='gestures'){
+      UI.pumpBtn={x:(pumpSide==='right'?W-118:14),y:H-188,w:104,h:52}; drawPump(UI.pumpBtn);
+      const lw=152, lx=W/2-lw/2, ly=H-40;   // analog lean indicator
+      ctx.fillStyle=down?'rgba(120,255,180,0.45)':'rgba(150,180,220,0.28)'; ctx.fillRect(lx,ly,lw,4);
+      ctx.fillStyle='rgba(120,200,255,0.95)'; ctx.shadowColor='#3ea0ff'; ctx.shadowBlur=6; ctx.beginPath(); ctx.arc(lx+lw/2+(leanX||0)*(lw/2-7), ly+2, 8, 0, 7); ctx.fill(); ctx.shadowBlur=0;
+      ctx.fillStyle='rgba(160,180,210,0.55)'; ctx.font='700 9px ui-monospace,monospace'; ctx.textAlign='center'; ctx.fillText(down?'◀ НАКЛОН ▶':'удерживай = газ · ◀ наклон ▶ · свайп↑ прыжок', W/2, ly-9); ctx.textAlign='left';
+    } else if(ctrlScheme==='btn4'){
+      // Trials layout: gas/brake stacked on the dominant side, lean PAIR together bottom-other-side (primary balance thumb)
+      const bw=116, gx=MX(W-14-bw,bw);
+      UI.gasBtn ={x:gx,y:H-110,w:bw,h:62}; ctlBtn(UI.gasBtn,'ГАЗ', down, down?'120,255,180':'120,205,160', 18);
+      UI.brkBtn ={x:gx,y:H-178,w:bw,h:60}; ctlBtn(UI.brkBtn,'ТОРМОЗ', brake, brake?'255,175,120':'200,155,135', 14);
+      UI.jumpBtn={x:gx,y:H-246,w:bw,h:48}; ctlBtn(UI.jumpBtn,'⤴ ПРЫЖОК', jumpReq||(bike&&!bike.onG&&jumpCd>0), '255,210,120', 13);
+      const lw2=84;   // lean pair, bottom on the other side
+      UI.leanLBtn={x:MX(14,lw2),y:H-110,w:lw2,h:62};       ctlBtn(UI.leanLBtn,'НОС↑', leanX<-0.05, '150,205,255', 14);   // nose up / wheelie
+      UI.leanRBtn={x:MX(14+lw2+6,lw2),y:H-110,w:lw2,h:62}; ctlBtn(UI.leanRBtn,'НОС↓', leanX>0.05, '150,205,255', 14);    // nose down / stoppie
+      UI.pumpBtn={x:MX(14,lw2*2+6),y:H-178,w:lw2*2+6,h:48}; drawPump(UI.pumpBtn);
+    } else {
+      // btn2 / tilt: GAS on the dominant side, BRAKE on the other; JUMP + PUMP small above
+      const bh=72, bw=118, by=H-150;
+      UI.gasBtn={x:MX(W-14-bw,bw),y:by,w:bw,h:bh}; ctlBtn(UI.gasBtn,'ГАЗ', down, down?'120,255,180':'120,205,160', 19);
+      UI.brkBtn={x:MX(14,bw),y:by,w:bw,h:bh};      ctlBtn(UI.brkBtn,'ТОРМОЗ', brake, brake?'255,175,120':'200,155,135', 15);
+      const sw=118, sh=44, sy=by-54;
+      UI.jumpBtn={x:MX(W-14-sw,sw),y:sy,w:sw,h:sh}; ctlBtn(UI.jumpBtn,'⤴ ПРЫЖОК', jumpReq||(bike&&!bike.onG&&jumpCd>0), '255,210,120', 14);
+      UI.pumpBtn={x:MX(14,sw),y:sy,w:sw,h:sh}; drawPump(UI.pumpBtn);
+      if(ctrlScheme==='tilt'){ ctx.fillStyle='rgba(150,180,220,'+(tiltReady?0.6:0.85)+')'; ctx.font='700 10px ui-monospace,monospace'; ctx.textAlign='center'; ctx.fillText(tiltReady?'наклоняй ТЕЛЕФОН = наклон байка':'нажми НАКЛОН в настройках — разреши гироскоп', W/2, sy-18); ctx.textAlign='left'; }
+    }
+  } else { UI.gas=null; UI.brk=null; UI.jump=null; UI.pumpBtn=null; UI.gasBtn=null; UI.brkBtn=null; UI.leanLBtn=null; UI.leanRBtn=null; UI.jumpBtn=null; }
   // engine audio tracks speed
   if(eng&&engOscs){ const v=bike?bike.vx:0, f=40+v*8+(down?16:0);
     engOscs[0].frequency.value=f; engOscs[1].frequency.value=f*2.01; engOscs[2].frequency.value=f*1.006;
@@ -919,17 +967,19 @@ function drawMenus(){
     UI.mute=null; UI.pause=null;
   } else if(screen==='settings'){
     ctx.fillStyle='rgba(6,5,16,0.96)'; ctx.fillRect(0,0,W,H);
-    ctx.fillStyle='#eafaff'; ctx.font='800 24px ui-monospace,monospace'; ctx.fillText('⚙ НАСТРОЙКИ',W/2,H*0.17);
-    ctx.fillStyle='#8fa0c4'; ctx.font='10px ui-monospace,monospace'; ctx.fillText('УДЕРЖАНИЕ = газ · ДРАГ = наклон · СВАЙП↑ = прыжок',W/2,H*0.17+24);
-    const cx=W/2, cw=280;
-    const yA=H*0.31; UI.setPump={x:cx-cw/2,y:yA,w:cw,h:58}; panel(UI.setPump.x,UI.setPump.y,cw,58,'rgba(120,200,255,0.6)');
-    ctx.fillStyle='#9fb6dc'; ctx.font='700 11px ui-monospace,monospace'; ctx.fillText('КНОПКА PUMP (РЫВОК)',cx,yA+20);
-    ctx.fillStyle='#9ff0c8'; ctx.font='800 18px ui-monospace,monospace'; ctx.fillText(pumpSide==='left'?'◀  СЛЕВА':'СПРАВА  ▶',cx,yA+44);
-    const yB=yA+74; UI.setMute={x:cx-cw/2,y:yB,w:cw,h:46}; panel(UI.setMute.x,UI.setMute.y,cw,46,'rgba(150,170,210,0.45)');
-    ctx.fillStyle='#bcd0ee'; ctx.font='14px ui-monospace,monospace'; ctx.fillText(muted?'ЗВУК:   ВЫКЛ':'ЗВУК:   ВКЛ',cx,yB+28);
-    ctx.fillStyle='rgba(150,170,200,0.62)'; ctx.font='600 10px ui-monospace,monospace'; ctx.fillText('правша → PUMP СЛЕВА · левша → СПРАВА',cx,yB+70);
-    ctx.fillStyle='rgba(125,140,180,0.5)'; ctx.font='10px ui-monospace,monospace'; ctx.fillText('— кнопочная схема для новичков скоро —',cx,yB+88);
-    UI.setBack={x:cx-90,y:H-96,w:180,h:46}; panel(UI.setBack.x,UI.setBack.y,180,46,'rgba(150,170,210,0.6)'); ctx.fillStyle='#cfe0ff'; ctx.font='700 15px ui-monospace,monospace'; ctx.fillText('←  НАЗАД',cx,UI.setBack.y+29);
+    ctx.fillStyle='#eafaff'; ctx.font='800 23px ui-monospace,monospace'; ctx.fillText('⚙ НАСТРОЙКИ',W/2,H*0.12);
+    const cx=W/2, cw=292;
+    let y=H*0.19; UI.setScheme={x:cx-cw/2,y:y,w:cw,h:64}; panel(UI.setScheme.x,UI.setScheme.y,cw,64,'rgba(120,255,180,0.6)');   // control scheme (tap to cycle)
+    ctx.fillStyle='#9fb6dc'; ctx.font='700 10px ui-monospace,monospace'; ctx.fillText('СХЕМА УПРАВЛЕНИЯ  (тап = следующая)',cx,y+18);
+    ctx.fillStyle='#9ff0c8'; ctx.font='800 17px ui-monospace,monospace'; ctx.fillText('‹  '+SCHEME_NAME[ctrlScheme]+'  ›',cx,y+39);
+    ctx.fillStyle='rgba(150,175,205,0.7)'; ctx.font='600 9px ui-monospace,monospace'; ctx.fillText(SCHEME_DESC[ctrlScheme],cx,y+55);
+    y+=78; UI.setPump={x:cx-cw/2,y:y,w:cw,h:54}; panel(UI.setPump.x,UI.setPump.y,cw,54,'rgba(120,200,255,0.55)');   // handedness / PUMP side
+    ctx.fillStyle='#9fb6dc'; ctx.font='700 10px ui-monospace,monospace'; ctx.fillText('ВЕДУЩАЯ РУКА · СТОРОНА PUMP',cx,y+19);
+    ctx.fillStyle='#9ff0c8'; ctx.font='800 15px ui-monospace,monospace'; ctx.fillText(pumpSide==='left'?'ПРАВША · PUMP СЛЕВА':'ЛЕВША · PUMP СПРАВА',cx,y+41);
+    y+=66; UI.setMute={x:cx-cw/2,y:y,w:cw,h:44}; panel(UI.setMute.x,UI.setMute.y,cw,44,'rgba(150,170,210,0.45)');   // sound
+    ctx.fillStyle='#bcd0ee'; ctx.font='14px ui-monospace,monospace'; ctx.fillText(muted?'ЗВУК:   ВЫКЛ':'ЗВУК:   ВКЛ',cx,y+27);
+    ctx.fillStyle='rgba(140,160,195,0.6)'; ctx.font='600 9px ui-monospace,monospace'; ctx.fillText('жесты — для тебя · кнопки/наклон — для новичков',cx,y+62);
+    UI.setBack={x:cx-90,y:H-88,w:180,h:46}; panel(UI.setBack.x,UI.setBack.y,180,46,'rgba(150,170,210,0.6)'); ctx.fillStyle='#cfe0ff'; ctx.font='700 15px ui-monospace,monospace'; ctx.fillText('←  НАЗАД',cx,UI.setBack.y+29);
     UI.mute=null; UI.pause=null;
   }
   ctx.textAlign='left';
