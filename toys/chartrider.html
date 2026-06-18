@@ -46,7 +46,7 @@ function lerp(a,b,t){return a+(b-a)*t;} function clamp(v,a,b){return v<a?a:v>b?b
 // false → full game. Single switch. Systems are GATED, never deleted.
 const CORE_TEST_MODE = true;
 // build stamp — bump on every change so a phone refresh can confirm it loaded fresh code (cache!)
-const BUILD = '2026-06-18 · b31';
+const BUILD = '2026-06-18 · b32';
 
 // ---------- procedural market terrain ----------
 // height map sampled every STEP px; generated forward as we ride. Market character:
@@ -121,7 +121,7 @@ function genSeg(){
     if(gapLeft>0){ isGap=true; gapLip=gapBaseY; close=H*0.99; gapLeft--; if(gapLeft<=0){ walk=gapBaseY-baseY; gapLandFlat=2; } }   // chasm floor (deep = void); restore level + flag a fair landing
     else if(gapLandFlat>0){ close=lerp(close, gapBaseY, 0.7); walk=close-baseY; gapLandFlat--; }   // flatten the 2 landing nodes right after a chasm → fair, not a wall
     else if(TUNE.gapEvery>0 && genX>=nextGapX && genX>TUNE.gapStart*10 && terr.length>20 && regime!=='pump' && regime!=='crash' && (prevC-close)<11){   // FAIR: only on a flat/downhill takeoff (runway + speed to clear it) — never mid-steep-climb; else defer to the next flatter node (nextGapX unchanged → retries)
-      gapBaseY=close; gapLeft=2+((Math.random()*(1+clamp((genX/10)/700,0,1)*2))|0);   // narrower (2 early → 2-4 deep) so the slower torquey bike clears them; THIS node = takeoff lip
+      gapBaseY=close; gapLeft=2;   // narrow 2-node chasm — the lip-kicker auto-launches you over it (slow enduro: keep momentum, no twitch timing); THIS node = takeoff lip
       nextGapX=genX + TUNE.gapEvery*10 + Math.random()*1400;
     }
   }
@@ -154,7 +154,7 @@ const TUNE = {
   gravity:      0.85,    // 1. гравитация — притяжение вниз за кадр
   acceleration: 0.55,    // 2. ТЯГА/момент — 0.42→0.55: грунт под КРУЧЕ-подъёмы (лезет 0.9-рад на vx~2.2, не глохнет). Топ-скорость держит низкой drag → медленный, но тяговитый = эндуро. accel-стат байка домножает
   brake:        0.90,    // 3. сила тормоза — vx *= это при торможении (МЕНЬШЕ = тормозит сильнее)
-  drag:         0.966,   // 3b. ПОТОЛОК СКОРОСТИ (vx*=drag/кадр): 0.978→0.966 → круиз ~8→6.6 (тише темп). Режет РОВНУЮ скорость, не тягу в горку → с поднятым acceleration байк МЕДЛЕННЫЙ, но ЛЕЗЕТ круче. НИЖЕ = ещё медленнее
+  drag:         0.954,   // 3b. ПОТОЛОК СКОРОСТИ (vx*=drag/кадр): 0.966→0.954 → круиз ~6.6→5 (эндуро = ТЯГА/контроль, НЕ скорость). Режет ровную скорость, не тягу в горку. Бонус: ниже скорость = мягче отрывы/посадки = меньше краш-зацепов
   jump:         15.0,    // 4. сила прыжка — импульс хопа (выше — пропасти перепрыгиваются на сниженной скорости)
   pumpForce:    0.09,    // 4b. PUMP — МЯГКИЙ постоянный толчок/кадр во время рывка (НЕ резкий скачок до vx18, от которого выкидывало). Помогает, не выбрасывает. Больше = тянет сильнее
   pumpDur:      120,     // 4c. PUMP — длительность рывка в кадрах (дольше + плавно, ×апгрейд PUMP). Был резкий ~56-кадровый скачок — теперь плавный разгон
@@ -165,14 +165,16 @@ const TUNE = {
   terrainSteep: 1.3,     // 9. ПОЛНАЯ крутизна рельефа — крутые, но ПРОХОДИМЫЕ холмы (гора, не вертикальная стена). Растёт от steepEarly за steepRamp
   mountain:     1.25,    // 9b. РАЗМАХ ГОР — множитель затяжных подъёмов/спусков (Gravity-Defied: БОЛЬШИЕ структурные горы). 1.0→1.25: выше/круче по просьбе. БОЛЬШЕ = выше/длиннее
   hillHeight:   80,      // 9c. высота плавной волны рельефа (вторичная к mountain-горам). БОЛЬШЕ = крупнее перекаты
-  rockGarden:   0.30,    // 9d. РОК-ГАРДЕН (реальное хард-эндуро: техничный тряский участок) — доля секций-«камней» vs гладких фич. 0 = выкл
-  rockSize:     8,       // 9e. амплитуда тряски рок-гардена (px). Мелко = трясёт, но проезжаемо (не подкидывает в краш). БОЛЬШЕ = злее/рискованнее посадки
+  rockGarden:   0.40,    // 9d. РОК-ГАРДЕН (реальное хард-эндуро: техничный тряский участок) — доля секций-«камней» vs гладких фич (0.30→0.40, больше рваности — график не сплошная линия). 0 = выкл
+  rockSize:     9,       // 9e. амплитуда тряски рок-гардена (px). Мелко = трясёт, но проезжаемо. БОЛЬШЕ = злее/рискованнее посадки
+  stick:        2.2,     // 9f. ЛИПУЧКА к трассе (px): держит на мелких неровностях (анти-джиттер). Реальные отрывы даёт launch, не это
+  launch:       2.5,     // 9g. ОТРЫВ С ГРЕБНЯ (центробежный): на выпуклости при скорости (vx²·кривизна > launch) байк СЛЕТАЕТ по касательной — физ-объект, не приклеен. Симой: пологое ~16% воздуха, резкие гребни ~31%, рок-гарден ~46%. НИЖЕ = чаще прыгает; ВЫШЕ = липче
   obstacleFreq: 1.0,     // 10. частота препятствий — множитель плотности sell-wall (×1 = как сейчас, 0 = нет)
   easeInDist:   350,     // 11. «мягкий въезд» (м): за сколько loop-forgiveness + волна доходят до полной (короче = скилл нужен рано)
   loopForgive:  1.8,     // 12. порог опрокидывания НА СТАРТЕ (рад): высокий = стойки на колесе держатся; спадает к PHYS.LOOP
   climbLift:    13,      // 13. ЭНДУРО-СКИЛЛ: газ козлит перед на крутом → нужен ВЕС ВПЕРЁД (драг вправо). 20 был ВЫШЕ порога «вес уже не удерживает» (~18.6) → перекос неловимый; 13 — ниже порога → ловится наклоном, ПЛАВНО, но скилл остаётся. Точную остроту докрутим, когда трассы станут правильными (террейн-фёрст)
   slopePull:    0.20,    // 14. импульс по склону (НИЖЕ = склон меньше гасит → байк ЛЕЗЕТ в горку за счёт тяги/сцепления, не глохнет; выше = надо нести momentum)
-  gapEvery:     280,     // 15. ПРОПАСТИ: ср. дистанция между провалами (м); чаще = больше прыжков (0 = выкл)
+  gapEvery:     420,     // 15. ПРОПАСТИ: ср. дистанция между провалами (м); РЕЖЕ (280→420) — медленный эндуро про тягу/технику/баланс, не про прыжки на скорости. 0 = выкл
   gapStart:     240,     // 16. первая пропасть после этой дистанции (м) — вызов уже рано
   pitchHold:    0.024,   // 17. самовыравнивание тангажа к склону (= «пружина» к склону; чуть мягче, чтобы наклон дотягивал до вилли/стоппи)
   steepEarly:   0.85,    // 18. множитель крутизны НА СТАРТЕ (положе на старте, проходимо; растёт к terrainSteep за steepRamp)
@@ -186,7 +188,7 @@ const TUNE = {
 const PHYS={ GRAV:TUNE.gravity, DX:26, DY:27.5,           // гравитация(↑TUNE), полубаза, высота ЦТ над колёсами
   POW:TUNE.acceleration, GACC:TUNE.slopePull, DRAG:TUNE.drag, BRK:TUNE.brake,   // тяга(↑TUNE), импульс-по-склону(↑TUNE), drag→ПОТОЛОК скорости ниже (медленнее, успеваешь корректировать) — тяга в горку остаётся, тормоз(↑TUNE)
   GP:TUNE.pitchHold, ENGTQ:0.0044, BRKTQ:0.018, CLIMB:TUNE.climbLift, // тангаж-возврат-к-склону(↑TUNE), газ-нос-вверх, тормоз-нос-вниз, множ. подъёма(↑TUNE: дозируй газ или loop out)
-  AIRTQ:TUNE.airControl, ANGD:0.78, AVMAX:0.5, LOOP:1.7, STICK:5, JUMP:TUNE.jump, // момент-сальто, ДЕМПФЕР (плавно), кламп, угол loop/endo=1.7 (вилли/стоппи ДЕРЖАТСЯ, кувырок только при реальном перекруте), прилипание, хоп
+  AIRTQ:TUNE.airControl, ANGD:0.78, AVMAX:0.5, LOOP:1.7, STICK:TUNE.stick, LAUNCH:TUNE.launch, JUMP:TUNE.jump, // момент-сальто, ДЕМПФЕР (плавно), кламп, угол loop/endo=1.7 (вилли/стоппи ДЕРЖАТСЯ, кувырок только при реальном перекруте), липучка(↑TUNE.stick), центробеж.отрыв(↑TUNE.launch), хоп
   LEANGND:TUNE.leanGround, LEANAIR:TUNE.leanAir, DESTAB:TUNE.destab }; // наклон на земле/в воздухе + дестабилизация (новая lean-схема управления)
 const BASE_PHYS={POW:PHYS.POW, AIRTQ:PHYS.AIRTQ, LOOP:PHYS.LOOP};   // frozen base — upgrades scale from this each run (no compounding)
 
@@ -450,8 +452,12 @@ function update(){
   if(grounded) coyote=8; else if(coyote>0) coyote--;                  // coyote grace: still jumpable briefly after a gap edge launches you early
   if(jumpCd>0)jumpCd--;
   if(jumpReq>0){ if((grounded||coyote>0) && jumpCd<=0){ bike.vy=-P.JUMP; grounded=false; coyote=0; jumpReq=0; jumpCd=16; airT=0; nearMissed=false; bike.angV*=0.3; jumpGrace=1; shake=Math.max(shake,3); for(let e=0;e<7;e++)dust.push({x:bike.x-10+Math.random()*20,y:bike.y+24,vx:(Math.random()-0.5)*2.4,vy:-Math.random()*2,life:1,r:Math.random()*2.4+1}); sfxAir(); } else jumpReq--; }   // on-demand hop (buffered + coyote)
+  // CENTRIPETAL LAUNCH: at speed over a convex crest/kicker the bike can't hug the curve → it FLIES OFF (a real physics object, not glued to the line) — this is "байк не приклеен"
+  if(grounded && bike.vx>2.5){ const lai=Math.floor((bike.x+DX*1.8)/STEP), gapAhead=gapNear||(terr[lai]&&terr[lai].gap)||(terr[lai+1]&&terr[lai+1].gap);   // never on a gap edge — gaps have their own kicker
+    if(!gapAhead){ const slA=terrainAt(bike.x+DX*1.8).ang, convex=slA-supA;
+      if(convex>0.05 && bike.vx*bike.vx*convex > P.LAUNCH){ grounded=false; bike.vy = bike.vx*Math.tan(clamp(supA,-1.2,0.1)) - convex*bike.vx*0.38; airT=0; nearMissed=false; } } }   // small skip-hops over bumps (not big air → controllable landings)
   if(grounded){
-    bike.y = targetY; bike.vy = gapNear ? -Math.max(7, bike.vx*1.1) : bike.vx*Math.tan(clamp(supA,-1.2,1.2)); // gap edge = a KICKER (beats STICK(5) → real auto-launch over the chasm + air); tap jump for an even bigger hop
+    bike.y = targetY; bike.vy = gapNear ? -Math.max(11, bike.vx*1.3) : bike.vx*Math.tan(clamp(supA,-1.2,1.2)); // gap edge = a strong KICKER — auto-launches you over the narrow chasm even at low speed (keep momentum, no twitch timing); tap jump for a bigger hop
     bike.vx += P.GACC*Math.sin(supA);                                  // gravity along slope = real momentum (climb bleeds, descent builds)
     if(down) bike.vx += P.POW*BK().accel;
     if(brake) bike.vx *= P.BRK;
@@ -466,7 +472,7 @@ function update(){
     if(bike.vy>0 && bike.y>targetY && !(terr[Math.floor(bike.x/STEP)]&&terr[Math.floor(bike.x/STEP)].gap)) bike.y=targetY;   // never punch THROUGH the surface on a fast landing (the 1-frame "sank into the track"); gaps fall freely
     if(Math.abs(leanX)>0.06){ bike.angV += leanX*P.LEANAIR; }                                                       // analog air rotation via LEAN (drag) — flips & landing aim; no more gas-coupled flip
     else if(jumpGrace){ const la=terrainAt(bike.x+Math.max(20,bike.vx*6)).ang; bike.angV+=(la-bike.ang)*0.02; }     // just jumped, not steering → clean controllable arc
-    else { const la=terrainAt(bike.x+Math.max(20,bike.vx*6)).ang; bike.angV+=(la-bike.ang)*0.006; }                 // no input → gentle auto-level to landing
+    else { const la=terrainAt(bike.x+Math.max(20,bike.vx*6)).ang; bike.angV+=(la-bike.ang)*0.025; }                 // no input → auto-level to the landing slope (un-commanded crest launches land on their wheels; commanded air = leanX for flips)
     bike.wheel += 0.3;
   }
   bike.vx*=P.DRAG; if(bike.vx<0)bike.vx*=0.95;                          // drag (emergent top speed, no hard cap) + roll-back resistance
@@ -486,7 +492,7 @@ function update(){
   else if(!wasG && grounded){                                          // just landed
     jumpGrace=0;                                                       // jump arc over
     let diff=Math.abs(rel); lastLandDiff=diff;
-    if(diff>BK().grip+0.07*upgLvl('grip')){ wipeout('crash'); }        // landed too crooked (СЦЕПЛЕНИЕ forgives)
+    if(airT>14 && diff>BK().grip+0.07*upgLvl('grip')){ wipeout('crash'); }   // crash only off a REAL jump; short hops over bumps/rocks just land (kills "caught the track & fell" on chatter)
     else { sfxLand(); bike.angV*=0.3;
       if(airT>28){ const ab=Math.round(airT*2.2*mult); pnl+=ab; mult+=0.4; boost=Math.min(1,(boost||0)+0.3); multPulse=1; popText('BIG AIR  +$'+ab.toLocaleString('en-US')); floatPop(bike.x,bike.y-30,'+$'+ab,'#9ff0ff'); gflash=0.6; shake=7; sfxAir(); buzz(18); }
       else if(diff<0.16 && airT>10){ coins+=2; floatPop(bike.x,bike.y-34,'CLEAN +◆2','#aef0ff'); }
@@ -514,7 +520,7 @@ function update(){
       if(!bike.onG && bike.x>gapFarX+STEP){ overGap=false; boost=Math.min(1,(boost||0)+0.2); shake=Math.max(shake,7); gflash=0.6; gapFxT=1; gapFxMsg='ПРОПАСТЬ ✓'; sfxAir(); buzz(22); }   // flew clear past the far edge
       else if(bike.onG){ overGap=false; boost=Math.min(1,(boost||0)+0.18); shake=Math.max(shake,6); gflash=0.5; gapFxT=1; gapFxMsg='ПРОПАСТЬ ✓'; sfxAir(); buzz(20); }   // landed on the landing (cling caught it) → cleared
     }
-    for(let k=ci+1;k<=ci+5;k++){ if(terr[k]&&terr[k].gap){ if(bike.onG) tut('gapj','⤴ ПРОПАСТЬ — РАЗГОНИСЬ и ПРЫГНИ'+(TOUCH?'':' (↑)')); break; } } }
+    for(let k=ci+1;k<=ci+5;k++){ if(terr[k]&&terr[k].gap){ if(bike.onG) tut('gapj','⤴ ПРОПАСТЬ — ДЕРЖИ МОМЕНТ, кромка подкинет'); break; } } }
   // hazards: on the ground they wreck your momentum; clear them in the air to DODGE
   for(let k=ci-1;k<=ci+1;k++){ const c=terr[k]; if(c&&c.haz&&!c.hazHit&&Math.abs(c.x-bike.x)<15){ c.hazHit=true;
     if(bike.onG){ bike.vx*=0.4; shake=9; hitstop=3; mult=Math.max(1,mult-0.8); flash=0.45; popText('REKT!'); floatPop(bike.x,bike.y-28,'-темп','#ff6a86'); sfxCrash(); buzz(45); }
