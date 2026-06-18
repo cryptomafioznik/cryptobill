@@ -46,7 +46,7 @@ function lerp(a,b,t){return a+(b-a)*t;} function clamp(v,a,b){return v<a?a:v>b?b
 // false → full game. Single switch. Systems are GATED, never deleted.
 const CORE_TEST_MODE = true;
 // build stamp — bump on every change so a phone refresh can confirm it loaded fresh code (cache!)
-const BUILD = '2026-06-18 · b20';
+const BUILD = '2026-06-18 · b21';
 
 // ---------- procedural market terrain ----------
 // height map sampled every STEP px; generated forward as we ride. Market character:
@@ -121,7 +121,7 @@ function genSeg(){
   if(terr.length && terr[terr.length-1].gap) open=close;   // no giant candle bridging out of a chasm
   const up=close<open, top=Math.min(open,close), bot=Math.max(open,close), wick=4+Math.random()*14;
   const hzRate=(0.024+clamp((dist||0)/1800,0,1)*0.028)*TUNE.obstacleFreq;   // sparse for onboarding → denser deep into the run (×TUNE.obstacleFreq)
-  const haz=(!isEv && !isGap && genX>1200 && regime!=='pump' && regime!=='crash' && (terr.length-lastHazIdx)>=10 && Math.random()<hzRate); // no sell-walls in events/gaps; none in the first ~120m
+  const haz=(!CORE_TEST_MODE && !isEv && !isGap && genX>1200 && regime!=='pump' && regime!=='crash' && (terr.length-lastHazIdx)>=10 && Math.random()<hzRate); // CORE: no sell-walls (they just sap momentum, esp. before a gap — replaced by organic terrain obstacles like mud later). no walls in events/gaps; none in first ~120m
   if(haz) lastHazIdx=terr.length;
   const coin = isEv==='rally' ? (Math.random()<0.55) : (!haz && !isEv && !isGap && Math.random()<0.2);   // rally rains gems
   terr.push({x:genX, y:close, open, close, hi:top-wick, lo:bot+wick*0.6, up, haz:haz, coin:coin, ev:isEv, gap:isGap, lipY:gapLip}); genX+=STEP;
