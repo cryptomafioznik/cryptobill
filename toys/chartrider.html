@@ -46,22 +46,26 @@ function lerp(a,b,t){return a+(b-a)*t;} function clamp(v,a,b){return v<a?a:v>b?b
 // false → full game. Single switch. Systems are GATED, never deleted.
 const CORE_TEST_MODE = true;
 // build stamp — bump on every change so a phone refresh can confirm it loaded fresh code (cache!)
-const BUILD = '2026-06-18 · b29';
+const BUILD = '2026-06-18 · b30';
 
 // ---------- procedural market terrain ----------
 // height map sampled every STEP px; generated forward as we ride. Market character:
 // trends (runs), volatility (chop), rare pumps & crashes.
-const STEP=26; let terr=[], genX=0, baseY, walk=0, regime='chop', regimeLeft=0, regimeDrift=0, regimeVol=18, lastHazIdx=-99;
+const STEP=26; let terr=[], genX=0, baseY, walk=0, regime='chop', regimeLeft=0, regimeDrift=0, regimeVol=18, lastHazIdx=-99, lastRegime='';
 // market regimes — distinct "scenarios" give the endless track rhythm & variety.
 // d<0 = price up (climb / green) ; d>0 = price down (drop / red)
 function pickRegime(){
-  const d=clamp((dist||0)/1800,0,1), volK=1+d*0.5, M=TUNE.mountain, r=Math.random();  // difficulty ramps with distance
-  // Gravity-Defied feel: terrain is mostly BIG sustained climbs & descents (mountains), not chaotic gentle chop
-  if(r<0.36){ regime='bull';  regimeDrift=-(17+Math.random()*14)*M; regimeVol=7*volK;  regimeLeft=15+Math.random()*16; } // long CLIMB up a mountain
-  else if(r<0.70){ regime='bear'; regimeDrift=(15+Math.random()*13)*M; regimeVol=8*volK; regimeLeft=13+Math.random()*15; } // long DESCENT down the other side
-  else if(r<0.82){ regime='chop'; regimeDrift=(Math.random()-0.5)*8;  regimeVol=16*volK; regimeLeft=7+Math.random()*8; }   // short rough patch (the only "noisy" bit, now rare)
-  else if(r<0.91){ regime='pump'; regimeDrift=-(24+d*10)*M;  regimeVol=7*volK;  regimeLeft=6+Math.random()*6; }            // steep ramp section
-  else { regime='crash'; regimeDrift=(22+d*10);  regimeVol=9*volK;  regimeLeft=6+Math.random()*6; }                        // steep cliff down
+  const d=clamp((dist||0)/1800,0,1), volK=1+d*0.5, M=TUNE.mountain;
+  // STRUCTURED enduro track: every hard FEATURE is followed by a flat RECOVERY run-up (setup/momentum — fair, you can prepare; no "stuck in a bad position")
+  if(lastRegime==='bull'||lastRegime==='pump'||lastRegime==='crash'||lastRegime==='bear'){
+    regime='flat'; regimeDrift=(Math.random()-0.5)*3; regimeVol=4*volK; regimeLeft=6+Math.random()*5; lastRegime=regime; return;
+  }
+  const r=Math.random();
+  if(r<0.42){ regime='bull';  regimeDrift=-(16+Math.random()*13)*M; regimeVol=5*volK;  regimeLeft=11+Math.random()*11; } // a deliberate CLIMB FACE (attack it from the run-up; weight forward)
+  else if(r<0.72){ regime='bear'; regimeDrift=(15+Math.random()*12)*M; regimeVol=5*volK; regimeLeft=10+Math.random()*11; } // a DESCENT (build speed for the next climb)
+  else if(r<0.88){ regime='pump'; regimeDrift=-(24+d*10)*M;  regimeVol=5*volK;  regimeLeft=6+Math.random()*5; }            // a STEEP ramp
+  else { regime='crash'; regimeDrift=(22+d*10);  regimeVol=8*volK;  regimeLeft=6+Math.random()*5; }                        // a steep CLIFF down
+  lastRegime=regime;
 }
 // ---- market EVENTS: telegraphed set-pieces that punctuate a run (the drama) ----
 const EVENTS={
@@ -97,7 +101,7 @@ function genSeg(){
     walk += regimeDrift*0.5 + (Math.random()-0.5)*regimeVol*0.5;
     walk = clamp(walk, -H*0.40, H*0.34);   // wider band → taller mountains (close-clamp 70..H*0.95 is the hard bound)
     const steepNow = lerp(TUNE.steepEarly, TUNE.terrainSteep, clamp((genX/10)/TUNE.steepRamp,0,1));   // gentle on-ramp → full steepness deeper in (easy to start, hard to master)
-    const roll = (Math.sin(genX*0.0042)*TUNE.hillHeight + Math.sin(genX*0.0105+0.6)*(TUNE.hillHeight*0.45))*(1+dd*0.25)*((regime==='pump'||regime==='crash')?0.6:1)*steepNow;   // smooth big swell (dropped the high-freq jitter → mountains, not noise)
+    const roll = (Math.sin(genX*0.0042)*TUNE.hillHeight + Math.sin(genX*0.0105+0.6)*(TUNE.hillHeight*0.45))*(1+dd*0.25)*((regime==='flat')?0.22:(regime==='pump'||regime==='crash')?0.6:1)*steepNow;   // smooth big swell; flat = recovery run-up (mostly level)
     close = clamp(baseY + walk + roll, 70, H*0.95);
     if(terr.length<16){ const e=terr.length/16; close=lerp(baseY, close, e*e); walk*=0.7; }   // flat starting ramp eases the bike in
     // CLIMB-SLOPE CAP: a real enduro lugs up steep grades; a near-vertical wall just stalls (torque < gravity).
@@ -160,7 +164,7 @@ const TUNE = {
   obstacleFreq: 1.0,     // 10. частота препятствий — множитель плотности sell-wall (×1 = как сейчас, 0 = нет)
   easeInDist:   350,     // 11. «мягкий въезд» (м): за сколько loop-forgiveness + волна доходят до полной (короче = скилл нужен рано)
   loopForgive:  1.8,     // 12. порог опрокидывания НА СТАРТЕ (рад): высокий = стойки на колесе держатся; спадает к PHYS.LOOP
-  climbLift:    20,      // 13. ЭНДУРО-СКИЛЛ (ядро): газ КОЗЛИТ перед на крутом → зажал газ без веса = ОПРОКИД (loop). Чтобы лезть: газ + ВЕС ВПЕРЁД (драг вправо/нос вниз), как в GD/Trials/реале. Симой: 9=зажал-газ-проезжает(скучно), 20=зажал-лупит/вес-вперёд-лезет. БОЛЬШЕ = жёстче требует вес
+  climbLift:    13,      // 13. ЭНДУРО-СКИЛЛ: газ козлит перед на крутом → нужен ВЕС ВПЕРЁД (драг вправо). 20 был ВЫШЕ порога «вес уже не удерживает» (~18.6) → перекос неловимый; 13 — ниже порога → ловится наклоном, ПЛАВНО, но скилл остаётся. Точную остроту докрутим, когда трассы станут правильными (террейн-фёрст)
   slopePull:    0.20,    // 14. импульс по склону (НИЖЕ = склон меньше гасит → байк ЛЕЗЕТ в горку за счёт тяги/сцепления, не глохнет; выше = надо нести momentum)
   gapEvery:     280,     // 15. ПРОПАСТИ: ср. дистанция между провалами (м); чаще = больше прыжков (0 = выкл)
   gapStart:     240,     // 16. первая пропасть после этой дистанции (м) — вызов уже рано
