@@ -46,7 +46,7 @@ function lerp(a,b,t){return a+(b-a)*t;} function clamp(v,a,b){return v<a?a:v>b?b
 // false → full game. Single switch. Systems are GATED, never deleted.
 const CORE_TEST_MODE = true;
 // build stamp — bump on every change so a phone refresh can confirm it loaded fresh code (cache!)
-const BUILD = '2026-06-19 · b42';
+const BUILD = '2026-06-19 · b43';
 
 // ---------- procedural market terrain ----------
 // height map sampled every STEP px; generated forward as we ride. Market character:
@@ -169,7 +169,7 @@ const TUNE = {
   gravity:      0.85,    // 1. гравитация — притяжение вниз за кадр
   acceleration: 0.55,    // 2. ТЯГА/момент — 0.42→0.55: грунт под КРУЧЕ-подъёмы (лезет 0.9-рад на vx~2.2, не глохнет). Топ-скорость держит низкой drag → медленный, но тяговитый = эндуро. accel-стат байка домножает
   brake:        0.90,    // 3. сила тормоза — vx *= это при торможении (МЕНЬШЕ = тормозит сильнее)
-  drag:         0.969,   // 3b. ПОТОЛОК СКОРОСТИ НА РОВНОМ (vx*=drag/кадр): 0.969 → ровно ~7.2 (быстро). СКОРОСТЬ СИТУАТИВНА, не глобальна: на ровном/спуске быстро, на КРУТОЙ горе медленно САМО (гравитация GACC·sin гасит скорость) — как в реале. Раньше 0.954=медленно ВЕЗДЕ (ошибка). НИЖЕ = медленнее ровный
+  drag:         0.965,   // 3b. ПОТОЛОК СКОРОСТИ НА РОВНОМ (vx*=drag/кадр): b43 0.969→0.965 (круиз ~7.2→~6.4) — медленнее/деликатнее по фидбэку (большая скорость мешала балансу). НИЖЕ = БОЛЬШЕ потеря/кадр = медленнее. СКОРОСТЬ СИТУАТИВНА: на спуске быстрее, на горе медленно САМО
   jump:         15.0,    // 4. сила прыжка — импульс хопа (выше — пропасти перепрыгиваются на сниженной скорости)
   pumpForce:    0.09,    // 4b. PUMP — МЯГКИЙ постоянный толчок/кадр во время рывка (НЕ резкий скачок до vx18, от которого выкидывало). Помогает, не выбрасывает. Больше = тянет сильнее
   pumpDur:      120,     // 4c. PUMP — длительность рывка в кадрах (дольше + плавно, ×апгрейд PUMP). Был резкий ~56-кадровый скачок — теперь плавный разгон
@@ -197,7 +197,7 @@ const TUNE = {
   steepRamp:    600,     // 19. дистанция (м), за которую крутизна растёт steepEarly → terrainSteep (ещё жёстче дальше)
   climbCap:     0.88,    // 19b. КЭП КРУТИЗНЫ ПОДЪЁМА (рад): 0.82→0.88 — круче по просьбе (скилл вес-вперёд держит при climbLift 13). Ниже физ-потолка тяги 1.08. Спуски/пропасти не трогает. Замерено: реальные крутые серии ≤16 узлов → байк лезет ~2-3с (min vx ~2), без кувырка/затыка. Физ-потолок тяги HODLER ≈1.08 (выше — глохнет); 0.9 ползёт на искусств. 60-узл. стене >25с. БОЛЬШЕ = круче/злее (до ~0.95), МЕНЬШЕ = пологее
   leanGround:   0.028,   // 20. сила НАКЛОНА (драг влево-вправо): 0.020→0.028 — ЧУВСТВИТЕЛЬНЕЕ (от тебя больше зависит; быстрее в вилли/стоппи, но и перекрутить легче = скилл)
-  leanAir:      0.050,   // 21. сила наклона в воздухе — аналоговое вращение. 0.022→0.050 (b42): хватает на полное САЛЬТО за время кикер-воздуха; доворот к посадке снаппернее. Ниже = плавнее но флип не докрутить
+  leanAir:      0.030,   // 21. сила наклона в воздухе — аналоговое вращение. b43: 0.050→0.030 (0.050 крутило ХАОТИЧНО/неуправляемо). Контролируемо ~0.14рад/кадр: видно вращение, ловишь посадку. Флип трудный (нужен большой взлёт) — это ОК, не хаос
   destab:       0.0018,  // 22. дестабилизация скорость×склон: подъём кренит назад, спуск — носом вниз → держи наклоном (мягко, наклон легко перекрывает)
   // ---- УСТУПЫ/СТУПЕНИ («лестницы»): вертикальный шаг ВВЕРХ — переднее колесо ЗАЕЗЖАЕТ таймингом вилли (реал trials/эндуро) ----
   ledgeEvery:   300,     // 23. ср. дистанция между уступами (м); 0 = выкл. ЧАЩЕ gaps (420) — это базовый скилл-обстакл «подними перед», добавляет вызов аркадной езде
@@ -528,11 +528,14 @@ function update(){
   // ---- TRICK KICKER lip: POP up ∝ speed (the ramp throws you — reward launch for flips; fly straight = safe, flip = risk/reward; NO chasm = no fall) ----
   if(grounded && !rearBal && terr[ci0] && terr[ci0].kick && bike.vx>2.5){ bike.vy=Math.max(-11, -bike.vx*TUNE.kickPop-4); grounded=false; airT=0; nearMissed=false; gflash=Math.max(gflash,0.35); shake=Math.max(shake,4); sfxAir(); for(let e=0;e<6;e++)dust.push({x:bike.x-8+Math.random()*16,y:bike.y+22,vx:(Math.random()-0.5)*3,vy:-Math.random()*2.5,life:1,r:Math.random()*2.4+1}); }   // base -4 + lip height = consistent air for a flip; cap -11 so you stay ON-SCREEN (see the landing)
   bike.vx*=P.DRAG; if(bike.vx<0)bike.vx*=0.95;                          // drag (emergent top speed, no hard cap) + roll-back resistance
-  bike.angV *= (!grounded && Math.abs(leanX)>0.06) ? 0.94 : P.ANGD;     // FREE SPIN in the air when actively flipping (light damping → a full flip completes in the kicker air); ground + passive air keep full damping for stability/landing
+  bike.angV*=P.ANGD;                                                   // angular damping — CONTROLLABLE rotation (b42's free-spin in air span the bike chaotically per playtest → reverted)
   if(bike.angV>P.AVMAX)bike.angV=P.AVMAX; else if(bike.angV<-P.AVMAX)bike.angV=-P.AVMAX;
   bike.x+=bike.vx; bike.ang+=bike.angV;
   if(rearBal){ bike.y = balSR + DX*Math.sin(bike.ang) - DY*Math.cos(bike.ang); bike.vy=0; }   // CG pinned to the rear contact (pendulum) — teeters on the wheel, can't fly up
   bike.onG=grounded;
+  if(grounded && !rearBal){ const cc=Math.cos(bike.ang),ss=Math.sin(bike.ang);   // FINAL anti-clip: restY was computed BEFORE the pitch finished integrating; a fast nose-down on a steep descent can still leave a wheel under the surface → lift it back on top
+    const deep=Math.max(bike.y-DX*ss+DY*cc-terrainAt(bike.x-DX*cc-DY*ss).y, bike.y+DX*ss+DY*cc-terrainAt(bike.x+DX*cc-DY*ss).y);
+    if(deep>1){ bike.y-=deep-1; if(bike.vy>0)bike.vy=0; } }
   let rel=bike.ang-supA; while(rel>Math.PI)rel-=6.283; while(rel<-Math.PI)rel+=6.283; // pitch vs the slope (loop-out / landing)
   if(!grounded){
     airT++;
