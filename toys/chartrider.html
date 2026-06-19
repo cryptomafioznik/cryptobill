@@ -46,7 +46,7 @@ function lerp(a,b,t){return a+(b-a)*t;} function clamp(v,a,b){return v<a?a:v>b?b
 // false → full game. Single switch. Systems are GATED, never deleted.
 const CORE_TEST_MODE = true;
 // build stamp — bump on every change so a phone refresh can confirm it loaded fresh code (cache!)
-const BUILD = '2026-06-19 · b50';
+const BUILD = '2026-06-19 · b51';
 
 // ---------- procedural market terrain ----------
 // height map sampled every STEP px; generated forward as we ride. Market character:
@@ -80,7 +80,7 @@ let evGenType='', evGenLeft=0, nextEvGenX=2600;                 // terrain-gener
 let gapLeft=0, nextGapX=1800, gapBaseY=0, gapLandFlat=0, overGap=false, gapLipNow=0, gapFarX=0, gapFxT=0, gapFxMsg='';   // GAPS: gen + fair-landing + clear state; gapLipNow/gapFarX = lip level & far-edge x of the gap being crossed
 let gapRunup=0, gapRampLeft=0, gapPrevY=0, gapRampBot=0;   // gap FEATURE phases: descent run-up (build speed) → kicker ramp (launch) → chasm → land below the lip
 let ledgeRunup=0, ledgeStepsLeft=0, ledgePrevY=0, ledgeTopY=0, nextLedgeX=1400;   // LEDGE phases: flat run-up (set up the wheelie) → riser/tread steps you must LOFT the front to mount
-let kickRunup=0, kickRampLeft=0, kickLandLeft=0, kickBaseY=0, nextKickX=1700;   // TRICK KICKER phases: flat run-up → steep ramp UP (launches you ∝ speed for flips) → flat solid landing (no chasm)
+let kickRunup=0, kickRampLeft=0, kickLandLeft=0, kickBaseY=0, kickRampBot=0, kickLandY=0, nextKickX=1700;   // TRICK KICKER phases: DESCENT run-up (bomb down → build speed, logical setup) → steep ramp UP (launches you ∝ speed for flips) → flat solid landing (no chasm)
 let curEvType='', evBanner='', evBannerT=0, evColor='90,240,150', evGlow=0, evBonus=0, lastWarnX=-1, evWarnType=''; // bike-side event state
 function pickEvent(gz){ const z=((gz%5)+5)%5, r=Math.random();
   if(z===2) return r<0.55?'rally':(r<0.82?'flash':'whale');     // Эйфория: pumps
@@ -127,9 +127,9 @@ function genSeg(){
     else if(gapLandFlat>0){ close=gapBaseY; walk=close-baseY; gapLandFlat--; }   // FLAT runway SNAPPED to the landing level (not lerp → clean predictable landing + recovery room, no crawl-out of a hole)
     else if(ledgeRunup>0){ close=clamp(ledgePrevY,70,H*0.92); walk=close-baseY; ledgeRunup--; if(ledgeRunup<=0){ ledgeStepsLeft=TUNE.ledgeStepN*3; ledgeTopY=ledgePrevY; } }   // LEDGE flat run-up: set up the wheelie (fair — you can prepare)
     else if(ledgeStepsLeft>0){ const pos=(TUNE.ledgeStepN*3-ledgeStepsLeft)%3; if(pos<2){ ledgeTopY=clamp(ledgeTopY-TUNE.ledgeH*0.5,70,H*0.86); if(pos===0){ isStep=true; stepTop=ledgeTopY; } } close=ledgeTopY; walk=close-baseY; ledgeStepsLeft--; }   // step = 2-node RISER (~0.6rad, rideable on momentum — not a vertical wall) + 1-node tread; first node tagged for the ▲ УСТУП telegraph
-    else if(kickRunup>0){ close=clamp(kickBaseY,70,H*0.86); walk=close-baseY; kickRunup--; if(kickRunup<=0){ kickRampLeft=3; } }   // TRICK KICKER flat run-up: build speed for the launch
-    else if(kickRampLeft>0){ const k=4-kickRampLeft; close=clamp(kickBaseY - k*TUNE.kickH,70,H*0.95); walk=close-baseY; if(kickRampLeft===1)isKick=true; kickRampLeft--; if(kickRampLeft<=0){ kickLandLeft=6; } }   // ramp UP — launches you airborne ∝ speed (do a FLIP!); last node = lip (tagged for the telegraph)
-    else if(kickLandLeft>0){ close=clamp(kickBaseY,70,H*0.9); walk=close-baseY; kickLandLeft--; }   // flat SOLID landing (no chasm — pure reward feature) → land the flip
+    else if(kickRunup>0){ const k=6-kickRunup; close=clamp(kickBaseY + k*13, 70, H*0.88); walk=close-baseY; kickRunup--; if(kickRunup<=0){ kickRampBot=close; kickRampLeft=3; } }   // b51: DESCENT run-up (6 nodes, ~65px down ≥ ramp's 66px up → NET downhill into the launch) — bomb down to BUILD SPEED so the ramp always launches you well ≥ cruise (logical "necessary place", like a real moto setup), not a random flat where you arrive slow
+    else if(kickRampLeft>0){ const k=4-kickRampLeft; close=clamp(kickRampBot - k*TUNE.kickH,70,H*0.95); walk=close-baseY; if(kickRampLeft===1)isKick=true; kickRampLeft--; if(kickRampLeft<=0){ kickLandLeft=6; kickLandY=clamp(kickRampBot,70,H*0.9); } }   // ramp UP from the run-up bottom — launches you airborne ∝ speed (do a FLIP!); last node = lip (tagged for the telegraph)
+    else if(kickLandLeft>0){ close=clamp(kickLandY,70,H*0.9); walk=close-baseY; kickLandLeft--; }   // flat SOLID landing at the run-up level (no chasm — pure reward feature) → land the flip
     else if(TUNE.gapEvery>0 && genX>=nextGapX && genX>TUNE.gapStart*10 && terr.length>20 && regime!=='pump' && regime!=='crash' && lastRegime!=='bull'){   // schedule a gap FEATURE (not mid-climb); the run-up handles the takeoff
       gapPrevY=close; gapRunup=5; nextGapX=genX + TUNE.gapEvery*10 + Math.random()*1400;   // start: descent run-up first
     }
@@ -137,7 +137,7 @@ function genSeg(){
       ledgePrevY=close; ledgeRunup=4; nextLedgeX=genX + TUNE.ledgeEvery*10 + Math.random()*1200;
     }
     else if(TUNE.kickEvery>0 && genX>=nextKickX && genX>TUNE.kickStart*10 && terr.length>16 && regime!=='pump' && regime!=='crash' && lastRegime!=='bull' && close>H*0.5){   // schedule a TRICK KICKER (not mid-climb; needs room ABOVE for the ramp)
-      kickBaseY=close; kickRunup=4; nextKickX=genX + TUNE.kickEvery*10 + Math.random()*1300;
+      kickBaseY=close; kickRunup=6; nextKickX=genX + TUNE.kickEvery*10 + Math.random()*1000;   // b51: descent run-up (6 nodes); tighter spacing jitter since kickers are now the main feature
     }
   }
   let open = terr.length ? terr[terr.length-1].close : close;
@@ -189,7 +189,7 @@ const TUNE = {
   loopForgive:  1.8,     // 12. порог опрокидывания НА СТАРТЕ (рад): высокий = стойки на колесе держатся; спадает к PHYS.LOOP
   climbLift:    18,      // 13. ЭНДУРО-СКИЛЛ: газ козлит перед на крутом → ЗАЖАЛ ГАЗ БЕЗ ВЕСА = ОПРОКИД (нельзя просто ехать на газу). Чтобы лезть — ВЕС ВПЕРЁД (драг вправо). 13 было слишком мягко (газ-зажал проезжал = скучно); 18 даёт реальный выбор. Эндо на климбе убран (b33) → вес-вперёд безопасен, окно ловимое
   slopePull:    0.20,    // 14. импульс по склону (НИЖЕ = склон меньше гасит → байк ЛЕЗЕТ в горку за счёт тяги/сцепления, не глохнет; выше = надо нести momentum)
-  gapEvery:     420,     // 15. ПРОПАСТИ: ср. дистанция между провалами (м); РЕЖЕ (280→420) — медленный эндуро про тягу/технику/баланс, не про прыжки на скорости. 0 = выкл
+  gapEvery:     0,       // 15. ПРОПАСТИ: ср. дистанция между провалами (м); 0 = ВЫКЛ. b51: ОТКЛЮЧЕНЫ по фидбэку юзера — обрывы давали «проблемы» (бинарная смерть в яму), а не «сложность»; трамплины их заменяют (WOW/флипы без фрустрации). Код пропастей цел — вернуть = поставить >0
   gapStart:     240,     // 16. первая пропасть после этой дистанции (м) — вызов уже рано
   gapKick:      0.45,    // 16b. КРОМКА-РАМПА: launch вверх = vx×это (физика рампы). При ровной скорости НЕ перелетает 3-4 узла → нужен ПРЫЖОК; со спуска-разгона (большой vx) долетает сам. БОЛЬШЕ = легче перелёт
   pitchHold:    0.024,   // 17. самовыравнивание тангажа к склону (= «пружина» к склону; чуть мягче, чтобы наклон дотягивал до вилли/стоппи)
@@ -215,7 +215,7 @@ const TUNE = {
   balanceGrav:  0.0007,  // 33. сила, с которой гравитация клонит нос ВНИЗ на балансе (маятник вокруг заднего). БОЛЬШЕ = труднее удержать (>0.0010 уже неудержимо — валит носом вниз); держи вилли активным наклоном НАЗАД. Равновесие (ЦТ над осью) ≈ −0.76рад
   wheelR:       13,      // 34. радиус колеса (px) для ЗАЦЕПА КРАЯ: заднее стоит на ВЫСШЕЙ точке в пределах ±R → край колеса цепляет кромку, не падаешь пока центр колеса не ушёл за край дальше R
   // ---- ТРЮК-КИКЕР (b42): рампа-трамплин, подбрасывает в воздух ∝ скорости → крутишь САЛЬТО наклоном (флипы уже в очках). НЕТ пропасти — летишь прямо = безопасно, крутишь = риск/награда ----
-  kickEvery:    340,     // 35. ср. дистанция между трамплинами (м); 0 = выкл. Чистая вариативность/драйв, не препятствие
+  kickEvery:    230,     // 35. ср. дистанция между трамплинами (м); 0 = выкл. b51: 340→230 ЧАЩЕ — трамплины теперь ГЛАВНАЯ фича (заменили обрывы). Чистая награда/драйв + флипы
   kickStart:    170,     // 36. первый трамплин после (м)
   kickH:        22,      // 37. крутизна рампы кикера (рост px/узел, 3 узла): визуальный трамплин. Взлёт эмерджентный + поп ниже
   kickPop:      2.4,     // 38. ПОП кикера: vy = −(vx×это + 4), кап −20 (b49: 0.7→2.4 — теперь поп ПРОПОРЦИОНАЛЕН скорости, не фикс −14. Медленно = мягкий хоп (всегда launch, не «не подпрыгнул»), круиз ~5.6 ≈ −17 (флип-фил тот же), быстро = кап −20 (естественно). БОЛЬШЕ = круче зависимость от скорости
