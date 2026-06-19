@@ -46,7 +46,7 @@ function lerp(a,b,t){return a+(b-a)*t;} function clamp(v,a,b){return v<a?a:v>b?b
 // false → full game. Single switch. Systems are GATED, never deleted.
 const CORE_TEST_MODE = true;
 // build stamp — bump on every change so a phone refresh can confirm it loaded fresh code (cache!)
-const BUILD = '2026-06-19 · b48';
+const BUILD = '2026-06-19 · b49';
 
 // ---------- procedural market terrain ----------
 // height map sampled every STEP px; generated forward as we ride. Market character:
@@ -218,7 +218,7 @@ const TUNE = {
   kickEvery:    340,     // 35. ср. дистанция между трамплинами (м); 0 = выкл. Чистая вариативность/драйв, не препятствие
   kickStart:    170,     // 36. первый трамплин после (м)
   kickH:        22,      // 37. крутизна рампы кикера (рост px/узел, 3 узла): визуальный трамплин. Взлёт эмерджентный + поп ниже
-  kickPop:      0.7,     // 38. ПОП кикера: vy = −(vx×это + 14), кап −20 (рампа ШВЫРЯЕТ вверх — награда, НЕ смерть). БОЛЬШОЙ воздух чтоб докрутить сальто; камера зумит ОТ для обзора. БОЛЬШЕ = выше/дольше воздух
+  kickPop:      2.4,     // 38. ПОП кикера: vy = −(vx×это + 4), кап −20 (b49: 0.7→2.4 — теперь поп ПРОПОРЦИОНАЛЕН скорости, не фикс −14. Медленно = мягкий хоп (всегда launch, не «не подпрыгнул»), круиз ~5.6 ≈ −17 (флип-фил тот же), быстро = кап −20 (естественно). БОЛЬШЕ = круче зависимость от скорости
   // ---- РАЙДЕР КАК ВТОРАЯ МАССА (b47): драг = СДВИГ ВЕСА ТЕЛА (не прямой торк). Прототип в изоляции (PASS): райдер 0.65 массы байка, сдвиг двигает общий ЦТ → трекшн + момент тангажа. Два колеса стабильны; вес сам = прощающий shallow-вилли/нос-вниз; глубокий вилли/стоппи (скилл-зона) — позже ----
   riderSmooth:  0.25,    // 39. инерция переноса веса: rShift лерпится к драгу с этим (масса тела не телепортируется). НИЖЕ = массивнее/ленивее, ВЫШЕ = резче (ближе к старому прямому наклону)
   weightAuth:   0.030,   // 40. АВТОРИТЕТ ВЕСА на тангаж (≈старый leanGround 0.028, чуть выше — компенсирует лаг сглаживания). Перенос веса вперёд = нос вниз/перед загружен, назад = нос вверх/вилли
@@ -536,12 +536,14 @@ function update(){
     bike.wheel += 0.3;
   }
   // ---- TRICK KICKER lip: POP up ∝ speed (the ramp throws you — reward launch for flips; fly straight = safe, flip = risk/reward; NO chasm = no fall) ----
-  if(!rearBal && terr[ci0] && terr[ci0].kick && !terr[ci0].kicked && bike.vx>2.5){ terr[ci0].kicked=true; bike.vy=Math.min(bike.vy, Math.max(-20, -bike.vx*TUNE.kickPop-14)); grounded=false; airT=0; nearMissed=false; gflash=Math.max(gflash,0.4); shake=Math.max(shake,5); sfxAir(); for(let e=0;e<8;e++)dust.push({x:bike.x-8+Math.random()*16,y:bike.y+22,vx:(Math.random()-0.5)*3.2,vy:-Math.random()*2.8,life:1,r:Math.random()*2.6+1.2}); }   // BIG air (base -14, cap -20) so a controllable spin completes a flip; fires once at the lip even if the ramp already launched you (no `grounded` requirement); camera zooms OUT to keep it on-screen
+  if(!rearBal && terr[ci0] && terr[ci0].kick && !terr[ci0].kicked && bike.vx>1.0){ terr[ci0].kicked=true; bike.vy=Math.min(bike.vy, Math.max(-20, -(bike.vx*TUNE.kickPop+4))); grounded=false; airT=0; nearMissed=false; gflash=Math.max(gflash,0.4); shake=Math.max(shake,5); sfxAir(); for(let e=0;e<8;e++)dust.push({x:bike.x-8+Math.random()*16,y:bike.y+22,vx:(Math.random()-0.5)*3.2,vy:-Math.random()*2.8,life:1,r:Math.random()*2.6+1.2}); }   // b49: pop now SCALES with speed (was a near-fixed -14 base → "unnatural throw" on some, "no launch" on slow ones). At cruise ~5.6 ≈ -17 (flip-able, unchanged), slow = gentle hop (consistent — always launches), fast caps -20. Camera zooms OUT to keep big air on-screen
   bike.vx*=P.DRAG; if(bike.vx<0)bike.vx*=0.95;                          // drag (emergent top speed, no hard cap) + roll-back resistance
   bike.angV*=P.ANGD;                                                   // angular damping — CONTROLLABLE rotation (b42's free-spin in air span the bike chaotically per playtest → reverted)
   if(bike.angV>P.AVMAX)bike.angV=P.AVMAX; else if(bike.angV<-P.AVMAX)bike.angV=-P.AVMAX;
   bike.x+=bike.vx; bike.ang+=bike.angV;
-  if(rearBal){ bike.y = balSR + DX*Math.sin(bike.ang) - DY*Math.cos(bike.ang); bike.vy=0; }   // CG pinned to the rear contact (pendulum) — teeters on the wheel, can't fly up
+  if(rearBal){ const cc=Math.cos(bike.ang),ss=Math.sin(bike.ang); const rbY=balSR + DX*ss - DY*cc;
+    const noPen=Math.min(terrainAt(bike.x-DX*cc-DY*ss).y-(-DX*ss+DY*cc), terrainAt(bike.x+DX*cc-DY*ss).y-(DX*ss+DY*cc));   // b49: anti-clip in the BALANCE state too — frontDrop can't tell a cliff edge from a steep slope, so the rear-teeter engages on slopes; a nose-down teeter then sank a wheel 15-30px. Clamp y so no wheel penetrates (teeter kept; not a fight = no jitter)
+    bike.y=Math.min(rbY, noPen); bike.vy=0; }   // CG pinned to the rear contact (pendulum) — teeters on the wheel, can't fly up, can't sink in
   bike.onG=grounded;
   if(grounded && !rearBal){ const cc=Math.cos(bike.ang),ss=Math.sin(bike.ang);   // FINAL anti-clip: restY was computed BEFORE the pitch finished integrating; a fast nose-down on a steep descent can still leave a wheel under the surface → lift it back on top
     const deep=Math.max(bike.y-DX*ss+DY*cc-terrainAt(bike.x-DX*cc-DY*ss).y, bike.y+DX*ss+DY*cc-terrainAt(bike.x+DX*cc-DY*ss).y);
