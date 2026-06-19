@@ -46,7 +46,7 @@ function lerp(a,b,t){return a+(b-a)*t;} function clamp(v,a,b){return v<a?a:v>b?b
 // false → full game. Single switch. Systems are GATED, never deleted.
 const CORE_TEST_MODE = true;
 // build stamp — bump on every change so a phone refresh can confirm it loaded fresh code (cache!)
-const BUILD = '2026-06-19 · b46';
+const BUILD = '2026-06-19 · b47';
 
 // ---------- procedural market terrain ----------
 // height map sampled every STEP px; generated forward as we ride. Market character:
@@ -219,13 +219,18 @@ const TUNE = {
   kickStart:    170,     // 36. первый трамплин после (м)
   kickH:        22,      // 37. крутизна рампы кикера (рост px/узел, 3 узла): визуальный трамплин. Взлёт эмерджентный + поп ниже
   kickPop:      0.7,     // 38. ПОП кикера: vy = −(vx×это + 14), кап −20 (рампа ШВЫРЯЕТ вверх — награда, НЕ смерть). БОЛЬШОЙ воздух чтоб докрутить сальто; камера зумит ОТ для обзора. БОЛЬШЕ = выше/дольше воздух
+  // ---- РАЙДЕР КАК ВТОРАЯ МАССА (b47): драг = СДВИГ ВЕСА ТЕЛА (не прямой торк). Прототип в изоляции (PASS): райдер 0.65 массы байка, сдвиг двигает общий ЦТ → трекшн + момент тангажа. Два колеса стабильны; вес сам = прощающий shallow-вилли/нос-вниз; глубокий вилли/стоппи (скилл-зона) — позже ----
+  riderSmooth:  0.25,    // 39. инерция переноса веса: rShift лерпится к драгу с этим (масса тела не телепортируется). НИЖЕ = массивнее/ленивее, ВЫШЕ = резче (ближе к старому прямому наклону)
+  weightAuth:   0.030,   // 40. АВТОРИТЕТ ВЕСА на тангаж (≈старый leanGround 0.028, чуть выше — компенсирует лаг сглаживания). Перенос веса вперёд = нос вниз/перед загружен, назад = нос вверх/вилли
+  driveTrade:   0.20,    // 41. ТРЕКШН-ТРЕЙДОФФ: вес НАЗАД грузит заднее → +тяга/сцепление в горку; вес ВПЕРЁД разгружает → −тяга (но держит перед от опрокида). Реальный эндуро-компромисс. 0 = выкл
+  riderShiftPx: 6,       // 42. на сколько px тело райдера ВИДИМО сдвигается вперёд/назад при переносе веса (только рендер — payoff «вес — отдельная единица»)
 };
 // ---- физика байка (двухколёсная: тангаж → вилли / loop-out / endo + импульс); ключевые крутилки тянет из TUNE ----
 const PHYS={ GRAV:TUNE.gravity, DX:26, DY:27.5,           // гравитация(↑TUNE), полубаза, высота ЦТ над колёсами
   POW:TUNE.acceleration, GACC:TUNE.slopePull, DRAG:TUNE.drag, BRK:TUNE.brake,   // тяга(↑TUNE), импульс-по-склону(↑TUNE), drag→ПОТОЛОК скорости ниже (медленнее, успеваешь корректировать) — тяга в горку остаётся, тормоз(↑TUNE)
   GP:TUNE.pitchHold, ENGTQ:0.0044, BRKTQ:0.018, CLIMB:TUNE.climbLift, // тангаж-возврат-к-склону(↑TUNE), газ-нос-вверх, тормоз-нос-вниз, множ. подъёма(↑TUNE: дозируй газ или loop out)
   AIRTQ:TUNE.airControl, ANGD:0.78, AVMAX:0.5, LOOP:1.7, STICK:TUNE.stick, LAUNCH:TUNE.launch, JUMP:TUNE.jump, // момент-сальто, ДЕМПФЕР (плавно), кламп, угол loop/endo=1.7 (вилли/стоппи ДЕРЖАТСЯ, кувырок только при реальном перекруте), липучка(↑TUNE.stick), центробеж.отрыв(↑TUNE.launch), хоп
-  LEANGND:TUNE.leanGround, LEANAIR:TUNE.leanAir, DESTAB:TUNE.destab }; // наклон на земле/в воздухе + дестабилизация (новая lean-схема управления)
+  LEANGND:TUNE.leanGround, LEANAIR:TUNE.leanAir, DESTAB:TUNE.destab, WEIGHTAUTH:TUNE.weightAuth }; // наклон на земле/в воздухе + дестабилизация + АВТОРИТЕТ ВЕСА РАЙДЕРА (b47 двухтельная: драг двигает вес тела, вес даёт момент тангажа)
 const BASE_PHYS={POW:PHYS.POW, AIRTQ:PHYS.AIRTQ, LOOP:PHYS.LOOP};   // frozen base — upgrades scale from this each run (no compounding)
 
 // ---------- meta: gem bank, bikes, missions ----------
@@ -373,7 +378,7 @@ function reset(){
   ledgeRunup=0; ledgeStepsLeft=0; ledgeTopY=0; nextLedgeX=TUNE.ledgeStart*10;   // LEDGES: first step after ledgeStart
   kickRunup=0; kickRampLeft=0; kickLandLeft=0; nextKickX=TUNE.kickStart*10;   // KICKERS: first trick ramp after kickStart
   for(let i=0;i<Math.ceil(W/STEP)+8;i++)genSeg();
-  bike={x:60,y:terrainAt(60).y-27.5,vx:0,vy:0,ang:terrainAt(60).ang,angV:0,onG:true,wheel:0};
+  bike={x:60,y:terrainAt(60).y-27.5,vx:0,vy:0,ang:terrainAt(60).ang,angV:0,onG:true,wheel:0,rShift:0};   // rShift = rider weight-shift state (-1 back .. +1 forward), smoothed from the drag input (b47 two-body)
   cam={x:bike.x-W*0.5,y:bike.y-H*0.46}; camAir=0; t=0; coins=0; dist=0; lastMile=0; newDepth=false; wipe=0; screen='play'; shake=0; flash=0; popT=0; daycycle=Math.random()*6.28;
   mult=1; pnl=0; airT=0; nearMissed=false; hitstop=0; gflash=0; multPulse=0; maxMult=1; flipCount=0; flipAcc=0;
   flipsTotal=0; topKmh=0; lastLandDiff=0; lean=0; rush=0; prevVx=0; down=false; brake=false; jumpReq=0; jumpCd=0; coyote=0; jumpGrace=0; activeTouches={}; leanX=0; ctrlId=null; leanKeyL=false; leanKeyR=false; wave=bike.x-W*0.95; waveSpd=0; deathBy=''; boost=0; boosting=0;
@@ -480,6 +485,11 @@ function update(){
   t++; daycycle+=0.0009;
   // physics
   const P=PHYS, DX=P.DX, DY=P.DY, wasG=bike.onG;
+  // --- RIDER WEIGHT-SHIFT (b47 two-body): the drag input moves the rider's body mass (smoothed = it has inertia), which sets the combined-CG offset → traction split + pitch torque ---
+  bike.rShift = lerp(bike.rShift, leanX, TUNE.riderSmooth);
+  const rShift = bike.rShift;
+  const frontFrac = clamp(0.48 + rShift*0.12, 0, 1);                 // front load fraction (forward = front planted, back = rear loaded) — matches the isolation traction sweep 0.36..0.60
+  const driveMul = clamp(1 - rShift*TUNE.driveTrade, 1-TUNE.driveTrade, 1+TUNE.driveTrade);   // weight back loads the rear → more drive/climb grip; forward unweights it → less drive
   // --- sample terrain under both wheels → rest slope + ground-follow target ---
   const gyr=terrainAt(bike.x-DX).y; let gyf=terrainAt(bike.x+DX).y;
   const ci0=Math.floor(bike.x/STEP);
@@ -507,21 +517,21 @@ function update(){
     if(down) bike.vx += P.POW*BK().accel*0.5;                           // gas rolls you forward → off the edge
     else bike.vx *= 0.80;                                               // coasting = roll-arrest: you can't freely roll off a cliff → you stop & teeter
     const hl=DX*Math.cos(bike.ang) + DY*Math.sin(bike.ang);             // CG horizontal offset from the rear contact
-    bike.angV += TUNE.balanceGrav*hl + leanX*P.LEANGND;                 // gravity tips the nose DOWN over the edge; lean BACK to hold the wheelie — modulate to balance (CG over the rear axle ≈ -0.76)
+    bike.angV += TUNE.balanceGrav*hl + rShift*P.WEIGHTAUTH;             // gravity tips the nose DOWN over the edge; shift WEIGHT BACK to hold the wheelie — modulate to balance (CG over the rear axle ≈ -0.76)
     bike.wheel += bike.vx*0.08;
   } else if(grounded){
     bike.y = restY; bike.vy = bike.vx*Math.tan(clamp(supA,-1.3,1.3));   // rest on the binding wheel (anti-clip). the LAUNCH is EMERGENT: when the slope eases at a crest / the ground drops, the carried vy lifts the bike off. Faster = bigger launch. No scripted kick.
     bike.vx += P.GACC*Math.sin(supA);                                     // gravity along slope (climb bleeds speed, descent builds) — speed is situational, like real life
-    if(down) bike.vx += P.POW*BK().accel;
+    if(down) bike.vx += P.POW*BK().accel*driveMul;   // throttle — weight back (driveMul>1) loads the rear for more drive/climb grip; weight forward unweights it (real enduro traction tradeoff)
     if(brake) bike.vx *= P.BRK;
-    bike.angV += -P.GP*Math.sin(bike.ang-supA) + leanX*P.LEANGND + bike.vx*Math.sin(supA)*P.DESTAB;   // self-stabilize to slope + player lean + speed×slope destabilize (the balance skill)
-    if(down && supA<-0.22) bike.angV += -P.ENGTQ*P.CLIMB*(-supA-0.22)*clamp(bike.vx/7,0.4,1.4);   // power pops the front on a steep climb → weight forward (lean) or loop out
+    bike.angV += -P.GP*Math.sin(bike.ang-supA) + rShift*P.WEIGHTAUTH + bike.vx*Math.sin(supA)*P.DESTAB;   // pitch = slope self-stabilize + RIDER WEIGHT-SHIFT torque (two-body: the shifted body mass tips the bike — replaces the old direct leanX torque) + speed×slope destabilize
+    if(down && supA<-0.22) bike.angV += -P.ENGTQ*P.CLIMB*(-supA-0.22)*clamp(bike.vx/7,0.4,1.4)*(1-0.5*clamp(rShift,0,1));   // gas pops the front on a steep climb → shift WEIGHT FORWARD (rShift>0) to plant it (less loop), weight back lofts it more (the climb skill, now physical via weight)
     bike.wheel += bike.vx*0.08;
     if(bike.vx>3&&t%2===0)dust.push({x:bike.x-14,y:bike.y+18,vx:-bike.vx*0.18-Math.random(),vy:-Math.random()*1.2,life:1,r:Math.random()*2+1});
   } else {
     bike.y += bike.vy;                                                 // airborne projectile (off ramps, crests, cliffs, gaps — all the SAME emergent launch)
     if(bike.vy>0 && bike.y>restY && !(terr[ci0]&&terr[ci0].gap)) bike.y=restY;   // ANTI-CLIP: never sink THROUGH solid ground — even a steep frontDrop DESCENT rests on the binding (rear) wheel. Only a real chasm node (.gap) lets you fall. Upward launches (vy<0) are untouched, so flying off ramps/edges still works (b46: was gated by !frontDrop → steep slopes plunged the bike through the track & it crawled back out)
-    if(Math.abs(leanX)>0.06){ bike.angV += leanX*P.LEANAIR; }                                       // hold lean = flip / aim the landing
+    if(Math.abs(rShift)>0.06){ bike.angV += rShift*P.LEANAIR; }                                       // hold weight-shift = flip / aim the landing (rider mass rotates the bike in air)
     else { const la=terrainAt(bike.x+Math.max(20,bike.vx*6)).ang; bike.angV += (clamp(la,-0.6,0.6)-bike.ang)*0.03; }   // no input → auto-level to the landing slope (clamped so a chasm sample can't spin you) — lands on its wheels
     bike.wheel += 0.3;
   }
@@ -627,9 +637,9 @@ function update(){
   multPulse*=0.92; gflash*=0.9;
   for(const f of floats){ f.y+=f.vy; f.vy+=0.02; f.life-=0.018; } floats=floats.filter(f=>f.life>0);
   checkMissions();
-  // rider weight-shift (motivated lean): attack on throttle/climb, upright when coasting, back on descents
-  const leanT = bike.onG ? ((down?0.14:0)+(brake?0.12:0)+clamp(-bike.ang,-0.35,0.35)*0.4) : (down?-0.06:(brake?0.16:0.06));
-  lean = lerp(lean, leanT, 0.12);
+  // rider upper-body lean DRIVEN BY THE REAL WEIGHT SHIFT (b47 two-body): rShift forward → body forward, back → body back (+ a touch of pitch comp). The visible second-mass payoff.
+  const leanT = bike.rShift*0.5 + (bike.onG ? clamp(-bike.ang,-0.25,0.25)*0.25 : 0);
+  lean = lerp(lean, leanT, 0.18);
   // situational MOTION 'rush' — big air / bombing descents / hard acceleration (not just raw speed)
   const accel=bike.vx-prevVx; prevVx=bike.vx; let rushT=0;
   if(bike.vx>7){ rushT=clamp((bike.vx-7)/10,0,1)*0.5;
@@ -815,7 +825,7 @@ function draw(){
     // ===== RIDER: upright base, upper body shifts weight via `lean` (motivated) =====
     ctx.strokeStyle='#080a0e'; ctx.lineWidth=5.5; ctx.lineCap='round';
     ctx.beginPath(); ctx.moveTo(-4,9); ctx.lineTo(5,0); ctx.lineTo(-3,-10); ctx.stroke(); ctx.lineCap='butt'; // legs on pegs (fixed)
-    ctx.save(); ctx.translate(-3,-10); ctx.rotate(lean||0); ctx.translate(3,10);   // upper body leans around the hip
+    ctx.save(); ctx.translate(-3 + (bike.rShift||0)*TUNE.riderShiftPx, -10); ctx.rotate(lean||0); ctx.translate(3,10);   // upper body shifts fore/aft WITH the weight (rShift) + leans around the hip — rider is a visible second mass (b47)
     const rg=ctx.createLinearGradient(0,-30,0,-10); rg.addColorStop(0,'#2c3447'); rg.addColorStop(1,'#0a0c12');
     ctx.beginPath(); ctx.moveTo(-3,-10); ctx.quadraticCurveTo(-5,-21,-1,-26); ctx.quadraticCurveTo(2,-28,5,-25); ctx.lineTo(4,-13); ctx.quadraticCurveTo(1,-10,-3,-10); ctx.closePath(); ctx.fillStyle=rg; ctx.fill();
     ctx.strokeStyle='rgba('+B.rider+',0.85)'; ctx.lineWidth=1.6; ctx.stroke();   // torso (upright base)
