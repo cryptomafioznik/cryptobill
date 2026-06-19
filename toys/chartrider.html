@@ -46,7 +46,7 @@ function lerp(a,b,t){return a+(b-a)*t;} function clamp(v,a,b){return v<a?a:v>b?b
 // false → full game. Single switch. Systems are GATED, never deleted.
 const CORE_TEST_MODE = true;
 // build stamp — bump on every change so a phone refresh can confirm it loaded fresh code (cache!)
-const BUILD = '2026-06-19 · b49';
+const BUILD = '2026-06-19 · b50';
 
 // ---------- procedural market terrain ----------
 // height map sampled every STEP px; generated forward as we ride. Market character:
@@ -155,7 +155,7 @@ function terrainAt(x){ // interpolated height + slope at world x
 }
 
 // ---------- bike ----------
-let bike, cam, t, coins, dist, best, screen, wipe, parts, stars, dust, shake, flash, daycycle, trail, streaks, mult, pnl, bestPnl, airT, nearMissed, hitstop, gflash, floats, multPulse, maxMult, lean, rush, prevVx, wave, waveSpd, deathBy, boost, boosting, zone, biomeBanner, biomeBannerT, BSKY, BLINE, BRIDGE, lastMile, newDepth, camAir=0;
+let bike, cam, t, coins, dist, best, screen, wipe, parts, stars, dust, shake, flash, daycycle, trail, streaks, mult, pnl, bestPnl, airT, nearMissed, hitstop, gflash, floats, multPulse, maxMult, lean, rush, prevVx, wave, waveSpd, deathBy, boost, boosting, zone, biomeBanner, biomeBannerT, BSKY, BLINE, BRIDGE, lastMile, newDepth, camAir=0, wheelieT=0;
 try{best=+localStorage.getItem('cipher_run_best')||0;}catch(e){}
 try{bestPnl=+localStorage.getItem('cipher_best_pnl')||0;}catch(e){}
 let down=false, brake=false, jumpReq=0, jumpCd=0, coyote=0, jumpGrace=0, activeTouches={}, touchLowY={};   // jumpReq = buffered press; coyote/jumpGrace = jump grace windows; touchLowY = per-touch low point for swipe-up
@@ -224,6 +224,10 @@ const TUNE = {
   weightAuth:   0.030,   // 40. АВТОРИТЕТ ВЕСА на тангаж (≈старый leanGround 0.028, чуть выше — компенсирует лаг сглаживания). Перенос веса вперёд = нос вниз/перед загружен, назад = нос вверх/вилли
   driveTrade:   0.20,    // 41. ТРЕКШН-ТРЕЙДОФФ: вес НАЗАД грузит заднее → +тяга/сцепление в горку; вес ВПЕРЁД разгружает → −тяга (но держит перед от опрокида). Реальный эндуро-компромисс. 0 = выкл
   riderShiftPx: 6,       // 42. на сколько px тело райдера ВИДИМО сдвигается вперёд/назад при переносе веса (только рендер — payoff «вес — отдельная единица»)
+  // ---- ФАЗА-2 (b50): глубокий вилли/стоппи = СКИЛЛ-БАЛАНС. (Баланс уже эмерджентно есть: weightAuth>GP → вилли неустойчив, держишь весом. Здесь — заострить глубокую зону + награда за удержание.) ----
+  skillZone:    0.55,    // 43. порог |тангаж−склон| (рад), за которым включается доп. неустойчивость скилл-зоны (глубокий вилли/стоппи). НИЖЕ норм-дрейфа вилли (~−0.6). Норм-езда (|dev|<это) НЕ тронута
+  skillDestab:  0.025,   // 44. сила инвертир.-маятника в скилл-зоне: глубже за порог = сильнее тянет дальше → держи переносом веса (вес 0.03 пересиливает). БОЛЬШЕ = резче/труднее
+  wheelieRew:   0.5,     // 45. награда за удержание вилли/стоппи: буст/кадр × это (как флипы — делает скилл-баланс осмысленным + даёт фидбэк-текст). 0 = выкл
 };
 // ---- физика байка (двухколёсная: тангаж → вилли / loop-out / endo + импульс); ключевые крутилки тянет из TUNE ----
 const PHYS={ GRAV:TUNE.gravity, DX:26, DY:27.5,           // гравитация(↑TUNE), полубаза, высота ЦТ над колёсами
@@ -380,7 +384,7 @@ function reset(){
   for(let i=0;i<Math.ceil(W/STEP)+8;i++)genSeg();
   bike={x:60,y:terrainAt(60).y-27.5,vx:0,vy:0,ang:terrainAt(60).ang,angV:0,onG:true,wheel:0,rShift:0};   // rShift = rider weight-shift state (-1 back .. +1 forward), smoothed from the drag input (b47 two-body)
   cam={x:bike.x-W*0.5,y:bike.y-H*0.46}; camAir=0; t=0; coins=0; dist=0; lastMile=0; newDepth=false; wipe=0; screen='play'; shake=0; flash=0; popT=0; daycycle=Math.random()*6.28;
-  mult=1; pnl=0; airT=0; nearMissed=false; hitstop=0; gflash=0; multPulse=0; maxMult=1; flipCount=0; flipAcc=0;
+  mult=1; pnl=0; airT=0; nearMissed=false; hitstop=0; gflash=0; multPulse=0; maxMult=1; flipCount=0; flipAcc=0; wheelieT=0;
   flipsTotal=0; topKmh=0; lastLandDiff=0; lean=0; rush=0; prevVx=0; down=false; brake=false; jumpReq=0; jumpCd=0; coyote=0; jumpGrace=0; activeTouches={}; leanX=0; ctrlId=null; leanKeyL=false; leanKeyR=false; wave=bike.x-W*0.95; waveSpd=0; deathBy=''; boost=0; boosting=0;
   zone=-1; biomeBanner=''; biomeBannerT=0; BSKY=['rgb(20,16,48)','rgb(46,30,78)','rgb(150,80,110)','rgb(230,150,110)']; BLINE='228,250,255'; BRIDGE='60,40,90'; rollMissions();
   parts=[]; dust=[]; trail=[]; streaks=[]; floats=[];
@@ -525,6 +529,7 @@ function update(){
     if(down) bike.vx += P.POW*BK().accel*driveMul;   // throttle — weight back (driveMul>1) loads the rear for more drive/climb grip; weight forward unweights it (real enduro traction tradeoff)
     if(brake) bike.vx *= P.BRK;
     bike.angV += -P.GP*Math.sin(bike.ang-supA) + rShift*P.WEIGHTAUTH + bike.vx*Math.sin(supA)*P.DESTAB;   // pitch = slope self-stabilize + RIDER WEIGHT-SHIFT torque (two-body: the shifted body mass tips the bike — replaces the old direct leanX torque) + speed×slope destabilize
+    { const dev=bike.ang-supA; if(dev < -TUNE.skillZone) bike.angV += -TUNE.skillDestab*(-dev-TUNE.skillZone); }   // ФАЗА-2 СКИЛЛ-ЗОНА (ВИЛЛИ): за порогом подъёма переднего колеса инвертир.-маятник тянет нос ВЫШЕ → держишь переносом веса, лупишь без модуляции (Trials/GD). Только вилли (стоппи-destab конфликтовал с вес-вперёд на подъёме = эндо). Норм-езда (dev>−skillZone) не тронута
     if(down && supA<-0.22) bike.angV += -P.ENGTQ*P.CLIMB*(-supA-0.22)*clamp(bike.vx/7,0.4,1.4)*(1-0.5*clamp(rShift,0,1));   // gas pops the front on a steep climb → shift WEIGHT FORWARD (rShift>0) to plant it (less loop), weight back lofts it more (the climb skill, now physical via weight)
     bike.wheel += bike.vx*0.08;
     if(bike.vx>3&&t%2===0)dust.push({x:bike.x-14,y:bike.y+18,vx:-bike.vx*0.18-Math.random(),vy:-Math.random()*1.2,life:1,r:Math.random()*2+1});
@@ -571,6 +576,12 @@ function update(){
   if(grounded && rel<-0.45 && dist>25) tut('climb','▲ КРУТО? ОТПУСТИ ГАЗ — НЕ ОПРОКИНЕШЬСЯ');   // teach feathering before the first loop-out
   const loopThresh = lerp(TUNE.loopForgive, P.LOOP, clamp((dist||0)/TUNE.easeInDist,0,1));   // Alto on-ramp: forgiving early, eases to full over easeInDist — mastery ceiling unchanged
   if(grounded && screen==='play'){ if(rel<-loopThresh) wipeout('loop'); else if(rel>loopThresh && supA>-0.3) wipeout('endo'); }   // ENDO (nose digs forward) only on flat/descent — on a steep CLIMB the hill is in front, you can't nose-dive, so weight-forward is SAFE (only LOOP-backward is the risk). matches real enduro
+  // ---- ФАЗА-2: УДЕРЖАНИЕ ВИЛЛИ/СТОППИ = осмысленный скилл-баланс (как флипы дают очки — балансируешь весом → копишь буст + фидбэк) ----
+  if(grounded && !rearBal && screen==='play' && Math.abs(rel)>0.55 && bike.vx>1.5 && !(rel>0 && supA<-0.1) && TUNE.wheelieRew>0){   // wheelie (rel<0) counts anywhere; stoppie (rel>0) NOT on a climb (that's just weight-forward climbing, not a trick)
+    wheelieT++;
+    if(wheelieT===12){ floatPop(bike.x,bike.y-42,(rel<0?'ВИЛЛИ':'СТОППИ')+'!','#9ff0ff'); sfxNear&&sfxNear(); }
+    if(wheelieT>12){ boost=Math.min(1,(boost||0)+0.006*TUNE.wheelieRew); if(wheelieT%18===0){ const g=Math.round(10*mult); pnl+=g; floatPop(bike.x,bike.y-46,'+$'+g,'#aef0ff'); } }
+  } else { if(wheelieT>40){ mult+=0.2; multPulse=1; } wheelieT=0; }   // long hold → leverage bump on release
   // coins along terrain
   const magR=36*(1+0.40*upgLvl('mag')); const ci=Math.floor(bike.x/STEP); for(let k=ci-3;k<=ci+3;k++){ const c=terr[k]; if(c&&c.coin){ const cx=c.x,cy=c.y-30; if(Math.hypot(cx-bike.x,cy-bike.y)<magR){ c.coin=false; coins++; sfxCoin(); boost=Math.min(1,(boost||0)+0.04); const gv=Math.round(25*mult); pnl+=gv; floatPop(cx,cy,'+$'+gv,'#ffd678'); for(let z=0;z<8;z++)parts.push({x:cx,y:cy,vx:(Math.random()-0.5)*3.5,vy:-Math.random()*3-1,life:1,gold:1,r:2});} } }
   // ---- GAPS are EMERGENT: you fly off the kicker as a projectile (∝ your speed). Reach the far side → land. Come up short → fall into the pit (visible & fair — NO edge-instadeath). Near-miss catches the far edge. ----
