@@ -46,7 +46,7 @@ function lerp(a,b,t){return a+(b-a)*t;} function clamp(v,a,b){return v<a?a:v>b?b
 // false → full game. Single switch. Systems are GATED, never deleted.
 const CORE_TEST_MODE = true;
 // build stamp — bump on every change so a phone refresh can confirm it loaded fresh code (cache!)
-const BUILD = '2026-06-19 · b52';
+const BUILD = '2026-06-19 · b53';
 
 // ---------- procedural market terrain ----------
 // height map sampled every STEP px; generated forward as we ride. Market character:
@@ -81,6 +81,7 @@ let gapLeft=0, nextGapX=1800, gapBaseY=0, gapLandFlat=0, overGap=false, gapLipNo
 let gapRunup=0, gapRampLeft=0, gapPrevY=0, gapRampBot=0;   // gap FEATURE phases: descent run-up (build speed) → kicker ramp (launch) → chasm → land below the lip
 let ledgeRunup=0, ledgeStepsLeft=0, ledgePrevY=0, ledgeTopY=0, nextLedgeX=1400;   // LEDGE phases: flat run-up (set up the wheelie) → riser/tread steps you must LOFT the front to mount
 let kickRunup=0, kickRampLeft=0, kickLandLeft=0, kickBaseY=0, kickRampBot=0, kickLandY=0, nextKickX=1700;   // TRICK KICKER phases: DESCENT run-up (bomb down → build speed, logical setup) → steep ramp UP (launches you ∝ speed for flips) → flat solid landing (no chasm)
+let whoopRunup=0, whoopLeft=0, whoopBaseY=0, whoopPhase=0, nextWhoopX=2200;   // WHOOPS (b53): flat approach → a rhythm section of rollers (skim/catch air at speed, roll over slow) — dynamic flow, no death
 let curEvType='', evBanner='', evBannerT=0, evColor='90,240,150', evGlow=0, evBonus=0, lastWarnX=-1, evWarnType=''; // bike-side event state
 function pickEvent(gz){ const z=((gz%5)+5)%5, r=Math.random();
   if(z===2) return r<0.55?'rally':(r<0.82?'flash':'whale');     // Эйфория: pumps
@@ -119,7 +120,7 @@ function genSeg(){
     if(prevC - close > maxRise){ close = prevC - maxRise; walk = close - baseY - roll; }
   }
   // ---- GAPS (chasm you JUMP) + LEDGES (vertical step you LOFT the front onto): structured skill obstacles ----
-  let isGap=false, gapLip=0, isStep=false, stepTop=0, isKick=false;
+  let isGap=false, gapLip=0, isStep=false, stepTop=0, isKick=false, isWhoop=false;
   if(!isEv){
     if(gapRunup>0){ const k=6-gapRunup; close=clamp(gapPrevY + k*11, 70, H*0.84); walk=close-baseY; gapRunup--; if(gapRunup<=0){ gapRampBot=close; gapRampLeft=3; } }   // DESCENT run-up: build speed before the gap
     else if(gapRampLeft>0){ const k=4-gapRampLeft; close=clamp(gapRampBot - k*20, 70, H*0.95); walk=close-baseY; gapRampLeft--; if(gapRampLeft<=0){ gapLeft=2; gapBaseY=clamp(close+40,70,H*0.9); } }   // KICKER launches you UP ∝ speed. Landing = lip+40 (b44: was +24; the slower b43 cruise ~5.6 falls more, so the runway sits where the slower arc lands → CLEAN clear, the edge-grab/snap stays rare). Chasm 2 nodes
@@ -130,6 +131,8 @@ function genSeg(){
     else if(kickRunup>0){ const k=6-kickRunup; close=clamp(kickBaseY + k*13, 70, H*0.88); walk=close-baseY; kickRunup--; if(kickRunup<=0){ kickRampBot=close; kickRampLeft=3; } }   // b51: DESCENT run-up (6 nodes, ~65px down ≥ ramp's 66px up → NET downhill into the launch) — bomb down to BUILD SPEED so the ramp always launches you well ≥ cruise (logical "necessary place", like a real moto setup), not a random flat where you arrive slow
     else if(kickRampLeft>0){ const k=4-kickRampLeft; close=clamp(kickRampBot - k*TUNE.kickH,70,H*0.95); walk=close-baseY; if(kickRampLeft===1)isKick=true; kickRampLeft--; if(kickRampLeft<=0){ kickLandLeft=6; kickLandY=clamp(kickRampBot,70,H*0.9); } }   // ramp UP from the run-up bottom — launches you airborne ∝ speed (do a FLIP!); last node = lip (tagged for the telegraph)
     else if(kickLandLeft>0){ close=clamp(kickLandY,70,H*0.9); walk=close-baseY; kickLandLeft--; }   // flat SOLID landing at the run-up level (no chasm — pure reward feature) → land the flip
+    else if(whoopRunup>0){ close=clamp(whoopBaseY,70,H*0.86); walk=close-baseY; whoopRunup--; if(whoopRunup<=0){ whoopLeft=TUNE.whoopN; whoopPhase=0; } }   // WHOOPS flat approach (read the rhythm)
+    else if(whoopLeft>0){ whoopPhase+=2.3; close=clamp(whoopBaseY - Math.sin(whoopPhase)*TUNE.whoopAmp, 70, H*0.88); walk=close-baseY; if(whoopLeft===TUNE.whoopN)isWhoop=true; whoopLeft--; }   // BUMPS: a rhythm section of rollers — at speed you skim/catch small air off each crest (un-glued physics), slow = roll over. No chasm = no death; dynamic flow
     else if(TUNE.gapEvery>0 && genX>=nextGapX && genX>TUNE.gapStart*10 && terr.length>20 && regime!=='pump' && regime!=='crash' && lastRegime!=='bull'){   // schedule a gap FEATURE (not mid-climb); the run-up handles the takeoff
       gapPrevY=close; gapRunup=5; nextGapX=genX + TUNE.gapEvery*10 + Math.random()*1400;   // start: descent run-up first
     }
@@ -139,6 +142,9 @@ function genSeg(){
     else if(TUNE.kickEvery>0 && genX>=nextKickX && genX>TUNE.kickStart*10 && terr.length>16 && regime!=='pump' && regime!=='crash' && lastRegime!=='bull' && close>H*0.5){   // schedule a TRICK KICKER (not mid-climb; needs room ABOVE for the ramp)
       kickBaseY=close; kickRunup=6; nextKickX=genX + TUNE.kickEvery*10 + Math.random()*1000;   // b51: descent run-up (6 nodes); tighter spacing jitter since kickers are now the main feature
     }
+    else if(TUNE.whoopEvery>0 && genX>=nextWhoopX && genX>TUNE.whoopStart*10 && terr.length>16 && regime!=='pump' && regime!=='crash' && lastRegime!=='bull'){   // schedule a WHOOPS section (rhythm rollers on calm terrain)
+      whoopBaseY=close; whoopRunup=3; nextWhoopX=genX + TUNE.whoopEvery*10 + Math.random()*900;
+    }
   }
   let open = terr.length ? terr[terr.length-1].close : close;
   if(terr.length && terr[terr.length-1].gap) open=close;   // no giant candle bridging out of a chasm
@@ -147,7 +153,7 @@ function genSeg(){
   const haz=(!CORE_TEST_MODE && !isEv && !isGap && genX>1200 && regime!=='pump' && regime!=='crash' && (terr.length-lastHazIdx)>=10 && Math.random()<hzRate); // CORE: no sell-walls (they just sap momentum, esp. before a gap — replaced by organic terrain obstacles like mud later). no walls in events/gaps; none in first ~120m
   if(haz) lastHazIdx=terr.length;
   const coin = isEv==='rally' ? (Math.random()<0.55) : (!haz && !isEv && !isGap && Math.random()<0.2);   // rally rains gems
-  terr.push({x:genX, y:close, open, close, hi:top-wick, lo:bot+wick*0.6, up, haz:haz, coin:coin, ev:isEv, gap:isGap, lipY:gapLip, step:isStep, topY:stepTop, kick:isKick}); genX+=STEP;
+  terr.push({x:genX, y:close, open, close, hi:top-wick, lo:bot+wick*0.6, up, haz:haz, coin:coin, ev:isEv, gap:isGap, lipY:gapLip, step:isStep, topY:stepTop, kick:isKick, whoop:isWhoop}); genX+=STEP;
 }
 function terrainAt(x){ // interpolated height + slope at world x
   const i=Math.floor(x/STEP); if(i<0||i+1>=terr.length) return {y:baseY,ang:0};
@@ -228,6 +234,11 @@ const TUNE = {
   skillZone:    0.55,    // 43. порог |тангаж−склон| (рад), за которым включается доп. неустойчивость скилл-зоны (глубокий вилли/стоппи). НИЖЕ норм-дрейфа вилли (~−0.6). Норм-езда (|dev|<это) НЕ тронута
   skillDestab:  0.025,   // 44. сила инвертир.-маятника в скилл-зоне: глубже за порог = сильнее тянет дальше → держи переносом веса (вес 0.03 пересиливает). БОЛЬШЕ = резче/труднее
   wheelieRew:   0.5,     // 45. награда за удержание вилли/стоппи: буст/кадр × это (как флипы — делает скилл-баланс осмысленным + даёт фидбэк-текст). 0 = выкл
+  // ---- БУГРЫ / WHOOPS (b53): ритмичная серия гребней — на скорости скипуешь по верхам (мелкий воздух/поток), медленно переваливаешь. Динамика без обрывов, БЕЗ смерти ----
+  whoopEvery:   240,     // 46. ср. дистанция между сериями бугров (м); 0 = выкл
+  whoopStart:   190,     // 47. первая серия после (м)
+  whoopN:       7,       // 48. сколько бугров в серии
+  whoopAmp:     15,      // 49. амплитуда бугра (px): на скорости ловишь мелкий воздух, медленно переваливаешь. БОЛЬШЕ = злее/прыгучее (риск перекрута), МЕНЬШЕ = глаже
 };
 // ---- физика байка (двухколёсная: тангаж → вилли / loop-out / endo + импульс); ключевые крутилки тянет из TUNE ----
 const PHYS={ GRAV:TUNE.gravity, DX:26, DY:27.5,           // гравитация(↑TUNE), полубаза, высота ЦТ над колёсами
@@ -381,6 +392,7 @@ function reset(){
   gapLeft=0; nextGapX=TUNE.gapStart*10; gapLandFlat=0; overGap=false; gapLipNow=0; gapFarX=0; gapFxT=0; gapRunup=0; gapRampLeft=0;   // GAPS: first chasm after gapStart
   ledgeRunup=0; ledgeStepsLeft=0; ledgeTopY=0; nextLedgeX=TUNE.ledgeStart*10;   // LEDGES: first step after ledgeStart
   kickRunup=0; kickRampLeft=0; kickLandLeft=0; nextKickX=TUNE.kickStart*10;   // KICKERS: first trick ramp after kickStart
+  whoopRunup=0; whoopLeft=0; whoopPhase=0; nextWhoopX=TUNE.whoopStart*10;   // WHOOPS: first rhythm section after whoopStart
   for(let i=0;i<Math.ceil(W/STEP)+8;i++)genSeg();
   bike={x:60,y:terrainAt(60).y-27.5,vx:0,vy:0,ang:terrainAt(60).ang,angV:0,onG:true,wheel:0,rShift:0};   // rShift = rider weight-shift state (-1 back .. +1 forward), smoothed from the drag input (b47 two-body)
   cam={x:bike.x-W*0.5,y:bike.y-H*0.46}; camAir=0; t=0; coins=0; dist=0; lastMile=0; newDepth=false; wipe=0; screen='play'; shake=0; flash=0; popT=0; daycycle=Math.random()*6.28;
@@ -600,6 +612,8 @@ function update(){
     for(let k=ci0+1;k<=ci0+5;k++){ if(terr[k]&&terr[k].gap){ if(bike.onG) tut('gapj','⤴ РАЗГОНИСЬ со спуска — перелетишь; медленно → прыжок в добор'); break; } } }
   // ---- LEDGES are EMERGENT: a step is just a short steep climb — ride it up on MOMENTUM (lean forward = climbs cleaner; too slow = you bog & lose speed, recoverable; never an instadeath). Telegraph only. ----
   for(let k=ci0;k<=ci0+4;k++){ const c=terr[k]; if(c&&c.step&&!c.stepDone){ if(c.x<=bike.x) c.stepDone=true; else if(bike.onG) tut('ledge','▲ УСТУП — держи скорость, НАКЛОН ВПЕРЁД заедет чище'); break; } }
+  // ---- WHOOPS telegraph: a rhythm section ahead — keep speed to skim the crests ----
+  for(let k=ci0+1;k<=ci0+4;k++){ if(terr[k]&&terr[k].whoop){ if(bike.onG) tut('whoop','〰 БУГРЫ — держи СКОРОСТЬ, скользи по верхам (медленно = переваливаешь)'); break; } }
   // hazards: on the ground they wreck your momentum; clear them in the air to DODGE
   for(let k=ci-1;k<=ci+1;k++){ const c=terr[k]; if(c&&c.haz&&!c.hazHit&&Math.abs(c.x-bike.x)<15){ c.hazHit=true;
     if(bike.onG){ bike.vx*=0.4; shake=9; hitstop=3; mult=Math.max(1,mult-0.8); flash=0.45; popText('REKT!'); floatPop(bike.x,bike.y-28,'-темп','#ff6a86'); sfxCrash(); buzz(45); }
@@ -764,6 +778,9 @@ function draw(){
     ctx.strokeStyle='rgba(255,200,90,0.95)'; ctx.lineWidth=3.6; ctx.shadowColor='#ffb040'; ctx.shadowBlur=12;
     ctx.beginPath(); ctx.moveTo(c.x-2,c.y-3); ctx.lineTo(c.x-2,c.y+10); ctx.stroke(); ctx.shadowBlur=0;
     ctx.fillStyle='rgba(255,210,110,'+(0.55+0.45*Math.sin(t*0.4))+')'; ctx.textAlign='center'; ctx.font='800 15px ui-monospace,monospace'; ctx.fillText('🎢 САЛЬТО!',c.x,c.y-26); ctx.textAlign='left'; }
+  // ---- WHOOPS: teal "〰 БУГРЫ" label at the section start ----
+  for(let i=i0;i<=i1;i++){ const c=terr[i]; if(!c||!c.whoop||c.x<=bike.x)continue;
+    ctx.fillStyle='rgba(150,235,210,'+(0.5+0.4*Math.sin(t*0.35))+')'; ctx.textAlign='center'; ctx.font='800 14px ui-monospace,monospace'; ctx.fillText('〰 БУГРЫ',c.x,c.y-24); ctx.textAlign='left'; }
   // hazards: red spiked sell-wall barriers on the track
   for(let i=i0;i<=i1;i++){ const c=terr[i]; if(c&&c.haz&&!c.hazHit){ ctx.save(); ctx.translate(c.x,c.y);
     ctx.fillStyle='rgba(255,60,80,0.22)'; ctx.strokeStyle='rgba(255,72,92,0.95)'; ctx.lineWidth=2; ctx.shadowColor='#ff3050'; ctx.shadowBlur=10;
