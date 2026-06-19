@@ -46,7 +46,7 @@ function lerp(a,b,t){return a+(b-a)*t;} function clamp(v,a,b){return v<a?a:v>b?b
 // false → full game. Single switch. Systems are GATED, never deleted.
 const CORE_TEST_MODE = true;
 // build stamp — bump on every change so a phone refresh can confirm it loaded fresh code (cache!)
-const BUILD = '2026-06-19 · b47';
+const BUILD = '2026-06-19 · b48';
 
 // ---------- procedural market terrain ----------
 // height map sampled every STEP px; generated forward as we ride. Market character:
@@ -577,12 +577,13 @@ function update(){
       let fe=ci0; while(terr[fe]&&terr[fe].gap)fe++; gapFarX=(terr[fe]?terr[fe].x:fe*STEP); const landY=terr[fe]?terr[fe].y:gn.lipY; gapLipNow=gn.lipY; overGap=true;
       const fwx=bike.x+DX, fwy=bike.y+DY;
       if(fwx>=gapFarX-20 && fwy>landY+10 && fwy<landY+72 && bike.vy>=-1){                                         // ONLY a near-miss (front wheel came in BELOW the runway top) → scrabble up the far edge. A clean clear (at/above the runway) flies PAST & lands naturally, keeping its momentum (no snap, no speed-kill).
-        bike.x=gapFarX+4; bike.y=terrainAt(bike.x).y-DY; bike.vy=Math.min(bike.vy,0); bike.onG=true; bike.vx*=0.97; bike.angV*=0.7; overGap=false;   // b45: gentler pitch settle on the edge-catch (was 0.5) → smoother no-jump landings
+        bike.x=gapFarX+4; bike.y=terrainAt(bike.x).y-DY; bike.vy=Math.min(bike.vy,0); bike.onG=true; bike.vx*=0.97; bike.angV*=0.4; overGap=false;   // b45: gentler pitch settle on the edge-catch (was 0.5) → smoother no-jump landings
+        bike.ang=lerp(bike.ang, terrainAt(bike.x).ang, 0.5); jumpReq=0; jumpCd=Math.max(jumpCd,14); coyote=0;   // b48: a scrabble is a SAVE → settle the pitch to the runway & DROP the buffered jump, so a stale gap-swipe can't relaunch you off the far edge into a tumble (the user's "снова баг с обрывом": caught the edge → buffered jump fired → crash)
         gapFxT=1; gapFxMsg='ЗАЦЕПИЛ КРАЙ'; boost=Math.min(1,(boost||0)+0.12); gflash=0.45; shake=Math.max(shake,5); sfxAir(); buzz(14);
       } else if(screen==='play' && bike.y>gn.lipY+120){                                                          // the arc came up short → fell into the pit (only NOW, deep below the lip — not at the edge)
         wipeout('gap');
       }
-    } else if(overGap && screen==='play' && bike.x>gapFarX){ overGap=false; boost=Math.min(1,(boost||0)+0.16); shake=Math.max(shake,6); gflash=0.5; gapFxT=1; gapFxMsg='ПРОПАСТЬ ✓'; sfxAir(); buzz(18); }   // cleared past the far edge (landed naturally on the far side)
+    } else if(overGap && screen==='play' && bike.x>gapFarX){ overGap=false; jumpReq=0; boost=Math.min(1,(boost||0)+0.16); shake=Math.max(shake,6); gflash=0.5; gapFxT=1; gapFxMsg='ПРОПАСТЬ ✓'; sfxAir(); buzz(18); }   // cleared past the far edge (landed naturally on the far side); b48: drop a stale buffered jump so it can't relaunch you into the next feature
     for(let k=ci0+1;k<=ci0+5;k++){ if(terr[k]&&terr[k].gap){ if(bike.onG) tut('gapj','⤴ РАЗГОНИСЬ со спуска — перелетишь; медленно → прыжок в добор'); break; } } }
   // ---- LEDGES are EMERGENT: a step is just a short steep climb — ride it up on MOMENTUM (lean forward = climbs cleaner; too slow = you bog & lose speed, recoverable; never an instadeath). Telegraph only. ----
   for(let k=ci0;k<=ci0+4;k++){ const c=terr[k]; if(c&&c.step&&!c.stepDone){ if(c.x<=bike.x) c.stepDone=true; else if(bike.onG) tut('ledge','▲ УСТУП — держи скорость, НАКЛОН ВПЕРЁД заедет чище'); break; } }
