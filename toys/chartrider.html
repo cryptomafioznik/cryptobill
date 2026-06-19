@@ -46,7 +46,7 @@ function lerp(a,b,t){return a+(b-a)*t;} function clamp(v,a,b){return v<a?a:v>b?b
 // false → full game. Single switch. Systems are GATED, never deleted.
 const CORE_TEST_MODE = true;
 // build stamp — bump on every change so a phone refresh can confirm it loaded fresh code (cache!)
-const BUILD = '2026-06-19 · b41';
+const BUILD = '2026-06-19 · b42';
 
 // ---------- procedural market terrain ----------
 // height map sampled every STEP px; generated forward as we ride. Market character:
@@ -80,6 +80,7 @@ let evGenType='', evGenLeft=0, nextEvGenX=2600;                 // terrain-gener
 let gapLeft=0, nextGapX=1800, gapBaseY=0, gapLandFlat=0, overGap=false, gapLipNow=0, gapFarX=0, gapFxT=0, gapFxMsg='';   // GAPS: gen + fair-landing + clear state; gapLipNow/gapFarX = lip level & far-edge x of the gap being crossed
 let gapRunup=0, gapRampLeft=0, gapPrevY=0, gapRampBot=0;   // gap FEATURE phases: descent run-up (build speed) → kicker ramp (launch) → chasm → land below the lip
 let ledgeRunup=0, ledgeStepsLeft=0, ledgePrevY=0, ledgeTopY=0, nextLedgeX=1400;   // LEDGE phases: flat run-up (set up the wheelie) → riser/tread steps you must LOFT the front to mount
+let kickRunup=0, kickRampLeft=0, kickLandLeft=0, kickBaseY=0, nextKickX=1700;   // TRICK KICKER phases: flat run-up → steep ramp UP (launches you ∝ speed for flips) → flat solid landing (no chasm)
 let curEvType='', evBanner='', evBannerT=0, evColor='90,240,150', evGlow=0, evBonus=0, lastWarnX=-1, evWarnType=''; // bike-side event state
 function pickEvent(gz){ const z=((gz%5)+5)%5, r=Math.random();
   if(z===2) return r<0.55?'rally':(r<0.82?'flash':'whale');     // Эйфория: pumps
@@ -118,7 +119,7 @@ function genSeg(){
     if(prevC - close > maxRise){ close = prevC - maxRise; walk = close - baseY - roll; }
   }
   // ---- GAPS (chasm you JUMP) + LEDGES (vertical step you LOFT the front onto): structured skill obstacles ----
-  let isGap=false, gapLip=0, isStep=false, stepTop=0;
+  let isGap=false, gapLip=0, isStep=false, stepTop=0, isKick=false;
   if(!isEv){
     if(gapRunup>0){ const k=6-gapRunup; close=clamp(gapPrevY + k*11, 70, H*0.84); walk=close-baseY; gapRunup--; if(gapRunup<=0){ gapRampBot=close; gapRampLeft=3; } }   // DESCENT run-up: build speed before the gap
     else if(gapRampLeft>0){ const k=4-gapRampLeft; close=clamp(gapRampBot - k*20, 70, H*0.95); walk=close-baseY; gapRampLeft--; if(gapRampLeft<=0){ gapLeft=2; gapBaseY=clamp(close+24,70,H*0.9); } }   // KICKER (3 nodes ~0.65rad) launches you UP ∝ speed → you ARC back to ~lip level; here `close` = the lip. Landing = lip+24 (a touch below, NOT a hole). Chasm 2 nodes → at cruise the arc clears CLEAN onto the runway (keeps momentum); slow → falls. Width = difficulty later via track variety
@@ -126,11 +127,17 @@ function genSeg(){
     else if(gapLandFlat>0){ close=gapBaseY; walk=close-baseY; gapLandFlat--; }   // FLAT runway SNAPPED to the landing level (not lerp → clean predictable landing + recovery room, no crawl-out of a hole)
     else if(ledgeRunup>0){ close=clamp(ledgePrevY,70,H*0.92); walk=close-baseY; ledgeRunup--; if(ledgeRunup<=0){ ledgeStepsLeft=TUNE.ledgeStepN*3; ledgeTopY=ledgePrevY; } }   // LEDGE flat run-up: set up the wheelie (fair — you can prepare)
     else if(ledgeStepsLeft>0){ const pos=(TUNE.ledgeStepN*3-ledgeStepsLeft)%3; if(pos<2){ ledgeTopY=clamp(ledgeTopY-TUNE.ledgeH*0.5,70,H*0.86); if(pos===0){ isStep=true; stepTop=ledgeTopY; } } close=ledgeTopY; walk=close-baseY; ledgeStepsLeft--; }   // step = 2-node RISER (~0.6rad, rideable on momentum — not a vertical wall) + 1-node tread; first node tagged for the ▲ УСТУП telegraph
+    else if(kickRunup>0){ close=clamp(kickBaseY,70,H*0.86); walk=close-baseY; kickRunup--; if(kickRunup<=0){ kickRampLeft=3; } }   // TRICK KICKER flat run-up: build speed for the launch
+    else if(kickRampLeft>0){ const k=4-kickRampLeft; close=clamp(kickBaseY - k*TUNE.kickH,70,H*0.95); walk=close-baseY; if(kickRampLeft===1)isKick=true; kickRampLeft--; if(kickRampLeft<=0){ kickLandLeft=6; } }   // ramp UP — launches you airborne ∝ speed (do a FLIP!); last node = lip (tagged for the telegraph)
+    else if(kickLandLeft>0){ close=clamp(kickBaseY,70,H*0.9); walk=close-baseY; kickLandLeft--; }   // flat SOLID landing (no chasm — pure reward feature) → land the flip
     else if(TUNE.gapEvery>0 && genX>=nextGapX && genX>TUNE.gapStart*10 && terr.length>20 && regime!=='pump' && regime!=='crash' && lastRegime!=='bull'){   // schedule a gap FEATURE (not mid-climb); the run-up handles the takeoff
       gapPrevY=close; gapRunup=5; nextGapX=genX + TUNE.gapEvery*10 + Math.random()*1400;   // start: descent run-up first
     }
     else if(TUNE.ledgeEvery>0 && genX>=nextLedgeX && genX>TUNE.ledgeStart*10 && terr.length>16 && regime!=='pump' && regime!=='crash' && lastRegime!=='bull' && close>H*0.45){   // schedule a LEDGE (not mid-climb, and only when low enough to have room to step up)
       ledgePrevY=close; ledgeRunup=4; nextLedgeX=genX + TUNE.ledgeEvery*10 + Math.random()*1200;
+    }
+    else if(TUNE.kickEvery>0 && genX>=nextKickX && genX>TUNE.kickStart*10 && terr.length>16 && regime!=='pump' && regime!=='crash' && lastRegime!=='bull' && close>H*0.5){   // schedule a TRICK KICKER (not mid-climb; needs room ABOVE for the ramp)
+      kickBaseY=close; kickRunup=4; nextKickX=genX + TUNE.kickEvery*10 + Math.random()*1300;
     }
   }
   let open = terr.length ? terr[terr.length-1].close : close;
@@ -140,7 +147,7 @@ function genSeg(){
   const haz=(!CORE_TEST_MODE && !isEv && !isGap && genX>1200 && regime!=='pump' && regime!=='crash' && (terr.length-lastHazIdx)>=10 && Math.random()<hzRate); // CORE: no sell-walls (they just sap momentum, esp. before a gap — replaced by organic terrain obstacles like mud later). no walls in events/gaps; none in first ~120m
   if(haz) lastHazIdx=terr.length;
   const coin = isEv==='rally' ? (Math.random()<0.55) : (!haz && !isEv && !isGap && Math.random()<0.2);   // rally rains gems
-  terr.push({x:genX, y:close, open, close, hi:top-wick, lo:bot+wick*0.6, up, haz:haz, coin:coin, ev:isEv, gap:isGap, lipY:gapLip, step:isStep, topY:stepTop}); genX+=STEP;
+  terr.push({x:genX, y:close, open, close, hi:top-wick, lo:bot+wick*0.6, up, haz:haz, coin:coin, ev:isEv, gap:isGap, lipY:gapLip, step:isStep, topY:stepTop, kick:isKick}); genX+=STEP;
 }
 function terrainAt(x){ // interpolated height + slope at world x
   const i=Math.floor(x/STEP); if(i<0||i+1>=terr.length) return {y:baseY,ang:0};
@@ -190,7 +197,7 @@ const TUNE = {
   steepRamp:    600,     // 19. дистанция (м), за которую крутизна растёт steepEarly → terrainSteep (ещё жёстче дальше)
   climbCap:     0.88,    // 19b. КЭП КРУТИЗНЫ ПОДЪЁМА (рад): 0.82→0.88 — круче по просьбе (скилл вес-вперёд держит при climbLift 13). Ниже физ-потолка тяги 1.08. Спуски/пропасти не трогает. Замерено: реальные крутые серии ≤16 узлов → байк лезет ~2-3с (min vx ~2), без кувырка/затыка. Физ-потолок тяги HODLER ≈1.08 (выше — глохнет); 0.9 ползёт на искусств. 60-узл. стене >25с. БОЛЬШЕ = круче/злее (до ~0.95), МЕНЬШЕ = пологее
   leanGround:   0.028,   // 20. сила НАКЛОНА (драг влево-вправо): 0.020→0.028 — ЧУВСТВИТЕЛЬНЕЕ (от тебя больше зависит; быстрее в вилли/стоппи, но и перекрутить легче = скилл)
-  leanAir:      0.022,   // 21. сила наклона в воздухе — аналоговое вращение (0.015→0.022, чувствительнее: доворот к посадке + флипы)
+  leanAir:      0.050,   // 21. сила наклона в воздухе — аналоговое вращение. 0.022→0.050 (b42): хватает на полное САЛЬТО за время кикер-воздуха; доворот к посадке снаппернее. Ниже = плавнее но флип не докрутить
   destab:       0.0018,  // 22. дестабилизация скорость×склон: подъём кренит назад, спуск — носом вниз → держи наклоном (мягко, наклон легко перекрывает)
   // ---- УСТУПЫ/СТУПЕНИ («лестницы»): вертикальный шаг ВВЕРХ — переднее колесо ЗАЕЗЖАЕТ таймингом вилли (реал trials/эндуро) ----
   ledgeEvery:   300,     // 23. ср. дистанция между уступами (м); 0 = выкл. ЧАЩЕ gaps (420) — это базовый скилл-обстакл «подними перед», добавляет вызов аркадной езде
@@ -207,6 +214,11 @@ const TUNE = {
   balanceV:     3.4,     // 32. порог скорости: НИЖЕ → у кромки балансируешь на заднем; ВЫШЕ → отрыв/полёт (как раньше). Регулирует «медленно подъехал»
   balanceGrav:  0.0007,  // 33. сила, с которой гравитация клонит нос ВНИЗ на балансе (маятник вокруг заднего). БОЛЬШЕ = труднее удержать (>0.0010 уже неудержимо — валит носом вниз); держи вилли активным наклоном НАЗАД. Равновесие (ЦТ над осью) ≈ −0.76рад
   wheelR:       13,      // 34. радиус колеса (px) для ЗАЦЕПА КРАЯ: заднее стоит на ВЫСШЕЙ точке в пределах ±R → край колеса цепляет кромку, не падаешь пока центр колеса не ушёл за край дальше R
+  // ---- ТРЮК-КИКЕР (b42): рампа-трамплин, подбрасывает в воздух ∝ скорости → крутишь САЛЬТО наклоном (флипы уже в очках). НЕТ пропасти — летишь прямо = безопасно, крутишь = риск/награда ----
+  kickEvery:    340,     // 35. ср. дистанция между трамплинами (м); 0 = выкл. Чистая вариативность/драйв, не препятствие
+  kickStart:    170,     // 36. первый трамплин после (м)
+  kickH:        22,      // 37. крутизна рампы кикера (рост px/узел, 3 узла): визуальный трамплин. Взлёт эмерджентный + поп ниже
+  kickPop:      0.6,     // 38. ПОП кикера: vy = −(vx×это + 4), кап −11 (рампа ШВЫРЯЕТ вверх — награда, НЕ смерть). База 4 + высота рампы → стабильный воздух на флип, но кап держит НА ЭКРАНЕ (видно посадку). БОЛЬШЕ = выше
 };
 // ---- физика байка (двухколёсная: тангаж → вилли / loop-out / endo + импульс); ключевые крутилки тянет из TUNE ----
 const PHYS={ GRAV:TUNE.gravity, DX:26, DY:27.5,           // гравитация(↑TUNE), полубаза, высота ЦТ над колёсами
@@ -359,6 +371,7 @@ function reset(){
   evGenType=''; evGenLeft=0; nextEvGenX=3000; curEvType=''; evBanner=''; evBannerT=0; evGlow=0; evBonus=0; lastWarnX=-1; evWarnType='';   // first event ~300m (onboarding breathing room)
   gapLeft=0; nextGapX=TUNE.gapStart*10; gapLandFlat=0; overGap=false; gapLipNow=0; gapFarX=0; gapFxT=0; gapRunup=0; gapRampLeft=0;   // GAPS: first chasm after gapStart
   ledgeRunup=0; ledgeStepsLeft=0; ledgeTopY=0; nextLedgeX=TUNE.ledgeStart*10;   // LEDGES: first step after ledgeStart
+  kickRunup=0; kickRampLeft=0; kickLandLeft=0; nextKickX=TUNE.kickStart*10;   // KICKERS: first trick ramp after kickStart
   for(let i=0;i<Math.ceil(W/STEP)+8;i++)genSeg();
   bike={x:60,y:terrainAt(60).y-27.5,vx:0,vy:0,ang:terrainAt(60).ang,angV:0,onG:true,wheel:0};
   cam={x:bike.x-W*0.5,y:bike.y-H*0.46}; t=0; coins=0; dist=0; lastMile=0; newDepth=false; wipe=0; screen='play'; shake=0; flash=0; popT=0; daycycle=Math.random()*6.28;
@@ -512,8 +525,10 @@ function update(){
     else { const la=terrainAt(bike.x+Math.max(20,bike.vx*6)).ang; bike.angV += (clamp(la,-0.6,0.6)-bike.ang)*0.03; }   // no input → auto-level to the landing slope (clamped so a chasm sample can't spin you) — lands on its wheels
     bike.wheel += 0.3;
   }
+  // ---- TRICK KICKER lip: POP up ∝ speed (the ramp throws you — reward launch for flips; fly straight = safe, flip = risk/reward; NO chasm = no fall) ----
+  if(grounded && !rearBal && terr[ci0] && terr[ci0].kick && bike.vx>2.5){ bike.vy=Math.max(-11, -bike.vx*TUNE.kickPop-4); grounded=false; airT=0; nearMissed=false; gflash=Math.max(gflash,0.35); shake=Math.max(shake,4); sfxAir(); for(let e=0;e<6;e++)dust.push({x:bike.x-8+Math.random()*16,y:bike.y+22,vx:(Math.random()-0.5)*3,vy:-Math.random()*2.5,life:1,r:Math.random()*2.4+1}); }   // base -4 + lip height = consistent air for a flip; cap -11 so you stay ON-SCREEN (see the landing)
   bike.vx*=P.DRAG; if(bike.vx<0)bike.vx*=0.95;                          // drag (emergent top speed, no hard cap) + roll-back resistance
-  bike.angV*=P.ANGD;
+  bike.angV *= (!grounded && Math.abs(leanX)>0.06) ? 0.94 : P.ANGD;     // FREE SPIN in the air when actively flipping (light damping → a full flip completes in the kicker air); ground + passive air keep full damping for stability/landing
   if(bike.angV>P.AVMAX)bike.angV=P.AVMAX; else if(bike.angV<-P.AVMAX)bike.angV=-P.AVMAX;
   bike.x+=bike.vx; bike.ang+=bike.angV;
   if(rearBal){ bike.y = balSR + DX*Math.sin(bike.ang) - DY*Math.cos(bike.ang); bike.vy=0; }   // CG pinned to the rear contact (pendulum) — teeters on the wheel, can't fly up
@@ -715,6 +730,11 @@ function draw(){
     ctx.strokeStyle='rgba(150,225,255,0.92)'; ctx.lineWidth=3.4; ctx.shadowColor='#6cf'; ctx.shadowBlur=10;
     ctx.beginPath(); ctx.moveTo(c.x,c.topY-2); ctx.lineTo(c.x,baseY2+4); ctx.stroke(); ctx.shadowBlur=0;
     if(c.x>bike.x){ ctx.fillStyle='rgba(170,228,255,'+(0.5+0.4*Math.sin(t*0.3))+')'; ctx.textAlign='center'; ctx.font='800 13px ui-monospace,monospace'; ctx.fillText('▲ УСТУП',c.x,c.topY-22); ctx.textAlign='left'; } }
+  // ---- TRICK KICKER: amber lip glow + "🎢 САЛЬТО!" telegraph (launch & flip) ----
+  for(let i=i0;i<=i1;i++){ const c=terr[i]; if(!c||!c.kick||c.x<=bike.x)continue;
+    ctx.strokeStyle='rgba(255,200,90,0.95)'; ctx.lineWidth=3.6; ctx.shadowColor='#ffb040'; ctx.shadowBlur=12;
+    ctx.beginPath(); ctx.moveTo(c.x-2,c.y-3); ctx.lineTo(c.x-2,c.y+10); ctx.stroke(); ctx.shadowBlur=0;
+    ctx.fillStyle='rgba(255,210,110,'+(0.55+0.45*Math.sin(t*0.4))+')'; ctx.textAlign='center'; ctx.font='800 15px ui-monospace,monospace'; ctx.fillText('🎢 САЛЬТО!',c.x,c.y-26); ctx.textAlign='left'; }
   // hazards: red spiked sell-wall barriers on the track
   for(let i=i0;i<=i1;i++){ const c=terr[i]; if(c&&c.haz&&!c.hazHit){ ctx.save(); ctx.translate(c.x,c.y);
     ctx.fillStyle='rgba(255,60,80,0.22)'; ctx.strokeStyle='rgba(255,72,92,0.95)'; ctx.lineWidth=2; ctx.shadowColor='#ff3050'; ctx.shadowBlur=10;
