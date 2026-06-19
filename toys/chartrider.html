@@ -46,7 +46,7 @@ function lerp(a,b,t){return a+(b-a)*t;} function clamp(v,a,b){return v<a?a:v>b?b
 // false → full game. Single switch. Systems are GATED, never deleted.
 const CORE_TEST_MODE = true;
 // build stamp — bump on every change so a phone refresh can confirm it loaded fresh code (cache!)
-const BUILD = '2026-06-19 · b37';
+const BUILD = '2026-06-19 · b38';
 
 // ---------- procedural market terrain ----------
 // height map sampled every STEP px; generated forward as we ride. Market character:
@@ -125,7 +125,7 @@ function genSeg(){
     else if(gapLeft>0){ isGap=true; gapLip=gapBaseY; close=H*0.99; gapLeft--; if(gapLeft<=0){ walk=gapBaseY-baseY; gapLandFlat=2; } }   // chasm floor; land at the run-up bottom (lower than the lip)
     else if(gapLandFlat>0){ close=lerp(close, gapBaseY, 0.7); walk=close-baseY; gapLandFlat--; }   // flatten the landing
     else if(ledgeRunup>0){ close=clamp(ledgePrevY,70,H*0.92); walk=close-baseY; ledgeRunup--; if(ledgeRunup<=0){ ledgeStepsLeft=TUNE.ledgeStepN*3; ledgeTopY=ledgePrevY; } }   // LEDGE flat run-up: set up the wheelie (fair — you can prepare)
-    else if(ledgeStepsLeft>0){ const isRiser=(ledgeStepsLeft%3===0); if(isRiser){ ledgeTopY=clamp(ledgeTopY-TUNE.ledgeH,70,H*0.86); isStep=true; stepTop=ledgeTopY; } close=ledgeTopY; walk=close-baseY; ledgeStepsLeft--; }   // riser (the vertical step — bypasses climbCap) + 2-node tread (so the bike seats between walls). step nodes are tagged; loft the front or bonk
+    else if(ledgeStepsLeft>0){ const pos=(TUNE.ledgeStepN*3-ledgeStepsLeft)%3; if(pos<2){ ledgeTopY=clamp(ledgeTopY-TUNE.ledgeH*0.5,70,H*0.86); if(pos===0){ isStep=true; stepTop=ledgeTopY; } } close=ledgeTopY; walk=close-baseY; ledgeStepsLeft--; }   // step = 2-node RISER (~0.6rad, rideable on momentum — not a vertical wall) + 1-node tread; first node tagged for the ▲ УСТУП telegraph
     else if(TUNE.gapEvery>0 && genX>=nextGapX && genX>TUNE.gapStart*10 && terr.length>20 && regime!=='pump' && regime!=='crash' && lastRegime!=='bull'){   // schedule a gap FEATURE (not mid-climb); the run-up handles the takeoff
       gapPrevY=close; gapRunup=5; nextGapX=genX + TUNE.gapEvery*10 + Math.random()*1400;   // start: descent run-up first
     }
@@ -175,7 +175,7 @@ const TUNE = {
   hillHeight:   80,      // 9c. высота плавной волны рельефа (вторичная к mountain-горам). БОЛЬШЕ = крупнее перекаты
   rockGarden:   0.40,    // 9d. РОК-ГАРДЕН (реальное хард-эндуро: техничный тряский участок) — доля секций-«камней» vs гладких фич (0.30→0.40, больше рваности — график не сплошная линия). 0 = выкл
   rockSize:     5,       // 9e. амплитуда тряски рок-гардена (px). 9→5: мельче → байк ТЕЧЁТ по камням (не подскакивает = не «лагает/зависает»), но трясёт. БОЛЬШЕ = злее/больше подскоков
-  stick:        2.2,     // 9f. ЛИПУЧКА к трассе (px): держит на мелких неровностях (анти-джиттер). Реальные отрывы даёт launch, не это
+  stick:        1.1,     // 9f. ЛИПУЧКА к трассе (px): порог отрыва. 2.2→1.1 = байк НЕ приклеен — на скорости слетает с бугров/гребней/рамп САМ (эмерджентно, ∝ скорости). Ниже = меньше клея/больше прыгуч; выше = глаже но приклеенней
   launch:       2.5,     // 9g. ОТРЫВ С ГРЕБНЯ (центробежный): на выпуклости при скорости (vx²·кривизна > launch) байк СЛЕТАЕТ по касательной — физ-объект, не приклеен. Симой: пологое ~16% воздуха, резкие гребни ~31%, рок-гарден ~46%. НИЖЕ = чаще прыгает; ВЫШЕ = липче
   obstacleFreq: 1.0,     // 10. частота препятствий — множитель плотности sell-wall (×1 = как сейчас, 0 = нет)
   easeInDist:   350,     // 11. «мягкий въезд» (м): за сколько loop-forgiveness + волна доходят до полной (короче = скилл нужен рано)
@@ -465,41 +465,31 @@ function update(){
   const P=PHYS, DX=P.DX, DY=P.DY, wasG=bike.onG;
   // --- sample terrain under both wheels → rest slope + ground-follow target ---
   const gyr=terrainAt(bike.x-DX).y; let gyf=terrainAt(bike.x+DX).y;
-  const _gi=Math.floor((bike.x+DX)/STEP), gapNear=!!((terr[_gi]&&terr[_gi].gap)||(terr[_gi+1]&&terr[_gi+1].gap));   // chasm within ~1.5 nodes ahead?
-  // LEDGE ahead? you must LOFT the front wheel above the step top (wheelie) to climb on — else the bike stays at base & bonks the wall
-  let stepNear=false, stepTopY=0, stepFaceX=0, stepIdx=-1;
-  for(let k=_gi-1;k<=_gi+1;k++){ const c=terr[k]; if(c&&c.step&&!c.stepDone){ stepNear=true; stepTopY=c.topY; stepFaceX=c.x; stepIdx=k; break; } }
-  let stepLofted=false;
-  if(stepNear){ const fwy0=bike.y+Math.sin(bike.ang)*DX+Math.cos(bike.ang)*DY; stepLofted=(fwy0<=stepTopY+TUNE.ledgeGrab); }   // front wheel reaches the step top (nose-up raises it)
-  if(gapNear || (stepNear && !stepLofted)) gyf=gyr;                   // gap lip → launch off, not into; un-lofted ledge → hold the front at base (it can't ride up the vertical wall). BUGFIX origin: front sample read the chasm floor as a down-slope before the lip.
-  const supA=Math.atan2(gyf-gyr, 2*DX), targetY=(gyr+gyf)*0.5 - DY;   // slope the bike rests at; CG height when seated
+  const ci0=Math.floor(bike.x/STEP);
+  const _gi=Math.floor((bike.x+DX)/STEP), gapNear=!!((terr[_gi]&&terr[_gi].gap)||(terr[_gi+1]&&terr[_gi+1].gap));   // chasm just ahead (telegraph + jump coyote)
+  // EMERGENT PHYSICS: the bike is a projectile, the ground a floor it LEAVES naturally. FRONT WHEEL OVER A SHARP DROP (chasm / cliff edge) = no front support → ride/pivot on the REAR and fly off the edge KEEPING its ramp momentum (don't read the void as a down-ramp & dive in; don't glue to the line).
+  const frontDrop = (gyf - gyr > STEP*1.6);
+  if(frontDrop) gyf=gyr;
+  const supA=Math.atan2(gyf-gyr, 2*DX), targetY=(gyr+gyf)*0.5 - DY;   // wheel slope + seated CG height
   bike.vy += P.GRAV;
-  let grounded = (bike.y + bike.vy >= targetY - P.STICK);             // cling to the ground unless it drops away faster than STICK (kills micro-launches, keeps real ramps)
-  if(grounded) coyote=gapNear?TUNE.gapCoyote:8; else if(coyote>0) coyote--;   // coyote grace: still jumpable after a gap edge launches you early — WIDER at gap lips (TUNE.gapCoyote) so a late swipe still fires
+  let grounded = !frontDrop && (bike.y + bike.vy >= targetY - P.STICK);   // on the floor unless momentum lifts you over a crest (EMERGENT launch) or the ground drops away (frontDrop) — this un-glues the bike
+  if(grounded) coyote=gapNear?TUNE.gapCoyote:8; else if(coyote>0) coyote--;   // coyote grace, wider at gap lips
   if(jumpCd>0)jumpCd--;
-  if(jumpReq>0){ if((grounded||coyote>0) && jumpCd<=0){ bike.vy=-P.JUMP; grounded=false; coyote=0; jumpReq=0; jumpCd=16; airT=0; nearMissed=false; bike.angV*=0.3; jumpGrace=1; shake=Math.max(shake,3); for(let e=0;e<7;e++)dust.push({x:bike.x-10+Math.random()*20,y:bike.y+24,vx:(Math.random()-0.5)*2.4,vy:-Math.random()*2,life:1,r:Math.random()*2.4+1}); sfxAir(); } else jumpReq--; }   // on-demand hop (buffered + coyote)
-  // CENTRIPETAL LAUNCH: at speed over a convex crest/kicker the bike can't hug the curve → it FLIES OFF (a real physics object, not glued to the line) — this is "байк не приклеен"
-  if(grounded && bike.vx>2.5){ const lai=Math.floor((bike.x+DX*1.8)/STEP), gapAhead=gapNear||(terr[lai]&&terr[lai].gap)||(terr[lai+1]&&terr[lai+1].gap);   // never on a gap edge — gaps have their own kicker
-    if(!gapAhead && !stepNear){ const slA=terrainAt(bike.x+DX*1.8).ang, convex=slA-supA;
-      if(convex>0.05 && bike.vx*bike.vx*convex > P.LAUNCH){ grounded=false; bike.vy = bike.vx*Math.tan(clamp(supA,-1.2,0.1)) - convex*bike.vx*0.38; airT=0; nearMissed=false; } } }   // small skip-hops over bumps (not big air → controllable landings)
+  if(jumpReq>0){ if((grounded||coyote>0) && jumpCd<=0){ bike.vy=-P.JUMP; grounded=false; coyote=0; jumpReq=0; jumpCd=16; airT=0; nearMissed=false; bike.angV*=0.3; jumpGrace=1; shake=Math.max(shake,3); for(let e=0;e<7;e++)dust.push({x:bike.x-10+Math.random()*20,y:bike.y+24,vx:(Math.random()-0.5)*2.4,vy:-Math.random()*2,life:1,r:Math.random()*2.4+1}); sfxAir(); } else jumpReq--; }   // on-demand hop (buffered + coyote) — adds height when momentum alone won't clear
   if(grounded){
-    bike.y = targetY; bike.vy = gapNear ? -bike.vx*TUNE.gapKick : bike.vx*Math.tan(clamp(supA,-1.2,1.2)); // gap lip = a RAMP: launch ∝ your speed (real physics). NOT enough at flat speed → you must JUMP to clear; come in fast off a descent → momentum carries you. No more free auto-clear.
-    bike.vx += P.GACC*Math.sin(supA);                                  // gravity along slope = real momentum (climb bleeds, descent builds)
+    bike.y = targetY; bike.vy = bike.vx*Math.tan(clamp(supA,-1.3,1.3));   // follow the slope — the LAUNCH is EMERGENT: when the slope eases at a crest / the ground drops, this carried vy lifts the bike off (grounded goes false). Faster = bigger launch. No scripted kick.
+    bike.vx += P.GACC*Math.sin(supA);                                     // gravity along slope (climb bleeds speed, descent builds) — speed is situational, like real life
     if(down) bike.vx += P.POW*BK().accel;
     if(brake) bike.vx *= P.BRK;
-    bike.angV += -P.GP*Math.sin(bike.ang-supA)                         // self-stabilize toward the slope
-               + leanX*P.LEANGND                                        // player LEAN (drag L/R): right = nose down, left = nose up — the balance control
-               + bike.vx*Math.sin(supA)*P.DESTAB;                       // speed×slope destabilizes (fast climb kicks the nose UP, descent DOWN) → counter it with lean
-    if(down && supA<-0.22) bike.angV += -P.ENGTQ*P.CLIMB*(-supA-0.22)*clamp(bike.vx/7,0.4,1.4);   // ENDURO: power POPS the front on a STEEP climb → feather the gas + lean forward (weight) to keep climbing, or loop out
+    bike.angV += -P.GP*Math.sin(bike.ang-supA) + leanX*P.LEANGND + bike.vx*Math.sin(supA)*P.DESTAB;   // self-stabilize to slope + player lean + speed×slope destabilize (the balance skill)
+    if(down && supA<-0.22) bike.angV += -P.ENGTQ*P.CLIMB*(-supA-0.22)*clamp(bike.vx/7,0.4,1.4);   // power pops the front on a steep climb → weight forward (lean) or loop out
     bike.wheel += bike.vx*0.08;
     if(bike.vx>3&&t%2===0)dust.push({x:bike.x-14,y:bike.y+18,vx:-bike.vx*0.18-Math.random(),vy:-Math.random()*1.2,life:1,r:Math.random()*2+1});
   } else {
-    bike.y += bike.vy;                                                 // airborne projectile
-    if(bike.vy>0 && bike.y>targetY && !(terr[Math.floor(bike.x/STEP)]&&terr[Math.floor(bike.x/STEP)].gap)) bike.y=targetY;   // never punch THROUGH the surface on a fast landing (the 1-frame "sank into the track"); gaps fall freely
-    if(Math.abs(leanX)>0.06){ bike.angV += leanX*P.LEANAIR; }                                                       // analog air rotation via LEAN (drag) — flips & landing aim; no more gas-coupled flip
-    else if(overGap||gapNear){ bike.angV += (0-bike.ang)*0.06; }                                                     // jumping off a gap lip / over a chasm + not steering → actively FLATTEN so you take off & land on your wheels (kills the gap-jump loop/crash; you can still flip by holding lean)
-    else if(jumpGrace){ const la=terrainAt(bike.x+Math.max(20,bike.vx*6)).ang; bike.angV+=(la-bike.ang)*0.02; }     // just jumped, not steering → clean controllable arc
-    else { const la=terrainAt(bike.x+Math.max(20,bike.vx*6)).ang; bike.angV+=(la-bike.ang)*0.025; }                 // no input → auto-level to the landing slope (un-commanded crest launches land on their wheels; commanded air = leanX for flips)
+    bike.y += bike.vy;                                                 // airborne projectile (off ramps, crests, cliffs, gaps — all the SAME emergent launch)
+    if(bike.vy>0 && bike.y>targetY && !frontDrop && !(terr[ci0]&&terr[ci0].gap)) bike.y=targetY;   // land cleanly on the surface; but fall FREELY off cliff edges & into chasms
+    if(Math.abs(leanX)>0.06){ bike.angV += leanX*P.LEANAIR; }                                       // hold lean = flip / aim the landing
+    else { const la=terrainAt(bike.x+Math.max(20,bike.vx*6)).ang; bike.angV += (clamp(la,-0.6,0.6)-bike.ang)*0.03; }   // no input → auto-level to the landing slope (clamped so a chasm sample can't spin you) — lands on its wheels
     bike.wheel += 0.3;
   }
   bike.vx*=P.DRAG; if(bike.vx<0)bike.vx*=0.95;                          // drag (emergent top speed, no hard cap) + roll-back resistance
@@ -532,31 +522,21 @@ function update(){
   if(grounded && screen==='play'){ if(rel<-loopThresh) wipeout('loop'); else if(rel>loopThresh && supA>-0.3) wipeout('endo'); }   // ENDO (nose digs forward) only on flat/descent — on a steep CLIMB the hill is in front, you can't nose-dive, so weight-forward is SAFE (only LOOP-backward is the risk). matches real enduro
   // coins along terrain
   const magR=36*(1+0.40*upgLvl('mag')); const ci=Math.floor(bike.x/STEP); for(let k=ci-3;k<=ci+3;k++){ const c=terr[k]; if(c&&c.coin){ const cx=c.x,cy=c.y-30; if(Math.hypot(cx-bike.x,cy-bike.y)<magR){ c.coin=false; coins++; sfxCoin(); boost=Math.min(1,(boost||0)+0.04); const gv=Math.round(25*mult); pnl+=gv; floatPop(cx,cy,'+$'+gv,'#ffd678'); for(let z=0;z<8;z++)parts.push({x:cx,y:cy,vx:(Math.random()-0.5)*3.5,vy:-Math.random()*3-1,life:1,gold:1,r:2});} } }
-  // ---- GAPS: jump them. The FRONT WHEEL can catch the far edge & scrabble up (enduro) — you only fall in on a real miss ----
-  { const gn=terr[ci];
+  // ---- GAPS are EMERGENT: you fly off the kicker as a projectile (∝ your speed). Reach the far side → land. Come up short → fall into the pit (visible & fair — NO edge-instadeath). Near-miss catches the far edge. ----
+  { const gn=terr[ci0];
     if(gn && gn.gap){
-      let fe=ci; while(terr[fe]&&terr[fe].gap)fe++; gapFarX=(terr[fe]?terr[fe].x:fe*STEP); gapLipNow=gn.lipY; overGap=true;   // airborne over the chasm
-      const landY=terr[fe]?terr[fe].y:gn.lipY, fwx=bike.x+DX, fwy=bike.y+DY;                                      // landing LIP height + FRONT wheel position
-      if(!bike.onG && bike.vy>=-1 && fwx>=gapFarX-24){                                                            // front wheel reaching the far edge (wider reach = catch near-misses)
-        if(fwy>landY-24 && fwy<landY+96){                                                                        // wheel within reach of the lip → GRAB it & scrabble up (generous window: a jump that ALMOST makes it still catches the edge)
-          bike.x=gapFarX+4; bike.y=terrainAt(bike.x).y-DY; bike.vy=0; bike.onG=true; bike.vx*=0.8; bike.angV*=0.45; overGap=false;
-          gapFxT=1; gapFxMsg='ЗАЦЕПИЛ КРАЙ!'; boost=Math.min(1,(boost||0)+0.12); gflash=0.45; shake=Math.max(shake,6); sfxAir(); buzz(16);
-        } else if(fwy>=landY+96 && screen==='play') wipeout('gap');                                              // front wheel below the lip's reach = missed → fell in
-      } else if(screen==='play' && (bike.onG || bike.y>gn.lipY+95)) wipeout('gap');                              // grounded on the chasm floor or fell deep before reaching the edge
-    } else if(overGap && screen==='play'){
-      if(!bike.onG && bike.x>gapFarX+STEP){ overGap=false; boost=Math.min(1,(boost||0)+0.2); shake=Math.max(shake,7); gflash=0.6; gapFxT=1; gapFxMsg='ПРОПАСТЬ ✓'; sfxAir(); buzz(22); }   // flew clear past the far edge
-      else if(bike.onG){ overGap=false; boost=Math.min(1,(boost||0)+0.18); shake=Math.max(shake,6); gflash=0.5; gapFxT=1; gapFxMsg='ПРОПАСТЬ ✓'; sfxAir(); buzz(20); }   // landed on the landing (cling caught it) → cleared
-    }
-    for(let k=ci+1;k<=ci+5;k++){ if(terr[k]&&terr[k].gap){ if(bike.onG) tut('gapj','⤴ ПРОПАСТЬ — ПРЫГНИ с кромки (или разгонись со спуска)'); break; } } }
-  // ---- LEDGES: loft the front to climb the step; commit the moment the front clears the lip, else stall / slam ----
-  if(stepNear){ const fwx=bike.x+DX;
-    if(fwx>=stepFaceX && (stepLofted || !bike.onG)){ if(terr[stepIdx])terr[stepIdx].stepDone=true;   // front lofted over the lip (or flew over) → mounted, rear drives up
-      if(bike.onG){ gapFxT=1; gapFxMsg='УСТУП ✓'; boost=Math.min(1,(boost||0)+0.07); gflash=0.4; shake=Math.max(shake,4); bike.vx*=0.92; sfxAir(); buzz(12); } }
-    else if(bike.onG && !stepLofted && fwx>=stepFaceX-2){
-      if(bike.vx>TUNE.ledgeSlam && dist>25 && screen==='play'){ if(terr[stepIdx])terr[stepIdx].stepDone=true; wipeout('ledge'); }   // slammed the wall fast without lofting → over the bars
-      else { bike.x=stepFaceX-DX-2; bike.vx*=0.4; }   // stall against the wall — loft the front to climb, or the dump closes in (real stakes, recoverable)
-    }
-    if(bike.onG && !stepLofted && fwx>=stepFaceX-STEP) tut('ledge','▲ УСТУП — ПОДНИМИ ПЕРЕД (наклон/держи ВЛЕВО)'); }
+      let fe=ci0; while(terr[fe]&&terr[fe].gap)fe++; gapFarX=(terr[fe]?terr[fe].x:fe*STEP); const landY=terr[fe]?terr[fe].y:gn.lipY; gapLipNow=gn.lipY; overGap=true;
+      const fwx=bike.x+DX, fwy=bike.y+DY;
+      if(fwx>=gapFarX-26 && fwy<landY+74 && bike.vy>=-2){                                                         // front wheel reached the far edge at a catchable height → land / scrabble up (generous near-miss catch)
+        bike.x=gapFarX+4; bike.y=terrainAt(bike.x).y-DY; bike.vy=Math.min(bike.vy,0); bike.onG=true; bike.vx*=0.86; bike.angV*=0.5; overGap=false;
+        gapFxT=1; gapFxMsg='ПРОПАСТЬ ✓'; boost=Math.min(1,(boost||0)+0.16); gflash=0.5; shake=Math.max(shake,6); sfxAir(); buzz(18);
+      } else if(screen==='play' && bike.y>gn.lipY+120){                                                          // the arc came up short → fell into the pit (only NOW, deep below the lip — not at the edge)
+        wipeout('gap');
+      }
+    } else if(overGap && screen==='play' && bike.x>gapFarX){ overGap=false; boost=Math.min(1,(boost||0)+0.16); shake=Math.max(shake,6); gflash=0.5; gapFxT=1; gapFxMsg='ПРОПАСТЬ ✓'; sfxAir(); buzz(18); }   // cleared past the far edge (landed naturally on the far side)
+    for(let k=ci0+1;k<=ci0+5;k++){ if(terr[k]&&terr[k].gap){ if(bike.onG) tut('gapj','⤴ РАЗГОНИСЬ со спуска — перелетишь; медленно → прыжок в добор'); break; } } }
+  // ---- LEDGES are EMERGENT: a step is just a short steep climb — ride it up on MOMENTUM (lean forward = climbs cleaner; too slow = you bog & lose speed, recoverable; never an instadeath). Telegraph only. ----
+  for(let k=ci0;k<=ci0+4;k++){ const c=terr[k]; if(c&&c.step&&!c.stepDone){ if(c.x<=bike.x) c.stepDone=true; else if(bike.onG) tut('ledge','▲ УСТУП — держи скорость, НАКЛОН ВПЕРЁД заедет чище'); break; } }
   // hazards: on the ground they wreck your momentum; clear them in the air to DODGE
   for(let k=ci-1;k<=ci+1;k++){ const c=terr[k]; if(c&&c.haz&&!c.hazHit&&Math.abs(c.x-bike.x)<15){ c.hazHit=true;
     if(bike.onG){ bike.vx*=0.4; shake=9; hitstop=3; mult=Math.max(1,mult-0.8); flash=0.45; popText('REKT!'); floatPop(bike.x,bike.y-28,'-темп','#ff6a86'); sfxCrash(); buzz(45); }
