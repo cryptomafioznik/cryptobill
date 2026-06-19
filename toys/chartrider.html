@@ -46,7 +46,7 @@ function lerp(a,b,t){return a+(b-a)*t;} function clamp(v,a,b){return v<a?a:v>b?b
 // false → full game. Single switch. Systems are GATED, never deleted.
 const CORE_TEST_MODE = true;
 // build stamp — bump on every change so a phone refresh can confirm it loaded fresh code (cache!)
-const BUILD = '2026-06-19 · b40';
+const BUILD = '2026-06-19 · b41';
 
 // ---------- procedural market terrain ----------
 // height map sampled every STEP px; generated forward as we ride. Market character:
@@ -175,7 +175,7 @@ const TUNE = {
   hillHeight:   80,      // 9c. высота плавной волны рельефа (вторичная к mountain-горам). БОЛЬШЕ = крупнее перекаты
   rockGarden:   0.40,    // 9d. РОК-ГАРДЕН (реальное хард-эндуро: техничный тряский участок) — доля секций-«камней» vs гладких фич (0.30→0.40, больше рваности — график не сплошная линия). 0 = выкл
   rockSize:     5,       // 9e. амплитуда тряски рок-гардена (px). 9→5: мельче → байк ТЕЧЁТ по камням (не подскакивает = не «лагает/зависает»), но трясёт. БОЛЬШЕ = злее/больше подскоков
-  stick:        1.1,     // 9f. ЛИПУЧКА к трассе (px): порог отрыва. 2.2→1.1 = байк НЕ приклеен — на скорости слетает с бугров/гребней/рамп САМ (эмерджентно, ∝ скорости). Ниже = меньше клея/больше прыгуч; выше = глаже но приклеенней
+  stick:        5.0,     // 9f. ЛИПУЧКА к трассе (px): порог отрыва. b41: посадка теперь на ОПОРНОЕ колесо (restY, анти-клип) — байк сам «едет по верхам» (отрыв ∝ скорости), поэтому stick 1.1→5.0 возвращает долю воздуха к ~11% (фил b40) без дрожи на мелочи. Ниже = прыгуч/твичово; выше = глаже/приклеенней
   launch:       2.5,     // 9g. ОТРЫВ С ГРЕБНЯ (центробежный): на выпуклости при скорости (vx²·кривизна > launch) байк СЛЕТАЕТ по касательной — физ-объект, не приклеен. Симой: пологое ~16% воздуха, резкие гребни ~31%, рок-гарден ~46%. НИЖЕ = чаще прыгает; ВЫШЕ = липче
   obstacleFreq: 1.0,     // 10. частота препятствий — множитель плотности sell-wall (×1 = как сейчас, 0 = нет)
   easeInDist:   350,     // 11. «мягкий въезд» (м): за сколько loop-forgiveness + волна доходят до полной (короче = скилл нужен рано)
@@ -475,8 +475,11 @@ function update(){
   const frontDrop = (gyf - gyr > STEP*1.6);
   if(frontDrop) gyf=gyr;
   const supA=Math.atan2(gyf-gyr, 2*DX), targetY=(gyr+gyf)*0.5 - DY;   // wheel slope + seated CG height
+  // CG height resting on the BINDING (lower) wheel given the actual pitch — equals targetY when pitch matches the slope, but never lets a wheel sink INTO the track on a steep slope + pitch mismatch (anti-clip)
+  const _ca=Math.cos(bike.ang), _sa=Math.sin(bike.ang);
+  const restY = Math.min(terrainAt(bike.x-DX*_ca-DY*_sa).y - (-DX*_sa+DY*_ca), terrainAt(bike.x+DX*_ca-DY*_sa).y - (DX*_sa+DY*_ca));
   bike.vy += P.GRAV;
-  let grounded = !frontDrop && (bike.y + bike.vy >= targetY - P.STICK);   // on the floor unless momentum lifts you over a crest (EMERGENT launch) or the ground drops away (frontDrop) — this un-glues the bike
+  let grounded = !frontDrop && (bike.y + bike.vy >= restY - P.STICK);   // on the floor unless momentum lifts you over a crest (EMERGENT launch) or the ground drops away (frontDrop) — this un-glues the bike
   if(grounded) coyote=gapNear?TUNE.gapCoyote:8; else if(coyote>0) coyote--;   // coyote grace, wider at gap lips
   if(jumpCd>0)jumpCd--;
   if(jumpReq>0){ if((grounded||coyote>0) && jumpCd<=0){ bike.vy=-P.JUMP; grounded=false; coyote=0; jumpReq=0; jumpCd=16; airT=0; nearMissed=false; bike.angV*=0.3; jumpGrace=1; shake=Math.max(shake,3); for(let e=0;e<7;e++)dust.push({x:bike.x-10+Math.random()*20,y:bike.y+24,vx:(Math.random()-0.5)*2.4,vy:-Math.random()*2,life:1,r:Math.random()*2.4+1}); sfxAir(); } else jumpReq--; }   // on-demand hop (buffered + coyote) — adds height when momentum alone won't clear
@@ -494,7 +497,7 @@ function update(){
     bike.angV += TUNE.balanceGrav*hl + leanX*P.LEANGND;                 // gravity tips the nose DOWN over the edge; lean BACK to hold the wheelie — modulate to balance (CG over the rear axle ≈ -0.76)
     bike.wheel += bike.vx*0.08;
   } else if(grounded){
-    bike.y = targetY; bike.vy = bike.vx*Math.tan(clamp(supA,-1.3,1.3));   // follow the slope — the LAUNCH is EMERGENT: when the slope eases at a crest / the ground drops, this carried vy lifts the bike off (grounded goes false). Faster = bigger launch. No scripted kick.
+    bike.y = restY; bike.vy = bike.vx*Math.tan(clamp(supA,-1.3,1.3));   // rest on the binding wheel (anti-clip). the LAUNCH is EMERGENT: when the slope eases at a crest / the ground drops, the carried vy lifts the bike off. Faster = bigger launch. No scripted kick.
     bike.vx += P.GACC*Math.sin(supA);                                     // gravity along slope (climb bleeds speed, descent builds) — speed is situational, like real life
     if(down) bike.vx += P.POW*BK().accel;
     if(brake) bike.vx *= P.BRK;
@@ -504,7 +507,7 @@ function update(){
     if(bike.vx>3&&t%2===0)dust.push({x:bike.x-14,y:bike.y+18,vx:-bike.vx*0.18-Math.random(),vy:-Math.random()*1.2,life:1,r:Math.random()*2+1});
   } else {
     bike.y += bike.vy;                                                 // airborne projectile (off ramps, crests, cliffs, gaps — all the SAME emergent launch)
-    if(bike.vy>0 && bike.y>targetY && !frontDrop && !(terr[ci0]&&terr[ci0].gap)) bike.y=targetY;   // land cleanly on the surface; but fall FREELY off cliff edges & into chasms
+    if(bike.vy>0 && bike.y>restY && !frontDrop && !(terr[ci0]&&terr[ci0].gap)) bike.y=restY;   // land cleanly on the binding wheel (anti-clip); but fall FREELY off cliff edges & into chasms
     if(Math.abs(leanX)>0.06){ bike.angV += leanX*P.LEANAIR; }                                       // hold lean = flip / aim the landing
     else { const la=terrainAt(bike.x+Math.max(20,bike.vx*6)).ang; bike.angV += (clamp(la,-0.6,0.6)-bike.ang)*0.03; }   // no input → auto-level to the landing slope (clamped so a chasm sample can't spin you) — lands on its wheels
     bike.wheel += 0.3;
