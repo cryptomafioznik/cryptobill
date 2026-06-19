@@ -46,7 +46,7 @@ function lerp(a,b,t){return a+(b-a)*t;} function clamp(v,a,b){return v<a?a:v>b?b
 // false → full game. Single switch. Systems are GATED, never deleted.
 const CORE_TEST_MODE = true;
 // build stamp — bump on every change so a phone refresh can confirm it loaded fresh code (cache!)
-const BUILD = '2026-06-19 · b38';
+const BUILD = '2026-06-19 · b39';
 
 // ---------- procedural market terrain ----------
 // height map sampled every STEP px; generated forward as we ride. Market character:
@@ -120,10 +120,10 @@ function genSeg(){
   // ---- GAPS (chasm you JUMP) + LEDGES (vertical step you LOFT the front onto): structured skill obstacles ----
   let isGap=false, gapLip=0, isStep=false, stepTop=0;
   if(!isEv){
-    if(gapRunup>0){ const k=6-gapRunup; close=clamp(gapPrevY + k*13, 70, H*0.86); walk=close-baseY; gapRunup--; if(gapRunup<=0){ gapRampBot=close; gapRampLeft=3; } }   // DESCENT run-up: build speed before the jump (always fast at the lip, even right after a climb)
-    else if(gapRampLeft>0){ const k=4-gapRampLeft; close=clamp(gapRampBot - k*22, 70, H*0.95); walk=close-baseY; gapRampLeft--; if(gapRampLeft<=0){ gapLeft=3+((Math.random()*2)|0); gapBaseY=gapRampBot; } }   // KICKER RAMP up (visible trampoline) → lip is the top; land back at the run-up bottom (below the lip = extra air)
-    else if(gapLeft>0){ isGap=true; gapLip=gapBaseY; close=H*0.99; gapLeft--; if(gapLeft<=0){ walk=gapBaseY-baseY; gapLandFlat=2; } }   // chasm floor; land at the run-up bottom (lower than the lip)
-    else if(gapLandFlat>0){ close=lerp(close, gapBaseY, 0.7); walk=close-baseY; gapLandFlat--; }   // flatten the landing
+    if(gapRunup>0){ const k=6-gapRunup; close=clamp(gapPrevY + k*11, 70, H*0.84); walk=close-baseY; gapRunup--; if(gapRunup<=0){ gapRampBot=close; gapRampLeft=3; } }   // DESCENT run-up: build speed before the gap
+    else if(gapRampLeft>0){ const k=4-gapRampLeft; close=clamp(gapRampBot - k*20, 70, H*0.95); walk=close-baseY; gapRampLeft--; if(gapRampLeft<=0){ gapLeft=2; gapBaseY=clamp(close+24,70,H*0.9); } }   // KICKER (3 nodes ~0.65rad) launches you UP ∝ speed → you ARC back to ~lip level; here `close` = the lip. Landing = lip+24 (a touch below, NOT a hole). Chasm 2 nodes → at cruise the arc clears CLEAN onto the runway (keeps momentum); slow → falls. Width = difficulty later via track variety
+    else if(gapLeft>0){ isGap=true; gapLip=gapBaseY; close=H*0.99; gapLeft--; if(gapLeft<=0){ walk=gapBaseY-baseY; gapLandFlat=5; } }   // chasm (3 nodes)
+    else if(gapLandFlat>0){ close=gapBaseY; walk=close-baseY; gapLandFlat--; }   // FLAT runway SNAPPED to the landing level (not lerp → clean predictable landing + recovery room, no crawl-out of a hole)
     else if(ledgeRunup>0){ close=clamp(ledgePrevY,70,H*0.92); walk=close-baseY; ledgeRunup--; if(ledgeRunup<=0){ ledgeStepsLeft=TUNE.ledgeStepN*3; ledgeTopY=ledgePrevY; } }   // LEDGE flat run-up: set up the wheelie (fair — you can prepare)
     else if(ledgeStepsLeft>0){ const pos=(TUNE.ledgeStepN*3-ledgeStepsLeft)%3; if(pos<2){ ledgeTopY=clamp(ledgeTopY-TUNE.ledgeH*0.5,70,H*0.86); if(pos===0){ isStep=true; stepTop=ledgeTopY; } } close=ledgeTopY; walk=close-baseY; ledgeStepsLeft--; }   // step = 2-node RISER (~0.6rad, rideable on momentum — not a vertical wall) + 1-node tread; first node tagged for the ▲ УСТУП telegraph
     else if(TUNE.gapEvery>0 && genX>=nextGapX && genX>TUNE.gapStart*10 && terr.length>20 && regime!=='pump' && regime!=='crash' && lastRegime!=='bull'){   // schedule a gap FEATURE (not mid-climb); the run-up handles the takeoff
@@ -527,9 +527,9 @@ function update(){
     if(gn && gn.gap){
       let fe=ci0; while(terr[fe]&&terr[fe].gap)fe++; gapFarX=(terr[fe]?terr[fe].x:fe*STEP); const landY=terr[fe]?terr[fe].y:gn.lipY; gapLipNow=gn.lipY; overGap=true;
       const fwx=bike.x+DX, fwy=bike.y+DY;
-      if(fwx>=gapFarX-26 && fwy<landY+74 && bike.vy>=-2){                                                         // front wheel reached the far edge at a catchable height → land / scrabble up (generous near-miss catch)
-        bike.x=gapFarX+4; bike.y=terrainAt(bike.x).y-DY; bike.vy=Math.min(bike.vy,0); bike.onG=true; bike.vx*=0.86; bike.angV*=0.5; overGap=false;
-        gapFxT=1; gapFxMsg='ПРОПАСТЬ ✓'; boost=Math.min(1,(boost||0)+0.16); gflash=0.5; shake=Math.max(shake,6); sfxAir(); buzz(18);
+      if(fwx>=gapFarX-20 && fwy>landY+10 && fwy<landY+72 && bike.vy>=-1){                                         // ONLY a near-miss (front wheel came in BELOW the runway top) → scrabble up the far edge. A clean clear (at/above the runway) flies PAST & lands naturally, keeping its momentum (no snap, no speed-kill).
+        bike.x=gapFarX+4; bike.y=terrainAt(bike.x).y-DY; bike.vy=Math.min(bike.vy,0); bike.onG=true; bike.vx*=0.97; bike.angV*=0.5; overGap=false;
+        gapFxT=1; gapFxMsg='ЗАЦЕПИЛ КРАЙ'; boost=Math.min(1,(boost||0)+0.12); gflash=0.45; shake=Math.max(shake,5); sfxAir(); buzz(14);
       } else if(screen==='play' && bike.y>gn.lipY+120){                                                          // the arc came up short → fell into the pit (only NOW, deep below the lip — not at the edge)
         wipeout('gap');
       }
