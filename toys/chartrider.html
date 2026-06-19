@@ -46,7 +46,7 @@ function lerp(a,b,t){return a+(b-a)*t;} function clamp(v,a,b){return v<a?a:v>b?b
 // false → full game. Single switch. Systems are GATED, never deleted.
 const CORE_TEST_MODE = true;
 // build stamp — bump on every change so a phone refresh can confirm it loaded fresh code (cache!)
-const BUILD = '2026-06-19 · b45';
+const BUILD = '2026-06-19 · b46';
 
 // ---------- procedural market terrain ----------
 // height map sampled every STEP px; generated forward as we ride. Market character:
@@ -520,7 +520,7 @@ function update(){
     if(bike.vx>3&&t%2===0)dust.push({x:bike.x-14,y:bike.y+18,vx:-bike.vx*0.18-Math.random(),vy:-Math.random()*1.2,life:1,r:Math.random()*2+1});
   } else {
     bike.y += bike.vy;                                                 // airborne projectile (off ramps, crests, cliffs, gaps — all the SAME emergent launch)
-    if(bike.vy>0 && bike.y>restY && !frontDrop && !(terr[ci0]&&terr[ci0].gap)) bike.y=restY;   // land cleanly on the binding wheel (anti-clip); but fall FREELY off cliff edges & into chasms
+    if(bike.vy>0 && bike.y>restY && !(terr[ci0]&&terr[ci0].gap)) bike.y=restY;   // ANTI-CLIP: never sink THROUGH solid ground — even a steep frontDrop DESCENT rests on the binding (rear) wheel. Only a real chasm node (.gap) lets you fall. Upward launches (vy<0) are untouched, so flying off ramps/edges still works (b46: was gated by !frontDrop → steep slopes plunged the bike through the track & it crawled back out)
     if(Math.abs(leanX)>0.06){ bike.angV += leanX*P.LEANAIR; }                                       // hold lean = flip / aim the landing
     else { const la=terrainAt(bike.x+Math.max(20,bike.vx*6)).ang; bike.angV += (clamp(la,-0.6,0.6)-bike.ang)*0.03; }   // no input → auto-level to the landing slope (clamped so a chasm sample can't spin you) — lands on its wheels
     bike.wheel += 0.3;
