@@ -46,7 +46,7 @@ function lerp(a,b,t){return a+(b-a)*t;} function clamp(v,a,b){return v<a?a:v>b?b
 // false → full game. Single switch. Systems are GATED, never deleted.
 const CORE_TEST_MODE = true;
 // build stamp — bump on every change so a phone refresh can confirm it loaded fresh code (cache!)
-const BUILD = '2026-06-19 · b43';
+const BUILD = '2026-06-19 · b44';
 
 // ---------- procedural market terrain ----------
 // height map sampled every STEP px; generated forward as we ride. Market character:
@@ -155,7 +155,7 @@ function terrainAt(x){ // interpolated height + slope at world x
 }
 
 // ---------- bike ----------
-let bike, cam, t, coins, dist, best, screen, wipe, parts, stars, dust, shake, flash, daycycle, trail, streaks, mult, pnl, bestPnl, airT, nearMissed, hitstop, gflash, floats, multPulse, maxMult, lean, rush, prevVx, wave, waveSpd, deathBy, boost, boosting, zone, biomeBanner, biomeBannerT, BSKY, BLINE, BRIDGE, lastMile, newDepth;
+let bike, cam, t, coins, dist, best, screen, wipe, parts, stars, dust, shake, flash, daycycle, trail, streaks, mult, pnl, bestPnl, airT, nearMissed, hitstop, gflash, floats, multPulse, maxMult, lean, rush, prevVx, wave, waveSpd, deathBy, boost, boosting, zone, biomeBanner, biomeBannerT, BSKY, BLINE, BRIDGE, lastMile, newDepth, camAir=0;
 try{best=+localStorage.getItem('cipher_run_best')||0;}catch(e){}
 try{bestPnl=+localStorage.getItem('cipher_best_pnl')||0;}catch(e){}
 let down=false, brake=false, jumpReq=0, jumpCd=0, coyote=0, jumpGrace=0, activeTouches={}, touchLowY={};   // jumpReq = buffered press; coyote/jumpGrace = jump grace windows; touchLowY = per-touch low point for swipe-up
@@ -197,7 +197,7 @@ const TUNE = {
   steepRamp:    600,     // 19. дистанция (м), за которую крутизна растёт steepEarly → terrainSteep (ещё жёстче дальше)
   climbCap:     0.88,    // 19b. КЭП КРУТИЗНЫ ПОДЪЁМА (рад): 0.82→0.88 — круче по просьбе (скилл вес-вперёд держит при climbLift 13). Ниже физ-потолка тяги 1.08. Спуски/пропасти не трогает. Замерено: реальные крутые серии ≤16 узлов → байк лезет ~2-3с (min vx ~2), без кувырка/затыка. Физ-потолок тяги HODLER ≈1.08 (выше — глохнет); 0.9 ползёт на искусств. 60-узл. стене >25с. БОЛЬШЕ = круче/злее (до ~0.95), МЕНЬШЕ = пологее
   leanGround:   0.028,   // 20. сила НАКЛОНА (драг влево-вправо): 0.020→0.028 — ЧУВСТВИТЕЛЬНЕЕ (от тебя больше зависит; быстрее в вилли/стоппи, но и перекрутить легче = скилл)
-  leanAir:      0.030,   // 21. сила наклона в воздухе — аналоговое вращение. b43: 0.050→0.030 (0.050 крутило ХАОТИЧНО/неуправляемо). Контролируемо ~0.14рад/кадр: видно вращение, ловишь посадку. Флип трудный (нужен большой взлёт) — это ОК, не хаос
+  leanAir:      0.040,   // 21. сила наклона в воздухе — вращение. b44: 0.030→0.040 (~0.16рад/кадр) — КОНТРОЛИРУЕМО (не хаос b42 0.5), но за БОЛЬШОЙ кикер-воздух (~45 кадров) сальто ДОКРУЧИВАЕТСЯ + успеваешь выровнять. Длинный воздух делает флип неспешным даже при чуть быстром спине
   destab:       0.0018,  // 22. дестабилизация скорость×склон: подъём кренит назад, спуск — носом вниз → держи наклоном (мягко, наклон легко перекрывает)
   // ---- УСТУПЫ/СТУПЕНИ («лестницы»): вертикальный шаг ВВЕРХ — переднее колесо ЗАЕЗЖАЕТ таймингом вилли (реал trials/эндуро) ----
   ledgeEvery:   300,     // 23. ср. дистанция между уступами (м); 0 = выкл. ЧАЩЕ gaps (420) — это базовый скилл-обстакл «подними перед», добавляет вызов аркадной езде
@@ -218,7 +218,7 @@ const TUNE = {
   kickEvery:    340,     // 35. ср. дистанция между трамплинами (м); 0 = выкл. Чистая вариативность/драйв, не препятствие
   kickStart:    170,     // 36. первый трамплин после (м)
   kickH:        22,      // 37. крутизна рампы кикера (рост px/узел, 3 узла): визуальный трамплин. Взлёт эмерджентный + поп ниже
-  kickPop:      0.6,     // 38. ПОП кикера: vy = −(vx×это + 4), кап −11 (рампа ШВЫРЯЕТ вверх — награда, НЕ смерть). База 4 + высота рампы → стабильный воздух на флип, но кап держит НА ЭКРАНЕ (видно посадку). БОЛЬШЕ = выше
+  kickPop:      0.7,     // 38. ПОП кикера: vy = −(vx×это + 14), кап −20 (рампа ШВЫРЯЕТ вверх — награда, НЕ смерть). БОЛЬШОЙ воздух чтоб докрутить сальто; камера зумит ОТ для обзора. БОЛЬШЕ = выше/дольше воздух
 };
 // ---- физика байка (двухколёсная: тангаж → вилли / loop-out / endo + импульс); ключевые крутилки тянет из TUNE ----
 const PHYS={ GRAV:TUNE.gravity, DX:26, DY:27.5,           // гравитация(↑TUNE), полубаза, высота ЦТ над колёсами
@@ -374,7 +374,7 @@ function reset(){
   kickRunup=0; kickRampLeft=0; kickLandLeft=0; nextKickX=TUNE.kickStart*10;   // KICKERS: first trick ramp after kickStart
   for(let i=0;i<Math.ceil(W/STEP)+8;i++)genSeg();
   bike={x:60,y:terrainAt(60).y-27.5,vx:0,vy:0,ang:terrainAt(60).ang,angV:0,onG:true,wheel:0};
-  cam={x:bike.x-W*0.5,y:bike.y-H*0.46}; t=0; coins=0; dist=0; lastMile=0; newDepth=false; wipe=0; screen='play'; shake=0; flash=0; popT=0; daycycle=Math.random()*6.28;
+  cam={x:bike.x-W*0.5,y:bike.y-H*0.46}; camAir=0; t=0; coins=0; dist=0; lastMile=0; newDepth=false; wipe=0; screen='play'; shake=0; flash=0; popT=0; daycycle=Math.random()*6.28;
   mult=1; pnl=0; airT=0; nearMissed=false; hitstop=0; gflash=0; multPulse=0; maxMult=1; flipCount=0; flipAcc=0;
   flipsTotal=0; topKmh=0; lastLandDiff=0; lean=0; rush=0; prevVx=0; down=false; brake=false; jumpReq=0; jumpCd=0; coyote=0; jumpGrace=0; activeTouches={}; leanX=0; ctrlId=null; leanKeyL=false; leanKeyR=false; wave=bike.x-W*0.95; waveSpd=0; deathBy=''; boost=0; boosting=0;
   zone=-1; biomeBanner=''; biomeBannerT=0; BSKY=['rgb(20,16,48)','rgb(46,30,78)','rgb(150,80,110)','rgb(230,150,110)']; BLINE='228,250,255'; BRIDGE='60,40,90'; rollMissions();
@@ -526,7 +526,7 @@ function update(){
     bike.wheel += 0.3;
   }
   // ---- TRICK KICKER lip: POP up ∝ speed (the ramp throws you — reward launch for flips; fly straight = safe, flip = risk/reward; NO chasm = no fall) ----
-  if(grounded && !rearBal && terr[ci0] && terr[ci0].kick && bike.vx>2.5){ bike.vy=Math.max(-11, -bike.vx*TUNE.kickPop-4); grounded=false; airT=0; nearMissed=false; gflash=Math.max(gflash,0.35); shake=Math.max(shake,4); sfxAir(); for(let e=0;e<6;e++)dust.push({x:bike.x-8+Math.random()*16,y:bike.y+22,vx:(Math.random()-0.5)*3,vy:-Math.random()*2.5,life:1,r:Math.random()*2.4+1}); }   // base -4 + lip height = consistent air for a flip; cap -11 so you stay ON-SCREEN (see the landing)
+  if(!rearBal && terr[ci0] && terr[ci0].kick && !terr[ci0].kicked && bike.vx>2.5){ terr[ci0].kicked=true; bike.vy=Math.min(bike.vy, Math.max(-20, -bike.vx*TUNE.kickPop-14)); grounded=false; airT=0; nearMissed=false; gflash=Math.max(gflash,0.4); shake=Math.max(shake,5); sfxAir(); for(let e=0;e<8;e++)dust.push({x:bike.x-8+Math.random()*16,y:bike.y+22,vx:(Math.random()-0.5)*3.2,vy:-Math.random()*2.8,life:1,r:Math.random()*2.6+1.2}); }   // BIG air (base -14, cap -20) so a controllable spin completes a flip; fires once at the lip even if the ramp already launched you (no `grounded` requirement); camera zooms OUT to keep it on-screen
   bike.vx*=P.DRAG; if(bike.vx<0)bike.vx*=0.95;                          // drag (emergent top speed, no hard cap) + roll-back resistance
   bike.angV*=P.ANGD;                                                   // angular damping — CONTROLLABLE rotation (b42's free-spin in air span the bike chaotically per playtest → reverted)
   if(bike.angV>P.AVMAX)bike.angV=P.AVMAX; else if(bike.angV<-P.AVMAX)bike.angV=-P.AVMAX;
@@ -610,8 +610,10 @@ function update(){
   if(bike.x - wave > leadCap) wave = bike.x - leadCap;
   if(screen==='play' && (bike.x-wave)<W*0.45 && dist>140) tut('wave','◀ ДАМП НАСТИГАЕТ — ГАЗУЙ, НЕ ГЛОХНИ');
   if(wave >= bike.x-18) wipeout('wave');
-  // camera
-  cam.x=bike.x-W*0.32; cam.y=lerp(cam.y,bike.y-H*0.52,TUNE.camFollow);
+  // camera — on BIG AIR (trick kicker) frame higher + follow faster + zoom out (draw) so the high launch AND the landing stay on-screen
+  const _airH = bike.onG ? 0 : Math.max(0, terrainAt(bike.x).y-(bike.y+DY));
+  camAir = lerp(camAir, clamp(_airH/280,0,1), _airH>camAir*280?0.25:0.08);   // rise fast into big air, ease out smoothly
+  cam.x=bike.x-W*0.32; cam.y=lerp(cam.y, bike.y-H*(0.52-camAir*0.10), lerp(TUNE.camFollow,0.45,camAir));   // fast follow on big air so the camera tracks the launch+fall (bike stays framed); zoom-out (draw) widens the view
   for(const p of parts){p.x+=p.vx;p.y+=p.vy;p.vy+=0.12;p.vx*=0.97;p.life-=0.03;} parts=parts.filter(p=>p.life>0);
   for(const d of dust){d.x+=d.vx;d.y+=d.vy;d.vy+=0.04;d.life-=0.04;} dust=dust.filter(d=>d.life>0);
   shake*=0.85; flash*=0.9;
@@ -690,7 +692,7 @@ function draw(){
   ridgeLayer(0.55,60,H*0.66,'rgba('+BRIDGE+',0.7)');
 
   // ---- the track: a real CANDLESTICK chart the bike rides across ----
-  const zoom=1-(rush||0)*0.05-(bike.onG?0:0.03);   // subtle zoom-out during a rush / big air
+  const zoom=1-(rush||0)*0.04-(camAir||0)*0.40;   // zoom OUT proportional to BIG AIR so a high kicker launch + the landing stay framed (was a tiny 3-5%)
   ctx.save(); ctx.translate(W/2,H/2); ctx.scale(zoom,zoom); ctx.translate(-W/2,-H/2);
   ctx.save(); ctx.translate(-cam.x,-cam.y);
   const x0=cam.x-STEP, x1=cam.x+W+STEP;
