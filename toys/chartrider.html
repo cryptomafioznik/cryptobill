@@ -46,7 +46,7 @@ function lerp(a,b,t){return a+(b-a)*t;} function clamp(v,a,b){return v<a?a:v>b?b
 // false → full game. Single switch. Systems are GATED, never deleted.
 const CORE_TEST_MODE = true;
 // build stamp — bump on every change so a phone refresh can confirm it loaded fresh code (cache!)
-const BUILD = '2026-06-20 · b56';
+const BUILD = '2026-06-20 · b57';
 
 // ---------- procedural market terrain ----------
 // height map sampled every STEP px; generated forward as we ride. Market character:
@@ -79,7 +79,7 @@ const EVENTS={
 let evGenType='', evGenLeft=0, nextEvGenX=2600;                 // terrain-generation scheduler
 let gapLeft=0, nextGapX=1800, gapBaseY=0, gapLandFlat=0, overGap=false, gapLipNow=0, gapFarX=0, gapFxT=0, gapFxMsg='';   // GAPS: gen + fair-landing + clear state; gapLipNow/gapFarX = lip level & far-edge x of the gap being crossed
 let gapRunup=0, gapRampLeft=0, gapPrevY=0, gapRampBot=0;   // gap FEATURE phases: descent run-up (build speed) → kicker ramp (launch) → chasm → land below the lip
-let ledgeRunup=0, ledgeStepsLeft=0, ledgePrevY=0, ledgeTopY=0, nextLedgeX=1400;   // LEDGE phases: flat run-up (set up the wheelie) → riser/tread steps you must LOFT the front to mount
+let ledgeRunup=0, ledgeStepsLeft=0, ledgePrevY=0, ledgeTopY=0, ledgeStepsThis=2, ledgeHThis=38, nextLedgeX=1400;   // LEDGE phases: flat run-up (set up the wheelie) → riser/tread steps you must LOFT the front to mount. b57: stepsThis/HThis randomize each ledge (variety: single small step ↔ tall 3-step staircase)
 let kickRunup=0, kickRampLeft=0, kickLandLeft=0, kickBaseY=0, kickRampBot=0, kickLandY=0, nextKickX=1700;   // TRICK KICKER phases: DESCENT run-up (bomb down → build speed, logical setup) → steep ramp UP (launches you ∝ speed for flips) → flat solid landing (no chasm)
 let whoopRunup=0, whoopLeft=0, whoopBaseY=0, whoopPhase=0, nextWhoopX=2200;   // WHOOPS (b53): flat approach → a rhythm section of rollers (skim/catch air at speed, roll over slow) — dynamic flow, no death
 let mudLeft=0, mudBaseY=0, nextMudX=2600;   // MUD (b54): a flat boggy section that SAPS speed (weight BACK = rear traction digs through) — honest obstacle, no death
@@ -127,8 +127,8 @@ function genSeg(){
     else if(gapRampLeft>0){ const k=4-gapRampLeft; close=clamp(gapRampBot - k*20, 70, H*0.95); walk=close-baseY; gapRampLeft--; if(gapRampLeft<=0){ gapLeft=2; gapBaseY=clamp(close+40,70,H*0.9); } }   // KICKER launches you UP ∝ speed. Landing = lip+40 (b44: was +24; the slower b43 cruise ~5.6 falls more, so the runway sits where the slower arc lands → CLEAN clear, the edge-grab/snap stays rare). Chasm 2 nodes
     else if(gapLeft>0){ isGap=true; gapLip=gapBaseY; close=H*0.99; gapLeft--; if(gapLeft<=0){ walk=gapBaseY-baseY; gapLandFlat=5; } }   // chasm (3 nodes)
     else if(gapLandFlat>0){ close=gapBaseY; walk=close-baseY; gapLandFlat--; }   // FLAT runway SNAPPED to the landing level (not lerp → clean predictable landing + recovery room, no crawl-out of a hole)
-    else if(ledgeRunup>0){ close=clamp(ledgePrevY,70,H*0.92); walk=close-baseY; ledgeRunup--; if(ledgeRunup<=0){ ledgeStepsLeft=TUNE.ledgeStepN*3; ledgeTopY=ledgePrevY; } }   // LEDGE flat run-up: set up the wheelie (fair — you can prepare)
-    else if(ledgeStepsLeft>0){ const pos=(TUNE.ledgeStepN*3-ledgeStepsLeft)%3; if(pos<2){ ledgeTopY=clamp(ledgeTopY-TUNE.ledgeH*0.5,70,H*0.86); if(pos===0){ isStep=true; stepTop=ledgeTopY; } } close=ledgeTopY; walk=close-baseY; ledgeStepsLeft--; }   // step = 2-node RISER (~0.6rad, rideable on momentum — not a vertical wall) + 1-node tread; first node tagged for the ▲ УСТУП telegraph
+    else if(ledgeRunup>0){ close=clamp(ledgePrevY,70,H*0.92); walk=close-baseY; ledgeRunup--; if(ledgeRunup<=0){ ledgeStepsLeft=ledgeStepsThis*3; ledgeTopY=ledgePrevY; } }   // LEDGE flat run-up: set up the wheelie (fair — you can prepare)
+    else if(ledgeStepsLeft>0){ const pos=(ledgeStepsThis*3-ledgeStepsLeft)%3; if(pos<2){ ledgeTopY=clamp(ledgeTopY-ledgeHThis*0.5,70,H*0.86); if(pos===0){ isStep=true; stepTop=ledgeTopY; } } close=ledgeTopY; walk=close-baseY; ledgeStepsLeft--; }   // b57: stepsThis/HThis vary per ledge → single small step or a tall multi-step staircase. step = 2-node RISER (rideable on momentum) + 1-node tread; first node tagged for ▲ УСТУП
     else if(kickRunup>0){ const k=6-kickRunup; close=clamp(kickBaseY + k*13, 70, H*0.88); walk=close-baseY; kickRunup--; if(kickRunup<=0){ kickRampBot=close; kickRampLeft=3; } }   // b51: DESCENT run-up (6 nodes, ~65px down ≥ ramp's 66px up → NET downhill into the launch) — bomb down to BUILD SPEED so the ramp always launches you well ≥ cruise (logical "necessary place", like a real moto setup), not a random flat where you arrive slow
     else if(kickRampLeft>0){ const k=4-kickRampLeft; close=clamp(kickRampBot - k*TUNE.kickH,70,H*0.95); walk=close-baseY; if(kickRampLeft===1)isKick=true; kickRampLeft--; if(kickRampLeft<=0){ kickLandLeft=6; kickLandY=clamp(kickRampBot,70,H*0.9); } }   // ramp UP from the run-up bottom — launches you airborne ∝ speed (do a FLIP!); last node = lip (tagged for the telegraph)
     else if(kickLandLeft>0){ close=clamp(kickLandY,70,H*0.9); walk=close-baseY; kickLandLeft--; }   // flat SOLID landing at the run-up level (no chasm — pure reward feature) → land the flip
@@ -139,7 +139,7 @@ function genSeg(){
       gapPrevY=close; gapRunup=5; nextGapX=genX + TUNE.gapEvery*10 + Math.random()*1400;   // start: descent run-up first
     }
     else if(TUNE.ledgeEvery>0 && genX>=nextLedgeX && genX>TUNE.ledgeStart*10 && terr.length>16 && regime!=='pump' && regime!=='crash' && lastRegime!=='bull' && close>H*0.45){   // schedule a LEDGE (not mid-climb, and only when low enough to have room to step up)
-      ledgePrevY=close; ledgeRunup=4; nextLedgeX=genX + TUNE.ledgeEvery*10 + Math.random()*1200;
+      ledgePrevY=close; ledgeStepsThis=1+Math.floor(Math.random()*2); ledgeHThis=TUNE.ledgeH*(0.7+Math.random()*0.5); ledgeRunup=4; nextLedgeX=genX + TUNE.ledgeEvery*10 + Math.random()*1100;   // b57: 1-2 steps, height 0.7-1.2× → variety (small kerb ↔ 2-step staircase) but stays climbable (taller 3-step staircases looped the loft)
     }
     else if(TUNE.kickEvery>0 && genX>=nextKickX && genX>TUNE.kickStart*10 && terr.length>16 && regime!=='pump' && regime!=='crash' && lastRegime!=='bull' && close>H*0.5){   // schedule a TRICK KICKER (not mid-climb; needs room ABOVE for the ramp)
       kickBaseY=close; kickRunup=6; nextKickX=genX + TUNE.kickEvery*10 + Math.random()*1000;   // b51: descent run-up (6 nodes); tighter spacing jitter since kickers are now the main feature
