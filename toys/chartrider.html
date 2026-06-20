@@ -46,7 +46,7 @@ function lerp(a,b,t){return a+(b-a)*t;} function clamp(v,a,b){return v<a?a:v>b?b
 // false → full game. Single switch. Systems are GATED, never deleted.
 const CORE_TEST_MODE = true;
 // build stamp — bump on every change so a phone refresh can confirm it loaded fresh code (cache!)
-const BUILD = '2026-06-19 · b54';
+const BUILD = '2026-06-20 · b55';
 
 // ---------- procedural market terrain ----------
 // height map sampled every STEP px; generated forward as we ride. Market character:
@@ -249,6 +249,8 @@ const TUNE = {
   mudStart:     250,     // 51. первый участок после (м)
   mudN:         6,       // 52. длина участка (узлы)
   mudDrag:      0.95,    // 53. сап скорости/кадр на грязи (НИЖЕ = сильнее засасывает; 0.93→0.95 чтоб не до стопа). Чистый момент-челлендж: нести скорость + газ
+  // ---- ПОСАДОЧНЫЙ АССИСТ (b55): у земли на снижении доворачиваем к склону + гасим спин → флипы приземляются (скилл = сделать флип, не пиксель-перфект). Юзер: «помогать приземляться» ----
+  landAssist:   95,      // 54. окно высоты над землёй (px), в котором включается ассист; ближе к земле = сильнее. БОЛЬШЕ = раньше/прощающе ловит флип, МЕНЬШЕ = жёстче (нужна точность)
 };
 // ---- физика байка (двухколёсная: тангаж → вилли / loop-out / endo + импульс); ключевые крутилки тянет из TUNE ----
 const PHYS={ GRAV:TUNE.gravity, DX:26, DY:27.5,           // гравитация(↑TUNE), полубаза, высота ЦТ над колёсами
@@ -535,7 +537,7 @@ function update(){
   if(jumpReq>0){ if((grounded||coyote>0) && jumpCd<=0){ bike.vy=-P.JUMP; grounded=false; coyote=0; jumpReq=0; jumpCd=16; airT=0; nearMissed=false; bike.angV*=0.3; jumpGrace=1; shake=Math.max(shake,3); for(let e=0;e<7;e++)dust.push({x:bike.x-10+Math.random()*20,y:bike.y+24,vx:(Math.random()-0.5)*2.4,vy:-Math.random()*2,life:1,r:Math.random()*2.4+1}); sfxAir(); } else jumpReq--; }   // on-demand hop (buffered + coyote) — adds height when momentum alone won't clear
   // ---- TWO-WHEEL BALANCE: slow at an edge → don't launch, TEETER on the rear wheel (front over the void, balance the wheelie by lean; the wheel edge catches the lip). Pendulum about the rear contact → can't fly up, real balance. ----
   let rearBal=false, balSR=0;
-  if(frontDrop && wasG && Math.abs(bike.vx)<TUNE.balanceV){
+  if(gapNear && frontDrop && wasG && Math.abs(bike.vx)<TUNE.balanceV){   // b55: teeter ONLY at a real chasm edge (gapNear). With gaps OFF this never fires → slow approach to a regular steep step no longer flips you over (bug: nose dived over the edge = endo) or freezes you (the 0.80 roll-arrest stuck you on slopes). Re-enables at real gaps if they return
     const rwx=bike.x - DX*Math.cos(bike.ang) - DY*Math.sin(bike.ang);   // rear wheel world x
     let sR=1e9; for(let d=-TUNE.wheelR; d<=TUNE.wheelR+0.1; d+=TUNE.wheelR){ const ty=terrainAt(rwx+d).y; if(ty<sR)sR=ty; }   // footprint-max: rest on the HIGHEST point within ±R → the wheel edge catches the lip
     if(sR < bike.y+150){ rearBal=true; balSR=sR; grounded=true; }       // rear still has a lip under it → balance; else it's over the void → fall (airborne path)
@@ -562,6 +564,7 @@ function update(){
     if(bike.vy>0 && bike.y>restY && !(terr[ci0]&&terr[ci0].gap)) bike.y=restY;   // ANTI-CLIP: never sink THROUGH solid ground — even a steep frontDrop DESCENT rests on the binding (rear) wheel. Only a real chasm node (.gap) lets you fall. Upward launches (vy<0) are untouched, so flying off ramps/edges still works (b46: was gated by !frontDrop → steep slopes plunged the bike through the track & it crawled back out)
     if(Math.abs(rShift)>0.06){ bike.angV += rShift*P.LEANAIR; }                                       // hold weight-shift = flip / aim the landing (rider mass rotates the bike in air)
     else { const la=terrainAt(bike.x+Math.max(20,bike.vx*6)).ang; bike.angV += (clamp(la,-0.6,0.6)-bike.ang)*0.03; }   // no input → auto-level to the landing slope (clamped so a chasm sample can't spin you) — lands on its wheels
+    { const skimG=terrainAt(bike.x).y-(bike.y+DY); if(bike.vy>0 && skimG>-4 && skimG<TUNE.landAssist){ const la=terrainAt(bike.x+Math.max(14,bike.vx*4)).ang; const k=clamp((TUNE.landAssist-Math.max(skimG,0))/TUNE.landAssist,0,1); bike.angV += (clamp(la,-0.75,0.75)-bike.ang)*0.17*k; bike.angV*=(1-0.10*k); } }   // b55: LANDING ASSIST — near the ground & descending, rotate toward the landing slope + damp spin (ramps up as you get closer) → flips LAND (the skill is the flip, not a pixel-perfect touchdown; user: "помогать приземляться, если не совсем ровно — всё равно сесть"). Doesn't touch the rising launch (vy>0 gate) or high-air flipping (skimG<landAssist gate)
     bike.wheel += 0.3;
   }
   // ---- TRICK KICKER lip: POP up ∝ speed (the ramp throws you — reward launch for flips; fly straight = safe, flip = risk/reward; NO chasm = no fall) ----
@@ -589,7 +592,7 @@ function update(){
   else if(!wasG && grounded){                                          // just landed
     jumpGrace=0;                                                       // jump arc over
     let diff=Math.abs(rel); lastLandDiff=diff;
-    if(airT>14 && diff>BK().grip+0.07*upgLvl('grip')){ wipeout('crash'); }   // crash only off a REAL jump; short hops over bumps/rocks just land (kills "caught the track & fell" on chatter)
+    if(airT>14 && diff>BK().grip+0.45+0.07*upgLvl('grip')){ wipeout('crash'); }   // b55: +0.45 forgiveness margin on top of the landing assist → a flip that lands NOT-perfectly-level still lands (user: that's OK, not a glitch). Crash only on a really sideways/upside-down touchdown
     else { sfxLand(); bike.angV*=0.3;
       if(airT>28){ const ab=Math.round(airT*2.2*mult); pnl+=ab; mult+=0.4; boost=Math.min(1,(boost||0)+0.3); multPulse=1; popText('BIG AIR  +$'+ab.toLocaleString('en-US')); floatPop(bike.x,bike.y-30,'+$'+ab,'#9ff0ff'); gflash=0.6; shake=7; sfxAir(); buzz(18); }
       else if(diff<0.16 && airT>10){ coins+=2; floatPop(bike.x,bike.y-34,'CLEAN +◆2','#aef0ff'); }
