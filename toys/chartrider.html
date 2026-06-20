@@ -46,7 +46,7 @@ function lerp(a,b,t){return a+(b-a)*t;} function clamp(v,a,b){return v<a?a:v>b?b
 // false → full game. Single switch. Systems are GATED, never deleted.
 const CORE_TEST_MODE = true;
 // build stamp — bump on every change so a phone refresh can confirm it loaded fresh code (cache!)
-const BUILD = '2026-06-20 · b57';
+const BUILD = '2026-06-20 · b58';
 
 // ---------- procedural market terrain ----------
 // height map sampled every STEP px; generated forward as we ride. Market character:
@@ -651,7 +651,7 @@ function update(){
   if(!CORE_TEST_MODE && dist>=lastMile+500){ lastMile=Math.floor(dist/500)*500; const rew=20+Math.floor(lastMile/500)*10; coins+=rew; gflash=0.5; multPulse=1; popText('ГЛУБИНА '+lastMile+'м  +◆'+rew); floatPop(bike.x,bike.y-40,'+◆'+rew,'#9ff0c8'); sfxLev(); }
   if(!newDepth && (best||0)>0 && dist>best){ newDepth=true; gflash=0.6; popText('★ НОВАЯ ГЛУБИНА!'); }
   // market-era biome by distance + entry banner
-  const zi2=Math.floor((dist||0)/700);
+  const zi2=Math.floor((dist||0)/520);   // b58: 700→520м — биомы (рыночные эпохи) сменяются чаще → больше визуальной динамики за заезд
   if(zi2!==zone){ zone=zi2; biomeBanner=BIOMES[zi2%BIOMES.length].name; biomeBannerT=1; }
   if(biomeBannerT>0) biomeBannerT-=0.012;
   if(evBannerT>0) evBannerT-=0.0095;
@@ -728,7 +728,7 @@ function farCandles(par,baseY,alpha){ // distant blurred candle skyline — adds
 }
 function draw(){
   if(screen==='garage'||screen==='settings'){ ctx.fillStyle='#0a0a1a'; ctx.fillRect(0,0,W,H); hudEl.style.opacity='0'; spdEl.style.opacity='0'; hintEl.style.opacity='0'; drawMenus(); return; }   // menu-only: skip the whole world render (was redrawing the full game every frame → stutter)
-  { const ZL=700, zf=(dist||0)/ZL, zi=Math.floor(zf)%BIOMES.length, zn=(zi+1)%BIOMES.length, fr=zf-Math.floor(zf), tb=clamp((fr-0.86)/0.14,0,1), A=BIOMES[zi], Bz=BIOMES[zn];
+  { const ZL=520, zf=(dist||0)/ZL, zi=Math.floor(zf)%BIOMES.length, zn=(zi+1)%BIOMES.length, fr=zf-Math.floor(zf), tb=clamp((fr-0.86)/0.14,0,1), A=BIOMES[zi], Bz=BIOMES[zn];   // b58: 700→520м (match the banner zone length)
     BSKY=[mix(A.sky[0],Bz.sky[0],tb),mix(A.sky[1],Bz.sky[1],tb),mix(A.sky[2],Bz.sky[2],tb),mix(A.sky[3],Bz.sky[3],tb)];
     BLINE=lerp3(A.line,Bz.line,tb).join(','); BRIDGE=lerp3(A.ridge,Bz.ridge,tb).join(','); }
   skyGrad();
@@ -920,9 +920,9 @@ function draw(){
     else { ctx.fillStyle='rgba(150,180,220,0.5)'; ctx.font='600 9px ui-monospace,monospace'; ctx.fillText('PUMP',W/2,by-7); }
     ctx.textAlign='left'; UI.boost={x:bx-12,y:by-24,w:bw+24,h:42}; }
   else UI.boost=null;
-  // new-zone (biome) banner
-  if(!CORE_TEST_MODE && biomeBannerT>0 && (screen==='play'||screen==='paused')){ const a=clamp(Math.min(biomeBannerT*3,(1-biomeBannerT)*5+0.3,1),0,1); ctx.globalAlpha=a; ctx.textAlign='center';
-    ctx.fillStyle='#9fb0d0'; ctx.font='600 10px ui-monospace,monospace'; ctx.fillText('▲ НОВАЯ ЗОНА',W/2,H*0.25-20);
+  // new-zone (biome) banner — b58: un-gated from CORE_TEST_MODE (biomes are core ATMOSPHERE/progression-feel, not meta bloat) → the market-era is announced as you ride deeper
+  if(biomeBannerT>0 && (screen==='play'||screen==='paused')){ const a=clamp(Math.min(biomeBannerT*3,(1-biomeBannerT)*5+0.3,1),0,1); ctx.globalAlpha=a; ctx.textAlign='center';
+    ctx.fillStyle='#9fb0d0'; ctx.font='600 10px ui-monospace,monospace'; ctx.fillText('▲ НОВАЯ ЭПОХА',W/2,H*0.25-20);
     ctx.fillStyle='#eafaff'; ctx.font='800 23px ui-monospace,monospace'; ctx.shadowColor='rgba(130,200,255,0.6)'; ctx.shadowBlur=12; ctx.fillText(biomeBanner,W/2,H*0.25+7); ctx.shadowBlur=0; ctx.globalAlpha=1; ctx.textAlign='left'; }
   // market-event screen tint (top+bottom bars in the event colour) + big telegraph banner
   if(evGlow>0.02 && screen==='play'){ const a=evGlow*0.2, eg=ctx.createLinearGradient(0,0,0,H); eg.addColorStop(0,'rgba('+evColor+','+a+')'); eg.addColorStop(0.42,'rgba('+evColor+',0)'); eg.addColorStop(0.58,'rgba('+evColor+',0)'); eg.addColorStop(1,'rgba('+evColor+','+a+')'); ctx.fillStyle=eg; ctx.fillRect(0,0,W,H); }
