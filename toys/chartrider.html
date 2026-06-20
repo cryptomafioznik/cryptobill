@@ -46,7 +46,7 @@ function lerp(a,b,t){return a+(b-a)*t;} function clamp(v,a,b){return v<a?a:v>b?b
 // false → full game. Single switch. Systems are GATED, never deleted.
 const CORE_TEST_MODE = true;
 // build stamp — bump on every change so a phone refresh can confirm it loaded fresh code (cache!)
-const BUILD = '2026-06-20 · b58';
+const BUILD = '2026-06-20 · b59';
 
 // ---------- procedural market terrain ----------
 // height map sampled every STEP px; generated forward as we ride. Market character:
@@ -55,7 +55,7 @@ const STEP=26; let terr=[], genX=0, baseY, walk=0, regime='chop', regimeLeft=0, 
 // market regimes — distinct "scenarios" give the endless track rhythm & variety.
 // d<0 = price up (climb / green) ; d>0 = price down (drop / red)
 function pickRegime(){
-  const d=clamp((dist||0)/1800,0,1), volK=1+d*0.5, M=TUNE.mountain;
+  const d=clamp((dist||0)/1400,0,1), volK=1+d*0.65, M=TUNE.mountain;   // b59: difficulty ramps over 1400m (was 1800 — builds within a typical run) + stronger volatility deeper → skill ramp, not a plateau
   // STRUCTURED enduro track: every hard FEATURE is followed by a flat RECOVERY run-up (setup/momentum — fair, you can prepare; no "stuck in a bad position")
   if(['bull','bear','pump','crash','rocks'].includes(lastRegime)){
     regime='flat'; regimeDrift=(Math.random()-0.5)*3; regimeVol=4*volK; regimeLeft=6+Math.random()*5; lastRegime=regime; return;
@@ -92,6 +92,7 @@ function genSeg(){
   if(regimeLeft<=0) pickRegime();
   regimeLeft--;
   const dd=clamp((dist||0)/1800,0,1);
+  const densK=1-clamp((genX/10)/1400,0,1)*0.30;   // b59: feature spacing shrinks up to 30% deeper in → denser obstacles = more skill pressure with distance (not a plateau)
   // start a market-event block once we pass the scheduled distance (terrain is shaped + tagged here, ridden into later)
   if(!CORE_TEST_MODE && evGenLeft<=0 && genX>=nextEvGenX && terr.length>40){ evGenType=pickEvent(Math.floor((genX/10)/700)); evGenLeft=EVENTS[evGenType].nodes; }   // CORE TEST: no events
   const prevC=terr.length?terr[terr.length-1].close:baseY;
@@ -139,16 +140,16 @@ function genSeg(){
       gapPrevY=close; gapRunup=5; nextGapX=genX + TUNE.gapEvery*10 + Math.random()*1400;   // start: descent run-up first
     }
     else if(TUNE.ledgeEvery>0 && genX>=nextLedgeX && genX>TUNE.ledgeStart*10 && terr.length>16 && regime!=='pump' && regime!=='crash' && lastRegime!=='bull' && close>H*0.45){   // schedule a LEDGE (not mid-climb, and only when low enough to have room to step up)
-      ledgePrevY=close; ledgeStepsThis=1+Math.floor(Math.random()*2); ledgeHThis=TUNE.ledgeH*(0.7+Math.random()*0.5); ledgeRunup=4; nextLedgeX=genX + TUNE.ledgeEvery*10 + Math.random()*1100;   // b57: 1-2 steps, height 0.7-1.2× → variety (small kerb ↔ 2-step staircase) but stays climbable (taller 3-step staircases looped the loft)
+      ledgePrevY=close; ledgeStepsThis=1+Math.floor(Math.random()*2); ledgeHThis=TUNE.ledgeH*(0.7+Math.random()*0.5); ledgeRunup=4; nextLedgeX=genX + TUNE.ledgeEvery*10*densK + Math.random()*1100*densK;   // b57: 1-2 steps, height 0.7-1.2× → variety (small kerb ↔ 2-step staircase) but stays climbable (taller 3-step staircases looped the loft)
     }
     else if(TUNE.kickEvery>0 && genX>=nextKickX && genX>TUNE.kickStart*10 && terr.length>16 && regime!=='pump' && regime!=='crash' && lastRegime!=='bull' && close>H*0.5){   // schedule a TRICK KICKER (not mid-climb; needs room ABOVE for the ramp)
-      kickBaseY=close; kickRunup=6; nextKickX=genX + TUNE.kickEvery*10 + Math.random()*1000;   // b51: descent run-up (6 nodes); tighter spacing jitter since kickers are now the main feature
+      kickBaseY=close; kickRunup=6; nextKickX=genX + TUNE.kickEvery*10*densK + Math.random()*1000*densK;   // b51: descent run-up (6 nodes); tighter spacing jitter since kickers are now the main feature
     }
     else if(TUNE.whoopEvery>0 && genX>=nextWhoopX && genX>TUNE.whoopStart*10 && terr.length>16 && regime!=='pump' && regime!=='crash' && lastRegime!=='bull'){   // schedule a WHOOPS section (rhythm rollers on calm terrain)
-      whoopBaseY=close; whoopRunup=3; nextWhoopX=genX + TUNE.whoopEvery*10 + Math.random()*900;
+      whoopBaseY=close; whoopRunup=3; nextWhoopX=genX + TUNE.whoopEvery*10*densK + Math.random()*900*densK;
     }
     else if(TUNE.mudEvery>0 && genX>=nextMudX && genX>TUNE.mudStart*10 && terr.length>16 && regime!=='pump' && regime!=='crash' && lastRegime!=='bull'){   // schedule a MUD section (calm terrain)
-      mudBaseY=close; mudLeft=TUNE.mudN; nextMudX=genX + TUNE.mudEvery*10 + Math.random()*1100;
+      mudBaseY=close; mudLeft=TUNE.mudN; nextMudX=genX + TUNE.mudEvery*10*densK + Math.random()*1100*densK;
     }
   }
   let open = terr.length ? terr[terr.length-1].close : close;
@@ -188,7 +189,7 @@ const TUNE = {
   camFollow:    0.08,    // 6. слежение камеры — плавность по вертикали за байком (больше = резче/нервнее)
   waveSpeed:    0.72,    // 7. скорость волны — базовая скорость дампа (0.85→0.72: большие горы стоят времени на подъём → дай брать их деликатно, не задушив погоней; мягкий БЭКСТОП. БОЛЬШЕ = больше давления)
   waveAccel:    0.4,     // 8. ускорение волны — насколько дамп разгоняется с дистанцией (СНИЖЕНО 0.5→0.4 — спокойнее темп)
-  terrainSteep: 1.3,     // 9. ПОЛНАЯ крутизна рельефа — крутые, но ПРОХОДИМЫЕ холмы (гора, не вертикальная стена). Растёт от steepEarly за steepRamp
+  terrainSteep: 1.5,     // 9. ПОЛНАЯ крутизна рельефа — крутые, но ПРОХОДИМЫЕ холмы (гора, не вертикальная стена). b59: 1.3→1.5 (техничнее глубже). Растёт от steepEarly за steepRamp
   mountain:     1.45,    // 9b. РАЗМАХ ГОР — множитель затяжных подъёмов/спусков (Gravity-Defied: БОЛЬШИЕ структурные горы). b52: 1.25→1.45 — больше ДИНАМИКИ вместо обрывов (длиннее/драматичнее спуски-подъёмы = больше вилли/баланса/естественного воздуха). БОЛЬШЕ = выше/длиннее
   hillHeight:   80,      // 9c. высота плавной волны рельефа (вторичная к mountain-горам). БОЛЬШЕ = крупнее перекаты
   rockGarden:   0.40,    // 9d. РОК-ГАРДЕН (реальное хард-эндуро: техничный тряский участок) — доля секций-«камней» vs гладких фич (0.30→0.40, больше рваности — график не сплошная линия). 0 = выкл
@@ -205,7 +206,7 @@ const TUNE = {
   gapKick:      0.45,    // 16b. КРОМКА-РАМПА: launch вверх = vx×это (физика рампы). При ровной скорости НЕ перелетает 3-4 узла → нужен ПРЫЖОК; со спуска-разгона (большой vx) долетает сам. БОЛЬШЕ = легче перелёт
   pitchHold:    0.024,   // 17. самовыравнивание тангажа к склону (= «пружина» к склону; чуть мягче, чтобы наклон дотягивал до вилли/стоппи)
   steepEarly:   0.85,    // 18. множитель крутизны НА СТАРТЕ (положе на старте, проходимо; растёт к terrainSteep за steepRamp)
-  steepRamp:    600,     // 19. дистанция (м), за которую крутизна растёт steepEarly → terrainSteep (ещё жёстче дальше)
+  steepRamp:    1100,    // 19. дистанция (м), за которую крутизна растёт steepEarly → terrainSteep. b59: 600→1100 — крутизна продолжает расти глубже (не плато на 600м = есть скилл-рампа дальше)
   climbCap:     0.94,    // 19b. КЭП КРУТИЗНЫ ПОДЪЁМА (рад): b52 0.88→0.94 — КРУЧЕ подъёмы по просьбе («сделать более крутые подъёмы»); скилл вес-вперёд держит, ниже физ-потолка тяги 1.08. Ниже физ-потолка тяги 1.08. Спуски/пропасти не трогает. Замерено: реальные крутые серии ≤16 узлов → байк лезет ~2-3с (min vx ~2), без кувырка/затыка. Физ-потолок тяги HODLER ≈1.08 (выше — глохнет); 0.9 ползёт на искусств. 60-узл. стене >25с. БОЛЬШЕ = круче/злее (до ~0.95), МЕНЬШЕ = пологее
   leanGround:   0.028,   // 20. сила НАКЛОНА (драг влево-вправо): 0.020→0.028 — ЧУВСТВИТЕЛЬНЕЕ (от тебя больше зависит; быстрее в вилли/стоппи, но и перекрутить легче = скилл)
   leanAir:      0.040,   // 21. сила наклона в воздухе — вращение. b44: 0.030→0.040 (~0.16рад/кадр) — КОНТРОЛИРУЕМО (не хаос b42 0.5), но за БОЛЬШОЙ кикер-воздух (~45 кадров) сальто ДОКРУЧИВАЕТСЯ + успеваешь выровнять. Длинный воздух делает флип неспешным даже при чуть быстром спине
