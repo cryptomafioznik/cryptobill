@@ -46,7 +46,7 @@ function lerp(a,b,t){return a+(b-a)*t;} function clamp(v,a,b){return v<a?a:v>b?b
 // false → full game. Single switch. Systems are GATED, never deleted.
 const CORE_TEST_MODE = true;
 // build stamp — bump on every change so a phone refresh can confirm it loaded fresh code (cache!)
-const BUILD = '2026-06-20 · b55';
+const BUILD = '2026-06-20 · b56';
 
 // ---------- procedural market terrain ----------
 // height map sampled every STEP px; generated forward as we ride. Market character:
@@ -271,9 +271,9 @@ try{pumpSide=localStorage.getItem('cipher_pumpside')||'left';}catch(e){}
 function savePumpSide(){ try{localStorage.setItem('cipher_pumpside',pumpSide);}catch(e){} }
 // ---- control schemes: player picks in settings (gestures = his default; buttons/tilt for newcomers — widen the audience) ----
 const SCHEMES=['gestures','btn2','btn4','tilt'];
-const SCHEME_NAME={gestures:'ЖЕСТЫ',btn2:'2 КНОПКИ',btn4:'4 КНОПКИ',tilt:'НАКЛОН ТЕЛЕФОНА'};
-const SCHEME_DESC={gestures:'держишь = газ · драг = наклон · свайп↑ = прыжок',btn2:'газ / тормоз — наклон делает сам газ-тормоз',btn4:'газ/тормоз + кнопки наклона НОС↑ / НОС↓',tilt:'газ/тормоз + наклон ТЕЛЕФОНА (гироскоп)'};
-let ctrlScheme='gestures'; try{ctrlScheme=localStorage.getItem('cipher_ctrlscheme')||'gestures'; if(SCHEMES.indexOf(ctrlScheme)<0)ctrlScheme='gestures';}catch(e){}
+const SCHEME_NAME={gestures:'ЖЕСТЫ',btn2:'АВТО-ГАЗ',btn4:'4 КНОПКИ',tilt:'НАКЛОН ТЕЛЕФОНА'};
+const SCHEME_DESC={gestures:'держишь = газ · драг = наклон · свайп↑ = прыжок',btn2:'газ САМ · тормоз + НОС↑/НОС↓ + прыжок/памп',btn4:'газ/тормоз + кнопки наклона НОС↑ / НОС↓ + прыжок/памп',tilt:'газ/тормоз + наклон ТЕЛЕФОНА (гироскоп)'};
+let ctrlScheme='btn4'; try{ctrlScheme=localStorage.getItem('cipher_ctrlscheme')||'btn4'; if(SCHEMES.indexOf(ctrlScheme)<0)ctrlScheme='btn4';}catch(e){}   // b56: 4 КНОПКИ = ДЕФОЛТ (юзер выбрал — удобнее). btn2 переделан в АВТО-ГАЗ
 function saveScheme(){ try{localStorage.setItem('cipher_ctrlscheme',ctrlScheme);}catch(e){} }
 let tiltReady=false;   // device-orientation lean (tilt scheme); needs a user-gesture permission on iOS
 function enableTilt(){ if(tiltReady)return; const add=()=>{ tiltReady=true; addEventListener('deviceorientation',ev=>{ if(ctrlScheme==='tilt'&&screen==='play'){ leanX=clamp((ev.gamma||0)/26,-1,1); } }); };
@@ -463,7 +463,7 @@ function pointerDown(p){
   return 'none';
 }
 function requestJump(){ if(screen==='play' && bike) jumpReq=TUNE.jumpBuf; }   // buffer the press (TUNE.jumpBuf frames — forgiving timing at gap edges); update() fires it if grounded or within coyote grace
-function recompute(){ let g=false,b=false,lL=false,lR=false; for(const id in activeTouches){ const z=activeTouches[id]; if(z==='gas')g=true; else if(z==='brake')b=true; else if(z==='leanL')lL=true; else if(z==='leanR')lR=true; } down=g; brake=b; if(ctrlScheme==='btn4') leanX=(lR?1:0)-(lL?1:0); }   // button schemes derive held state (btn2 lean handled per-frame in update; tilt by gyro)
+function recompute(){ let g=false,b=false,lL=false,lR=false; for(const id in activeTouches){ const z=activeTouches[id]; if(z==='gas')g=true; else if(z==='brake')b=true; else if(z==='leanL')lL=true; else if(z==='leanR')lR=true; } brake=b; if(ctrlScheme==='btn4'||ctrlScheme==='btn2') leanX=(lR?1:0)-(lL?1:0); down=(ctrlScheme==='btn2')? !b : g; }   // b56: btn2 = AUTO-GAS (down=true unless braking) + lean buttons; btn4 = gas button + lean buttons; tilt by gyro
 function ptFromEvent(e){ const r=cv.getBoundingClientRect(), s=(e.touches&&e.touches[0])?e.touches[0]:e; return {x:(s.clientX||0)-r.left,y:(s.clientY||0)-r.top}; }
 const GAS_KEYS={' ':1};                              // hold = gas (release = coast)
 const LEANL_KEYS={'ArrowLeft':1,'a':1,'A':1};        // lean nose UP / back
@@ -510,7 +510,7 @@ addEventListener('touchcancel',e=>{ for(const tch of e.changedTouches){ delete t
 function update(){
   if(hitstop>0){ hitstop--; return; }   // brief freeze for impact punch
   if(boosting>0)boosting--;
-  if(ctrlScheme==='btn2'){ leanX = brake ? 1 : (down ? -clamp(1.1-(bike?bike.vx:0)/9,0,1)*0.6 : 0); }   // Hill Climb feel: gas pops the nose (wheelie) at low speed, brake noses down — pitch comes from gas/brake
+  if(ctrlScheme==='btn2'){ down=!brake; }   // b56: AUTO-GAS — always driving unless you press brake (lean comes from the НОС↑/НОС↓ buttons, like btn4)
   t++; daycycle+=0.0009;
   // physics
   const P=PHYS, DX=P.DX, DY=P.DY, wasG=bike.onG;
@@ -1021,15 +1021,26 @@ function draw(){
       UI.leanLBtn={x:MX(14,lw2),y:H-110,w:lw2,h:62};       ctlBtn(UI.leanLBtn,'НОС↑', leanX<-0.05, '150,205,255', 14);   // nose up / wheelie
       UI.leanRBtn={x:MX(14+lw2+6,lw2),y:H-110,w:lw2,h:62}; ctlBtn(UI.leanRBtn,'НОС↓', leanX>0.05, '150,205,255', 14);    // nose down / stoppie
       UI.pumpBtn={x:MX(14,lw2*2+6),y:H-178,w:lw2*2+6,h:48}; drawPump(UI.pumpBtn);
+    } else if(ctrlScheme==='btn2'){
+      // AUTO-GAS (b56): NO gas button — always driving unless you brake. Same lean buttons as btn4; gas is automatic so casual players don't manage throttle.
+      const bw=116, gx=MX(W-14-bw,bw);
+      UI.brkBtn ={x:gx,y:H-110,w:bw,h:62}; ctlBtn(UI.brkBtn,'ТОРМОЗ', brake, brake?'255,175,120':'200,155,135', 16);
+      UI.jumpBtn={x:gx,y:H-178,w:bw,h:56}; ctlBtn(UI.jumpBtn,'⤴ ПРЫЖОК', jumpReq||(bike&&!bike.onG&&jumpCd>0), '255,210,120', 13);
+      const lw2=84;
+      UI.leanLBtn={x:MX(14,lw2),y:H-110,w:lw2,h:62};       ctlBtn(UI.leanLBtn,'НОС↑', leanX<-0.05, '150,205,255', 14);
+      UI.leanRBtn={x:MX(14+lw2+6,lw2),y:H-110,w:lw2,h:62}; ctlBtn(UI.leanRBtn,'НОС↓', leanX>0.05, '150,205,255', 14);
+      UI.pumpBtn={x:MX(14,lw2*2+6),y:H-178,w:lw2*2+6,h:48}; drawPump(UI.pumpBtn);
+      UI.gasBtn=null;
+      ctx.fillStyle='rgba(120,255,180,'+(0.45+0.25*Math.sin(t*0.1))+')'; ctx.font='800 11px ui-monospace,monospace'; ctx.textAlign='center'; ctx.fillText('⚡ ГАЗ АВТО', W/2, H-200); ctx.textAlign='left';
     } else {
-      // btn2 / tilt: GAS on the dominant side, BRAKE on the other; JUMP + PUMP small above
+      // tilt: GAS/BRAKE buttons + gyro lean
       const bh=72, bw=118, by=H-150;
       UI.gasBtn={x:MX(W-14-bw,bw),y:by,w:bw,h:bh}; ctlBtn(UI.gasBtn,'ГАЗ', down, down?'120,255,180':'120,205,160', 19);
       UI.brkBtn={x:MX(14,bw),y:by,w:bw,h:bh};      ctlBtn(UI.brkBtn,'ТОРМОЗ', brake, brake?'255,175,120':'200,155,135', 15);
       const sw=118, sh=44, sy=by-54;
       UI.jumpBtn={x:MX(W-14-sw,sw),y:sy,w:sw,h:sh}; ctlBtn(UI.jumpBtn,'⤴ ПРЫЖОК', jumpReq||(bike&&!bike.onG&&jumpCd>0), '255,210,120', 14);
       UI.pumpBtn={x:MX(14,sw),y:sy,w:sw,h:sh}; drawPump(UI.pumpBtn);
-      if(ctrlScheme==='tilt'){ ctx.fillStyle='rgba(150,180,220,'+(tiltReady?0.6:0.85)+')'; ctx.font='700 10px ui-monospace,monospace'; ctx.textAlign='center'; ctx.fillText(tiltReady?'наклоняй ТЕЛЕФОН = наклон байка':'нажми НАКЛОН в настройках — разреши гироскоп', W/2, sy-18); ctx.textAlign='left'; }
+      ctx.fillStyle='rgba(150,180,220,'+(tiltReady?0.6:0.85)+')'; ctx.font='700 10px ui-monospace,monospace'; ctx.textAlign='center'; ctx.fillText(tiltReady?'наклоняй ТЕЛЕФОН = наклон байка':'нажми НАКЛОН в настройках — разреши гироскоп', W/2, sy-18); ctx.textAlign='left';
     }
   } else { UI.gas=null; UI.brk=null; UI.jump=null; UI.pumpBtn=null; UI.gasBtn=null; UI.brkBtn=null; UI.leanLBtn=null; UI.leanRBtn=null; UI.jumpBtn=null; }
   // engine audio tracks speed
