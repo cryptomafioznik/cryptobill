@@ -46,7 +46,7 @@ function lerp(a,b,t){return a+(b-a)*t;} function clamp(v,a,b){return v<a?a:v>b?b
 // false → full game. Single switch. Systems are GATED, never deleted.
 const CORE_TEST_MODE = true;
 // build stamp — bump on every change so a phone refresh can confirm it loaded fresh code (cache!)
-const BUILD = '2026-06-20 · b60';
+const BUILD = '2026-06-21 · b61';
 
 // ---------- procedural market terrain ----------
 // height map sampled every STEP px; generated forward as we ride. Market character:
@@ -209,7 +209,7 @@ const TUNE = {
   steepRamp:    1100,    // 19. дистанция (м), за которую крутизна растёт steepEarly → terrainSteep. b59: 600→1100 — крутизна продолжает расти глубже (не плато на 600м = есть скилл-рампа дальше)
   climbCap:     0.94,    // 19b. КЭП КРУТИЗНЫ ПОДЪЁМА (рад): b52 0.88→0.94 — КРУЧЕ подъёмы по просьбе («сделать более крутые подъёмы»); скилл вес-вперёд держит, ниже физ-потолка тяги 1.08. Ниже физ-потолка тяги 1.08. Спуски/пропасти не трогает. Замерено: реальные крутые серии ≤16 узлов → байк лезет ~2-3с (min vx ~2), без кувырка/затыка. Физ-потолок тяги HODLER ≈1.08 (выше — глохнет); 0.9 ползёт на искусств. 60-узл. стене >25с. БОЛЬШЕ = круче/злее (до ~0.95), МЕНЬШЕ = пологее
   leanGround:   0.028,   // 20. сила НАКЛОНА (драг влево-вправо): 0.020→0.028 — ЧУВСТВИТЕЛЬНЕЕ (от тебя больше зависит; быстрее в вилли/стоппи, но и перекрутить легче = скилл)
-  leanAir:      0.040,   // 21. сила наклона в воздухе — вращение. b44: 0.030→0.040 (~0.16рад/кадр) — КОНТРОЛИРУЕМО (не хаос b42 0.5), но за БОЛЬШОЙ кикер-воздух (~45 кадров) сальто ДОКРУЧИВАЕТСЯ + успеваешь выровнять. Длинный воздух делает флип неспешным даже при чуть быстром спине
+  leanAir:      0.045,   // 21. сила наклона в воздухе — вращение. b61: 0.040→0.045 — спин быстрее, чтобы зажатый флип ЯВНО докручивал полный оборот за кикер-воздух (раньше ~6рад чуть не доходил до 6.28 → не засчитывался). b44: 0.030→0.040 (~0.16рад/кадр) — КОНТРОЛИРУЕМО (не хаос b42 0.5), но за БОЛЬШОЙ кикер-воздух (~45 кадров) сальто ДОКРУЧИВАЕТСЯ + успеваешь выровнять. Длинный воздух делает флип неспешным даже при чуть быстром спине
   destab:       0.0018,  // 22. дестабилизация скорость×склон: подъём кренит назад, спуск — носом вниз → держи наклоном (мягко, наклон легко перекрывает)
   // ---- УСТУПЫ/СТУПЕНИ («лестницы»): вертикальный шаг ВВЕРХ — переднее колесо ЗАЕЗЖАЕТ таймингом вилли (реал trials/эндуро) ----
   ledgeEvery:   300,     // 23. ср. дистанция между уступами (м); 0 = выкл. ЧАЩЕ gaps (420) — это базовый скилл-обстакл «подними перед», добавляет вызов аркадной езде
@@ -545,7 +545,7 @@ function update(){
   const ci0=Math.floor(bike.x/STEP);
   const _gi=Math.floor((bike.x+DX)/STEP), gapNear=!!((terr[_gi]&&terr[_gi].gap)||(terr[_gi+1]&&terr[_gi+1].gap));   // chasm just ahead (telegraph + jump coyote)
   // EMERGENT PHYSICS: the bike is a projectile, the ground a floor it LEAVES naturally. FRONT WHEEL OVER A SHARP DROP (chasm / cliff edge) = no front support → ride/pivot on the REAR and fly off the edge KEEPING its ramp momentum (don't read the void as a down-ramp & dive in; don't glue to the line).
-  const frontDrop = (gyf - gyr > STEP*1.6);
+  const frontDrop = gapNear && (gyf - gyr > STEP*1.6);   // b61: gate on gapNear — frontDrop = a real CHASM edge (its whole purpose). On a CONTINUOUS steep descent (no gap) it wrongly forced the airborne branch (no forward propulsion) + flattened the slope → the bike couldn't accelerate down and FROZE mid-slope (vy ballooned, vx→0). With gaps off this never fires → steep descents are real slopes: grounded, gravity-propelled down, and the bike still LAUNCHES off convex crests via the grounded condition (the "fly off bumps" feel)
   if(frontDrop) gyf=gyr;
   const supA=Math.atan2(gyf-gyr, 2*DX), targetY=(gyr+gyf)*0.5 - DY;   // wheel slope + seated CG height
   // CG height resting on the BINDING (lower) wheel given the actual pitch — equals targetY when pitch matches the slope, but never lets a wheel sink INTO the track on a steep slope + pitch mismatch (anti-clip)
@@ -585,7 +585,7 @@ function update(){
     if(bike.vy>0 && bike.y>restY && !(terr[ci0]&&terr[ci0].gap)) bike.y=restY;   // ANTI-CLIP: never sink THROUGH solid ground — even a steep frontDrop DESCENT rests on the binding (rear) wheel. Only a real chasm node (.gap) lets you fall. Upward launches (vy<0) are untouched, so flying off ramps/edges still works (b46: was gated by !frontDrop → steep slopes plunged the bike through the track & it crawled back out)
     if(Math.abs(rShift)>0.06){ bike.angV += rShift*P.LEANAIR; }                                       // hold weight-shift = flip / aim the landing (rider mass rotates the bike in air)
     else { const la=terrainAt(bike.x+Math.max(20,bike.vx*6)).ang; bike.angV += (clamp(la,-0.6,0.6)-bike.ang)*0.03; }   // no input → auto-level to the landing slope (clamped so a chasm sample can't spin you) — lands on its wheels
-    { const skimG=terrainAt(bike.x).y-(bike.y+DY); if(bike.vy>0 && skimG>-4 && skimG<TUNE.landAssist){ const la=terrainAt(bike.x+Math.max(14,bike.vx*4)).ang; const k=clamp((TUNE.landAssist-Math.max(skimG,0))/TUNE.landAssist,0,1); bike.angV += (clamp(la,-0.75,0.75)-bike.ang)*0.17*k; bike.angV*=(1-0.10*k); } }   // b55: LANDING ASSIST — near the ground & descending, rotate toward the landing slope + damp spin (ramps up as you get closer) → flips LAND (the skill is the flip, not a pixel-perfect touchdown; user: "помогать приземляться, если не совсем ровно — всё равно сесть"). Doesn't touch the rising launch (vy>0 gate) or high-air flipping (skimG<landAssist gate)
+    { const skimG=terrainAt(bike.x).y-(bike.y+DY); if(bike.vy>0 && skimG>-4 && skimG<TUNE.landAssist){ const la=terrainAt(bike.x+Math.max(14,bike.vx*4)).ang; const k=clamp((TUNE.landAssist-Math.max(skimG,0))/TUNE.landAssist,0,1); const holding=Math.abs(rShift)>0.4 && Math.sign(rShift)===Math.sign(bike.angV) && Math.abs(bike.angV)>0.08; const bias=holding?0.4*Math.sign(bike.angV):0; const target=Math.round((bike.ang-la)/6.2832 + bias)*6.2832 + la; bike.angV += (target-bike.ang)*0.18*k; bike.angV*=(1-0.11*k*k); } }   // b61: LANDING ASSIST → nearest wheels-down. The "complete the flip" bias fires ONLY when the player is HOLDING the flip (|rShift|>0.4 in the spin direction) → an intentional flip COMPLETES & counts, while incidental air-rotation just LEVELS (no over-rotation loop). Spin-damp ramps with k² (settles only at the very ground, doesn't choke the flip) — if you're actively flipping (|angV|>0.08) it COMPLETES the flip (rounds up the turn you're committed to, so it counts), a small tilt just levels. No spin-damping (b55 damped rotation → "always under-rotate"). Skill = commit the flip; touchdown is forgiven
     bike.wheel += 0.3;
   }
   // ---- TRICK KICKER lip: POP up ∝ speed (the ramp throws you — reward launch for flips; fly straight = safe, flip = risk/reward; NO chasm = no fall) ----
