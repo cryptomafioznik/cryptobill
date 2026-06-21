@@ -42,11 +42,12 @@ function resize(){DPR=Math.min(2,devicePixelRatio||1);W=innerWidth;H=innerHeight
 addEventListener('resize',resize);resize();
 function lerp(a,b,t){return a+(b-a)*t;} function clamp(v,a,b){return v<a?a:v>b?b:v;}
 // ===================== CORE TEST MODE =====================
-// true  → minimal ride-and-chase loop only (garage/upgrades/ranks/daily/missions/events/economy/popups OFF)
-// false → full game. Single switch. Systems are GATED, never deleted.
+// true  → ENDLESS stays a pure ride-and-chase core on a STOCK bike (the feel-reference; ranks/daily/missions/events/popups OFF).
+//          CAREER (b64) is the progression layer ON TOP: its gems buy garage UPGRADES that APPLY in career runs (endless ignores them).
+// false → full game everywhere. Single switch. Systems are GATED, never deleted.
 const CORE_TEST_MODE = true;
 // build stamp — bump on every change so a phone refresh can confirm it loaded fresh code (cache!)
-const BUILD = '2026-06-21 · b63';
+const BUILD = '2026-06-21 · b64';
 
 // ---------- procedural market terrain ----------
 // height map sampled every STEP px; generated forward as we ride. Market character:
@@ -268,7 +269,7 @@ try{bank=+localStorage.getItem('cipher_bank')||0;}catch(e){}
 try{owned=JSON.parse(localStorage.getItem('cipher_owned')||'[0]')||[0];}catch(e){owned=[0];}
 try{selBike=+localStorage.getItem('cipher_bike')||0;}catch(e){}
 try{muted=localStorage.getItem('cipher_muted')==='1';}catch(e){}
-let pumpSide='left', settingsRet='title';   // PUMP button side (right-hander → left, configurable for lefties); settingsRet = screen to return to from settings
+let pumpSide='left', settingsRet='title', garageRet='career', careerDeathGems=0;   // PUMP button side (right-hander → left, configurable for lefties); settingsRet/garageRet = screen to return to; careerDeathGems = consolation gems from the last failed career run
 try{pumpSide=localStorage.getItem('cipher_pumpside')||'left';}catch(e){}
 function savePumpSide(){ try{localStorage.setItem('cipher_pumpside',pumpSide);}catch(e){} }
 // ---- control schemes: player picks in settings (gestures = his default; buttons/tilt for newcomers — widen the audience) ----
@@ -299,7 +300,8 @@ let upg={}, career=0, buyFlash=0, buyRow=-1, rankMul=1, rankedUp=null;
 function rankIdx(c){ let i=0; for(let k=0;k<RANKS.length;k++)if(c>=RANKS[k].at)i=k; return i; }
 try{upg=JSON.parse(localStorage.getItem('cipher_upg')||'{}')||{};}catch(e){upg={};}
 try{career=+localStorage.getItem('cipher_career')||0;}catch(e){}
-function upgLvl(id){ return CORE_TEST_MODE ? 0 : (upg[id]||0); }   // CORE TEST: stock bike, upgrades disabled
+function upgOwned(id){ return upg[id]||0; }   // BOUGHT level — shop display + buy logic (always the real stored level, regardless of mode)
+function upgLvl(id){ return (!CORE_TEST_MODE || gameMode==='career') ? (upg[id]||0) : 0; }   // EFFECTIVE level in physics: CAREER applies your upgrades (the progression gate); the ENDLESS core stays STOCK (the pure feel-reference). Full game (CORE_TEST off) applies everywhere.
 function rankFor(c){ let r=RANKS[0]; for(const x of RANKS)if(c>=x.at)r=x; return r; }
 function nextRank(c){ for(const x of RANKS)if(c<x.at)return x; return null; }
 function saveProg(){ try{localStorage.setItem('cipher_upg',JSON.stringify(upg));localStorage.setItem('cipher_career',career);}catch(e){} }
@@ -445,18 +447,20 @@ function pointerDown(p){
   }
   if(screen==='career'){
     if(hit(p,UI.cback)){ screen='title'; sfxClick(); return; }
+    if(UI.cgarage && hit(p,UI.cgarage)){ garageRet='career'; screen='garage'; sfxClick(); return; }
     if(UI.trackRows) for(let i=0;i<UI.trackRows.length;i++){ if(hit(p,UI.trackRows[i])){ if(i<=careerMax){ gameMode='career'; careerTrack=i; reset(); } else sfxClick(); sfxClick(); return; } }
     return;
   }
   if(screen==='won'){
+    if(UI.wgarage && hit(p,UI.wgarage)){ garageRet='won'; screen='garage'; sfxClick(); return; }
     if(hit(p,UI.wnext) && careerTrack<CAREER_TRACKS.length-1){ careerTrack++; reset(); sfxClick(); return; }
     if(hit(p,UI.wretry)){ reset(); sfxClick(); return; }
     if(hit(p,UI.wmenu)){ gameMode='career'; screen='career'; sfxClick(); return; }
     return;
   }
   if(screen==='garage'){
-    if(hit(p,UI.gback)){ screen='title'; sfxClick(); return; }
-    if(UI.upgRows) for(let i=0;i<UI.upgRows.length;i++){ if(hit(p,UI.upgRows[i])){ const u=UPGRADES[i], lvl=upgLvl(u.id), cost=upgCost(u.id,lvl); if(lvl<u.max && bank>=cost){ bank-=cost; upg[u.id]=lvl+1; saveProg(); saveMeta(); sfxLev(); blip(1300,0.07,'triangle',0.12); buyFlash=1; buyRow=i; } else sfxClick(); return; } }
+    if(hit(p,UI.gback)){ screen=garageRet||'career'; sfxClick(); return; }
+    if(UI.upgRows) for(let i=0;i<UI.upgRows.length;i++){ if(hit(p,UI.upgRows[i])){ const u=UPGRADES[i], lvl=upgOwned(u.id), cost=upgCost(u.id,lvl); if(lvl<u.max && bank>=cost){ bank-=cost; upg[u.id]=lvl+1; saveProg(); saveMeta(); sfxLev(); blip(1300,0.07,'triangle',0.12); buyFlash=1; buyRow=i; } else sfxClick(); return; } }
     return;
   }
   if(screen==='paused'){
@@ -472,7 +476,12 @@ function pointerDown(p){
     if(hit(p,UI.setBack)){ screen=settingsRet||'title'; sfxClick(); return; }
     return;
   }
-  if(screen==='dead'){ if(hit(p,UI.dgarage)){ screen='garage'; sfxClick(); return; } if(hit(p,UI.menu)) toTitle(); else reset(); sfxClick(); return; }
+  if(screen==='dead'){
+    if(UI.dgarage && hit(p,UI.dgarage)){ garageRet='dead'; screen='garage'; sfxClick(); return; }
+    if(UI.dtracks && hit(p,UI.dtracks)){ gameMode='career'; screen='career'; sfxClick(); return; }
+    if(UI.dretry && hit(p,UI.dretry)){ reset(); sfxClick(); return; }
+    if(gameMode==='career'){ sfxClick(); return; }   // career: only the explicit buttons act (no tap-anywhere-retry → avoids mis-taps near ГАРАЖ)
+    if(hit(p,UI.menu)) toTitle(); else reset(); sfxClick(); return; }
   if(hit(p,UI.pause)){ screen='paused'; sfxClick(); return null; }
   if(UI.pumpBtn && hit(p,UI.pumpBtn)){ activateBoost(); return 'tap'; }          // tap PUMP button
   if((boost||0)>=1 && UI.boost && hit(p,UI.boost)){ activateBoost(); return 'tap'; } // charged meter (desktop) also fires
@@ -731,7 +740,9 @@ function resolveEvent(type){ if(screen!=='play')return;          // payoff when 
   else if(type==='whale'){ wave=Math.min(wave, bike.x-W*0.9); const r=Math.round(160*mult); pnl+=r; boost=Math.min(1,(boost||0)+0.25); popText('ОТОРВАЛСЯ ОТ КИТА  +$'+r.toLocaleString('en-US')); floatPop(bike.x,bike.y-34,'+$'+r,'#9ff0c8'); gflash=0.6; sfxLev(); }
   else if(type==='flash'){ wave=Math.min(wave, bike.x-W*0.95); const r=Math.round(280*mult); pnl+=r; coins+=2; popText('КУПИЛ ДНО  +$'+r.toLocaleString('en-US')); floatPop(bike.x,bike.y-34,'+$'+r,'#ffd678'); gflash=0.7; multPulse=1; sfxAir(); } }
 function winRun(){ careerWon=true; screen='won'; const T=CAREER_TRACKS[careerTrack]; if(careerTrack>=careerMax && careerTrack<CAREER_TRACKS.length-1){ careerMax=careerTrack+1; saveCareer(); } bank+=T.gems||0; saveMeta(); if(dist>best){best=dist;try{localStorage.setItem('cipher_run_best',best);}catch(e){}} flash=0.6; gflash=0.85; shake=8; sfxRankUp(); buzz([25,40,25,60]); }   // b60: career track FINISHED → unlock next + award gems
-function wipeout(reason){ deathBy=reason||'crash'; screen='dead'; shake=20; flash=1; sfxCrash(); buzz((reason==='wave')?[70,40,110]:[50,30,70]); for(let i=0;i<28;i++)parts.push({x:bike.x,y:bike.y,vx:(Math.random()-0.5)*8,vy:-Math.random()*6,life:1,r:Math.random()*3+1}); if(dist>best){best=dist;try{localStorage.setItem('cipher_run_best',best);}catch(e){}} pnl=Math.floor(pnl); if(!CORE_TEST_MODE){ if(pnl>bestPnl){bestPnl=pnl;try{localStorage.setItem('cipher_best_pnl',bestPnl);}catch(e){}} bank+=coins; const oi=rankIdx(career); career+=pnl; const ni=rankIdx(career); if(ni>oi){ let bonus=0; for(let r=oi+1;r<=ni;r++)bonus+=RANKS[r].rew; bank+=bonus; rankedUp={rank:RANKS[ni],bonus:bonus}; sfxRankUp(); buzz([25,50,25,70]); } saveProg(); saveMeta(); } }   // CORE TEST: only the distance record is saved; economy frozen
+function wipeout(reason){ deathBy=reason||'crash'; screen='dead'; shake=20; flash=1; sfxCrash(); buzz((reason==='wave')?[70,40,110]:[50,30,70]); for(let i=0;i<28;i++)parts.push({x:bike.x,y:bike.y,vx:(Math.random()-0.5)*8,vy:-Math.random()*6,life:1,r:Math.random()*3+1}); if(dist>best){best=dist;try{localStorage.setItem('cipher_run_best',best);}catch(e){}} pnl=Math.floor(pnl);
+  careerDeathGems=0; if(gameMode==='career'){ const T=CAREER_TRACKS[careerTrack]||CAREER_TRACKS[0]; careerDeathGems=Math.round((T.gems||0)*clamp(dist/Math.max(1,finishDist),0,1)*0.4); if(careerDeathGems>0){ bank+=careerDeathGems; saveMeta(); } }   // CAREER consolation: partial gems by distance reached → failing a gate still funds upgrades (no soft-lock); finishing pays the full T.gems
+  if(!CORE_TEST_MODE){ if(pnl>bestPnl){bestPnl=pnl;try{localStorage.setItem('cipher_best_pnl',bestPnl);}catch(e){}} bank+=coins; const oi=rankIdx(career); career+=pnl; const ni=rankIdx(career); if(ni>oi){ let bonus=0; for(let r=oi+1;r<=ni;r++)bonus+=RANKS[r].rew; bank+=bonus; rankedUp={rank:RANKS[ni],bonus:bonus}; sfxRankUp(); buzz([25,50,25,70]); } saveProg(); saveMeta(); } }   // CORE TEST: only the distance record is saved; economy frozen
 
 // ---------- render (Alto-style dusk, layered) ----------
 function skyGrad(){
@@ -982,7 +993,13 @@ function draw(){
   if(screen==='dead'){ ctx.fillStyle='rgba(8,6,18,0.66)';ctx.fillRect(0,0,W,H); ctx.textAlign='center';
     if(rankedUp){ ctx.fillStyle='rgba(255,214,120,'+(0.72+0.28*Math.sin(t*0.2))+')'; ctx.font='800 21px ui-monospace,monospace'; ctx.shadowColor='#ffd678'; ctx.shadowBlur=16; ctx.fillText(rankedUp.rank.e+'  НОВЫЙ РАНГ: '+rankedUp.rank.n+'!',W/2,H*0.205); ctx.shadowBlur=0; ctx.fillStyle='#9ff0c8'; ctx.font='800 15px ui-monospace,monospace'; ctx.fillText('+◆'+rankedUp.bonus+'   ·   +'+Math.round((rankIdx(career))*7)+'% к профиту',W/2,H*0.205+25); }
     ctx.fillStyle='#ff7a8a';ctx.font='700 30px ui-monospace,monospace';ctx.fillText(deathBy==='wave'?'ПОЙМАН ДАМПОМ':deathBy==='loop'?'ОПРОКИНУЛСЯ':deathBy==='endo'?'ЧЕРЕЗ РУЛЬ':deathBy==='gap'?'УПАЛ В ПРОПАСТЬ':deathBy==='ledge'?'ВРЕЗАЛСЯ В УСТУП':'LIQUIDATED',W/2,H*0.34);
-    if(CORE_TEST_MODE){
+    if(gameMode==='career'){ const T=CAREER_TRACKS[careerTrack]||CAREER_TRACKS[0]; const pr=clamp(dist/Math.max(1,finishDist),0,1);
+      ctx.fillStyle='#9ff0c8';ctx.font='800 16px ui-monospace,monospace';ctx.fillText('🏁 '+T.name,W/2,H*0.34+40);
+      ctx.fillStyle='#eafaff';ctx.font='800 30px ui-monospace,monospace';ctx.fillText(Math.min(dist,finishDist)+' / '+finishDist+' м',W/2,H*0.34+74);
+      const bw=224,bx=W/2-bw/2,by=H*0.34+86; ctx.fillStyle='rgba(20,26,42,0.7)'; if(ctx.roundRect){ctx.beginPath();ctx.roundRect(bx,by,bw,8,4);ctx.fill();}else ctx.fillRect(bx,by,bw,8); ctx.fillStyle='rgba(255,120,140,0.85)'; if(ctx.roundRect){ctx.beginPath();ctx.roundRect(bx,by,Math.max(4,bw*pr),8,4);ctx.fill();}else ctx.fillRect(bx,by,bw*pr,8);
+      ctx.fillStyle=careerDeathGems>0?'#ffd678':'#9fb0d0';ctx.font='700 14px ui-monospace,monospace';ctx.fillText(careerDeathGems>0?('◆ +'+careerDeathGems+'  в банк  (◆ '+bank+')'):('банк  ◆ '+bank),W/2,by+30);
+      { const tip=deathBy==='wave'?'🛡 в ГАРАЖЕ качай ЩИТ ОТ ВОЛНЫ — оторвёшься от дампа':(deathBy==='loop'||deathBy==='endo'||deathBy==='crash')?'◎ в ГАРАЖЕ качай СЦЕПЛЕНИЕ — мягче посадки/прощает кувырки':'⚙ в ГАРАЖЕ качай ДВИЖОК — быстрее уедешь'; ctx.fillStyle='#9fd0ea';ctx.font='11px ui-monospace,monospace';ctx.fillText(tip,W/2,by+50); }
+    } else if(CORE_TEST_MODE){
       const nb=dist>=(best||0);
       ctx.fillStyle=nb?'#ffd678':'#9ff0c8';ctx.font='800 46px ui-monospace,monospace';ctx.fillText(dist+' m',W/2,H*0.34+58);
       ctx.fillStyle=nb?'#ffd678':'#7a8bb0';ctx.font='700 14px ui-monospace,monospace';ctx.fillText(nb?'★ НОВЫЙ РЕКОРД':'рекорд  '+(best||0)+' m',W/2,H*0.34+90);
@@ -993,7 +1010,7 @@ function draw(){
     ctx.fillStyle=isBest?'#ffd678':'#7a6f9a';ctx.fillText((isBest?'★ NEW BEST   $':'BEST   $')+bestPnl.toLocaleString('en-US'),W/2,H*0.34+108);
     ctx.fillStyle='#9ff0c8';ctx.font='700 12px ui-monospace,monospace';ctx.fillText('◆ +'+coins+'  в банк  (◆ '+bank+')',W/2,H*0.34+130);
     { const tip=deathBy==='wave'?'🛡 качай ЩИТ ОТ ВОЛНЫ — оторвёшься от дампа':(deathBy==='loop'||deathBy==='endo')?'◎ качай СЦЕПЛЕНИЕ — прощает кувырки':deathBy==='crash'?'◎ качай СЦЕПЛЕНИЕ — мягче посадки':'⚙ качай ДВИЖОК — быстрее уедешь'; ctx.fillStyle='#9fd0ea';ctx.font='11px ui-monospace,monospace';ctx.fillText(tip,W/2,H*0.34+150); } }
-    ctx.fillStyle='#6effc0';ctx.font='13px ui-monospace,monospace';ctx.fillText('коснись — снова',W/2,H*0.34+172); }
+    if(gameMode!=='career'){ ctx.fillStyle='#6effc0';ctx.font='13px ui-monospace,monospace';ctx.fillText('коснись — снова',W/2,H*0.34+172); } }
   if(screen==='won'){ ctx.fillStyle='rgba(8,20,12,0.72)';ctx.fillRect(0,0,W,H); ctx.textAlign='center'; const T=CAREER_TRACKS[careerTrack]||CAREER_TRACKS[0]; const last=careerTrack>=CAREER_TRACKS.length-1;
     ctx.fillStyle='rgba(120,255,180,'+(0.75+0.25*Math.sin(t*0.2))+')';ctx.font='800 32px ui-monospace,monospace';ctx.shadowColor='#6effc0';ctx.shadowBlur=18;ctx.fillText('🏁 ФИНИШ!',W/2,H*0.25);ctx.shadowBlur=0;
     ctx.fillStyle='#eafaff';ctx.font='800 20px ui-monospace,monospace';ctx.fillText(T.name+' ПРОЙДЕН',W/2,H*0.25+36);
@@ -1003,6 +1020,7 @@ function draw(){
     const by2=H*0.45+(last?44:60);
     UI.wretry={x:W/2-104,y:by2,w:100,h:42}; panel(UI.wretry.x,UI.wretry.y,100,42,'rgba(150,180,220,0.7)','rgba(30,40,62,0.5)'); ctx.fillStyle='#cfe0ff';ctx.font='700 13px ui-monospace,monospace';ctx.fillText('↻ ЕЩЁ',UI.wretry.x+50,UI.wretry.y+26);
     UI.wmenu={x:W/2+4,y:by2,w:100,h:42}; panel(UI.wmenu.x,UI.wmenu.y,100,42,'rgba(150,180,220,0.7)','rgba(30,40,62,0.5)'); ctx.fillStyle='#cfe0ff';ctx.font='700 13px ui-monospace,monospace';ctx.fillText('☰ ЭТАПЫ',UI.wmenu.x+50,UI.wmenu.y+26);
+    UI.wgarage={x:W/2-104,y:by2+52,w:208,h:44}; panel(UI.wgarage.x,UI.wgarage.y,208,44,'rgba(120,255,180,0.85)','rgba(34,54,46,0.4)'); ctx.fillStyle='#9ff0c8';ctx.font='800 14px ui-monospace,monospace';ctx.fillText('🔧 ГАРАЖ  ·  прокачать байк',W/2,UI.wgarage.y+28);
     ctx.textAlign='left'; }
   // crash-readability: landing-angle gauge above the bike (telegraphs the failure)
   if(screen==='play' && !bike.onG){ const grd=terrainAt(bike.x), gap=(grd.y-40)-bike.y;
@@ -1107,6 +1125,7 @@ function drawMenus(){
     ctx.fillStyle='#eafaff'; ctx.font='800 26px ui-monospace,monospace'; ctx.shadowColor='rgba(255,200,120,0.5)'; ctx.shadowBlur=12; ctx.fillText('🏁 КАРЬЕРА',W/2,52); ctx.shadowBlur=0;
     ctx.fillStyle='#ffd678'; ctx.font='700 14px ui-monospace,monospace'; ctx.fillText('банк  ◆ '+bank,W/2,76);
     UI.cback={x:14,y:18,w:78,h:34}; panel(UI.cback.x,UI.cback.y,78,34,'rgba(150,180,220,0.6)','rgba(30,40,62,0.5)'); ctx.fillStyle='#cfe0ff'; ctx.font='700 13px ui-monospace,monospace'; ctx.fillText('‹ НАЗАД',UI.cback.x+39,UI.cback.y+22);
+    UI.cgarage={x:W-104,y:18,w:90,h:34}; panel(UI.cgarage.x,UI.cgarage.y,90,34,'rgba(120,255,180,0.7)','rgba(34,54,46,0.5)'); ctx.fillStyle='#9ff0c8'; ctx.font='800 13px ui-monospace,monospace'; ctx.fillText('🔧 ГАРАЖ',UI.cgarage.x+45,UI.cgarage.y+22);
     UI.trackRows=[]; const rh=46, gp=6, top=96, listW=W-36;
     for(let i=0;i<CAREER_TRACKS.length;i++){ const T=CAREER_TRACKS[i], y=top+i*(rh+gp); const r={x:18,y:y,w:listW,h:rh}; UI.trackRows.push(r);
       const unlocked=i<=careerMax, done=i<careerMax, cur=i===careerMax;
@@ -1164,8 +1183,13 @@ function drawMenus(){
     UI.pset={x:W/2-105,y:H*0.40+110,w:210,h:40}; panel(UI.pset.x,UI.pset.y,210,40,'rgba(150,170,210,0.45)'); ctx.fillStyle='#bcd0ee'; ctx.font='13px ui-monospace,monospace'; ctx.fillText('⚙  НАСТРОЙКИ',W/2,UI.pset.y+25);
     UI.quit={x:W/2-105,y:H*0.40+162,w:210,h:40}; panel(UI.quit.x,UI.quit.y,210,40,'rgba(255,120,140,0.55)'); ctx.fillStyle='#ff9fb0'; ctx.font='700 14px ui-monospace,monospace'; ctx.fillText('✕  В МЕНЮ',W/2,UI.quit.y+25);
   } else if(screen==='dead'){
-    if(CORE_TEST_MODE){ UI.dgarage=null; UI.menu={x:W/2-90,y:H*0.34+198,w:180,h:44}; panel(UI.menu.x,UI.menu.y,180,44,'rgba(150,170,210,0.5)'); ctx.fillStyle='#bcd0ee'; ctx.font='13px ui-monospace,monospace'; ctx.fillText('≡  МЕНЮ',W/2,UI.menu.y+27); }
+    if(gameMode==='career'){ const yb=H*0.34+198; UI.menu=null;
+      UI.dgarage={x:W/2-150,y:yb,w:96,h:44}; panel(UI.dgarage.x,UI.dgarage.y,96,44,'rgba(120,255,180,0.85)','rgba(34,54,46,0.5)'); ctx.fillStyle='#9ff0c8'; ctx.font='800 13px ui-monospace,monospace'; ctx.fillText('🔧 ГАРАЖ',UI.dgarage.x+48,yb+27);
+      UI.dretry={x:W/2-50,y:yb,w:100,h:44}; panel(UI.dretry.x,UI.dretry.y,100,44,'rgba(150,180,220,0.75)','rgba(30,40,62,0.5)'); ctx.fillStyle='#cfe0ff'; ctx.font='800 14px ui-monospace,monospace'; ctx.fillText('↻ ЕЩЁ',UI.dretry.x+50,yb+27);
+      UI.dtracks={x:W/2+56,y:yb,w:94,h:44}; panel(UI.dtracks.x,UI.dtracks.y,94,44,'rgba(150,180,220,0.6)','rgba(30,40,62,0.5)'); ctx.fillStyle='#bcd0ee'; ctx.font='700 13px ui-monospace,monospace'; ctx.fillText('☰ ЭТАПЫ',UI.dtracks.x+47,yb+27); }
+    else if(CORE_TEST_MODE){ UI.dgarage=null; UI.dretry=null; UI.dtracks=null; UI.menu={x:W/2-90,y:H*0.34+198,w:180,h:44}; panel(UI.menu.x,UI.menu.y,180,44,'rgba(150,170,210,0.5)'); ctx.fillStyle='#bcd0ee'; ctx.font='13px ui-monospace,monospace'; ctx.fillText('≡  МЕНЮ',W/2,UI.menu.y+27); }
     else {
+    UI.dretry=null; UI.dtracks=null;
     UI.menu={x:W/2-150,y:H*0.34+198,w:140,h:44}; panel(UI.menu.x,UI.menu.y,140,44,'rgba(150,170,210,0.5)'); ctx.fillStyle='#bcd0ee'; ctx.font='13px ui-monospace,monospace'; ctx.fillText('≡  МЕНЮ',UI.menu.x+70,UI.menu.y+27);
     UI.dgarage={x:W/2+10,y:H*0.34+198,w:140,h:44}; panel(UI.dgarage.x,UI.dgarage.y,140,44,'rgba(120,255,180,0.7)','rgba(34,54,46,0.5)'); ctx.fillStyle='#9ff0c8'; ctx.font='800 13px ui-monospace,monospace'; ctx.fillText('🔧 ГАРАЖ',UI.dgarage.x+70,UI.dgarage.y+27); }
   } else if(screen==='garage'){
@@ -1175,7 +1199,7 @@ function drawMenus(){
     { const rk=rankFor(career), nr=nextRank(career); ctx.fillStyle='#9fe0c8'; ctx.font='700 12px ui-monospace,monospace'; ctx.fillText(rk.e+' '+rk.n+(nr?'   до '+nr.e+': $'+Math.max(0,nr.at-career).toLocaleString('en-US'):'   — ВЕРШИНА'),W/2,98); }
     if(buyFlash>0)buyFlash-=0.05;
     UI.upgRows=[]; const rowH=72, gap=7, x0=18, w0=W-36, y0=114;
-    for(let i=0;i<UPGRADES.length;i++){ const u=UPGRADES[i], lvl=upgLvl(u.id), maxed=lvl>=u.max, cost=upgCost(u.id,lvl), afford=!maxed&&bank>=cost, ry=y0+i*(rowH+gap), fl=(buyRow===i)?Math.max(0,buyFlash):0;
+    for(let i=0;i<UPGRADES.length;i++){ const u=UPGRADES[i], lvl=upgOwned(u.id), maxed=lvl>=u.max, cost=upgCost(u.id,lvl), afford=!maxed&&bank>=cost, ry=y0+i*(rowH+gap), fl=(buyRow===i)?Math.max(0,buyFlash):0;
       UI.upgRows.push({x:x0,y:ry,w:w0,h:rowH});
       ctx.fillStyle=fl>0?'rgba('+Math.round(lerp(28,90,fl))+','+Math.round(lerp(48,255,fl))+','+Math.round(lerp(40,180,fl))+',0.82)':(afford?'rgba(28,48,40,0.72)':'rgba(20,22,38,0.62)');
       if(ctx.roundRect){ctx.beginPath();ctx.roundRect(x0,ry,w0,rowH,12);ctx.fill();ctx.strokeStyle=fl>0?'rgba(170,255,205,'+(0.5+0.5*fl)+')':(afford?'rgba(120,255,180,0.6)':(maxed?'rgba(255,214,120,0.5)':'rgba(120,140,180,0.28)'));ctx.lineWidth=fl>0?2.4:1.4;ctx.stroke();}else ctx.fillRect(x0,ry,w0,rowH);
