@@ -46,7 +46,7 @@ function lerp(a,b,t){return a+(b-a)*t;} function clamp(v,a,b){return v<a?a:v>b?b
 // false → full game. Single switch. Systems are GATED, never deleted.
 const CORE_TEST_MODE = true;
 // build stamp — bump on every change so a phone refresh can confirm it loaded fresh code (cache!)
-const BUILD = '2026-06-21 · b62';
+const BUILD = '2026-06-21 · b63';
 
 // ---------- procedural market terrain ----------
 // height map sampled every STEP px; generated forward as we ride. Market character:
@@ -82,7 +82,7 @@ let gapRunup=0, gapRampLeft=0, gapPrevY=0, gapRampBot=0;   // gap FEATURE phases
 let ledgeRunup=0, ledgeStepsLeft=0, ledgePrevY=0, ledgeTopY=0, ledgeStepsThis=2, ledgeHThis=38, nextLedgeX=1400;   // LEDGE phases: flat run-up (set up the wheelie) → riser/tread steps you must LOFT the front to mount. b57: stepsThis/HThis randomize each ledge (variety: single small step ↔ tall 3-step staircase)
 let kickRunup=0, kickRampLeft=0, kickLandLeft=0, kickBaseY=0, kickRampBot=0, kickLandY=0, nextKickX=1700;   // TRICK KICKER phases: DESCENT run-up (bomb down → build speed, logical setup) → steep ramp UP (launches you ∝ speed for flips) → flat solid landing (no chasm)
 let whoopRunup=0, whoopLeft=0, whoopBaseY=0, whoopPhase=0, nextWhoopX=2200;   // WHOOPS (b53): flat approach → a rhythm section of rollers (skim/catch air at speed, roll over slow) — dynamic flow, no death
-let mudLeft=0, mudBaseY=0, nextMudX=2600;   // MUD (b54): a flat boggy section that SAPS speed (weight BACK = rear traction digs through) — honest obstacle, no death
+let mudLeft=0, mudRamp=0, mudBaseY=0, nextMudX=2600;   // MUD (b54/b63): a LIP-ramp → boggy patch you JUMP OVER (clear it = clean; land in it = saps speed). Logical, not random
 let curEvType='', evBanner='', evBannerT=0, evColor='90,240,150', evGlow=0, evBonus=0, lastWarnX=-1, evWarnType=''; // bike-side event state
 function pickEvent(gz){ const z=((gz%5)+5)%5, r=Math.random();
   if(z===2) return r<0.55?'rally':(r<0.82?'flash':'whale');     // Эйфория: pumps
@@ -135,7 +135,8 @@ function genSeg(){
     else if(kickLandLeft>0){ close=clamp(kickLandY,70,H*0.9); walk=close-baseY; kickLandLeft--; }   // flat SOLID landing at the run-up level (no chasm — pure reward feature) → land the flip
     else if(whoopRunup>0){ close=clamp(whoopBaseY,70,H*0.86); walk=close-baseY; whoopRunup--; if(whoopRunup<=0){ whoopLeft=TUNE.whoopN; whoopPhase=0; } }   // WHOOPS flat approach (read the rhythm)
     else if(whoopLeft>0){ whoopPhase+=2.3; close=clamp(whoopBaseY - Math.sin(whoopPhase)*TUNE.whoopAmp, 70, H*0.88); walk=close-baseY; if(whoopLeft===TUNE.whoopN)isWhoop=true; whoopLeft--; }   // BUMPS: a rhythm section of rollers — at speed you skim/catch small air off each crest (un-glued physics), slow = roll over. No chasm = no death; dynamic flow
-    else if(mudLeft>0){ close=clamp(mudBaseY,70,H*0.9); walk=close-baseY; isMud=true; mudLeft--; }   // MUD: flat boggy section — physics saps vx on these nodes (weight back digs through). No death
+    else if(mudRamp>0){ const k=2-mudRamp; close=clamp(mudBaseY - k*18,70,H*0.88); walk=close-baseY; if(mudRamp===1)isKick=true; mudRamp--; if(mudRamp<=0){ mudLeft=TUNE.mudN; } }   // b63: KICKER lip (last node tagged .kick → kickPop launches you ∝ speed) before the mud → fast = clear the bog cleanly; slow = drop into it & bog down
+    else if(mudLeft>0){ close=clamp(mudBaseY,70,H*0.9); walk=close-baseY; isMud=true; mudLeft--; }   // MUD patch (a dip below the lip) — saps vx if you LAND in it; jump it cleanly = no penalty. No death
     else if(TUNE.gapEvery>0 && genX>=nextGapX && genX>TUNE.gapStart*10 && terr.length>20 && regime!=='pump' && regime!=='crash' && lastRegime!=='bull'){   // schedule a gap FEATURE (not mid-climb); the run-up handles the takeoff
       gapPrevY=close; gapRunup=5; nextGapX=genX + TUNE.gapEvery*10 + Math.random()*1400;   // start: descent run-up first
     }
@@ -149,7 +150,7 @@ function genSeg(){
       whoopBaseY=close; whoopRunup=3; nextWhoopX=genX + TUNE.whoopEvery*10*densK + Math.random()*900*densK;
     }
     else if(TUNE.mudEvery>0 && genX>=nextMudX && genX>TUNE.mudStart*10 && terr.length>16 && regime!=='pump' && regime!=='crash' && lastRegime!=='bull'){   // schedule a MUD section (calm terrain)
-      mudBaseY=close; mudLeft=TUNE.mudN; nextMudX=genX + TUNE.mudEvery*10*densK + Math.random()*1100*densK;
+      mudBaseY=close; mudRamp=2; nextMudX=genX + TUNE.mudEvery*10*densK + Math.random()*1100*densK;   // b63: start with the LIP ramp (2 nodes), then the mud patch
     }
   }
   let open = terr.length ? terr[terr.length-1].close : close;
@@ -248,7 +249,7 @@ const TUNE = {
   // ---- ГРЯЗЬ / MUD (b54): участок ЗАСАСЫВАЕТ скорость (не убивает) — несёшь моментум + ВЕС НАЗАД (трекшн прокапывает). Честное препятствие вместо мин ----
   mudEvery:     320,     // 50. ср. дистанция между грязевыми участками (м); 0 = выкл
   mudStart:     250,     // 51. первый участок после (м)
-  mudN:         6,       // 52. длина участка (узлы)
+  mudN:         2,       // 52. длина грязевого участка (узлы). b63: 6→2 — перепрыгиваемо за кикер-воздух (рампа-лип перед ней кидает). Длиннее = труднее перепрыгнуть
   mudDrag:      0.95,    // 53. сап скорости/кадр на грязи (НИЖЕ = сильнее засасывает; 0.93→0.95 чтоб не до стопа). Чистый момент-челлендж: нести скорость + газ
   // ---- ПОСАДОЧНЫЙ АССИСТ (b55): у земли на снижении доворачиваем к склону + гасим спин → флипы приземляются (скилл = сделать флип, не пиксель-перфект). Юзер: «помогать приземляться» ----
   landAssist:   95,      // 54. окно высоты над землёй (px), в котором включается ассист; ближе к земле = сильнее. БОЛЬШЕ = раньше/прощающе ловит флип, МЕНЬШЕ = жёстче (нужна точность)
@@ -413,7 +414,7 @@ function reset(){
   ledgeRunup=0; ledgeStepsLeft=0; ledgeTopY=0; nextLedgeX=TUNE.ledgeStart*10;   // LEDGES: first step after ledgeStart
   kickRunup=0; kickRampLeft=0; kickLandLeft=0; nextKickX=TUNE.kickStart*10;   // KICKERS: first trick ramp after kickStart
   whoopRunup=0; whoopLeft=0; whoopPhase=0; nextWhoopX=TUNE.whoopStart*10;   // WHOOPS: first rhythm section after whoopStart
-  mudLeft=0; nextMudX=TUNE.mudStart*10;   // MUD: first boggy section after mudStart
+  mudLeft=0; mudRamp=0; nextMudX=TUNE.mudStart*10;   // MUD: first boggy section after mudStart
   for(let i=0;i<Math.ceil(W/STEP)+8;i++)genSeg();
   bike={x:60,y:terrainAt(60).y-27.5,vx:0,vy:0,ang:terrainAt(60).ang,angV:0,onG:true,wheel:0,rShift:0};   // rShift = rider weight-shift state (-1 back .. +1 forward), smoothed from the drag input (b47 two-body)
   cam={x:bike.x-W*0.5,y:bike.y-H*0.46}; camAir=0; t=0; coins=0; dist=0; lastMile=0; newDepth=false; wipe=0; screen='play'; shake=0; flash=0; popT=0; daycycle=Math.random()*6.28;
@@ -652,7 +653,7 @@ function update(){
   for(let k=ci0;k<=ci0+4;k++){ const c=terr[k]; if(c&&c.step&&!c.stepDone){ if(c.x<=bike.x) c.stepDone=true; else if(bike.onG) tut('ledge','▲ УСТУП — держи скорость, НАКЛОН ВПЕРЁД заедет чище'); break; } }
   // ---- WHOOPS telegraph: a rhythm section ahead — keep speed to skim the crests ----
   for(let k=ci0+1;k<=ci0+4;k++){ if(terr[k]&&terr[k].whoop){ if(bike.onG) tut('whoop','〰 БУГРЫ — держи СКОРОСТЬ, скользи по верхам (медленно = переваливаешь)'); break; } }
-  for(let k=ci0+1;k<=ci0+4;k++){ if(terr[k]&&terr[k].mud){ if(bike.onG) tut('mud','🟤 ГРЯЗЬ засасывает — РАЗГОНИСЬ заранее и держи ГАЗ (не дай завязнуть)'); break; } }
+  for(let k=ci0+1;k<=ci0+5;k++){ if(terr[k]&&terr[k].mud){ if(bike.onG) tut('mud','🟤 ГРЯЗЬ — РАЗГОНИСЬ и ПЕРЕПРЫГНИ с трамплина (упал в неё = вязнешь)'); break; } }
   // hazards: on the ground they wreck your momentum; clear them in the air to DODGE
   for(let k=ci-1;k<=ci+1;k++){ const c=terr[k]; if(c&&c.haz&&!c.hazHit&&Math.abs(c.x-bike.x)<15){ c.hazHit=true;
     if(bike.onG){ bike.vx*=0.4; shake=9; hitstop=3; mult=Math.max(1,mult-0.8); flash=0.45; popText('REKT!'); floatPop(bike.x,bike.y-28,'-темп','#ff6a86'); sfxCrash(); buzz(45); }
