@@ -47,7 +47,7 @@ function lerp(a,b,t){return a+(b-a)*t;} function clamp(v,a,b){return v<a?a:v>b?b
 // false → full game everywhere. Single switch. Systems are GATED, never deleted.
 const CORE_TEST_MODE = true;
 // build stamp — bump on every change so a phone refresh can confirm it loaded fresh code (cache!)
-const BUILD = '2026-06-21 · b64';
+const BUILD = '2026-06-21 · b65';
 
 // ---------- procedural market terrain ----------
 // height map sampled every STEP px; generated forward as we ride. Market character:
@@ -196,8 +196,8 @@ const TUNE = {
   hillHeight:   80,      // 9c. высота плавной волны рельефа (вторичная к mountain-горам). БОЛЬШЕ = крупнее перекаты
   rockGarden:   0.40,    // 9d. РОК-ГАРДЕН (реальное хард-эндуро: техничный тряский участок) — доля секций-«камней» vs гладких фич (0.30→0.40, больше рваности — график не сплошная линия). 0 = выкл
   rockSize:     5,       // 9e. амплитуда тряски рок-гардена (px). 9→5: мельче → байк ТЕЧЁТ по камням (не подскакивает = не «лагает/зависает»), но трясёт. БОЛЬШЕ = злее/больше подскоков
-  stick:        3.5,     // 9f. ЛИПУЧКА к трассе (px): порог отрыва. b62: 5.0→3.5 — менее приклеен, охотнее вылетает с бугров/гребней (фидбэк «должен слетать как в жизни»). Ниже = прыгуч/твичово. b41: посадка теперь на ОПОРНОЕ колесо (restY, анти-клип) — байк сам «едет по верхам» (отрыв ∝ скорости), поэтому stick 1.1→5.0 возвращает долю воздуха к ~11% (фил b40) без дрожи на мелочи. Ниже = прыгуч/твичово; выше = глаже/приклеенней
-  launch:       5.0,     // 9g. ОТРЫВ С ГРЕБНЯ (центробежный): на выпуклости при скорости (vx²·кривизна > launch) байк СЛЕТАЕТ по касательной. b62: 2.5→5.0 — вылетай только со ЗНАЧИМЫХ гребней на скорости (2.5 кидало с каждой кочки → 23% воздуха, дист падала). ВЫШЕ = реже/липче — физ-объект, не приклеен. Симой: пологое ~16% воздуха, резкие гребни ~31%, рок-гарден ~46%. НИЖЕ = чаще прыгает; ВЫШЕ = липче
+  stick:        2.8,     // 9f. ЛИПУЧКА к трассе (px): порог отрыва. b65: 3.5→2.8 (фидбэк «байк приклеен, не получается подпрыгивать после бугров/подъёмов»). b62: 5.0→3.5 — менее приклеен, охотнее вылетает с бугров/гребней (фидбэк «должен слетать как в жизни»). Ниже = прыгуч/твичово. b41: посадка теперь на ОПОРНОЕ колесо (restY, анти-клип) — байк сам «едет по верхам» (отрыв ∝ скорости), поэтому stick 1.1→5.0 возвращает долю воздуха к ~11% (фил b40) без дрожи на мелочи. Ниже = прыгуч/твичово; выше = глаже/приклеенней
+  launch:       3.0,     // 9g. ОТРЫВ С ГРЕБНЯ (центробежный): на выпуклости при скорости (vx²·кривизна > launch) байк СЛЕТАЕТ по касательной. b65: 5.0→3.0 (фидбэк «приклеен, не подпрыгивает с бугров/гребней» — 5.0 переборщил с залипанием). Сим: воздух 19.8%→24.7%, дист держится ~925м, без всплеска смертей. b62: 2.5→5.0 (2.5 кидало с каждой кочки). НИЖЕ = чаще прыгает с гребней; ВЫШЕ = липче
   obstacleFreq: 1.0,     // 10. частота препятствий — множитель плотности sell-wall (×1 = как сейчас, 0 = нет)
   easeInDist:   350,     // 11. «мягкий въезд» (м): за сколько loop-forgiveness + волна доходят до полной (короче = скилл нужен рано)
   loopForgive:  1.8,     // 12. порог опрокидывания НА СТАРТЕ (рад): высокий = стойки на колесе держатся; спадает к PHYS.LOOP
@@ -626,7 +626,9 @@ function update(){
     jumpGrace=0;                                                       // jump arc over
     let diff=Math.abs(rel); lastLandDiff=diff;
     if(airT>14 && diff>BK().grip+0.45+0.07*upgLvl('grip')){ wipeout('crash'); }   // b55: +0.45 forgiveness margin on top of the landing assist → a flip that lands NOT-perfectly-level still lands (user: that's OK, not a glitch). Crash only on a really sideways/upside-down touchdown
-    else { sfxLand(); bike.angV*=0.3;
+    else { sfxLand();
+      // b65: on a REAL-AIR landing (airT>10 — a jump/flip, not a tiny whoop-skip) SETTLE the touchdown to wheels-down (nearest full turn relative to the slope) + kill most residual spin → a COMPLETED flip no longer instantly LOOPS-OUT on the same grounded frame (the loop-check below ran on the leftover nose-up angle/spin). Skill = the air rotation; the touchdown is forgiven (b55/b61 intent). Crash-check above still rejects a truly sideways landing. rel is recomputed so the loop/endo check sees the corrected angle. Tiny terrain-skips (airT≤10) keep their flow (gentle damp only).
+      if(airT>10){ bike.ang=Math.round((bike.ang-supA)/6.2832)*6.2832+supA; bike.angV*=0.15; rel=bike.ang-supA; while(rel>Math.PI)rel-=6.283; while(rel<-Math.PI)rel+=6.283; } else bike.angV*=0.3;
       if(airT>28){ const ab=Math.round(airT*2.2*mult); pnl+=ab; mult+=0.4; boost=Math.min(1,(boost||0)+0.3); multPulse=1; popText('BIG AIR  +$'+ab.toLocaleString('en-US')); floatPop(bike.x,bike.y-30,'+$'+ab,'#9ff0ff'); gflash=0.6; shake=7; sfxAir(); buzz(18); }
       else if(diff<0.16 && airT>10){ coins+=2; floatPop(bike.x,bike.y-34,'CLEAN +◆2','#aef0ff'); }
       if(flipCount){ flipsTotal+=flipCount; mult+=flipCount*0.6; boost=Math.min(1,(boost||0)+0.22*flipCount); multPulse=1; const gain=Math.round(flipCount*40*mult); pnl+=gain; coins+=flipCount; popText('FLIP ×'+flipCount+'   +$'+gain.toLocaleString('en-US')); shake=9; hitstop=4; gflash=0.7; sfxFlip(); }
@@ -1254,7 +1256,7 @@ function dbgTick(){
     +'<b>'+(dist||0)+'</b>m · дамп <span class="'+wc+'">'+gapM+'m</span><br>'
     +'<span class="lab">'+state+' · CORE '+(CORE_TEST_MODE?'ON':'OFF')+' · '+BUILD+'</span>';
 }
-function loop(){ if(screen==='play')update(); draw(); musicTick(); dbgTick(); requestAnimationFrame(loop); }
+function loop(){ requestAnimationFrame(loop); try{ if(screen==='play')update(); draw(); musicTick(); dbgTick(); }catch(e){ if(!loop._e){loop._e=1; console.error('CHART loop error (self-healed, screen='+screen+'):',e&&e.stack||e); } } }   // b65: rAF re-requested FIRST + try/catch → one bad frame can no longer permanently FREEZE the game (was: any throw skipped the re-request → stuck until a page refresh, matching the "магазин дёргается/не работает до обновления" report). The first error is logged so the real cause surfaces.
 function shakeApply(){} // (shake folded into camera draw via translate jitter)
 toTitle();
 // apply shake in draw by jittering before skyGrad
