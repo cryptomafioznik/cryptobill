@@ -46,7 +46,7 @@ function lerp(a,b,t){return a+(b-a)*t;} function clamp(v,a,b){return v<a?a:v>b?b
 // false → full game. Single switch. Systems are GATED, never deleted.
 const CORE_TEST_MODE = true;
 // build stamp — bump on every change so a phone refresh can confirm it loaded fresh code (cache!)
-const BUILD = '2026-06-21 · b61';
+const BUILD = '2026-06-21 · b62';
 
 // ---------- procedural market terrain ----------
 // height map sampled every STEP px; generated forward as we ride. Market character:
@@ -194,8 +194,8 @@ const TUNE = {
   hillHeight:   80,      // 9c. высота плавной волны рельефа (вторичная к mountain-горам). БОЛЬШЕ = крупнее перекаты
   rockGarden:   0.40,    // 9d. РОК-ГАРДЕН (реальное хард-эндуро: техничный тряский участок) — доля секций-«камней» vs гладких фич (0.30→0.40, больше рваности — график не сплошная линия). 0 = выкл
   rockSize:     5,       // 9e. амплитуда тряски рок-гардена (px). 9→5: мельче → байк ТЕЧЁТ по камням (не подскакивает = не «лагает/зависает»), но трясёт. БОЛЬШЕ = злее/больше подскоков
-  stick:        5.0,     // 9f. ЛИПУЧКА к трассе (px): порог отрыва. b41: посадка теперь на ОПОРНОЕ колесо (restY, анти-клип) — байк сам «едет по верхам» (отрыв ∝ скорости), поэтому stick 1.1→5.0 возвращает долю воздуха к ~11% (фил b40) без дрожи на мелочи. Ниже = прыгуч/твичово; выше = глаже/приклеенней
-  launch:       2.5,     // 9g. ОТРЫВ С ГРЕБНЯ (центробежный): на выпуклости при скорости (vx²·кривизна > launch) байк СЛЕТАЕТ по касательной — физ-объект, не приклеен. Симой: пологое ~16% воздуха, резкие гребни ~31%, рок-гарден ~46%. НИЖЕ = чаще прыгает; ВЫШЕ = липче
+  stick:        3.5,     // 9f. ЛИПУЧКА к трассе (px): порог отрыва. b62: 5.0→3.5 — менее приклеен, охотнее вылетает с бугров/гребней (фидбэк «должен слетать как в жизни»). Ниже = прыгуч/твичово. b41: посадка теперь на ОПОРНОЕ колесо (restY, анти-клип) — байк сам «едет по верхам» (отрыв ∝ скорости), поэтому stick 1.1→5.0 возвращает долю воздуха к ~11% (фил b40) без дрожи на мелочи. Ниже = прыгуч/твичово; выше = глаже/приклеенней
+  launch:       5.0,     // 9g. ОТРЫВ С ГРЕБНЯ (центробежный): на выпуклости при скорости (vx²·кривизна > launch) байк СЛЕТАЕТ по касательной. b62: 2.5→5.0 — вылетай только со ЗНАЧИМЫХ гребней на скорости (2.5 кидало с каждой кочки → 23% воздуха, дист падала). ВЫШЕ = реже/липче — физ-объект, не приклеен. Симой: пологое ~16% воздуха, резкие гребни ~31%, рок-гарден ~46%. НИЖЕ = чаще прыгает; ВЫШЕ = липче
   obstacleFreq: 1.0,     // 10. частота препятствий — множитель плотности sell-wall (×1 = как сейчас, 0 = нет)
   easeInDist:   350,     // 11. «мягкий въезд» (м): за сколько loop-forgiveness + волна доходят до полной (короче = скилл нужен рано)
   loopForgive:  1.8,     // 12. порог опрокидывания НА СТАРТЕ (рад): высокий = стойки на колесе держатся; спадает к PHYS.LOOP
@@ -552,7 +552,9 @@ function update(){
   const _ca=Math.cos(bike.ang), _sa=Math.sin(bike.ang);
   const restY = Math.min(terrainAt(bike.x-DX*_ca-DY*_sa).y - (-DX*_sa+DY*_ca), terrainAt(bike.x+DX*_ca-DY*_sa).y - (DX*_sa+DY*_ca));
   bike.vy += P.GRAV;
-  let grounded = !frontDrop && (bike.y + bike.vy >= restY - P.STICK);   // on the floor unless momentum lifts you over a crest (EMERGENT launch) or the ground drops away (frontDrop) — this un-glues the bike
+  const _aheadA=terrainAt(bike.x+Math.max(16,bike.vx*3)).ang, _conv=_aheadA-supA;   // slope a bit ahead vs here: convex crest/bump = _conv>0 (terrain curving away beneath you)
+  const flyOff = _conv>0.05 && bike.vx*bike.vx*_conv > P.LAUNCH;   // b62: CENTRIFUGAL LAUNCH — over a convex crest/bump AT SPEED the bike can't hug the curve → it flies off tangentially (real life: hit a bump fast = you launch). Restored (was removed b38). The carried slope-vy is the launch velocity
+  let grounded = !frontDrop && !flyOff && (bike.y + bike.vy >= restY - P.STICK);   // on the floor unless momentum lifts you over a crest (EMERGENT launch) / flies off a bump (flyOff) / the ground drops away (frontDrop) — un-glues the bike
   if(grounded) coyote=gapNear?TUNE.gapCoyote:8; else if(coyote>0) coyote--;   // coyote grace, wider at gap lips
   if(jumpCd>0)jumpCd--;
   if(jumpReq>0){ if((grounded||coyote>0) && jumpCd<=0){ bike.vy=-P.JUMP; grounded=false; coyote=0; jumpReq=0; jumpCd=16; airT=0; nearMissed=false; bike.angV*=0.3; jumpGrace=1; shake=Math.max(shake,3); for(let e=0;e<7;e++)dust.push({x:bike.x-10+Math.random()*20,y:bike.y+24,vx:(Math.random()-0.5)*2.4,vy:-Math.random()*2,life:1,r:Math.random()*2.4+1}); sfxAir(); } else jumpReq--; }   // on-demand hop (buffered + coyote) — adds height when momentum alone won't clear
