@@ -47,7 +47,7 @@ function lerp(a,b,t){return a+(b-a)*t;} function clamp(v,a,b){return v<a?a:v>b?b
 // false → full game everywhere. Single switch. Systems are GATED, never deleted.
 const CORE_TEST_MODE = true;
 // build stamp — bump on every change so a phone refresh can confirm it loaded fresh code (cache!)
-const BUILD = '2026-06-22 · b66';
+const BUILD = '2026-06-22 · b67';
 
 // ---------- procedural market terrain ----------
 // height map sampled every STEP px; generated forward as we ride. Market character:
@@ -199,7 +199,6 @@ const TUNE = {
   rockSize:     5,       // 9e. амплитуда тряски рок-гардена (px). 9→5: мельче → байк ТЕЧЁТ по камням (не подскакивает = не «лагает/зависает»), но трясёт. БОЛЬШЕ = злее/больше подскоков
   stick:        2.8,     // 9f. ЛИПУЧКА к трассе (px): порог отрыва. b65: 3.5→2.8 (фидбэк «байк приклеен, не получается подпрыгивать после бугров/подъёмов»). b62: 5.0→3.5 — менее приклеен, охотнее вылетает с бугров/гребней (фидбэк «должен слетать как в жизни»). Ниже = прыгуч/твичово. b41: посадка теперь на ОПОРНОЕ колесо (restY, анти-клип) — байк сам «едет по верхам» (отрыв ∝ скорости), поэтому stick 1.1→5.0 возвращает долю воздуха к ~11% (фил b40) без дрожи на мелочи. Ниже = прыгуч/твичово; выше = глаже/приклеенней
   launch:       2.0,     // 9g. ОТРЫВ С ГРЕБНЯ (центробежный): на выпуклости при скорости (vx²·кривизна > launch) байк СЛЕТАЕТ. b66: 3.0→2.0 + смотрим ДАЛЬШЕ вперёд (vx*5) → ловим гребень/обрыв РАНЬШЕ пика, пока есть запас скорости. b65 3.0 всё ещё «приклеен» (фидбэк: «совсем не вылетает с обрывов/подъёмов, низ тянет»). НИЖЕ = чаще прыгает; ВЫШЕ = липче
-  launchPop:    3.2,     // 9h. b66: СИЛА ОТРЫВА с гребня/бугра/обрыва — при flyOff даём ВВЕРХ vy ∝ vx×кривизна×это (кап 14). Раньше отрыв был с vy≈0 (на пике касательная горизонтальна) → байк просто падал, не «вылетал». Теперь реально подпрыгивает с бугров/съезжает с обрывов снарядом. БОЛЬШЕ = выше пуляет с гребней; 0 = старый вялый отрыв
   obstacleFreq: 1.0,     // 10. частота препятствий — множитель плотности sell-wall (×1 = как сейчас, 0 = нет)
   easeInDist:   350,     // 11. «мягкий въезд» (м): за сколько loop-forgiveness + волна доходят до полной (короче = скилл нужен рано)
   loopForgive:  1.8,     // 12. порог опрокидывания НА СТАРТЕ (рад): высокий = стойки на колесе держатся; спадает к PHYS.LOOP
@@ -567,7 +566,7 @@ function update(){
   const _aheadA=terrainAt(bike.x+Math.max(28,bike.vx*5)).ang, _conv=_aheadA-supA;   // b66: look FURTHER ahead (vx*5, ≥1 STEP) → catch a convex crest/bump/drop while still on the up-ramp (upward momentum), not at the peak where the tangent is already flat & vy≈0
   const flyOff = _conv>0.04 && bike.vx*bike.vx*_conv > P.LAUNCH;   // CENTRIFUGAL LAUNCH — over a convex crest/bump/drop AT SPEED the bike can't hug the curve → it flies off (real life: hit a bump fast = you launch)
   let grounded = !frontDrop && !flyOff && (bike.y + bike.vy >= restY - P.STICK);   // on the floor unless flyOff lifts you off a crest/drop / the ground drops away (frontDrop) — un-glues the bike
-  if(flyOff && wasG){ bike.vy = Math.min(bike.vy, -Math.min(bike.vx*_conv*TUNE.launchPop, 14)); }   // b66: LAUNCH POP — leave the crest/bump/drop with REAL upward velocity ∝ speed × sharpness (was ~0 at the peak → the bike just fell instead of flying). THIS is the "вылетает с бугров/гребней/обрывов, не приклеен/низ тянет" feel the rider needs
+  if(flyOff && wasG){ bike.vy = bike.vx*Math.tan(clamp(supA,-1.35,1.35)); }   // b67: REAL PROJECTILE LAUNCH — leave the crest/lip/drop carrying the TRUE TANGENTIAL velocity (vx, vx·tanθ at the takeoff angle), NOT a scripted pop. The arc = your speed × takeoff angle (steep lip at speed = big arc; gentle hill = long shallow arc; slow = just roll over). "Байк не прыгает — летит соразмерно тому, как едет"; gravity does the rest in the air
   if(grounded) coyote=gapNear?TUNE.gapCoyote:8; else if(coyote>0) coyote--;   // coyote grace, wider at gap lips
   if(jumpCd>0)jumpCd--;
   if(jumpReq>0){ if((grounded||coyote>0) && jumpCd<=0){ bike.vy=-P.JUMP; grounded=false; coyote=0; jumpReq=0; jumpCd=16; airT=0; nearMissed=false; bike.angV*=0.3; jumpGrace=1; shake=Math.max(shake,3); for(let e=0;e<7;e++)dust.push({x:bike.x-10+Math.random()*20,y:bike.y+24,vx:(Math.random()-0.5)*2.4,vy:-Math.random()*2,life:1,r:Math.random()*2.4+1}); sfxAir(); } else jumpReq--; }   // on-demand hop (buffered + coyote) — adds height when momentum alone won't clear
@@ -604,7 +603,7 @@ function update(){
     bike.wheel += 0.3;
   }
   // ---- TRICK KICKER lip: POP up ∝ speed (the ramp throws you — reward launch for flips; fly straight = safe, flip = risk/reward; NO chasm = no fall) ----
-  if(!rearBal && terr[ci0] && terr[ci0].kick && !terr[ci0].kicked && bike.vx>1.0){ terr[ci0].kicked=true; bike.vy=Math.min(bike.vy, Math.max(-20, -(bike.vx*TUNE.kickPop+4))); grounded=false; airT=0; nearMissed=false; gflash=Math.max(gflash,0.4); shake=Math.max(shake,5); sfxAir(); for(let e=0;e<8;e++)dust.push({x:bike.x-8+Math.random()*16,y:bike.y+22,vx:(Math.random()-0.5)*3.2,vy:-Math.random()*2.8,life:1,r:Math.random()*2.6+1.2}); }   // b49: pop now SCALES with speed (was a near-fixed -14 base → "unnatural throw" on some, "no launch" on slow ones). At cruise ~5.6 ≈ -17 (flip-able, unchanged), slow = gentle hop (consistent — always launches), fast caps -20. Camera zooms OUT to keep big air on-screen
+  if(!rearBal && terr[ci0] && terr[ci0].kick && !terr[ci0].kicked && bike.vx>1.0){ terr[ci0].kicked=true; bike.vy=Math.min(bike.vy, Math.max(-22, -bike.vx*TUNE.kickPop)); grounded=false; airT=0; nearMissed=false; gflash=Math.max(gflash,0.4); shake=Math.max(shake,5); sfxAir(); for(let e=0;e<8;e++)dust.push({x:bike.x-8+Math.random()*16,y:bike.y+22,vx:(Math.random()-0.5)*3.2,vy:-Math.random()*2.8,life:1,r:Math.random()*2.6+1.2}); }   // b67: kicker launch now PURELY ∝ speed (dropped the +4 fixed impulse = the "jump even when slow" the rider flagged). Steep ramp hit FAST = big air, slow = small hop — real, not a scripted pop. kickPop = the ramp's launch coefficient (effective takeoff angle). Camera zooms OUT to keep big air on-screen
   bike.vx*=P.DRAG; if(bike.vx<0)bike.vx*=0.95;                          // drag (emergent top speed, no hard cap) + roll-back resistance
   bike.angV*=P.ANGD;                                                   // angular damping — CONTROLLABLE rotation (b42's free-spin in air span the bike chaotically per playtest → reverted)
   if(bike.angV>P.AVMAX)bike.angV=P.AVMAX; else if(bike.angV<-P.AVMAX)bike.angV=-P.AVMAX;
