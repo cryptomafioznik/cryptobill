@@ -49,7 +49,7 @@ function lerp(a,b,t){return a+(b-a)*t;} function clamp(v,a,b){return v<a?a:v>b?b
 // false → full game everywhere. Single switch. Systems are GATED, never deleted.
 const CORE_TEST_MODE = false;   // b70: META LIVE — building the progression spine (upgrades/bikes with teeth, career, economy) on the confirmed rigid-body core
 // build stamp — bump on every change so a phone refresh can confirm it loaded fresh code (cache!)
-const BUILD = '2026-06-23 · b73';
+const BUILD = '2026-06-23 · b74';
 
 // ---------- procedural market terrain ----------
 // height map sampled every STEP px; generated forward as we ride. Market character:
@@ -347,7 +347,7 @@ function saveProg(){ try{localStorage.setItem('cipher_upg',JSON.stringify(upg));
 const DAILY=50; let dailyBonus=0, dailyBonusT=0;
 function checkDaily(){ try{ const today=new Date().toDateString(); if(localStorage.getItem('cipher_lastday')!==today){ localStorage.setItem('cipher_lastday',today); bank+=DAILY; saveMeta(); dailyBonus=DAILY; dailyBonusT=1; } }catch(e){} }
 // ---- CAREER MODE (b60): a campaign of TRACKS with a FINISH line, increasing difficulty via diffOffset (the track starts deeper in the distance-based difficulty ramp). Reuses the endless ride + the meta (gems/upgrades). ----
-const CAREER_TRACKS=[]; for(let i=0;i<12;i++){ CAREER_TRACKS.push({ name:'ЭТАП '+(i+1), len:600+i*170, diff:i*300, biome:i%5, gems:30+i*18, waveMul:1+i*0.03 }); }   // b73: POWER-GATE — len 600→2470, diff 0→3300, waveMul 1.0→1.33 (per-stage wave speed). Late stages need ДВИГАТЕЛЬ/ЩИТ/СЦЕПЛЕНИЕ. GENTLE first pass = ГИПОТЕЗА ПОД РУКИ (bot can't validate post-skill-bite — calibrate waveMul/len/diff by hand)   // biome:i%5 (BIOMES is declared below — avoid a TDZ ref at init; BIOMES[T.biome] is read later at draw time)
+const CAREER_TRACKS=[]; for(let i=0;i<12;i++){ CAREER_TRACKS.push({ name:'ЭТАП '+(i+1), len:600+i*230, diff:i*320, biome:i%5, gems:40+i*22, waveMul:1+i*0.09 }); }   // b74: POWER-GATE КРУЧЕ (юзер со скиллом проходил мягкий пресет на стоке легко) — len 600→3130, diff 0→3520, waveMul 1.0→1.99 (волна вдвое быстрее на эт.12). Без ДВИГАТЕЛЬ/ЩИТ/СЦЕПЛЕНИЕ не выехать. Юзер найдёт стену → калибруем   // biome:i%5 (BIOMES is declared below — avoid a TDZ ref at init; BIOMES[T.biome] is read later at draw time)
 let gameMode='endless', careerTrack=0, careerMax=0, diffOffset=0, finishDist=0, careerWon=false, careerWaveMul=1;   // careerMax = highest UNLOCKED track index (0 = only ЭТАП 1); diffOffset/finishDist set per track at reset
 try{careerMax=+localStorage.getItem('cipher_career_max')||0;}catch(e){}
 function saveCareer(){ try{localStorage.setItem('cipher_career_max',careerMax);}catch(e){} }
@@ -1384,7 +1384,8 @@ function loop(){ requestAnimationFrame(loop); try{ if(screen==='play')update(); 
 function shakeApply(){} // (shake folded into camera draw via translate jitter)
 toTitle();
 // apply shake in draw by jittering before skyGrad
-const _draw=draw; draw=function(){ if(shake>0.3){ctx.save();ctx.translate((Math.random()-0.5)*shake,(Math.random()-0.5)*shake);_draw();ctx.restore();}else _draw(); };
+const _draw=draw; draw=function(){ if(screen!=='play'){ if(shake>0.01)shake*=0.8; if(flash>0.01)flash*=0.85; if(gflash>0.01)gflash*=0.85; }   // b74 FIX «трясучка»: shake/flash/gflash затухали только в update() (а он не идёт вне игры) → на dead/garage тряслось вечно. Теперь гасим и вне игры
+  if(shake>0.3){ctx.save();ctx.translate((Math.random()-0.5)*shake,(Math.random()-0.5)*shake);_draw();ctx.restore();}else _draw(); };
 requestAnimationFrame(loop);
 </script>
 </body>
