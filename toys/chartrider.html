@@ -49,7 +49,7 @@ function lerp(a,b,t){return a+(b-a)*t;} function clamp(v,a,b){return v<a?a:v>b?b
 // false → full game everywhere. Single switch. Systems are GATED, never deleted.
 const CORE_TEST_MODE = false;   // b70: META LIVE — building the progression spine (upgrades/bikes with teeth, career, economy) on the confirmed rigid-body core
 // build stamp — bump on every change so a phone refresh can confirm it loaded fresh code (cache!)
-const BUILD = '2026-06-23 · b70';
+const BUILD = '2026-06-23 · b71';
 
 // ---------- procedural market terrain ----------
 // height map sampled every STEP px; generated forward as we ride. Market character:
@@ -330,6 +330,11 @@ const UPGRADES=[
 function upgCost(id,lvl){ const base={eng:45,grip:55,pump:55,wave:65,air:50,mag:40}[id]||50; return Math.round(base*(1+lvl*0.95)); }
 const RANKS=[{n:'КРЕВЕТКА',e:'🦐',at:0,rew:0},{n:'КРАБ',e:'🦀',at:25000,rew:80},{n:'РЫБА',e:'🐟',at:100000,rew:180},{n:'ДЕЛЬФИН',e:'🐬',at:350000,rew:400},{n:'АКУЛА',e:'🦈',at:1000000,rew:800},{n:'КИТ',e:'🐋',at:3000000,rew:1500}];
 let upg={}, career=0, buyFlash=0, buyRow=-1, rankMul=1, rankedUp=null;
+// b71: LEVERAGE BET (Endless) — pick ×2..100 → multiplies the gem payout AND the risk (faster dump). TAKE-PROFIT (cash out) banks it; crash/caught = LIQUIDATION (lose all but a small insurance). PnL is fed by distance+coins+tricks → collecting coins at high leverage = the greed hook.
+const LEVS=[2,5,10,25,50,100], COIN_GEM=0.1, LIQ_KEEP=0.25;   // b71: gems = coins × COIN_GEM × leverage (cash out) · × COIN_GEM × LIQ_KEEP (liquidation). Coins = POSITION → collect + leverage = greed hook. COIN_GEM tunes the grind (~40 ×2-runs to max all; faster at high leverage = риск). ECONOMY tuning = by hands
+let leverage=2; try{leverage=+localStorage.getItem('cipher_lev')||2; if(LEVS.indexOf(leverage)<0)leverage=2;}catch(e){}
+let cashedOut=false, runGems=0;   // cashedOut = voluntary take-profit this run; runGems = gems banked from the last run (shown on the end screen)
+function saveLev(){ try{localStorage.setItem('cipher_lev',leverage);}catch(e){} }
 function rankIdx(c){ let i=0; for(let k=0;k<RANKS.length;k++)if(c>=RANKS[k].at)i=k; return i; }
 try{upg=JSON.parse(localStorage.getItem('cipher_upg')||'{}')||{};}catch(e){upg={};}
 try{career=+localStorage.getItem('cipher_career')||0;}catch(e){}
@@ -454,7 +459,7 @@ function reset(){
   for(let i=0;i<Math.ceil(W/STEP)+8;i++)genSeg();
   bike={x:60,y:terrainAt(60).y-27.5,vx:0,vy:0,ang:terrainAt(60).ang,angV:0,onG:true,wheel:0,rShift:0};   // rShift = rider weight-shift state (-1 back .. +1 forward), smoothed from the drag input (b47 two-body)
   cam={x:bike.x-W*0.5,y:bike.y-H*0.46}; camAir=0; t=0; coins=0; dist=0; lastMile=0; newDepth=false; wipe=0; screen='play'; shake=0; flash=0; popT=0; daycycle=Math.random()*6.28;
-  mult=1; pnl=0; airT=0; nearMissed=false; hitstop=0; gflash=0; multPulse=0; maxMult=1; flipCount=0; flipAcc=0; wheelieT=0;
+  mult=1; pnl=0; airT=0; nearMissed=false; hitstop=0; gflash=0; multPulse=0; maxMult=1; flipCount=0; flipAcc=0; wheelieT=0; cashedOut=false; runGems=0;
   flipsTotal=0; topKmh=0; lastLandDiff=0; lean=0; rush=0; prevVx=0; down=false; brake=false; jumpReq=0; jumpCd=0; coyote=0; jumpGrace=0; activeTouches={}; leanX=0; ctrlId=null; leanKeyL=false; leanKeyR=false; wave=bike.x-W*0.95; waveSpd=0; deathBy=''; boost=0; boosting=0;
   zone=-1; biomeBanner=''; biomeBannerT=0; BSKY=['rgb(20,16,48)','rgb(46,30,78)','rgb(150,80,110)','rgb(230,150,110)']; BLINE='228,250,255'; BRIDGE='60,40,90'; rollMissions();
   parts=[]; dust=[]; trail=[]; streaks=[]; floats=[];
@@ -474,6 +479,7 @@ function pointerDown(p){
     if(hit(p,UI.mute)){ toggleMute(); sfxClick(); return; }
     if(hit(p,UI.settings)){ settingsRet='title'; screen='settings'; sfxClick(); return; }
     if(UI.career && hit(p,UI.career)){ screen='career'; sfxClick(); return; }   // b60: enter career track-select
+    if(UI.lev && hit(p,UI.lev)){ leverage=LEVS[(LEVS.indexOf(leverage)+1)%LEVS.length]; saveLev(); sfxClick(); return; }   // b71: cycle LEVERAGE bet
     const b=BIKES[selBike];
     if(owned.indexOf(selBike)<0){ if(hit(p,UI.action)){ if(bank>=b.cost){ bank-=b.cost; owned.push(selBike); saveMeta(); sfxLev(); } else sfxClick(); } return; }
     if(hit(p,UI.action)){ gameMode='endless'; reset(); sfxClick(); }   // b60: ▶ ЭНДЛЕСС
@@ -517,6 +523,7 @@ function pointerDown(p){
     if(gameMode==='career'){ sfxClick(); return; }   // career: only the explicit buttons act (no tap-anywhere-retry → avoids mis-taps near ГАРАЖ)
     if(hit(p,UI.menu)) toTitle(); else reset(); sfxClick(); return; }
   if(hit(p,UI.pause)){ screen='paused'; sfxClick(); return null; }
+  if(UI.cashBtn && hit(p,UI.cashBtn)){ cashOut(); return 'tap'; }                 // b71: tap TAKE-PROFIT button
   if(UI.pumpBtn && hit(p,UI.pumpBtn)){ activateBoost(); return 'tap'; }          // tap PUMP button
   if((boost||0)>=1 && UI.boost && hit(p,UI.boost)){ activateBoost(); return 'tap'; } // charged meter (desktop) also fires
   if(UI.jumpBtn && hit(p,UI.jumpBtn)){ requestJump(); return 'tap'; }            // tap JUMP button (button schemes)
@@ -790,7 +797,7 @@ function update(){
   if((boost||0)>=1 && screen==='play') tut('pump','⚡ PUMP ЗАРЯЖЕН — '+('ontouchstart'in window?'ЖМИ ⚡PUMP':'SHIFT')+' ЧТОБ ОТОРВАТЬСЯ');
   if(tutT>0) tutT-=0.0062;
   // chasing LIQUIDATION wave (the dump): ramps with distance + biome, caps its lead so it always looms; catch = death
-  waveSpd = (TUNE.waveSpeed + (Math.min((dist||0)/150, 4.8) + Math.max(0,((dist||0)-700)/620))*TUNE.waveAccel) * BIOMES[(((zone||0)%BIOMES.length)+BIOMES.length)%BIOMES.length].wave * (curEvType==='whale'?1.75:1) * lerp(0.6,1,clamp((dist||0)/TUNE.easeInDist,0,1)) * (1-0.07*upgLvl('wave'));   // ramps, then keeps creeping past 700m (no cap) → an eventual wall that ДВИЖОК/ЩИТ push deeper   // re-tuned for the heavier momentum bike; surges during a whale dump
+  waveSpd = (TUNE.waveSpeed + (Math.min((dist||0)/150, 4.8) + Math.max(0,((dist||0)-700)/620))*TUNE.waveAccel) * BIOMES[(((zone||0)%BIOMES.length)+BIOMES.length)%BIOMES.length].wave * (curEvType==='whale'?1.75:1) * lerp(0.6,1,clamp((dist||0)/TUNE.easeInDist,0,1)) * (1-0.07*upgLvl('wave')) * (gameMode==='endless'?(1+(leverage-2)*0.010):1);   // b71: higher LEVERAGE = faster dump = real risk (Endless). ramps, then keeps creeping past 700m (no cap) → an eventual wall that ДВИЖОК/ЩИТ push deeper   // re-tuned for the heavier momentum bike; surges during a whale dump
   wave += waveSpd;
   const leadCap = W*lerp(0.92, 0.36, clamp((dist||0)/320,0,1));   // dump closes in over the first ~320m → then a constant chase (front sits at the left edge)
   if(bike.x - wave > leadCap) wave = bike.x - leadCap;
@@ -840,7 +847,14 @@ function resolveEvent(type){ if(screen!=='play')return;          // payoff when 
 function winRun(){ careerWon=true; screen='won'; const T=CAREER_TRACKS[careerTrack]; if(careerTrack>=careerMax && careerTrack<CAREER_TRACKS.length-1){ careerMax=careerTrack+1; saveCareer(); } bank+=T.gems||0; saveMeta(); if(dist>best){best=dist;try{localStorage.setItem('cipher_run_best',best);}catch(e){}} flash=0.6; gflash=0.85; shake=8; sfxRankUp(); buzz([25,40,25,60]); }   // b60: career track FINISHED → unlock next + award gems
 function wipeout(reason){ deathBy=reason||'crash'; screen='dead'; shake=20; flash=1; sfxCrash(); buzz((reason==='wave')?[70,40,110]:[50,30,70]); for(let i=0;i<28;i++)parts.push({x:bike.x,y:bike.y,vx:(Math.random()-0.5)*8,vy:-Math.random()*6,life:1,r:Math.random()*3+1}); if(dist>best){best=dist;try{localStorage.setItem('cipher_run_best',best);}catch(e){}} pnl=Math.floor(pnl);
   careerDeathGems=0; if(gameMode==='career'){ const T=CAREER_TRACKS[careerTrack]||CAREER_TRACKS[0]; careerDeathGems=Math.round((T.gems||0)*clamp(dist/Math.max(1,finishDist),0,1)*0.4); if(careerDeathGems>0){ bank+=careerDeathGems; saveMeta(); } }   // CAREER consolation: partial gems by distance reached → failing a gate still funds upgrades (no soft-lock); finishing pays the full T.gems
-  if(!CORE_TEST_MODE){ if(pnl>bestPnl){bestPnl=pnl;try{localStorage.setItem('cipher_best_pnl',bestPnl);}catch(e){}} bank+=coins; const oi=rankIdx(career); career+=pnl; const ni=rankIdx(career); if(ni>oi){ let bonus=0; for(let r=oi+1;r<=ni;r++)bonus+=RANKS[r].rew; bank+=bonus; rankedUp={rank:RANKS[ni],bonus:bonus}; sfxRankUp(); buzz([25,50,25,70]); } saveProg(); saveMeta(); } }   // CORE TEST: only the distance record is saved; economy frozen
+  if(!CORE_TEST_MODE){ if(pnl>bestPnl){bestPnl=pnl;try{localStorage.setItem('cipher_best_pnl',bestPnl);}catch(e){}} if(gameMode==='endless'){ cashedOut=false; runGems=Math.round((coins||0)*COIN_GEM*LIQ_KEEP); bank+=runGems; } else { bank+=coins; }   // b71: ENDLESS crash/caught = LIQUIDATION → keep only LIQ_KEEP of collected coins, lose the leverage upside (the sting). career keeps its own consolation
+    const oi=rankIdx(career); career+=pnl; const ni=rankIdx(career); if(ni>oi){ let bonus=0; for(let r=oi+1;r<=ni;r++)bonus+=RANKS[r].rew; bank+=bonus; rankedUp={rank:RANKS[ni],bonus:bonus}; sfxRankUp(); buzz([25,50,25,70]); } saveProg(); saveMeta(); } }
+function cashOut(){ if(screen!=='play'||gameMode!=='endless'||(pnl||0)<=0)return;   // b71: TAKE PROFIT — bank the FULL leveraged PnL & end the run safely (the greed↔safety decision)
+  cashedOut=true; pnl=Math.floor(pnl); runGems=Math.round((coins||0)*COIN_GEM*leverage); bank+=runGems; deathBy='cashout';
+  if(pnl>bestPnl){bestPnl=pnl;try{localStorage.setItem('cipher_best_pnl',bestPnl);}catch(e){}}
+  if(dist>best){best=dist;try{localStorage.setItem('cipher_run_best',best);}catch(e){}}
+  const oi=rankIdx(career); career+=pnl; const ni=rankIdx(career); if(ni>oi){ let bonus=0; for(let r=oi+1;r<=ni;r++)bonus+=RANKS[r].rew; bank+=bonus; rankedUp={rank:RANKS[ni],bonus:bonus}; }
+  saveProg(); saveMeta(); screen='dead'; flash=0.4; gflash=0.8; shake=4; sfxLev(); buzz([20,40,20]); }   // CORE TEST: only the distance record is saved; economy frozen
 
 // ---------- render (Alto-style dusk, layered) ----------
 function skyGrad(){
@@ -1082,7 +1096,15 @@ function draw(){
   if(!CORE_TEST_MODE && mult>1.05 && screen!=='dead'){ const g3=clamp((mult-1)/7,0,1), col=mix([90,225,255],[120,255,170],clamp(g3*1.4,0,1));
     ctx.save(); ctx.textAlign='center'; ctx.translate(W/2,116); const sc=1+(multPulse||0)*0.55; ctx.scale(sc,sc);
     ctx.font='800 26px ui-monospace,monospace'; ctx.shadowColor=col; ctx.shadowBlur=12+(multPulse||0)*18; ctx.fillStyle=col; ctx.fillText('×'+mult.toFixed(1),0,0); ctx.shadowBlur=0;
-    ctx.font='600 9px ui-monospace,monospace'; ctx.fillStyle='rgba(200,220,240,0.72)'; ctx.fillText('LEVERAGE',0,12); ctx.restore(); ctx.textAlign='left'; }
+    ctx.font='600 9px ui-monospace,monospace'; ctx.fillStyle='rgba(200,220,240,0.72)'; ctx.fillText('КОМБО',0,12); ctx.restore(); ctx.textAlign='left'; }   // b71: renamed LEVERAGE→КОМБО (the in-run combo mult) to free the name ПЛЕЧО for the player's leverage BET
+  // b71: TAKE-PROFIT button (Endless) — sits BELOW the КОМБО badge, clear of the top dev overlays; shows live bankable gems (coins × leverage)
+  if(screen==='play' && gameMode==='endless' && !CORE_TEST_MODE && (coins||0)>=3){
+    const gShow=Math.max(0,Math.round((coins||0)*COIN_GEM*leverage)); const pulse=0.5+0.5*Math.sin(t*0.16);
+    UI.cashBtn={x:W/2-94,y:150,w:188,h:38}; ctx.textAlign='center';
+    ctx.fillStyle='rgba(16,42,28,0.86)'; if(ctx.roundRect){ctx.beginPath();ctx.roundRect(UI.cashBtn.x,UI.cashBtn.y,188,38,10);ctx.fill();ctx.strokeStyle='rgba(120,255,180,'+pulse+')';ctx.lineWidth=2;ctx.stroke();}else ctx.fillRect(UI.cashBtn.x,UI.cashBtn.y,188,38);
+    ctx.fillStyle='#9ff0c8'; ctx.font='800 15px ui-monospace,monospace'; ctx.fillText('💰 ЗАФИКСИТЬ ◆'+gShow+'  ×'+leverage, W/2, UI.cashBtn.y+25);
+    ctx.textAlign='left';
+  } else UI.cashBtn=null;
   // dead overlay
   if(gameMode==='career' && finishDist>0 && (screen==='play'||screen==='paused')){ const T=CAREER_TRACKS[careerTrack]||CAREER_TRACKS[0]; const pr=clamp(dist/finishDist,0,1); const bw=W-130, bx=65, by=66;   // b60: finish progress bar
     ctx.fillStyle='rgba(20,26,42,0.65)'; if(ctx.roundRect){ctx.beginPath();ctx.roundRect(bx,by,bw,8,4);ctx.fill();}else ctx.fillRect(bx,by,bw,8);
@@ -1090,7 +1112,7 @@ function draw(){
     ctx.textAlign='center'; ctx.fillStyle='#9ff0c8'; ctx.font='700 11px ui-monospace,monospace'; ctx.fillText('🏁 '+T.name+'  '+Math.min(dist,finishDist)+'/'+finishDist+'м',W/2,by-5); ctx.textAlign='left'; }
   if(screen==='dead'){ ctx.fillStyle='rgba(8,6,18,0.66)';ctx.fillRect(0,0,W,H); ctx.textAlign='center';
     if(rankedUp){ ctx.fillStyle='rgba(255,214,120,'+(0.72+0.28*Math.sin(t*0.2))+')'; ctx.font='800 21px ui-monospace,monospace'; ctx.shadowColor='#ffd678'; ctx.shadowBlur=16; ctx.fillText(rankedUp.rank.e+'  НОВЫЙ РАНГ: '+rankedUp.rank.n+'!',W/2,H*0.205); ctx.shadowBlur=0; ctx.fillStyle='#9ff0c8'; ctx.font='800 15px ui-monospace,monospace'; ctx.fillText('+◆'+rankedUp.bonus+'   ·   +'+Math.round((rankIdx(career))*7)+'% к профиту',W/2,H*0.205+25); }
-    ctx.fillStyle='#ff7a8a';ctx.font='700 30px ui-monospace,monospace';ctx.fillText(deathBy==='wave'?'ПОЙМАН ДАМПОМ':deathBy==='loop'?'ОПРОКИНУЛСЯ':deathBy==='endo'?'ЧЕРЕЗ РУЛЬ':deathBy==='gap'?'УПАЛ В ПРОПАСТЬ':deathBy==='ledge'?'ВРЕЗАЛСЯ В УСТУП':'LIQUIDATED',W/2,H*0.34);
+    ctx.fillStyle=cashedOut?'#6effc0':'#ff7a8a';ctx.font='700 28px ui-monospace,monospace';ctx.fillText(cashedOut?'💰 ПРОФИТ ЗАФИКСИРОВАН':deathBy==='wave'?'ЛИКВИДИРОВАН ДАМПОМ':deathBy==='loop'?'ОПРОКИНУЛСЯ':deathBy==='endo'?'ЧЕРЕЗ РУЛЬ':deathBy==='gap'?'УПАЛ В ПРОПАСТЬ':deathBy==='ledge'?'ВРЕЗАЛСЯ В УСТУП':'ЛИКВИДИРОВАН',W/2,H*0.34);
     if(gameMode==='career'){ const T=CAREER_TRACKS[careerTrack]||CAREER_TRACKS[0]; const pr=clamp(dist/Math.max(1,finishDist),0,1);
       ctx.fillStyle='#9ff0c8';ctx.font='800 16px ui-monospace,monospace';ctx.fillText('🏁 '+T.name,W/2,H*0.34+40);
       ctx.fillStyle='#eafaff';ctx.font='800 30px ui-monospace,monospace';ctx.fillText(Math.min(dist,finishDist)+' / '+finishDist+' м',W/2,H*0.34+74);
@@ -1106,7 +1128,7 @@ function draw(){
     ctx.fillStyle=isBest?'#ffd678':'#9ff0c8';ctx.font='800 42px ui-monospace,monospace';ctx.fillText('$'+Math.floor(pnl).toLocaleString('en-US'),W/2,H*0.34+54);
     ctx.fillStyle=newDepth?'#9ff0c8':'#cdbef0';ctx.font=(newDepth?'800 ':'')+'13px ui-monospace,monospace';ctx.fillText(dist+'м'+(newDepth?'  ★ НОВАЯ ГЛУБИНА':'   ·   ⛏ рекорд '+(best||0)+'м')+'    ◆'+coins+'   ×'+maxMult.toFixed(1),W/2,H*0.34+84);
     ctx.fillStyle=isBest?'#ffd678':'#7a6f9a';ctx.fillText((isBest?'★ NEW BEST   $':'BEST   $')+bestPnl.toLocaleString('en-US'),W/2,H*0.34+108);
-    ctx.fillStyle='#9ff0c8';ctx.font='700 12px ui-monospace,monospace';ctx.fillText('◆ +'+coins+'  в банк  (◆ '+bank+')',W/2,H*0.34+130);
+    ctx.fillStyle=cashedOut?'#9ff0c8':'#ffb0a0';ctx.font='800 13px ui-monospace,monospace';ctx.fillText((cashedOut?'💰 ЗАФИКСИЛ ◆+'+runGems+'  (×'+leverage+')':'☠ страховка ◆+'+runGems+'  (потерял ×'+leverage+')')+'    банк ◆'+bank,W/2,H*0.34+130);
     { const tip=deathBy==='wave'?'🛡 качай ЩИТ ОТ ВОЛНЫ — оторвёшься от дампа':(deathBy==='loop'||deathBy==='endo')?'◎ качай СЦЕПЛЕНИЕ — прощает кувырки':deathBy==='crash'?'◎ качай СЦЕПЛЕНИЕ — мягче посадки':'⚙ качай ДВИЖОК — быстрее уедешь'; ctx.fillStyle='#9fd0ea';ctx.font='11px ui-monospace,monospace';ctx.fillText(tip,W/2,H*0.34+150); } }
     if(gameMode!=='career'){ ctx.fillStyle='#6effc0';ctx.font='13px ui-monospace,monospace';ctx.fillText('коснись — снова',W/2,H*0.34+172); } }
   if(screen==='won'){ ctx.fillStyle='rgba(8,20,12,0.72)';ctx.fillRect(0,0,W,H); ctx.textAlign='center'; const T=CAREER_TRACKS[careerTrack]||CAREER_TRACKS[0]; const last=careerTrack>=CAREER_TRACKS.length-1;
@@ -1236,7 +1258,7 @@ function drawMenus(){
   if(screen==='title'){
     const og=ctx.createLinearGradient(0,0,0,H); og.addColorStop(0,'rgba(6,5,16,0.62)'); og.addColorStop(0.38,'rgba(6,5,16,0.04)'); og.addColorStop(0.72,'rgba(6,5,16,0.12)'); og.addColorStop(1,'rgba(6,5,16,0.9)'); ctx.fillStyle=og; ctx.fillRect(0,0,W,H);
     ctx.fillStyle='#eafaff'; ctx.font='800 33px ui-monospace,monospace'; ctx.shadowColor='rgba(80,220,255,0.55)'; ctx.shadowBlur=16; ctx.fillText('CHART RUNNER',W/2,H*0.155); ctx.shadowBlur=0;
-    ctx.fillStyle='#9fb0d0'; ctx.font='11px ui-monospace,monospace'; ctx.fillText('оседлай график · набери ПЛЕЧО · не словив ликвидацию',W/2,H*0.155+22);
+    ctx.fillStyle='#9fb0d0'; ctx.font='11px ui-monospace,monospace'; ctx.fillText('оседлай график · ставь ПЛЕЧО · зафиксь профит до ликвидации',W/2,H*0.155+22);
     ctx.fillStyle='#ffd678'; ctx.font='700 15px ui-monospace,monospace'; ctx.fillText(CORE_TEST_MODE?('⛏ РЕКОРД  '+(best||0)+' m'):('BEST  $'+bestPnl.toLocaleString('en-US')+'   ·   ⛏ '+(best||0)+'м'),W/2,H*0.155+50);
     if(!CORE_TEST_MODE) ctx.fillStyle='#9ff0c8'; if(!CORE_TEST_MODE) ctx.font='13px ui-monospace,monospace'; if(!CORE_TEST_MODE) ctx.fillText('банк  ◆ '+bank,W/2,H*0.155+70);
     if(!CORE_TEST_MODE){ const ri=rankIdx(career), rk=RANKS[ri], nr=RANKS[ri+1], yy=H*0.155+90;
@@ -1245,6 +1267,11 @@ function drawMenus(){
         ctx.fillStyle='rgba(30,40,62,0.75)'; if(ctx.roundRect){ctx.beginPath();ctx.roundRect(bx,by,bw,7,3.5);ctx.fill();}else ctx.fillRect(bx,by,bw,7);
         ctx.fillStyle='rgba(120,220,255,0.92)'; if(ctx.roundRect){ctx.beginPath();ctx.roundRect(bx,by,Math.max(3,bw*prog),7,3.5);ctx.fill();}else ctx.fillRect(bx,by,bw*prog,7);
         ctx.fillStyle='rgba(180,200,230,0.72)'; ctx.font='10px ui-monospace,monospace'; ctx.fillText('до '+nr.e+' '+nr.n+': $'+Math.max(0,nr.at-career).toLocaleString('en-US')+'  ▸ +◆'+nr.rew,W/2,by+20); } }
+    if(!CORE_TEST_MODE){ UI.lev={x:W/2-104,y:H*0.37,w:208,h:42};   // b71: LEVERAGE bet selector (Endless) — tap to cycle ×2..100
+      ctx.fillStyle='rgba(40,30,16,0.82)'; if(ctx.roundRect){ctx.beginPath();ctx.roundRect(UI.lev.x,UI.lev.y,208,42,11);ctx.fill();ctx.strokeStyle='rgba(255,200,120,0.85)';ctx.lineWidth=1.8;ctx.stroke();}else ctx.fillRect(UI.lev.x,UI.lev.y,208,42);
+      ctx.textAlign='center'; ctx.fillStyle='#ffd678'; ctx.font='800 18px ui-monospace,monospace'; ctx.fillText('⚡ ПЛЕЧО  ×'+leverage, W/2, UI.lev.y+19);
+      ctx.fillStyle='rgba(205,185,140,0.82)'; ctx.font='600 9px ui-monospace,monospace'; ctx.fillText('тапни — выше риск/награда в ЭНДЛЕСС', W/2, UI.lev.y+33); }
+    else UI.lev=null;
     if(CORE_TEST_MODE){ UI.garage=null; }
     else { UI.garage={x:W-112,y:18,w:94,h:38}; ctx.fillStyle='rgba(34,54,46,0.72)'; if(ctx.roundRect){ctx.beginPath();ctx.roundRect(UI.garage.x,UI.garage.y,94,38,10);ctx.fill();ctx.strokeStyle='rgba(120,255,180,0.65)';ctx.lineWidth=1.5;ctx.stroke();}else ctx.fillRect(UI.garage.x,UI.garage.y,94,38);
       ctx.fillStyle='#9ff0c8'; ctx.font='800 13px ui-monospace,monospace'; ctx.fillText('🔧 ГАРАЖ',UI.garage.x+47,UI.garage.y+24); }
