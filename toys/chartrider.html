@@ -52,7 +52,7 @@ function lerp(a,b,t){return a+(b-a)*t;} function clamp(v,a,b){return v<a?a:v>b?b
 // false → full game everywhere. Single switch. Systems are GATED, never deleted.
 const CORE_TEST_MODE = false;   // b70: META LIVE — building the progression spine (upgrades/bikes with teeth, career, economy) on the confirmed rigid-body core
 // build stamp — bump on every change so a phone refresh can confirm it loaded fresh code (cache!)
-const BUILD = '2026-06-23 · b76';
+const BUILD = '2026-06-23 · b77';
 
 // ---------- procedural market terrain ----------
 // height map sampled every STEP px; generated forward as we ride. Market character:
@@ -344,6 +344,7 @@ try{upg=JSON.parse(localStorage.getItem('cipher_upg')||'{}')||{};}catch(e){upg={
 try{career=+localStorage.getItem('cipher_career')||0;}catch(e){}
 function upgOwned(id){ return upg[id]||0; }   // BOUGHT level — shop display + buy logic (always the real stored level, regardless of mode)
 function upgLvl(id){ return (!CORE_TEST_MODE || gameMode==='career') ? (upg[id]||0) : 0; }   // EFFECTIVE level in physics: CAREER applies your upgrades (the progression gate); the ENDLESS core stays STOCK (the pure feel-reference). Full game (CORE_TEST off) applies everywhere.
+function safeLev(){ return Math.round(4 + 4*upgLvl('wave') + 1.5*upgLvl('eng') + selBike*2); }   // b77 МАХОВИК: безопасный ПОТОЛОК ПЛЕЧА — растят ЩИТ(wave)+ДВИГАТЕЛЬ(eng)+тир байка. Плечо ВЫШЕ потолка разгоняет волну (over-leveraged) → железо даёт безопасно держать БÓЛЬШЕЕ плечо = больше профит = маховик. Сток ~4, макс ~30+
 function rankFor(c){ let r=RANKS[0]; for(const x of RANKS)if(c>=x.at)r=x; return r; }
 function nextRank(c){ for(const x of RANKS)if(c<x.at)return x; return null; }
 function saveProg(){ try{localStorage.setItem('cipher_upg',JSON.stringify(upg));localStorage.setItem('cipher_career',career);}catch(e){} }
@@ -801,7 +802,7 @@ function update(){
   if((boost||0)>=1 && screen==='play') tut('pump','⚡ PUMP ЗАРЯЖЕН — '+('ontouchstart'in window?'ЖМИ ⚡PUMP':'SHIFT')+' ЧТОБ ОТОРВАТЬСЯ');
   if(tutT>0) tutT-=0.0062;
   // chasing LIQUIDATION wave (the dump): ramps with distance + biome, caps its lead so it always looms; catch = death
-  waveSpd = (TUNE.waveSpeed + (Math.min((dist||0)/150, 4.8) + Math.max(0,((dist||0)-700)/620))*TUNE.waveAccel) * BIOMES[(((zone||0)%BIOMES.length)+BIOMES.length)%BIOMES.length].wave * (curEvType==='whale'?1.75:1) * lerp(0.6,1,clamp((dist||0)/TUNE.easeInDist,0,1)) * (1-0.07*upgLvl('wave')) * (gameMode==='endless'?(1+(leverage-2)*0.010):1) * careerWaveMul;   // b71: higher LEVERAGE = faster dump (Endless). b72: careerWaveMul = per-stage wave speed (POWER-GATE: late stages need engine/shield). ramps, then keeps creeping past 700m (no cap) → an eventual wall that ДВИЖОК/ЩИТ push deeper   // re-tuned for the heavier momentum bike; surges during a whale dump
+  waveSpd = (TUNE.waveSpeed + (Math.min((dist||0)/150, 4.8) + Math.max(0,((dist||0)-700)/620))*TUNE.waveAccel) * BIOMES[(((zone||0)%BIOMES.length)+BIOMES.length)%BIOMES.length].wave * (curEvType==='whale'?1.75:1) * lerp(0.6,1,clamp((dist||0)/TUNE.easeInDist,0,1)) * (1-0.07*upgLvl('wave')) * (gameMode==='endless'?(1+Math.max(0,leverage-safeLev())*0.02):1) * careerWaveMul;   // b77 МАХОВИК: волна разгоняется только за плечо ВЫШЕ безопасного потолка (safeLev от железа) → качай ЩИТ/ДВИЖОК → выше потолок → безопасно больше плечо. b72: careerWaveMul = per-stage wave (POWER-GATE). ramps, then keeps creeping past 700m (no cap) → an eventual wall that ДВИЖОК/ЩИТ push deeper   // re-tuned for the heavier momentum bike; surges during a whale dump
   wave += waveSpd;
   const leadCap = W*lerp(0.92, 0.36, clamp((dist||0)/320,0,1));   // dump closes in over the first ~320m → then a constant chase (front sits at the left edge)
   if(bike.x - wave > leadCap) wave = bike.x - leadCap;
@@ -1271,10 +1272,10 @@ function drawMenus(){
         ctx.fillStyle='rgba(30,40,62,0.75)'; if(ctx.roundRect){ctx.beginPath();ctx.roundRect(bx,by,bw,7,3.5);ctx.fill();}else ctx.fillRect(bx,by,bw,7);
         ctx.fillStyle='rgba(120,220,255,0.92)'; if(ctx.roundRect){ctx.beginPath();ctx.roundRect(bx,by,Math.max(3,bw*prog),7,3.5);ctx.fill();}else ctx.fillRect(bx,by,bw*prog,7);
         ctx.fillStyle='rgba(180,200,230,0.72)'; ctx.font='10px ui-monospace,monospace'; ctx.fillText('до '+nr.e+' '+nr.n+': $'+Math.max(0,nr.at-career).toLocaleString('en-US')+'  ▸ +◆'+nr.rew,W/2,by+20); } }
-    if(!CORE_TEST_MODE){ UI.lev={x:W/2-104,y:H*0.37,w:208,h:42};   // b71: LEVERAGE bet selector (Endless) — tap to cycle ×2..100
-      ctx.fillStyle='rgba(40,30,16,0.82)'; if(ctx.roundRect){ctx.beginPath();ctx.roundRect(UI.lev.x,UI.lev.y,208,42,11);ctx.fill();ctx.strokeStyle='rgba(255,200,120,0.85)';ctx.lineWidth=1.8;ctx.stroke();}else ctx.fillRect(UI.lev.x,UI.lev.y,208,42);
-      ctx.textAlign='center'; ctx.fillStyle='#ffd678'; ctx.font='800 18px ui-monospace,monospace'; ctx.fillText('⚡ ПЛЕЧО  ×'+leverage, W/2, UI.lev.y+19);
-      ctx.fillStyle='rgba(205,185,140,0.82)'; ctx.font='600 9px ui-monospace,monospace'; ctx.fillText('тапни — выше риск/награда в ЭНДЛЕСС', W/2, UI.lev.y+33); }
+    if(!CORE_TEST_MODE){ UI.lev={x:W/2-104,y:H*0.37,w:208,h:42}; const _sl=safeLev(), _over=leverage>_sl;   // b77: показываем безопасный ПОТОЛОК плеча (от железа); красный = выше потолка
+      ctx.fillStyle=_over?'rgba(58,20,16,0.85)':'rgba(40,30,16,0.82)'; if(ctx.roundRect){ctx.beginPath();ctx.roundRect(UI.lev.x,UI.lev.y,208,42,11);ctx.fill();ctx.strokeStyle=_over?'rgba(255,110,90,0.9)':'rgba(255,200,120,0.85)';ctx.lineWidth=1.8;ctx.stroke();}else ctx.fillRect(UI.lev.x,UI.lev.y,208,42);
+      ctx.textAlign='center'; ctx.fillStyle=_over?'#ff9a7a':'#ffd678'; ctx.font='800 18px ui-monospace,monospace'; ctx.fillText('⚡ ПЛЕЧО  ×'+leverage, W/2, UI.lev.y+18);
+      ctx.fillStyle=_over?'rgba(255,150,120,0.95)':'rgba(205,185,140,0.82)'; ctx.font='600 9px ui-monospace,monospace'; ctx.fillText(_over?('⚠ выше потолка ×'+_sl+' — волна догонит'):('безопасно до ×'+_sl+' · качай ЩИТ/ДВИЖОК'), W/2, UI.lev.y+33); }
     else UI.lev=null;
     if(CORE_TEST_MODE){ UI.garage=null; }
     else { UI.garage={x:W-112,y:18,w:94,h:38}; ctx.fillStyle='rgba(34,54,46,0.72)'; if(ctx.roundRect){ctx.beginPath();ctx.roundRect(UI.garage.x,UI.garage.y,94,38,10);ctx.fill();ctx.strokeStyle='rgba(120,255,180,0.65)';ctx.lineWidth=1.5;ctx.stroke();}else ctx.fillRect(UI.garage.x,UI.garage.y,94,38);
@@ -1298,9 +1299,9 @@ function drawMenus(){
       ctx.fillStyle='#ffd678'; ctx.font='700 15px ui-monospace,monospace'; ctx.fillText('🏁  КАРЬЕРА  ·  '+Math.min(careerMax+1,CAREER_TRACKS.length)+'/'+CAREER_TRACKS.length,W/2,UI.career.y+28); } else UI.career=null;
     if(CORE_TEST_MODE){ /* CAREER replaces the old CORE TEST note */ }
     else {
-    ctx.fillStyle='#7a8bb0'; ctx.font='600 10px ui-monospace,monospace'; ctx.fillText('— ЦЕЛИ ЗАБЕГА —',W/2,UI.action.y+78);
+    ctx.fillStyle='#7a8bb0'; ctx.font='600 10px ui-monospace,monospace'; ctx.fillText('— ЦЕЛИ ЗАБЕГА —',W/2,UI.action.y+(UI.career?114:78));   // b77 FIX: ниже кнопки КАРЬЕРА (не налазит)
     ctx.fillStyle='#c6d4ee'; ctx.font='12px ui-monospace,monospace';
-    for(let i=0;i<missions.length;i++) ctx.fillText('◆'+missions[i].rew+'   '+missions[i].txt,W/2,UI.action.y+98+i*19); }
+    for(let i=0;i<missions.length;i++) ctx.fillText('◆'+missions[i].rew+'   '+missions[i].txt,W/2,UI.action.y+(UI.career?132:98)+i*18); }
     if(dailyBonusT>0){ dailyBonusT-=0.006; const a=clamp(Math.min(dailyBonusT*4,1),0,1); ctx.globalAlpha=a; ctx.fillStyle='#ffd678'; ctx.font='800 16px ui-monospace,monospace'; ctx.shadowColor='#ffd678'; ctx.shadowBlur=14; ctx.fillText('🎁 ЕЖЕДНЕВНЫЙ БОНУС  +◆'+dailyBonus,W/2,H*0.36); ctx.shadowBlur=0; ctx.globalAlpha=1; }
     ctx.fillStyle='rgba(125,140,180,0.55)'; ctx.font='10px ui-monospace,monospace'; ctx.fillText('build '+BUILD,W/2,H-12);   // confirm a fresh load on the phone (cache check)
     UI.mute=null; UI.pause=null;
