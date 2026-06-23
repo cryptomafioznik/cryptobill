@@ -52,7 +52,7 @@ function lerp(a,b,t){return a+(b-a)*t;} function clamp(v,a,b){return v<a?a:v>b?b
 // false → full game everywhere. Single switch. Systems are GATED, never deleted.
 const CORE_TEST_MODE = false;   // b70: META LIVE — building the progression spine (upgrades/bikes with teeth, career, economy) on the confirmed rigid-body core
 // build stamp — bump on every change so a phone refresh can confirm it loaded fresh code (cache!)
-const BUILD = '2026-06-23 · b75';
+const BUILD = '2026-06-23 · b76';
 
 // ---------- procedural market terrain ----------
 // height map sampled every STEP px; generated forward as we ride. Market character:
@@ -335,7 +335,7 @@ function upgCost(id,lvl){ const base={eng:45,grip:55,pump:55,wave:65,air:50,mag:
 const RANKS=[{n:'КРЕВЕТКА',e:'🦐',at:0,rew:0},{n:'КРАБ',e:'🦀',at:25000,rew:80},{n:'РЫБА',e:'🐟',at:100000,rew:180},{n:'ДЕЛЬФИН',e:'🐬',at:350000,rew:400},{n:'АКУЛА',e:'🦈',at:1000000,rew:800},{n:'КИТ',e:'🐋',at:3000000,rew:1500}];
 let upg={}, career=0, buyFlash=0, buyRow=-1, rankMul=1, rankedUp=null;
 // b71: LEVERAGE BET (Endless) — pick ×2..100 → multiplies the gem payout AND the risk (faster dump). TAKE-PROFIT (cash out) banks it; crash/caught = LIQUIDATION (lose all but a small insurance). PnL is fed by distance+coins+tricks → collecting coins at high leverage = the greed hook.
-const LEVS=[2,5,10,25,50,100], COIN_GEM=0.1, LIQ_KEEP=0.25;   // b71: gems = coins × COIN_GEM × leverage (cash out) · × COIN_GEM × LIQ_KEEP (liquidation). Coins = POSITION → collect + leverage = greed hook. COIN_GEM tunes the grind (~40 ×2-runs to max all; faster at high leverage = риск). ECONOMY tuning = by hands
+const LEVS=[2,5,10,25,50,100], COIN_GEM=0.1, LIQ_PEN=0.004, LIQ_PEN_MAX=0.18;   // b76 ЕДИНАЯ ЭКОНОМИКА (маховик): bank = NET WORTH. ЗАФИКСИЛ → bank += coins×COIN_GEM×leverage (рост). ЛИКВИДАЦИЯ → bank −= min(bank×leverage×LIQ_PEN, bank×LIQ_PEN_MAX) = РЕАЛЬНАЯ потеря (∝ плечу, капано LIQ_PEN_MAX, пол ≥0; железо/тиры НЕ теряются). Реальные ставки = азарт. Баланс = руки
 let leverage=2; try{leverage=+localStorage.getItem('cipher_lev')||2; if(LEVS.indexOf(leverage)<0)leverage=2;}catch(e){}
 let cashedOut=false, runGems=0;   // cashedOut = voluntary take-profit this run; runGems = gems banked from the last run (shown on the end screen)
 function saveLev(){ try{localStorage.setItem('cipher_lev',leverage);}catch(e){} }
@@ -851,7 +851,7 @@ function resolveEvent(type){ if(screen!=='play')return;          // payoff when 
 function winRun(){ careerWon=true; screen='won'; const T=CAREER_TRACKS[careerTrack]; if(careerTrack>=careerMax && careerTrack<CAREER_TRACKS.length-1){ careerMax=careerTrack+1; saveCareer(); } bank+=T.gems||0; saveMeta(); if(dist>best){best=dist;try{localStorage.setItem('cipher_run_best',best);}catch(e){}} flash=0.6; gflash=0.85; shake=8; sfxRankUp(); buzz([25,40,25,60]); }   // b60: career track FINISHED → unlock next + award gems
 function wipeout(reason){ deathBy=reason||'crash'; screen='dead'; shake=20; flash=1; sfxCrash(); buzz((reason==='wave')?[70,40,110]:[50,30,70]); for(let i=0;i<28;i++)parts.push({x:bike.x,y:bike.y,vx:(Math.random()-0.5)*8,vy:-Math.random()*6,life:1,r:Math.random()*3+1}); if(dist>best){best=dist;try{localStorage.setItem('cipher_run_best',best);}catch(e){}} pnl=Math.floor(pnl);
   careerDeathGems=0; if(gameMode==='career'){ const T=CAREER_TRACKS[careerTrack]||CAREER_TRACKS[0]; careerDeathGems=Math.round((T.gems||0)*clamp(dist/Math.max(1,finishDist),0,1)*0.4); if(careerDeathGems>0){ bank+=careerDeathGems; saveMeta(); } }   // CAREER consolation: partial gems by distance reached → failing a gate still funds upgrades (no soft-lock); finishing pays the full T.gems
-  if(!CORE_TEST_MODE){ if(pnl>bestPnl){bestPnl=pnl;try{localStorage.setItem('cipher_best_pnl',bestPnl);}catch(e){}} if(gameMode==='endless'){ cashedOut=false; runGems=Math.round((coins||0)*COIN_GEM*LIQ_KEEP); bank+=runGems; } else { bank+=coins; }   // b71: ENDLESS crash/caught = LIQUIDATION → keep only LIQ_KEEP of collected coins, lose the leverage upside (the sting). career keeps its own consolation
+  if(!CORE_TEST_MODE){ if(pnl>bestPnl){bestPnl=pnl;try{localStorage.setItem('cipher_best_pnl',bestPnl);}catch(e){}} if(gameMode==='endless'){ cashedOut=false; const pen=Math.min(Math.round(bank*leverage*LIQ_PEN), Math.round(bank*LIQ_PEN_MAX)); runGems=-pen; bank=Math.max(0,bank-pen); } else { bank+=coins; }   // b76: ENDLESS liquidation = REAL LOSS from net worth (leverage-scaled, capped at LIQ_PEN_MAX, floored ≥0) → real stakes (the engagement engine). career keeps its own consolation
     const oi=rankIdx(career); career+=pnl; const ni=rankIdx(career); if(ni>oi){ let bonus=0; for(let r=oi+1;r<=ni;r++)bonus+=RANKS[r].rew; bank+=bonus; rankedUp={rank:RANKS[ni],bonus:bonus}; sfxRankUp(); buzz([25,50,25,70]); } saveProg(); saveMeta(); } }
 function cashOut(){ if(screen!=='play'||gameMode!=='endless'||(pnl||0)<=0)return;   // b71: TAKE PROFIT — bank the FULL leveraged PnL & end the run safely (the greed↔safety decision)
   cashedOut=true; pnl=Math.floor(pnl); runGems=Math.round((coins||0)*COIN_GEM*leverage); bank+=runGems; deathBy='cashout';
@@ -1132,7 +1132,7 @@ function draw(){
     ctx.fillStyle=isBest?'#ffd678':'#9ff0c8';ctx.font='800 42px ui-monospace,monospace';ctx.fillText('$'+Math.floor(pnl).toLocaleString('en-US'),W/2,H*0.34+54);
     ctx.fillStyle=newDepth?'#9ff0c8':'#cdbef0';ctx.font=(newDepth?'800 ':'')+'13px ui-monospace,monospace';ctx.fillText(dist+'м'+(newDepth?'  ★ НОВАЯ ГЛУБИНА':'   ·   ⛏ рекорд '+(best||0)+'м')+'    ◆'+coins+'   ×'+maxMult.toFixed(1),W/2,H*0.34+84);
     ctx.fillStyle=isBest?'#ffd678':'#7a6f9a';ctx.fillText((isBest?'★ NEW BEST   $':'BEST   $')+bestPnl.toLocaleString('en-US'),W/2,H*0.34+108);
-    ctx.fillStyle=cashedOut?'#9ff0c8':'#ffb0a0';ctx.font='800 13px ui-monospace,monospace';ctx.fillText((cashedOut?'💰 ЗАФИКСИЛ ◆+'+runGems+'  (×'+leverage+')':'☠ страховка ◆+'+runGems+'  (потерял ×'+leverage+')')+'    банк ◆'+bank,W/2,H*0.34+130);
+    ctx.fillStyle=cashedOut?'#9ff0c8':'#ffb0a0';ctx.font='800 13px ui-monospace,monospace';ctx.fillText((cashedOut?'💰 ЗАФИКСИЛ ◆+'+runGems+'  (×'+leverage+')':'☠ ЛИКВИДАЦИЯ ◆'+runGems+'  (плечо ×'+leverage+')')+'    банк ◆'+bank,W/2,H*0.34+130);
     { const tip=deathBy==='wave'?'🛡 качай ЩИТ ОТ ВОЛНЫ — оторвёшься от дампа':(deathBy==='loop'||deathBy==='endo')?'◎ качай СЦЕПЛЕНИЕ — прощает кувырки':deathBy==='crash'?'◎ качай СЦЕПЛЕНИЕ — мягче посадки':'⚙ качай ДВИЖОК — быстрее уедешь'; ctx.fillStyle='#9fd0ea';ctx.font='11px ui-monospace,monospace';ctx.fillText(tip,W/2,H*0.34+150); } }
     if(gameMode!=='career'){ ctx.fillStyle='#6effc0';ctx.font='13px ui-monospace,monospace';ctx.fillText('коснись — снова',W/2,H*0.34+172); } }
   if(screen==='won'){ ctx.fillStyle='rgba(8,20,12,0.72)';ctx.fillRect(0,0,W,H); ctx.textAlign='center'; const T=CAREER_TRACKS[careerTrack]||CAREER_TRACKS[0]; const last=careerTrack>=CAREER_TRACKS.length-1;
