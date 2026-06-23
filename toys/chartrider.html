@@ -49,7 +49,7 @@ function lerp(a,b,t){return a+(b-a)*t;} function clamp(v,a,b){return v<a?a:v>b?b
 // false → full game everywhere. Single switch. Systems are GATED, never deleted.
 const CORE_TEST_MODE = true;
 // build stamp — bump on every change so a phone refresh can confirm it loaded fresh code (cache!)
-const BUILD = '2026-06-23 · b68';
+const BUILD = '2026-06-23 · b69';
 
 // ---------- procedural market terrain ----------
 // height map sampled every STEP px; generated forward as we ride. Market character:
@@ -86,6 +86,7 @@ let ledgeRunup=0, ledgeStepsLeft=0, ledgePrevY=0, ledgeTopY=0, ledgeStepsThis=2,
 let kickRunup=0, kickRampLeft=0, kickLandLeft=0, kickBaseY=0, kickRampBot=0, kickLandY=0, nextKickX=1700;   // TRICK KICKER phases: DESCENT run-up (bomb down → build speed, logical setup) → steep ramp UP (launches you ∝ speed for flips) → flat solid landing (no chasm)
 let whoopRunup=0, whoopLeft=0, whoopBaseY=0, whoopPhase=0, nextWhoopX=2200;   // WHOOPS (b53): flat approach → a rhythm section of rollers (skim/catch air at speed, roll over slow) — dynamic flow, no death
 let mudLeft=0, mudRamp=0, mudRunup=0, mudBaseY=0, mudLipBot=0, nextMudX=2600;   // MUD (b54/b63/b66): DESCENT run-up (build speed) → LIP-ramp → boggy patch you JUMP OVER (clear it = clean; land in it = saps speed). Logical, not random
+let dropLandLeft=0, dropLandY=0, nextDropX=2000;   // DROPS/CLIFFS (b69): terrain steps DOWN one node (convex edge) → rigid body flies off as a projectile → flat lower shelf catches it. NOT the old gap-pit (close=H*0.99 = wheels rest on bottom). climbCap caps any rise after → no "pit-wall"
 let curEvType='', evBanner='', evBannerT=0, evColor='90,240,150', evGlow=0, evBonus=0, lastWarnX=-1, evWarnType=''; // bike-side event state
 function pickEvent(gz){ const z=((gz%5)+5)%5, r=Math.random();
   if(z===2) return r<0.55?'rally':(r<0.82?'flash':'whale');     // Эйфория: pumps
@@ -125,7 +126,7 @@ function genSeg(){
     if(prevC - close > maxRise){ close = prevC - maxRise; walk = close - baseY - roll; }
   }
   // ---- GAPS (chasm you JUMP) + LEDGES (vertical step you LOFT the front onto): structured skill obstacles ----
-  let isGap=false, gapLip=0, isStep=false, stepTop=0, isKick=false, isWhoop=false, isMud=false;
+  let isGap=false, gapLip=0, isStep=false, stepTop=0, isKick=false, isWhoop=false, isMud=false, isDrop=false;
   if(!isEv){
     if(gapRunup>0){ const k=6-gapRunup; close=clamp(gapPrevY + k*11, 70, H*0.84); walk=close-baseY; gapRunup--; if(gapRunup<=0){ gapRampBot=close; gapRampLeft=3; } }   // DESCENT run-up: build speed before the gap
     else if(gapRampLeft>0){ const k=4-gapRampLeft; close=clamp(gapRampBot - k*20, 70, H*0.95); walk=close-baseY; gapRampLeft--; if(gapRampLeft<=0){ gapLeft=2; gapBaseY=clamp(close+40,70,H*0.9); } }   // KICKER launches you UP ∝ speed. Landing = lip+40 (b44: was +24; the slower b43 cruise ~5.6 falls more, so the runway sits where the slower arc lands → CLEAN clear, the edge-grab/snap stays rare). Chasm 2 nodes
@@ -141,6 +142,7 @@ function genSeg(){
     else if(mudRunup>0){ const k=6-mudRunup; close=clamp(mudBaseY + k*12, 70, H*0.86); walk=close-baseY; mudRunup--; if(mudRunup<=0){ mudLipBot=close; mudRamp=2; } }   // b66: DESCENT run-up (6 nodes, ~60px down) → BUILD SPEED so the lip actually LAUNCHES you over the bog (was: hit the lip at ambient ~2vx → weak pop → landed in the mud → "не перепрыгнуть")
     else if(mudRamp>0){ const k=2-mudRamp; close=clamp(mudLipBot - k*20,70,H*0.88); walk=close-baseY; if(mudRamp===1)isKick=true; mudRamp--; if(mudRamp<=0){ mudLeft=TUNE.mudN; } }   // KICKER lip (last node tagged .kick → kickPop launches you ∝ speed) UP from the run-up bottom
     else if(mudLeft>0){ close=clamp(mudLipBot,70,H*0.9); walk=close-baseY; isMud=true; mudLeft--; }   // MUD patch at the run-up bottom (a dip below the lip) — jump it from the lip, or land in & bog. No death
+    else if(dropLandLeft>0){ close=clamp(dropLandY,70,H*0.9); walk=close-baseY; if(dropLandLeft===TUNE.dropLandN)isDrop=true; dropLandLeft--; }   // CLIFF: ride line SNAPPED down to the lower shelf — the one-STEP plunge from the lip IS the convex edge (fly off ∝ speed); flat shelf = forgiving landing + pit-wall guard. first node tagged .drop (telegraph + keep edge sharp)
     else if(TUNE.gapEvery>0 && genX>=nextGapX && genX>TUNE.gapStart*10 && terr.length>20 && regime!=='pump' && regime!=='crash' && lastRegime!=='bull'){   // schedule a gap FEATURE (not mid-climb); the run-up handles the takeoff
       gapPrevY=close; gapRunup=5; nextGapX=genX + TUNE.gapEvery*10 + Math.random()*1400;   // start: descent run-up first
     }
@@ -156,6 +158,9 @@ function genSeg(){
     else if(TUNE.mudEvery>0 && genX>=nextMudX && genX>TUNE.mudStart*10 && terr.length>16 && regime!=='pump' && regime!=='crash' && lastRegime!=='bull'){   // schedule a MUD section (calm terrain)
       mudBaseY=close; mudRunup=6; nextMudX=genX + TUNE.mudEvery*10*densK + Math.random()*1100*densK;   // b66: start with the DESCENT run-up (6 nodes) → lip → mud patch
     }
+    else if(TUNE.dropEvery>0 && genX>=nextDropX && genX>TUNE.dropStart*10 && terr.length>16 && regime!=='pump' && regime!=='crash' && lastRegime!=='bull' && close<H*0.66){   // schedule a CLIFF/DROP (not mid-climb; only when high enough to have room BELOW to drop into)
+      dropLandY=clamp(close+TUNE.dropH,70,H*0.9); dropLandLeft=TUNE.dropLandN; nextDropX=genX + TUNE.dropEvery*10*densK + Math.random()*1100*densK;   // next node snaps DOWN to the shelf = the edge; shelf runs flat for dropLandN nodes
+    }
   }
   let open = terr.length ? terr[terr.length-1].close : close;
   if(terr.length && terr[terr.length-1].gap) open=close;   // no giant candle bridging out of a chasm
@@ -164,9 +169,9 @@ function genSeg(){
   const haz=(!CORE_TEST_MODE && !isEv && !isGap && genX>1200 && regime!=='pump' && regime!=='crash' && (terr.length-lastHazIdx)>=10 && Math.random()<hzRate); // CORE: no sell-walls (they just sap momentum, esp. before a gap — replaced by organic terrain obstacles like mud later). no walls in events/gaps; none in first ~120m
   if(haz) lastHazIdx=terr.length;
   const coin = isEv==='rally' ? (Math.random()<0.55) : (!haz && !isEv && !isGap && Math.random()<0.2);   // rally rains gems
-  terr.push({x:genX, y:close, open, close, hi:top-wick, lo:bot+wick*0.6, up, haz:haz, coin:coin, ev:isEv, gap:isGap, lipY:gapLip, step:isStep, topY:stepTop, kick:isKick, whoop:isWhoop, mud:isMud}); genX+=STEP;
+  terr.push({x:genX, y:close, open, close, hi:top-wick, lo:bot+wick*0.6, up, haz:haz, coin:coin, ev:isEv, gap:isGap, lipY:gapLip, step:isStep, topY:stepTop, kick:isKick, whoop:isWhoop, mud:isMud, drop:isDrop}); genX+=STEP;
   // b68: SMOOTH the RIDE LINE — the candlestick line is cornery (sharp node-to-node), so the rigid body bounces/stutters on the corners + over-launches ("странное торможение на подъёмах", too much air). Smooth ONLY .y (the line you RIDE + the ground fill); the candles' open/close/hi/lo stay sharp = chart texture. 5-tap blur on a node a few behind the front (it has neighbours; the bike reaches it already-smoothed). Skip feature/gap nodes (kept sharp for ramps/steps when re-enabled).
-  { const n=terr.length; if(n>=5){ const w0=terr[n-5],w1=terr[n-4],w2=terr[n-3],w3=terr[n-2],w4=terr[n-1]; if(!(w0.gap||w1.gap||w2.gap||w3.gap||w4.gap||w2.kick||w2.step)) w2.y = w0.y*0.10+w1.y*0.22+w2.y*0.36+w3.y*0.22+w4.y*0.10; } }
+  { const n=terr.length; if(n>=5){ const w0=terr[n-5],w1=terr[n-4],w2=terr[n-3],w3=terr[n-2],w4=terr[n-1]; if(!(w0.gap||w1.gap||w2.gap||w3.gap||w4.gap||w0.drop||w1.drop||w2.drop||w3.drop||w4.drop||w2.kick||w2.step)) w2.y = w0.y*0.10+w1.y*0.22+w2.y*0.36+w3.y*0.22+w4.y*0.10; } }
 }
 function terrainAt(x){ // interpolated height + slope at world x
   const i=Math.floor(x/STEP); if(i<0||i+1>=terr.length) return {y:baseY,ang:0};
@@ -211,6 +216,11 @@ const TUNE = {
   gapEvery:     0,       // 15. ПРОПАСТИ: ср. дистанция между провалами (м); 0 = ВЫКЛ. b51: ОТКЛЮЧЕНЫ по фидбэку юзера — обрывы давали «проблемы» (бинарная смерть в яму), а не «сложность»; трамплины их заменяют (WOW/флипы без фрустрации). Код пропастей цел — вернуть = поставить >0
   gapStart:     240,     // 16. первая пропасть после этой дистанции (м) — вызов уже рано
   gapKick:      0.45,    // 16b. КРОМКА-РАМПА: launch вверх = vx×это (физика рампы). При ровной скорости НЕ перелетает 3-4 узла → нужен ПРЫЖОК; со спуска-разгона (большой vx) долетает сам. БОЛЬШЕ = легче перелёт
+  // ---- ОБРЫВЫ/СЪЕЗДЫ (b69): ступень террейна ВНИЗ за 1 узел = выпуклая кромка → ТВЁРДОЕ ТЕЛО слетает СНАРЯДОМ (колесо за кромкой не достаёт землю → гравитация уносит в дугу) → нижняя ПОЛКА ловит. НЕ старая gap-яма. Защита от «ямы-стены»: climbCap и так капает подъём (~13.6px/узел) → стены сразу за обрывом быть не может ----
+  dropEvery:    240,     // X1. ср. дистанция между обрывами (м); 0 = выкл. Гейт: не в pump/crash и только когда есть место ВНИЗУ (close<H*0.66) → реальный темп реже номинала. b69: 320→240 для теста (гарантированно встретишь). БОЛЬШЕ = реже
+  dropStart:    200,     // X2. первый обрыв после (м) — после онбординга
+  dropH:        58,      // X3. высота ступени-обрыва (px) за 1 узел (STEP=26 → ~66° кромка = выпуклая, слетаешь). Сначала ПОЛОГО/прощающе; ВЫШЕ = страшнее (хардкор-потолок)
+  dropLandN:    8,       // X4. длина нижней ПОЛКИ приземления (узлов ×26px ≈ 208px) — щедрая, ловит дугу при любой скорости. КОРОЧЕ = жёстче (нужна точность)
   pitchHold:    0.024,   // 17. самовыравнивание тангажа к склону (= «пружина» к склону; чуть мягче, чтобы наклон дотягивал до вилли/стоппи)
   steepEarly:   0.85,    // 18. множитель крутизны НА СТАРТЕ (положе на старте, проходимо; растёт к terrainSteep за steepRamp)
   steepRamp:    1100,    // 19. дистанция (м), за которую крутизна растёт steepEarly → terrainSteep. b59: 600→1100 — крутизна продолжает расти глубже (не плато на 600м = есть скилл-рампа дальше)
@@ -440,6 +450,7 @@ function reset(){
   kickRunup=0; kickRampLeft=0; kickLandLeft=0; nextKickX=TUNE.kickStart*10;   // KICKERS: first trick ramp after kickStart
   whoopRunup=0; whoopLeft=0; whoopPhase=0; nextWhoopX=TUNE.whoopStart*10;   // WHOOPS: first rhythm section after whoopStart
   mudLeft=0; mudRamp=0; mudRunup=0; nextMudX=TUNE.mudStart*10;   // MUD: first boggy section after mudStart
+  dropLandLeft=0; nextDropX=TUNE.dropStart*10;   // DROPS/CLIFFS: first cliff after dropStart
   for(let i=0;i<Math.ceil(W/STEP)+8;i++)genSeg();
   bike={x:60,y:terrainAt(60).y-27.5,vx:0,vy:0,ang:terrainAt(60).ang,angV:0,onG:true,wheel:0,rShift:0};   // rShift = rider weight-shift state (-1 back .. +1 forward), smoothed from the drag input (b47 two-body)
   cam={x:bike.x-W*0.5,y:bike.y-H*0.46}; camAir=0; t=0; coins=0; dist=0; lastMile=0; newDepth=false; wipe=0; screen='play'; shake=0; flash=0; popT=0; daycycle=Math.random()*6.28;
