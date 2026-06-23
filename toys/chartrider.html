@@ -165,6 +165,8 @@ function genSeg(){
   if(haz) lastHazIdx=terr.length;
   const coin = isEv==='rally' ? (Math.random()<0.55) : (!haz && !isEv && !isGap && Math.random()<0.2);   // rally rains gems
   terr.push({x:genX, y:close, open, close, hi:top-wick, lo:bot+wick*0.6, up, haz:haz, coin:coin, ev:isEv, gap:isGap, lipY:gapLip, step:isStep, topY:stepTop, kick:isKick, whoop:isWhoop, mud:isMud}); genX+=STEP;
+  // b68: SMOOTH the RIDE LINE — the candlestick line is cornery (sharp node-to-node), so the rigid body bounces/stutters on the corners + over-launches ("странное торможение на подъёмах", too much air). Smooth ONLY .y (the line you RIDE + the ground fill); the candles' open/close/hi/lo stay sharp = chart texture. 5-tap blur on a node a few behind the front (it has neighbours; the bike reaches it already-smoothed). Skip feature/gap nodes (kept sharp for ramps/steps when re-enabled).
+  { const n=terr.length; if(n>=5){ const w0=terr[n-5],w1=terr[n-4],w2=terr[n-3],w3=terr[n-2],w4=terr[n-1]; if(!(w0.gap||w1.gap||w2.gap||w3.gap||w4.gap||w2.kick||w2.step)) w2.y = w0.y*0.10+w1.y*0.22+w2.y*0.36+w3.y*0.22+w4.y*0.10; } }
 }
 function terrainAt(x){ // interpolated height + slope at world x
   const i=Math.floor(x/STEP); if(i<0||i+1>=terr.length) return {y:baseY,ang:0};
@@ -585,7 +587,7 @@ function rigidStep(){
         const vt=vpx*tx+vpy*ty;
         let Ft=-vt*(onMud?R.mudRoll:R.rollResist);          // wheel ROLLS (slight resistance; mud = more = sap)
         const maxF=R.mu*Fn;                                 // traction cone
-        if(drive&&thr>0.02){ const want=R.engine*engScale*thr; if(want>maxF){ Ft+=maxF*R.spinGrip; spun=true; } else Ft+=want; }   // БУКС: газу больше, чем держит сцепление → колесо СРЫВАЕТ, передаётся только кинетич. (×spinGrip<1). Дозируешь газ = держит и лезет; молотишь на подъёме/старте = буксует
+        if(drive&&thr>0.02){ const want=R.engine*engScale*thr; if(want>maxF){ const over=clamp((want-maxF)/maxF,0,1); Ft+=maxF*(1-(1-R.spinGrip)*over); spun=over>0.35; } else Ft+=want; }   // БУКС (ПЛАВНО, не вкл/выкл — иначе стук «торможения» на подъёме): газу больше сцепления → колесо СРЫВАЕТ постепенно, передаётся кинетич. Дозируешь = держит и лезет; молотишь на подъёме/старте = буксует
         if(brake) Ft+=-Math.sign(vt)*R.brakeF;
         if(Ft>maxF)Ft=maxF; else if(Ft<-maxF)Ft=-maxF;
         fx+=Ft*tx; fy+=Ft*ty; tq+=rx*(Ft*ty)-ry*(Ft*tx);
