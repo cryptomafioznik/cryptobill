@@ -47,9 +47,9 @@ function lerp(a,b,t){return a+(b-a)*t;} function clamp(v,a,b){return v<a?a:v>b?b
 // true  → ENDLESS stays a pure ride-and-chase core on a STOCK bike (the feel-reference; ranks/daily/missions/events/popups OFF).
 //          CAREER (b64) is the progression layer ON TOP: its gems buy garage UPGRADES that APPLY in career runs (endless ignores them).
 // false → full game everywhere. Single switch. Systems are GATED, never deleted.
-const CORE_TEST_MODE = true;
+const CORE_TEST_MODE = false;   // b70: META LIVE — building the progression spine (upgrades/bikes with teeth, career, economy) on the confirmed rigid-body core
 // build stamp — bump on every change so a phone refresh can confirm it loaded fresh code (cache!)
-const BUILD = '2026-06-23 · b69';
+const BUILD = '2026-06-23 · b70';
 
 // ---------- procedural market terrain ----------
 // height map sampled every STEP px; generated forward as we ride. Market character:
@@ -208,7 +208,7 @@ const TUNE = {
   rockSize:     5,       // 9e. амплитуда тряски рок-гардена (px). 9→5: мельче → байк ТЕЧЁТ по камням (не подскакивает = не «лагает/зависает»), но трясёт. БОЛЬШЕ = злее/больше подскоков
   stick:        2.8,     // 9f. ЛИПУЧКА к трассе (px): порог отрыва. b65: 3.5→2.8 (фидбэк «байк приклеен, не получается подпрыгивать после бугров/подъёмов»). b62: 5.0→3.5 — менее приклеен, охотнее вылетает с бугров/гребней (фидбэк «должен слетать как в жизни»). Ниже = прыгуч/твичово. b41: посадка теперь на ОПОРНОЕ колесо (restY, анти-клип) — байк сам «едет по верхам» (отрыв ∝ скорости), поэтому stick 1.1→5.0 возвращает долю воздуха к ~11% (фил b40) без дрожи на мелочи. Ниже = прыгуч/твичово; выше = глаже/приклеенней
   launch:       2.0,     // 9g. ОТРЫВ С ГРЕБНЯ (центробежный): на выпуклости при скорости (vx²·кривизна > launch) байк СЛЕТАЕТ. b66: 3.0→2.0 + смотрим ДАЛЬШЕ вперёд (vx*5) → ловим гребень/обрыв РАНЬШЕ пика, пока есть запас скорости. b65 3.0 всё ещё «приклеен» (фидбэк: «совсем не вылетает с обрывов/подъёмов, низ тянет»). НИЖЕ = чаще прыгает; ВЫШЕ = липче
-  obstacleFreq: 1.0,     // 10. частота препятствий — множитель плотности sell-wall (×1 = как сейчас, 0 = нет)
+  obstacleFreq: 0,       // 10. b70: 1.0→0 — sell-walls OFF (фидбэк: «не сложность, а кража моментума»; заменяем органик-препятствиями). ×1 = вернуть. множитель плотности sell-wall
   easeInDist:   350,     // 11. «мягкий въезд» (м): за сколько loop-forgiveness + волна доходят до полной (короче = скилл нужен рано)
   loopForgive:  1.8,     // 12. порог опрокидывания НА СТАРТЕ (рад): высокий = стойки на колесе держатся; спадает к PHYS.LOOP
   climbLift:    18,      // 13. ЭНДУРО-СКИЛЛ: газ козлит перед на крутом → ЗАЖАЛ ГАЗ БЕЗ ВЕСА = ОПРОКИД (нельзя просто ехать на газу). Чтобы лезть — ВЕС ВПЕРЁД (драг вправо). 13 было слишком мягко (газ-зажал проезжал = скучно); 18 даёт реальный выбор. Эндо на климбе убран (b33) → вес-вперёд безопасен, окно ловимое
@@ -574,7 +574,12 @@ addEventListener('touchcancel',e=>{ for(const tch of e.changedTouches){ delete t
 
 // === RIGID-BODY STEP (b68): one frame of the real bike physics over the price line (terrainAt = ground). ===
 function rigidStep(){
-  const R=RB, sdt=1/R.subSteps, engScale=BK().accel/0.49;
+  const R=RB, sdt=1/R.subSteps;
+  // b70: UPGRADES + BIKE STATS get TEETH on the rigid body. Stock HODLER lvl0 = unchanged feel (all multipliers = 1); upgrades/tiers add ON TOP.
+  const _bk=BK(), _eL=upgLvl('eng'), _gL=upgLvl('grip'), _aL=upgLvl('air');
+  const engScale=(_bk.accel/0.49)*(1+0.08*_eL);            // ДВИГАТЕЛЬ: bike accel × engine-upgrade → climb power / accel / top speed (outrun the wave)
+  const muEff=R.mu*(_bk.grip/1.40)*(1+0.10*_gL);           // СЦЕПЛЕНИЕ: bike grip (1.40 = HODLER base → stock = R.mu) × grip-upgrade → REAL climb traction (lezet ne buksuya)
+  const leanAirEff=R.leanAir*(1+0.12*_aL);                 // ВОЗД.КОНТРОЛЬ: faster/controllable flip rotation (capped by avMax)
   bike.thr = lerp(bike.thr||0, down?1:0, R.thrRamp);        // АНАЛОГОВЫЙ ГАЗ: рампа 0→1 → тяга/вилли ∝ тому, сколько газу даёшь (не бинарно)
   const thr=bike.thr;
   const ci0=Math.floor(bike.x/STEP), onMud=!!(terr[ci0]&&terr[ci0].mud);
@@ -597,7 +602,7 @@ function rigidStep(){
         fx+=Fn*nx; fy+=Fn*ny; tq+=rx*(Fn*ny)-ry*(Fn*nx);
         const vt=vpx*tx+vpy*ty;
         let Ft=-vt*(onMud?R.mudRoll:R.rollResist);          // wheel ROLLS (slight resistance; mud = more = sap)
-        const maxF=R.mu*Fn;                                 // traction cone
+        const maxF=muEff*Fn;                                // traction cone (b70: bike grip + СЦЕПЛЕНИЕ upgrade)
         if(drive&&thr>0.02){ const want=R.engine*engScale*thr; if(want>maxF){ const over=clamp((want-maxF)/maxF,0,1); Ft+=maxF*(1-(1-R.spinGrip)*over); spun=over>0.35; } else Ft+=want; }   // БУКС (ПЛАВНО, не вкл/выкл — иначе стук «торможения» на подъёме): газу больше сцепления → колесо СРЫВАЕТ постепенно, передаётся кинетич. Дозируешь = держит и лезет; молотишь на подъёме/старте = буксует
         if(brake) Ft+=-Math.sign(vt)*R.brakeF;
         if(Ft>maxF)Ft=maxF; else if(Ft<-maxF)Ft=-maxF;
@@ -605,7 +610,7 @@ function rigidStep(){
       }
     }
     if(onGround) tq+=bike.rShift*R.leanGround*R.inertia;    // weight shift = pitch torque on the ground
-    else { tq+=bike.rShift*R.leanAir*R.inertia;             // = flip torque in the air
+    else { tq+=bike.rShift*leanAirEff*R.inertia;            // = flip torque in the air (b70: ВОЗД.КОНТРОЛЬ upgrade)
       if(Math.abs(bike.rShift)<0.15){ const la=terrainAt(bike.x+Math.max(20,bike.vx*8)).ang; let d=la-bike.ang; while(d>Math.PI)d-=6.283; while(d<-Math.PI)d+=6.283; const near=clamp(1-(terrainAt(bike.x).y-(bike.y+R.oy+R.wr))/240,0,1); tq+=(d*R.uprightAir-bike.angV*R.uprightDamp)*(0.4+near)*R.inertia; }   // not holding lean → PD auto-level + spin-damp = lands on its wheels (forgiving)
     }
     if(onGround){ const gs=terrainAt(bike.x).ang; let rp=bike.ang-gs; while(rp>Math.PI)rp-=6.283; while(rp<-Math.PI)rp+=6.283; if(rp<-R.loopLimit)tq+=(-R.loopLimit-rp)*R.antiLoop*R.inertia; else if(rp>R.loopLimit)tq+=(R.loopLimit-rp)*R.antiLoop*R.inertia; }   // forgiving anti-loop (no infinite backward tumble)
