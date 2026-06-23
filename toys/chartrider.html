@@ -49,7 +49,7 @@ function lerp(a,b,t){return a+(b-a)*t;} function clamp(v,a,b){return v<a?a:v>b?b
 // false → full game everywhere. Single switch. Systems are GATED, never deleted.
 const CORE_TEST_MODE = false;   // b70: META LIVE — building the progression spine (upgrades/bikes with teeth, career, economy) on the confirmed rigid-body core
 // build stamp — bump on every change so a phone refresh can confirm it loaded fresh code (cache!)
-const BUILD = '2026-06-23 · b71';
+const BUILD = '2026-06-23 · b72';
 
 // ---------- procedural market terrain ----------
 // height map sampled every STEP px; generated forward as we ride. Market character:
@@ -292,7 +292,8 @@ const RB={
   jump:9.0,                                    // импульс хопа (свайп вверх)
   airDrag:0.992, rollDrag:0.997,              // аэро / качение (потолок скорости)
   leanGround:0.016, leanAir:0.050,            // авторитет веса: тангаж на земле / вращение сальто в воздухе. b68: leanAir 0.075→0.050 — МЕДЛЕННЕЕ/УПРАВЛЯЕМЕЕ сальто (фидбэк «крутит слишком быстро»), откроет разные флипы
-  uprightAir:0.030, uprightDamp:0.34,         // ПРОЩЕНИЕ: авто-выравнивание + гашение спина когда НЕ держишь наклон
+  uprightAir:0.028, uprightDamp:0.34,         // авто-выравнивание + гашение спина когда НЕ держишь наклон (ловит МАЛЫЙ наклон → обычная езда прощает)
+  crashAngle:1.2, spinCrash:0.34,             // b72 СКИЛЛ-БИТ (Trials): посадка дальше crashAngle (~69°) от колёс-вниз ИЛИ с большим остаточным ВРАЩЕНИЕМ = КРАШ (ботнул/перекрутил флип = цена). Обычные вылеты выравниваются сами = прощает (не подстава). Кусает в основном агрессивные флипы/большой воздух. СЦЕПЛЕНИЕ-апгрейд + цепкий байк расширяют. Жёсткость: ↓ crashAngle = больше скилла
   antiLoop:0.07, loopLimit:0.95,              // ПРОЩЕНИЕ луп-аута: возврат если нос задрался > этого над склоном
   angDamp:0.992, avMax:0.42, subSteps:6 };    // угл.демпфер / КАП скорости вращения (контролируемое сальто, не блюр) / под-шаги
 
@@ -618,7 +619,7 @@ function rigidStep(){
     }
     if(onGround) tq+=bike.rShift*R.leanGround*R.inertia;    // weight shift = pitch torque on the ground
     else { tq+=bike.rShift*leanAirEff*R.inertia;            // = flip torque in the air (b70: ВОЗД.КОНТРОЛЬ upgrade)
-      if(Math.abs(bike.rShift)<0.15){ const la=terrainAt(bike.x+Math.max(20,bike.vx*8)).ang; let d=la-bike.ang; while(d>Math.PI)d-=6.283; while(d<-Math.PI)d+=6.283; const near=clamp(1-(terrainAt(bike.x).y-(bike.y+R.oy+R.wr))/240,0,1); tq+=(d*R.uprightAir-bike.angV*R.uprightDamp)*(0.4+near)*R.inertia; }   // not holding lean → PD auto-level + spin-damp = lands on its wheels (forgiving)
+      if(Math.abs(bike.rShift)<0.15){ const la=terrainAt(bike.x+Math.max(20,bike.vx*8)).ang; let d=la-bike.ang; while(d>Math.PI)d-=6.283; while(d<-Math.PI)d+=6.283; const near=clamp(1-(terrainAt(bike.x).y-(bike.y+R.oy+R.wr))/240,0,1); tq+=(d*R.uprightAir-bike.angV*R.uprightDamp)*(0.4+near)*R.inertia; }   // not holding lean → PD auto-level + spin-damp = forgiving normal launches/landings
     }
     if(onGround){ const gs=terrainAt(bike.x).ang; let rp=bike.ang-gs; while(rp>Math.PI)rp-=6.283; while(rp<-Math.PI)rp+=6.283; if(rp<-R.loopLimit)tq+=(-R.loopLimit-rp)*R.antiLoop*R.inertia; else if(rp>R.loopLimit)tq+=(R.loopLimit-rp)*R.antiLoop*R.inertia; }   // forgiving anti-loop (no infinite backward tumble)
     bike.vx+=(fx/R.mass)*sdt; bike.vy+=(fy/R.mass)*sdt;
@@ -728,7 +729,7 @@ function update(){
   else if(!wasG && grounded){                                          // just landed
     jumpGrace=0;                                                       // jump arc over
     let diff=Math.abs(rel); lastLandDiff=diff;
-    if(airT>14 && diff>BK().grip+0.45+0.07*upgLvl('grip')){ wipeout('crash'); }   // b55: +0.45 forgiveness margin on top of the landing assist → a flip that lands NOT-perfectly-level still lands (user: that's OK, not a glitch). Crash only on a really sideways/upside-down touchdown
+    if(airT>14 && (diff > RB.crashAngle + 0.12*upgLvl('grip') + Math.max(0,(BK().grip-1.40))*0.4 || Math.abs(bike.angV) > RB.spinCrash + 0.03*upgLvl('grip'))){ wipeout('crash'); }   // b72 СКИЛЛ-БИТ (Trials): land too far off wheels-down OR still SPINNING fast = CRASH (botched/over-rotated flip costs). СЦЕПЛЕНИЕ upgrade + grippy bike widen tolerance (interconnected). Tune RB.crashAngle/spinCrash by hand
     else { sfxLand();
       // b65: on a REAL-AIR landing (airT>10 — a jump/flip, not a tiny whoop-skip) SETTLE the touchdown to wheels-down (nearest full turn relative to the slope) + kill most residual spin → a COMPLETED flip no longer instantly LOOPS-OUT on the same grounded frame (the loop-check below ran on the leftover nose-up angle/spin). Skill = the air rotation; the touchdown is forgiven (b55/b61 intent). Crash-check above still rejects a truly sideways landing. rel is recomputed so the loop/endo check sees the corrected angle. Tiny terrain-skips (airT≤10) keep their flow (gentle damp only).
       bike.angV*=0.4;   // b68: just damp residual spin on touchdown — the rigid body + air auto-level already settle the angle; the old teleport-snap fought the rigid body
