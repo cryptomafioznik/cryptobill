@@ -192,7 +192,7 @@ const TUNE = {
   pumpDur:      120,     // 4c. PUMP — длительность рывка в кадрах (дольше + плавно, ×апгрейд PUMP). Был резкий ~56-кадровый скачок — теперь плавный разгон
   airControl:   0.014,   // 5. контроль в воздухе — момент вращения/сальто в полёте
   camFollow:    0.08,    // 6. слежение камеры — плавность по вертикали за байком (больше = резче/нервнее)
-  waveSpeed:    0.60,    // 7. b68: 0.72→0.60 — под новую физику (байк больше в воздухе, чуть мягче погоня пока трассу не дотюнили). 7-OLD:0.72 скорость волны — базовая скорость дампа (0.85→0.72: большие горы стоят времени на подъём → дай брать их деликатно, не задушив погоней; мягкий БЭКСТОП. БОЛЬШЕ = больше давления)
+  waveSpeed:    0.50,    // 7. b68: 0.72→0.50 — под новую физику (байк больше в воздухе, чуть мягче погоня пока трассу не дотюнили). 7-OLD:0.72 скорость волны — базовая скорость дампа (0.85→0.72: большие горы стоят времени на подъём → дай брать их деликатно, не задушив погоней; мягкий БЭКСТОП. БОЛЬШЕ = больше давления)
   waveAccel:    0.4,     // 8. ускорение волны — насколько дамп разгоняется с дистанцией (СНИЖЕНО 0.5→0.4 — спокойнее темп)
   terrainSteep: 0.85,    // 9. b68: 1.5→0.85 — положе под твёрдое тело. 9-OLD: ПОЛНАЯ крутизна рельефа — крутые, но ПРОХОДИМЫЕ холмы (гора, не вертикальная стена). b59: 1.3→1.5 (техничнее глубже). Растёт от steepEarly за steepRamp
   mountain:     0.80,    // 9b. b68: 1.45→0.80 — гоночные холмы под твёрдое тело (катаешь+вылетаешь), не вертикальные стены старой glued-модели. 9b-OLD: РАЗМАХ ГОР — множитель затяжных подъёмов/спусков (Gravity-Defied: БОЛЬШИЕ структурные горы). b52: 1.25→1.45 — больше ДИНАМИКИ вместо обрывов (длиннее/драматичнее спуски-подъёмы = больше вилли/баланса/естественного воздуха). БОЛЬШЕ = выше/длиннее
@@ -275,13 +275,14 @@ const RB={
   wb:26, oy:15.5, wr:12,                       // полубаза (±колёса) / ЦТ выше оси / радиус колеса — = спрайту
   springK:0.40, springC:0.55,                 // ПОДВЕСКА: жёсткость пружины (мягче) / демпфер БОЛЬШЕ (гасит отскок от угловатой ценовой линии → меньше скачет)
   rollResist:0.04, mudRoll:0.20,              // сопротивление качению (колесо катится) / на грязи (вязнет)
-  mu:2.2, engine:1.0, brakeF:0.5,             // конус трения/тяги / сила двигателя (×стат байка) / тормоз — высокие т.к. трасса крутая, traction-limited байк иначе вязнет на подъёмах
+  mu:2.6, engine:1.15, brakeF:0.5,            // конус трения/тяги / сила двигателя (×стат байка) / тормоз — высокие т.к. трасса крутая, traction-limited байк иначе вязнет на подъёмах
+  thrRamp:0.11, spinGrip:0.86,                // b68: АНАЛОГ.ГАЗ (рампа газа 0→1 → вилли/тяга ∝ сколько газу) + БУКС (при срыве сцепления передаётся кинетич.×spinGrip<1 → молотить газ чуть хуже, чем дозировать; мягко, чтоб подъёмы не глохли)
   jump:9.0,                                    // импульс хопа (свайп вверх)
   airDrag:0.992, rollDrag:0.997,              // аэро / качение (потолок скорости)
-  leanGround:0.016, leanAir:0.075,            // авторитет веса: тангаж на земле / вращение сальто в воздухе
+  leanGround:0.016, leanAir:0.050,            // авторитет веса: тангаж на земле / вращение сальто в воздухе. b68: leanAir 0.075→0.050 — МЕДЛЕННЕЕ/УПРАВЛЯЕМЕЕ сальто (фидбэк «крутит слишком быстро»), откроет разные флипы
   uprightAir:0.030, uprightDamp:0.34,         // ПРОЩЕНИЕ: авто-выравнивание + гашение спина когда НЕ держишь наклон
   antiLoop:0.07, loopLimit:0.95,              // ПРОЩЕНИЕ луп-аута: возврат если нос задрался > этого над склоном
-  angDamp:0.992, subSteps:6 };                // угл.демпфер / под-шаги (стабильность penalty-пружин)
+  angDamp:0.992, avMax:0.42, subSteps:6 };    // угл.демпфер / КАП скорости вращения (контролируемое сальто, не блюр) / под-шаги
 
 // ---------- meta: gem bank, bikes, missions ----------
 let bank=0, owned=[0], selBike=0, muted=false, flipsTotal=0, topKmh=0, lastLandDiff=0;
@@ -560,9 +561,11 @@ addEventListener('touchcancel',e=>{ for(const tch of e.changedTouches){ delete t
 
 // === RIGID-BODY STEP (b68): one frame of the real bike physics over the price line (terrainAt = ground). ===
 function rigidStep(){
-  const R=RB, sdt=1/R.subSteps, thr=down?1:0, engScale=BK().accel/0.49;
+  const R=RB, sdt=1/R.subSteps, engScale=BK().accel/0.49;
+  bike.thr = lerp(bike.thr||0, down?1:0, R.thrRamp);        // АНАЛОГОВЫЙ ГАЗ: рампа 0→1 → тяга/вилли ∝ тому, сколько газу даёшь (не бинарно)
+  const thr=bike.thr;
   const ci0=Math.floor(bike.x/STEP), onMud=!!(terr[ci0]&&terr[ci0].mud);
-  let onGround=false;
+  let onGround=false, spun=false;
   for(let s=0;s<R.subSteps;s++){
     let fx=0, fy=0, tq=0;
     fy += R.mass*R.grav;                                   // gravity on the CG
@@ -581,9 +584,10 @@ function rigidStep(){
         fx+=Fn*nx; fy+=Fn*ny; tq+=rx*(Fn*ny)-ry*(Fn*nx);
         const vt=vpx*tx+vpy*ty;
         let Ft=-vt*(onMud?R.mudRoll:R.rollResist);          // wheel ROLLS (slight resistance; mud = more = sap)
-        if(drive&&thr) Ft+=R.engine*engScale;               // engine drive on rear (× bike stat) — naturally wheelies
+        const maxF=R.mu*Fn;                                 // traction cone
+        if(drive&&thr>0.02){ const want=R.engine*engScale*thr; if(want>maxF){ Ft+=maxF*R.spinGrip; spun=true; } else Ft+=want; }   // БУКС: газу больше, чем держит сцепление → колесо СРЫВАЕТ, передаётся только кинетич. (×spinGrip<1). Дозируешь газ = держит и лезет; молотишь на подъёме/старте = буксует
         if(brake) Ft+=-Math.sign(vt)*R.brakeF;
-        const maxF=R.mu*Fn; if(Ft>maxF)Ft=maxF; else if(Ft<-maxF)Ft=-maxF;   // friction/traction cone
+        if(Ft>maxF)Ft=maxF; else if(Ft<-maxF)Ft=-maxF;
         fx+=Ft*tx; fy+=Ft*ty; tq+=rx*(Ft*ty)-ry*(Ft*tx);
       }
     }
@@ -598,8 +602,12 @@ function rigidStep(){
   }
   bike.vx*=onGround?R.rollDrag:R.airDrag;                  // drag once per frame (speed ceiling)
   bike.angV*=R.angDamp;
+  if(bike.angV>R.avMax)bike.angV=R.avMax; else if(bike.angV<-R.avMax)bike.angV=-R.avMax;   // КАП вращения → сальто УПРАВЛЯЕМОЕ (не «крутит слишком быстро»)
   if(boosting>0) bike.vx+=TUNE.pumpForce;                  // PUMP boost (kept)
   bike.onG=onGround; bike.wheel+=bike.vx*0.08;
+  bike.spin = spun ? Math.min(1,(bike.spin||0)+0.34) : Math.max(0,(bike.spin||0)-0.12);   // wheelspin amount (roost + visual)
+  if(bike.spin>0.3 && onGround && t%2===0) dust.push({x:bike.x-16,y:bike.y+20,vx:-bike.vx*0.2-2-Math.random()*3,vy:-Math.random()*2.2,life:1,r:Math.random()*2.4+1.4});   // РООСТ: заднее буксует → выбивает пыль
+  if(bike.spin>0.2) bike.wheel+=bike.vx*0.10*bike.spin;     // буксующее колесо крутится быстрее визуально
 }
 function update(){
   if(hitstop>0){ hitstop--; return; }   // brief freeze for impact punch
