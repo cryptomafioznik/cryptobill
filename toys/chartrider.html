@@ -35,6 +35,8 @@
 <div id="spd"><div id="mood">— bull run —</div><div><b id="kmh">0</b> km/h</div></div>
 <div id="hint"></div>
 <div id="dbg"></div>
+<a id="physlink" href="physlab.html" style="position:fixed;left:50%;transform:translateX(-50%);top:env(safe-area-inset-top,4px);z-index:60;padding:4px 12px;background:rgba(44,30,60,0.85);color:#d3bcff;font:700 11px ui-monospace,monospace;border:1px solid rgba(160,120,220,0.55);border-radius:9px;text-decoration:none;white-space:nowrap;">🧪 ТЕСТ НОВОЙ ФИЗИКИ →</a>
+<script>document.getElementById('physlink').href=location.pathname.indexOf('/toys/')>=0?'physlab.html':'toys/physlab.html';</script>
 <script>
 const cv=document.getElementById('c'),ctx=cv.getContext('2d');let W,H,DPR;
 const hudEl=document.getElementById('hud'),spdEl=document.getElementById('spd'),hintEl=document.getElementById('hint');
