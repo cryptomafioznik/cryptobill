@@ -52,7 +52,7 @@ function lerp(a,b,t){return a+(b-a)*t;} function clamp(v,a,b){return v<a?a:v>b?b
 // false → full game everywhere. Single switch. Systems are GATED, never deleted.
 const CORE_TEST_MODE = false;   // b70: META LIVE — building the progression spine (upgrades/bikes with teeth, career, economy) on the confirmed rigid-body core
 // build stamp — bump on every change so a phone refresh can confirm it loaded fresh code (cache!)
-const BUILD = '2026-06-24 · b79';
+const BUILD = '2026-06-24 · b80';
 
 // ---------- procedural market terrain ----------
 // height map sampled every STEP px; generated forward as we ride. Market character:
@@ -199,6 +199,7 @@ try{best=+localStorage.getItem('cipher_run_best')||0;}catch(e){}
 try{bestPnl=+localStorage.getItem('cipher_best_pnl')||0;}catch(e){}
 let down=false, brake=false, jumpReq=0, jumpCd=0, coyote=0, jumpGrace=0, activeTouches={}, touchLowY={};   // jumpReq = buffered press; coyote/jumpGrace = jump grace windows; touchLowY = per-touch low point for swipe-up
 let leanX=0, ctrlId=null, ctrlOX=0, leanKeyL=false, leanKeyR=false;   // ONE-TOUCH scheme: hold = gas, release = coast, swipe up = jump, drag L/R = analog lean (leanX -1..1)
+let leanCmd=0, rShiftVel=0;   // b80 LEAN_FEEL: leanCmd = ДОЗИРОВАННОЕ усилие (нарастает по удержанию leanX); rShiftVel = скорость смещения веса в массе-пружине
 const LEANRANGE=90;   // px of horizontal drag from the touch origin for full lean (full = wheelie/stoppie); finer for light drags
 const TOUCH=('ontouchstart' in window)||navigator.maxTouchPoints>0;
 // ===================== TUNE — единый источник «крутилок фила» (core ride feel) =====================
@@ -301,12 +302,24 @@ const BASE_PHYS={POW:PHYS.POW, AIRTQ:PHYS.AIRTQ, LOOP:PHYS.LOOP};   // frozen ba
 // Склон ВАЛИТ байк (подъём → назад/нос вверх, спуск → носом вниз); держишь кнопками наклона НОС↑/НОС↓.
 // Дефолты = СРЕДНЯЯ строгость (НЕ финал — финал калибруем ПОСЛЕ Этапа 2 под крутой рельеф). КРУТИ РУКАМИ:
 const BALANCE_TUNE={
-  BAL_PENDULUM:  0.05,    // перевёрнутый маятник: чем сильнее уже наклонён ОТ склона — тем сильнее валит дальше = САМА УГРОЗА (без него склон-момент просто стабилизируется и угрозы нет). крути руками
+  BAL_PENDULUM:  0.045,   // перевёрнутый маятник = САМА УГРОЗА (гуляние у равновесия → микро-поправки). b80: 0.045 под аналоговый ввод — «не сваливается от касания» держит ДОЗИРОВАННЫЙ ВВОД, а не слабый маятник. ГЛАВНАЯ РУЧКА: спокойно → подними; хрупко → опусти. крути руками
   BAL_RECOVER:   0.03,    // мягкий возврат к склону у центра (мёртвая зона, без твича). Чистая неустойчивость = BAL_PENDULUM − BAL_RECOVER (сейчас +0.02 = есть угроза). крути руками
   BAL_GRAV_TIP:  0.014,   // СМЕЩЕНИЕ от склона ∝ sin(крутизна): подъём биасит назад, спуск — носом вниз. крути руками (средне; не максимум)
   BAL_SPEED_TIP: 0.0016,  // добавка дестабилизации ∝ vx·sin(склон): быстрее в гору = сильнее кидает назад. крути руками
   BAL_LEAN_GND:  0.045,   // авторитет кнопок наклона на ЗЕМЛЕ — чем вытягиваешь (было RB.leanGround 0.016 = мало). крути руками
   BAL_TIP_LIMIT: 1.3,     // |тангаж − склон| (рад ≈ 75°), за которым уже не вытянуть = ПАДЕНИЕ. крути руками (средне; не 1.15)
+};
+// ===================== LEAN_FEEL — АНАЛОГОВЫЙ ВВОД НАКЛОНА (эндуро-дозирование) =====================
+// Вместо мгновенного leanX=±1: удержание кнопки НАРАЩИВАЕТ усилие (leanCmd) за LEAN_RAMP, спадает за LEAN_RELEASE
+// (короткий тап = слабая поправка, удержание = сильный наклон = «сила нажатия» через длительность). Затем
+// фактическое смещение веса rShift догоняет команду через МАССА-ПРУЖИНА-ДЕМПФЕР (инерция, без телепорта).
+// Дефолты = реалистично-мягко, но живо. КРУТИ РУКАМИ:
+const LEAN_FEEL={
+  LEAN_RAMP:    20,    // кадров до МАКС усилия при удержании (≈0.33с). Меньше = резче набор; больше = нужно дольше держать для сильного наклона. крути руками
+  LEAN_RELEASE: 14,    // кадров спада усилия к 0 после отпускания. крути руками
+  LEAN_MASS:    1.0,   // инерция райдера в пружине вес-смещения (выше = тяжелее/ленивее). крути руками
+  LEAN_SPRING:  0.05,  // жёсткость: тянет фактический rShift к команде (выше = быстрее догоняет). крути руками
+  LEAN_DAMP:    0.42,  // демпфер скорости смещения (≈критический 2·√(SPRING·MASS)=0.45 → плавно, почти без отскока). крути руками
 };
 const RB={
   grav:0.26, mass:1.0, inertia:230,          // гравитация на ЦТ / масса / момент инерции (выше = лениво крутится)
@@ -488,7 +501,7 @@ function reset(){
   bike={x:60,y:terrainAt(60).y-27.5,vx:0,vy:0,ang:terrainAt(60).ang,angV:0,onG:true,wheel:0,rShift:0};   // rShift = rider weight-shift state (-1 back .. +1 forward), smoothed from the drag input (b47 two-body)
   cam={x:bike.x-W*0.5,y:bike.y-H*0.46}; camAir=0; t=0; coins=0; dist=0; lastMile=0; newDepth=false; wipe=0; screen='play'; shake=0; flash=0; popT=0; daycycle=Math.random()*6.28;
   mult=1; pnl=0; airT=0; nearMissed=false; hitstop=0; gflash=0; multPulse=0; maxMult=1; flipCount=0; flipAcc=0; wheelieT=0; cashedOut=false; runGems=0;
-  flipsTotal=0; topKmh=0; lastLandDiff=0; lean=0; rush=0; prevVx=0; down=false; brake=false; jumpReq=0; jumpCd=0; coyote=0; jumpGrace=0; activeTouches={}; leanX=0; ctrlId=null; leanKeyL=false; leanKeyR=false; wave=bike.x-W*0.95; waveSpd=0; deathBy=''; boost=0; boosting=0;
+  flipsTotal=0; topKmh=0; lastLandDiff=0; lean=0; rush=0; prevVx=0; down=false; brake=false; jumpReq=0; jumpCd=0; coyote=0; jumpGrace=0; activeTouches={}; leanX=0; ctrlId=null; leanKeyL=false; leanKeyR=false; leanCmd=0; rShiftVel=0; wave=bike.x-W*0.95; waveSpd=0; deathBy=''; boost=0; boosting=0;
   zone=-1; biomeBanner=''; biomeBannerT=0; BSKY=['rgb(20,16,48)','rgb(46,30,78)','rgb(150,80,110)','rgb(230,150,110)']; BLINE='228,250,255'; BRIDGE='60,40,90'; rollMissions();
   parts=[]; dust=[]; trail=[]; streaks=[]; floats=[];
   stars=[]; for(let i=0;i<90;i++)stars.push({x:Math.random()*W,y:Math.random()*H*0.7,z:0.2+Math.random()*0.6,s:Math.random()*1.6+0.4});
@@ -673,7 +686,14 @@ function update(){
   // physics
   const P=PHYS, DX=P.DX, DY=P.DY, wasG=bike.onG;
   // --- RIDER WEIGHT-SHIFT (b47 two-body): the drag input moves the rider's body mass (smoothed = it has inertia), which sets the combined-CG offset → traction split + pitch torque ---
-  bike.rShift = lerp(bike.rShift, leanX, TUNE.riderSmooth);
+  // b80 LEAN_FEEL — аналоговый ввод: удержание ДОЗИРУЕТ усилие (leanCmd), затем масса-пружина-демпфер → rShift (инерция, без телепорта/инстант-переворота)
+  { const F=LEAN_FEEL;
+    if(ctrlScheme==='gestures'){ leanCmd=leanX; }                                       // драг = аналоговая команда напрямую (уже дозирован позицией пальца)
+    else if(leanX>0.05) leanCmd=Math.min(1, leanCmd+1/F.LEAN_RAMP);                      // держишь НОС↓ → усилие НАРАСТАЕТ (тап = слабо, удержание = сильно)
+    else if(leanX<-0.05) leanCmd=Math.max(-1, leanCmd-1/F.LEAN_RAMP);                    // держишь НОС↑ → усилие НАРАСТАЕТ
+    else leanCmd += (leanCmd>0?-1:1)*Math.min(Math.abs(leanCmd), 1/F.LEAN_RELEASE);      // отпустил → плавный спад к нулю
+    rShiftVel += ((leanCmd-bike.rShift)*F.LEAN_SPRING - rShiftVel*F.LEAN_DAMP)/F.LEAN_MASS;   // пружина к команде − демпфер
+    bike.rShift += rShiftVel; }
   const rShift = bike.rShift;
   const frontFrac = clamp(0.48 + rShift*0.12, 0, 1);                 // front load fraction (forward = front planted, back = rear loaded) — matches the isolation traction sweep 0.36..0.60
   const driveMul = clamp(1 - rShift*TUNE.driveTrade, 1-TUNE.driveTrade, 1+TUNE.driveTrade);   // weight back loads the rear → more drive/climb grip; forward unweights it → less drive
