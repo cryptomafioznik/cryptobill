@@ -52,7 +52,7 @@ function lerp(a,b,t){return a+(b-a)*t;} function clamp(v,a,b){return v<a?a:v>b?b
 // false → full game everywhere. Single switch. Systems are GATED, never deleted.
 const CORE_TEST_MODE = false;   // b70: META LIVE — building the progression spine (upgrades/bikes with teeth, career, economy) on the confirmed rigid-body core
 // build stamp — bump on every change so a phone refresh can confirm it loaded fresh code (cache!)
-const BUILD = '2026-06-23 · b77';
+const BUILD = '2026-06-24 · b78';
 
 // ---------- procedural market terrain ----------
 // height map sampled every STEP px; generated forward as we ride. Market character:
@@ -285,6 +285,17 @@ const BASE_PHYS={POW:PHYS.POW, AIRTQ:PHYS.AIRTQ, LOOP:PHYS.LOOP};   // frozen ba
 // с ценовой линией) + момент двигателя на заднем + гравитация на ЦТ + вес райдера = момент тангажа.
 // ВСЁ эмерджентно (вылет=колёса оторвались, сальто=момент в воздухе, посадка=подвеска гасит, луп=перегаз).
 // Геометрия совпадает со спрайтом (колёса ±DX, ЦТ DY выше) → рендер не трогаем. Юзер подтвердил фил руками.
+// ===================== BALANCE_TUNE — ЭТАП 1: БАЛАНС КАК ЯДРО (Gravity Defied) =====================
+// Склон ВАЛИТ байк (подъём → назад/нос вверх, спуск → носом вниз); держишь кнопками наклона НОС↑/НОС↓.
+// Дефолты = СРЕДНЯЯ строгость (НЕ финал — финал калибруем ПОСЛЕ Этапа 2 под крутой рельеф). КРУТИ РУКАМИ:
+const BALANCE_TUNE={
+  BAL_PENDULUM:  0.05,    // перевёрнутый маятник: чем сильнее уже наклонён ОТ склона — тем сильнее валит дальше = САМА УГРОЗА (без него склон-момент просто стабилизируется и угрозы нет). крути руками
+  BAL_RECOVER:   0.03,    // мягкий возврат к склону у центра (мёртвая зона, без твича). Чистая неустойчивость = BAL_PENDULUM − BAL_RECOVER (сейчас +0.02 = есть угроза). крути руками
+  BAL_GRAV_TIP:  0.014,   // СМЕЩЕНИЕ от склона ∝ sin(крутизна): подъём биасит назад, спуск — носом вниз. крути руками (средне; не максимум)
+  BAL_SPEED_TIP: 0.0016,  // добавка дестабилизации ∝ vx·sin(склон): быстрее в гору = сильнее кидает назад. крути руками
+  BAL_LEAN_GND:  0.045,   // авторитет кнопок наклона на ЗЕМЛЕ — чем вытягиваешь (было RB.leanGround 0.016 = мало). крути руками
+  BAL_TIP_LIMIT: 1.3,     // |тангаж − склон| (рад ≈ 75°), за которым уже не вытянуть = ПАДЕНИЕ. крути руками (средне; не 1.15)
+};
 const RB={
   grav:0.26, mass:1.0, inertia:230,          // гравитация на ЦТ / масса / момент инерции (выше = лениво крутится)
   wb:26, oy:15.5, wr:12,                       // полубаза (±колёса) / ЦТ выше оси / радиус колеса — = спрайту
@@ -621,11 +632,14 @@ function rigidStep(){
         fx+=Ft*tx; fy+=Ft*ty; tq+=rx*(Ft*ty)-ry*(Ft*tx);
       }
     }
-    if(onGround) tq+=bike.rShift*R.leanGround*R.inertia;    // weight shift = pitch torque on the ground
+    if(onGround){ const gs=terrainAt(bike.x).ang; let rp=bike.ang-gs; while(rp>Math.PI)rp-=6.283; while(rp<-Math.PI)rp+=6.283; const B=BALANCE_TUNE;   // b78 ЭТАП 1 — БАЛАНС КАК ЯДРО
+      tq += bike.rShift*B.BAL_LEAN_GND*R.inertia                                          // кнопки наклона = чем держишь баланс
+          + Math.sin(gs)*(B.BAL_GRAV_TIP + B.BAL_SPEED_TIP*Math.abs(bike.vx))*R.inertia   // склон ВАЛИТ: подъём→назад, спуск→носом вниз (∝ крутизне × скорости)
+          + rp*(B.BAL_PENDULUM - B.BAL_RECOVER)*R.inertia; }                              // перевёрнутый маятник (угроза) − мягкий возврат у центра
     else { tq+=bike.rShift*leanAirEff*R.inertia;            // = flip torque in the air (b70: ВОЗД.КОНТРОЛЬ upgrade)
       if(Math.abs(bike.rShift)<0.15){ const la=terrainAt(bike.x+Math.max(20,bike.vx*8)).ang; let d=la-bike.ang; while(d>Math.PI)d-=6.283; while(d<-Math.PI)d+=6.283; const near=clamp(1-(terrainAt(bike.x).y-(bike.y+R.oy+R.wr))/240,0,1); tq+=(d*R.uprightAir-bike.angV*R.uprightDamp)*(0.4+near)*R.inertia; }   // not holding lean → PD auto-level + spin-damp = forgiving normal launches/landings
     }
-    if(onGround){ const gs=terrainAt(bike.x).ang; let rp=bike.ang-gs; while(rp>Math.PI)rp-=6.283; while(rp<-Math.PI)rp+=6.283; if(rp<-R.loopLimit)tq+=(-R.loopLimit-rp)*R.antiLoop*R.inertia; else if(rp>R.loopLimit)tq+=(R.loopLimit-rp)*R.antiLoop*R.inertia; }   // forgiving anti-loop (no infinite backward tumble)
+    // b78: жёсткий antiLoop УБРАН — баланс теперь через BALANCE_TUNE выше (маятник + мягкий возврат). RB.antiLoop/loopLimit больше не используются (оставлены в RB для отката).
     bike.vx+=(fx/R.mass)*sdt; bike.vy+=(fy/R.mass)*sdt;
     bike.x+=bike.vx*sdt; bike.y+=bike.vy*sdt;
     bike.angV+=(tq/R.inertia)*sdt; bike.ang+=bike.angV*sdt;
@@ -745,7 +759,7 @@ function update(){
   // loop-out / endo: over-rotate while grounded = crash (the GD skill — too much gas on a climb loops you backward)
   if(grounded && rel<-0.45 && dist>25) tut('climb','▲ КРУТО? ОТПУСТИ ГАЗ — НЕ ОПРОКИНЕШЬСЯ');   // teach feathering before the first loop-out
   const loopThresh = lerp(TUNE.loopForgive, P.LOOP, clamp((dist||0)/TUNE.easeInDist,0,1));   // Alto on-ramp: forgiving early, eases to full over easeInDist — mastery ceiling unchanged
-  if(grounded && screen==='play' && Math.abs(rel)>2.4 && Math.abs(bike.angV)<0.06) wipeout('loop');   // b68: the rigid body's anti-loop already prevents the runaway backward tumble → a crash is ONLY a fully upside-down, settled landing (forgiving, like physlab). The old loop/endo threshold death is retired with the glued model
+  if(grounded && screen==='play' && Math.abs(rel)>BALANCE_TUNE.BAL_TIP_LIMIT && rel*bike.angV>0) wipeout('loop');   // b78 ЭТАП 1: переворот за BAL_TIP_LIMIT = ПАДЕНИЕ, но ТОЛЬКО если валится дальше (rel·angV>0). Если angV уже к центру (rel·angV≤0) — «ВЫТЯНУЛ», окно спасения
   // ---- ФАЗА-2: УДЕРЖАНИЕ ВИЛЛИ/СТОППИ = осмысленный скилл-баланс (как флипы дают очки — балансируешь весом → копишь буст + фидбэк) ----
   if(grounded && !rearBal && screen==='play' && Math.abs(rel)>0.55 && bike.vx>1.5 && !(rel>0 && supA<-0.1) && TUNE.wheelieRew>0){   // wheelie (rel<0) counts anywhere; stoppie (rel>0) NOT on a climb (that's just weight-forward climbing, not a trick)
     wheelieT++;
