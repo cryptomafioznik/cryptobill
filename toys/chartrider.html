@@ -13,7 +13,7 @@
   canvas{display:block;}
   #hud{position:fixed;top:14px;left:16px;color:#cdbef0;font-size:12px;letter-spacing:.14em;line-height:1.5;pointer-events:none;text-shadow:0 1px 6px rgba(0,0,0,.5);}
   #hud .tk{color:#ffe6a8;font-size:11px;letter-spacing:.22em;opacity:.85;}
-  #hud .pnl{font-size:27px;font-weight:700;letter-spacing:.04em;line-height:1.15;color:#6effc0;text-shadow:0 2px 12px rgba(0,0,0,.55);}
+  #hud .pnl{font-size:27px;font-weight:700;letter-spacing:.04em;line-height:1.15;color:#6effc0;text-shadow:0 2px 12px rgba(0,0,0,.55);transition:transform .13s cubic-bezier(.34,1.7,.5,1);transform-origin:left center;will-change:transform;}
   #hud .sub{font-size:12px;letter-spacing:.14em;margin-top:1px;} #hud b{color:#fff;}
   #hud .up{color:#6effc0;} #hud .dn{color:#ff7a8a;}
   #spd{position:fixed;top:48px;right:16px;color:#bfe8ff;font-size:12px;letter-spacing:.14em;text-align:right;pointer-events:none;text-shadow:0 1px 6px rgba(0,0,0,.5);transition:opacity .2s;}
@@ -52,7 +52,7 @@ function lerp(a,b,t){return a+(b-a)*t;} function clamp(v,a,b){return v<a?a:v>b?b
 // false → full game everywhere. Single switch. Systems are GATED, never deleted.
 const CORE_TEST_MODE = false;   // b70: META LIVE — building the progression spine (upgrades/bikes with teeth, career, economy) on the confirmed rigid-body core
 // build stamp — bump on every change so a phone refresh can confirm it loaded fresh code (cache!)
-const BUILD = '2026-06-24 · b83';
+const BUILD = '2026-06-24 · b84';
 
 // ---------- procedural market terrain ----------
 // height map sampled every STEP px; generated forward as we ride. Market character:
@@ -195,6 +195,7 @@ function terrainAt(x){ // interpolated height + slope at world x
 
 // ---------- bike ----------
 let bike, cam, t, coins, dist, best, screen, wipe, parts, stars, dust, shake, flash, daycycle, trail, streaks, mult, pnl, bestPnl, airT, nearMissed, hitstop, gflash, floats, multPulse, maxMult, lean, rush, prevVx, wave, waveSpd, deathBy, boost, boosting, zone, biomeBanner, biomeBannerT, BSKY, BLINE, BRIDGE, lastMile, newDepth, camAir=0, wheelieT=0;
+let posPulse=0,_posPrev=0,_dangBuzz=0;   // b84 degen-момент: posPulse=пульс главного числа при росте позиции (number-go-up); _dangBuzz=одноразовый вибро при входе дампа в зону удара
 try{best=+localStorage.getItem('cipher_run_best')||0;}catch(e){}
 try{bestPnl=+localStorage.getItem('cipher_best_pnl')||0;}catch(e){}
 let down=false, brake=false, jumpReq=0, jumpCd=0, coyote=0, jumpGrace=0, activeTouches={}, touchLowY={};   // jumpReq = buffered press; coyote/jumpGrace = jump grace windows; touchLowY = per-touch low point for swipe-up
@@ -503,7 +504,7 @@ function reset(){
   bike={x:60,y:terrainAt(60).y-27.5,vx:0,vy:0,ang:terrainAt(60).ang,angV:0,onG:true,wheel:0,rShift:0};   // rShift = rider weight-shift state (-1 back .. +1 forward), smoothed from the drag input (b47 two-body)
   cam={x:bike.x-W*0.5,y:bike.y-H*0.46}; camAir=0; t=0; coins=0; dist=0; lastMile=0; newDepth=false; wipe=0; screen='play'; shake=0; flash=0; popT=0; daycycle=Math.random()*6.28;
   mult=1; pnl=0; airT=0; nearMissed=false; hitstop=0; gflash=0; multPulse=0; maxMult=1; flipCount=0; flipAcc=0; wheelieT=0; cashedOut=false; runGems=0;
-  flipsTotal=0; topKmh=0; lastLandDiff=0; lean=0; rush=0; prevVx=0; down=false; brake=false; jumpReq=0; jumpCd=0; coyote=0; jumpGrace=0; activeTouches={}; leanX=0; ctrlId=null; leanKeyL=false; leanKeyR=false; leanCmd=0; rShiftVel=0; wave=bike.x-W*0.95; waveSpd=0; deathBy=''; boost=0; boosting=0;
+  flipsTotal=0; topKmh=0; lastLandDiff=0; lean=0; rush=0; prevVx=0; down=false; brake=false; jumpReq=0; jumpCd=0; coyote=0; jumpGrace=0; activeTouches={}; leanX=0; ctrlId=null; leanKeyL=false; leanKeyR=false; leanCmd=0; rShiftVel=0; wave=bike.x-W*0.95; waveSpd=0; deathBy=''; boost=0; boosting=0; posPulse=0; _posPrev=0; _dangBuzz=0;
   zone=-1; biomeBanner=''; biomeBannerT=0; BSKY=['rgb(20,16,48)','rgb(46,30,78)','rgb(150,80,110)','rgb(230,150,110)']; BLINE='228,250,255'; BRIDGE='60,40,90'; rollMissions();
   parts=[]; dust=[]; trail=[]; streaks=[]; floats=[];
   stars=[]; for(let i=0;i<90;i++)stars.push({x:Math.random()*W,y:Math.random()*H*0.7,z:0.2+Math.random()*0.6,s:Math.random()*1.6+0.4});
@@ -897,7 +898,7 @@ function cashOut(){ if(screen!=='play'||gameMode!=='endless'||(pnl||0)<=0)return
   if(pnl>bestPnl){bestPnl=pnl;try{localStorage.setItem('cipher_best_pnl',bestPnl);}catch(e){}}
   if(dist>best){best=dist;try{localStorage.setItem('cipher_run_best',best);}catch(e){}}
   const oi=rankIdx(career); career+=pnl; const ni=rankIdx(career); if(ni>oi){ let bonus=0; for(let r=oi+1;r<=ni;r++)bonus+=RANKS[r].rew; bank+=bonus; rankedUp={rank:RANKS[ni],bonus:bonus}; }
-  saveProg(); saveMeta(); screen='dead'; flash=0.4; gflash=0.8; shake=4; sfxLev(); buzz([20,40,20]); }   // CORE TEST: only the distance record is saved; economy frozen
+  saveProg(); saveMeta(); screen='dead'; const _big=clamp((runGems||0)/180,0,1); flash=0.4+0.34*_big; gflash=0.8+0.18*_big; shake=4+7*_big; if(_big>0.5)sfxRankUp(); else sfxLev(); buzz(_big>0.5?[25,40,25,60]:[20,40,20]); }   // b84: эйфория фикса ∝ размеру банкуемого (крупный фикс = фанфары + сильнее вспышка/тряс)
 
 // ---------- render (Alto-style dusk, layered) ----------
 function skyGrad(){
@@ -1099,7 +1100,9 @@ function draw(){
   if(gflash>0.01){ctx.fillStyle='rgba(120,255,200,'+(gflash*0.16)+')';ctx.fillRect(0,0,W,H);}
   // danger glow + warning as the dump closes in
   if(screen==='play'){ const wgap=bike.x-wave, dang=clamp(1-wgap/(W*0.62),0,1);
-    if(dang>0.02){ const rv=ctx.createLinearGradient(0,0,W*0.55,0); rv.addColorStop(0,'rgba(225,28,52,'+(0.4*dang)+')'); rv.addColorStop(1,'rgba(225,28,52,0)'); ctx.fillStyle=rv; ctx.fillRect(0,0,W*0.55,H); }
+    const hb=dang>0.4?(0.74+0.26*Math.sin(t*(0.32+0.7*dang))):1;   // b84: сердцебиение — красный сзади пульсирует тем чаще, чем ближе дамп (спина чувствует)
+    if(dang>0.02){ const rv=ctx.createLinearGradient(0,0,W*0.6,0); rv.addColorStop(0,'rgba(225,28,52,'+(0.46*dang*hb)+')'); rv.addColorStop(1,'rgba(225,28,52,0)'); ctx.fillStyle=rv; ctx.fillRect(0,0,W*0.6,H); }
+    if(dang>0.5 && !_dangBuzz){ _dangBuzz=1; buzz(28); } else if(dang<0.38 && _dangBuzz){ _dangBuzz=0; }   // b84: одноразовый вибро-«тук» когда дамп входит в зону удара (без дёрготни — гистерезис 0.5/0.38)
     if(dang>0.45){ ctx.fillStyle='rgba(255,80,100,'+(0.55+0.45*Math.sin(t*0.45))+')'; ctx.font='800 15px ui-monospace,monospace'; ctx.textAlign='center'; ctx.fillText('⚠ ДАМП НАСТИГАЕТ',W/2,H*0.18); ctx.textAlign='left'; } }
   // BOOST (PUMP) gauge — on touch the PUMP button carries charge+control; keep this slim gauge only on desktop (Shift to fire)
   if(screen==='play' && !(TOUCH||window.__forceTouchUI)){ const bw=150,bx=W/2-bw/2,by=H-58,bf=clamp(boost||0,0,1);
@@ -1142,10 +1145,12 @@ function draw(){
     ctx.font='600 9px ui-monospace,monospace'; ctx.fillStyle='rgba(200,220,240,0.72)'; ctx.fillText('КОМБО',0,12); ctx.restore(); ctx.textAlign='left'; }   // b71: renamed LEVERAGE→КОМБО (the in-run combo mult) to free the name ПЛЕЧО for the player's leverage BET
   // b71: TAKE-PROFIT button (Endless) — sits BELOW the КОМБО badge, clear of the top dev overlays; shows live bankable gems (coins × leverage)
   if(screen==='play' && gameMode==='endless' && !CORE_TEST_MODE && (coins||0)>=3){
-    const gShow=Math.max(0,Math.round((coins||0)*COIN_GEM*leverage)); const pulse=0.5+0.5*Math.sin(t*0.16);
+    const gShow=Math.max(0,Math.round((coins||0)*COIN_GEM*leverage));
+    const wgapC=bike.x-wave, dngC=clamp(1-wgapC/(W*0.62),0,1), urge=dngC>0.4;   // b84: близко дамп → кнопка кричит «ЗАБЕРИ» (момент «фиксь сейчас или жадничай»)
+    const pulse=0.5+0.5*Math.sin(t*(0.16+0.55*dngC));
     UI.cashBtn={x:W/2-94,y:150,w:188,h:38}; ctx.textAlign='center';
-    ctx.fillStyle='rgba(16,42,28,0.86)'; if(ctx.roundRect){ctx.beginPath();ctx.roundRect(UI.cashBtn.x,UI.cashBtn.y,188,38,10);ctx.fill();ctx.strokeStyle='rgba(120,255,180,'+pulse+')';ctx.lineWidth=2;ctx.stroke();}else ctx.fillRect(UI.cashBtn.x,UI.cashBtn.y,188,38);
-    ctx.fillStyle='#9ff0c8'; ctx.font='800 15px ui-monospace,monospace'; ctx.fillText('💰 ЗАФИКСИТЬ ◆'+gShow+'  ×'+leverage, W/2, UI.cashBtn.y+25);
+    ctx.fillStyle=urge?'rgba(50,22,18,0.9)':'rgba(16,42,28,0.86)'; if(ctx.roundRect){ctx.beginPath();ctx.roundRect(UI.cashBtn.x,UI.cashBtn.y,188,38,10);ctx.fill();ctx.strokeStyle=(urge?'rgba(255,150,120,':'rgba(120,255,180,')+pulse+')';ctx.lineWidth=urge?2.6:2;ctx.stroke();}else ctx.fillRect(UI.cashBtn.x,UI.cashBtn.y,188,38);
+    ctx.fillStyle=urge?'#ffd0a8':'#9ff0c8'; ctx.font='800 15px ui-monospace,monospace'; ctx.fillText((urge?'💰 ЗАБЕРИ ◆':'💰 ЗАФИКСИТЬ ◆')+gShow+'  ×'+leverage, W/2, UI.cashBtn.y+25);
     ctx.textAlign='left';
   } else UI.cashBtn=null;
   // dead overlay
@@ -1273,9 +1278,16 @@ function draw(){
   // hud DOM
   const playing=(screen==='play'||screen==='paused');
   hudEl.style.opacity=playing?'1':'0'; spdEl.style.opacity=playing?'1':'0'; hintEl.style.opacity=(screen==='play'&&!TOUCH)?'1':'0';   // on touch the visible buttons replace the text hint
-  document.getElementById('pnl').textContent=CORE_TEST_MODE?(dist+' m'):('$'+Math.floor(pnl).toLocaleString('en-US'));   // CORE TEST: distance is the score
+  const pnlEl=document.getElementById('pnl'), subC=document.getElementById('coins');
+  if(CORE_TEST_MODE){ pnlEl.textContent=dist+' m'; pnlEl.style.transform='none'; subC.textContent='★ рекорд '+(best||0)+'m'; }
+  else if(gameMode==='endless'){   // b84 DEGEN-МОМЕНТ: главное число = ПОЗИЦИЯ на кону (◆ = ровно что зафиксишь = монеты×плечо), пухнет с соком — не абстрактный $профит
+    const pos=Math.max(0,Math.round((coins||0)*COIN_GEM*leverage));
+    pnlEl.textContent='◆ '+pos.toLocaleString('en-US');
+    subC.textContent='ПЛЕЧО ×'+leverage+'  ·  '+coins+' монет';
+    if(pos>_posPrev)posPulse=1; _posPrev=pos; posPulse*=0.86;
+    pnlEl.style.transform=posPulse>0.012?('scale('+(1+0.16*posPulse)+')'):'none';
+  } else { pnlEl.textContent='$'+Math.floor(pnl).toLocaleString('en-US'); pnlEl.style.transform='none'; subC.textContent='◆ '+coins; }
   document.getElementById('dist').textContent=dist;
-  document.getElementById('coins').textContent=CORE_TEST_MODE?('★ рекорд '+(best||0)+'m'):('◆ '+coins);
   document.getElementById('kmh').textContent=Math.round(bike.vx*12);
   const m=document.getElementById('mood'); const slope=terrainAt(bike.x+40).y-terrainAt(bike.x).y;
   m.textContent=slope<-6?'▲ bull run':slope>6?'▼ crash':'— sideways —'; m.style.color=slope<-6?'#6effc0':slope>6?'#ff7a8a':'#cdbef0';
