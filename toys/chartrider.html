@@ -52,7 +52,7 @@ function lerp(a,b,t){return a+(b-a)*t;} function clamp(v,a,b){return v<a?a:v>b?b
 // false → full game everywhere. Single switch. Systems are GATED, never deleted.
 const CORE_TEST_MODE = false;   // b70: META LIVE — building the progression spine (upgrades/bikes with teeth, career, economy) on the confirmed rigid-body core
 // build stamp — bump on every change so a phone refresh can confirm it loaded fresh code (cache!)
-const BUILD = '2026-06-24 · b78';
+const BUILD = '2026-06-24 · b79';
 
 // ---------- procedural market terrain ----------
 // height map sampled every STEP px; generated forward as we ride. Market character:
@@ -60,19 +60,31 @@ const BUILD = '2026-06-24 · b78';
 const STEP=26; let terr=[], genX=0, baseY, walk=0, regime='chop', regimeLeft=0, regimeDrift=0, regimeVol=18, lastHazIdx=-99, lastRegime='';
 // market regimes — distinct "scenarios" give the endless track rhythm & variety.
 // d<0 = price up (climb / green) ; d>0 = price down (drop / red)
+// ===================== CANDLE_TUNE — ЭТАП 2: СВЕЧА = РЕЛЬЕФ =====================
+// Зелёная (рост) = подъём, красная (падение) = спуск; тело свечи = крутизна (close правит и ride-линию, и свечу);
+// волатильность = пила (тяжело держать баланс), боковик = пологий спокойный. ПАМП = крутая гора, ДАМП = обрыв.
+// Дефолты СРЕДНЕ-круто (драматичнее текущего, но не финал — финал калибруем вместе с BALANCE_TUNE). КРУТИ РУКАМИ:
+const CANDLE_TUNE={
+  C_PUMP_STEEP:  1.6,    // множитель крутизны ЗЕЛЁНОГО подъёма (bull/pump) — выше = памп круче, тяжелее залезть не опрокинувшись назад. крути руками
+  C_DUMP_STEEP:  1.6,    // множитель крутизны КРАСНОГО спуска (bear/crash) — выше = дамп резче, обрыв вниз. крути руками
+  C_VOL_JAG:     1.6,    // множитель «пилы» на волатильных режимах (pump/crash/rocks) — резкий рельеф = тяжело держать баланс. крути руками
+  C_CALM_FLAT:   0.5,    // насколько боковик (flat) ПОЛОГИЙ/спокойный — ниже = ровнее передышка. крути руками
+  C_CLIMB_CAP:   0.6,    // КЭП крутизны подъёма (рад ≈34°; было TUNE.climbCap 0.48≈28°) — памп круче. крути руками (выше = круче, но риск что стоковый байк не залезет → опусти)
+};
 function pickRegime(){
   const d=clamp(((dist||0)+diffOffset)/1400,0,1), volK=1+d*0.65, M=TUNE.mountain;   // b59: difficulty ramps over 1400m + stronger volatility deeper → skill ramp. b60: +diffOffset → a career track starts deeper in the ramp (harder from the gun)
   // STRUCTURED enduro track: every hard FEATURE is followed by a flat RECOVERY run-up (setup/momentum — fair, you can prepare; no "stuck in a bad position")
+  const C=CANDLE_TUNE;   // b79 ЭТАП 2: свеча правит крутизну рельефа
   if(['bull','bear','pump','crash','rocks'].includes(lastRegime)){
-    regime='flat'; regimeDrift=(Math.random()-0.5)*3; regimeVol=4*volK; regimeLeft=6+Math.random()*5; lastRegime=regime; return;
+    regime='flat'; regimeDrift=(Math.random()-0.5)*3*C.C_CALM_FLAT; regimeVol=4*volK*C.C_CALM_FLAT; regimeLeft=6+Math.random()*5; lastRegime=regime; return;   // боковик = пологий спокойный (C_CALM_FLAT)
   }
   const r=Math.random();
-  if(r<TUNE.rockGarden){ regime='rocks'; regimeDrift=(Math.random()-0.5)*5; regimeVol=4*volK; regimeLeft=9+Math.random()*7; } // ROCK GARDEN — technical chatter (real hard-enduro: jostles balance, saps momentum; the "non-flow" texture)
+  if(r<TUNE.rockGarden){ regime='rocks'; regimeDrift=(Math.random()-0.5)*5; regimeVol=4*volK*C.C_VOL_JAG; regimeLeft=9+Math.random()*7; } // РОК-ГАРДЕН = пила (C_VOL_JAG): тяжело держать баланс
   else { const r2=Math.random();
-    if(r2<0.42){ regime='bull';  regimeDrift=-(16+Math.random()*13)*M; regimeVol=5*volK;  regimeLeft=11+Math.random()*11; } // a deliberate CLIMB FACE (attack from the run-up; weight forward)
-    else if(r2<0.72){ regime='bear'; regimeDrift=(15+Math.random()*12)*M; regimeVol=5*volK; regimeLeft=10+Math.random()*11; } // a DESCENT (build speed for the next climb)
-    else if(r2<0.88){ regime='pump'; regimeDrift=-(24+d*10)*M;  regimeVol=5*volK;  regimeLeft=6+Math.random()*5; }            // a STEEP ramp
-    else { regime='crash'; regimeDrift=(22+d*10);  regimeVol=8*volK;  regimeLeft=6+Math.random()*5; }                        // a steep CLIFF down
+    if(r2<0.42){ regime='bull';  regimeDrift=-(16+Math.random()*13)*M*C.C_PUMP_STEEP; regimeVol=5*volK;  regimeLeft=11+Math.random()*11; } // ЗЕЛЁНЫЙ ПОДЪЁМ круче (C_PUMP_STEEP)
+    else if(r2<0.72){ regime='bear'; regimeDrift=(15+Math.random()*12)*M*C.C_DUMP_STEEP; regimeVol=5*volK; regimeLeft=10+Math.random()*11; } // КРАСНЫЙ СПУСК круче (C_DUMP_STEEP)
+    else if(r2<0.88){ regime='pump'; regimeDrift=-(24+d*10)*M*C.C_PUMP_STEEP;  regimeVol=5*volK*C.C_VOL_JAG;  regimeLeft=6+Math.random()*5; }            // ПАМП = крутая ГОРА (тяжело залезть не опрокинувшись назад)
+    else { regime='crash'; regimeDrift=(22+d*10)*C.C_DUMP_STEEP;  regimeVol=8*volK*C.C_VOL_JAG;  regimeLeft=6+Math.random()*5; }                        // ДАМП = ОБРЫВ вниз
   }
   lastRegime=regime;
 }
@@ -125,7 +137,7 @@ function genSeg(){
     // Cap how much the price-line can RISE per node (climb = close ABOVE prev on screen = smaller y) so every
     // climb stays steep-but-grindable. Descents & gaps untouched. Re-derive walk so the generator can't "bank"
     // an un-drawable deficit and spring it as a wall a few nodes later.
-    const maxRise = Math.tan(TUNE.climbCap)*STEP;
+    const maxRise = Math.tan(CANDLE_TUNE.C_CLIMB_CAP)*STEP;   // b79 ЭТАП 2: кэп крутизны подъёма из CANDLE_TUNE (памп круче)
     if(prevC - close > maxRise){ close = prevC - maxRise; walk = close - baseY - roll; }
   }
   // ---- GAPS (chasm you JUMP) + LEDGES (vertical step you LOFT the front onto): structured skill obstacles ----
