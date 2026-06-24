@@ -52,7 +52,7 @@ function lerp(a,b,t){return a+(b-a)*t;} function clamp(v,a,b){return v<a?a:v>b?b
 // false → full game everywhere. Single switch. Systems are GATED, never deleted.
 const CORE_TEST_MODE = false;   // b70: META LIVE — building the progression spine (upgrades/bikes with teeth, career, economy) on the confirmed rigid-body core
 // build stamp — bump on every change so a phone refresh can confirm it loaded fresh code (cache!)
-const BUILD = '2026-06-24 · b84';
+const BUILD = '2026-06-24 · b85';
 
 // ---------- procedural market terrain ----------
 // height map sampled every STEP px; generated forward as we ride. Market character:
@@ -1103,7 +1103,7 @@ function draw(){
     const hb=dang>0.4?(0.74+0.26*Math.sin(t*(0.32+0.7*dang))):1;   // b84: сердцебиение — красный сзади пульсирует тем чаще, чем ближе дамп (спина чувствует)
     if(dang>0.02){ const rv=ctx.createLinearGradient(0,0,W*0.6,0); rv.addColorStop(0,'rgba(225,28,52,'+(0.46*dang*hb)+')'); rv.addColorStop(1,'rgba(225,28,52,0)'); ctx.fillStyle=rv; ctx.fillRect(0,0,W*0.6,H); }
     if(dang>0.5 && !_dangBuzz){ _dangBuzz=1; buzz(28); } else if(dang<0.38 && _dangBuzz){ _dangBuzz=0; }   // b84: одноразовый вибро-«тук» когда дамп входит в зону удара (без дёрготни — гистерезис 0.5/0.38)
-    if(dang>0.45){ ctx.fillStyle='rgba(255,80,100,'+(0.55+0.45*Math.sin(t*0.45))+')'; ctx.font='800 15px ui-monospace,monospace'; ctx.textAlign='center'; ctx.fillText('⚠ ДАМП НАСТИГАЕТ',W/2,H*0.18); ctx.textAlign='left'; } }
+    if(dang>0.45){ ctx.fillStyle='rgba(255,80,100,'+(0.55+0.45*Math.sin(t*0.45))+')'; ctx.font='800 15px ui-monospace,monospace'; ctx.textAlign='center'; ctx.fillText('⚠ ДАМП НАСТИГАЕТ',W/2,178); ctx.textAlign='left'; } }   // b85: увёл текст под кнопку (было H*0.18 — лез в поднятую рамку); угроза и так читается сердцебиением-виньеткой+вибро (b84)
   // BOOST (PUMP) gauge — on touch the PUMP button carries charge+control; keep this slim gauge only on desktop (Shift to fire)
   if(screen==='play' && !(TOUCH||window.__forceTouchUI)){ const bw=150,bx=W/2-bw/2,by=H-58,bf=clamp(boost||0,0,1);
     ctx.fillStyle='rgba(20,24,40,0.55)'; ctx.fillRect(bx,by,bw,9);
@@ -1140,7 +1140,7 @@ function draw(){
   if(gapFxT>0){ gapFxT-=0.02; ctx.globalAlpha=Math.min(1,gapFxT*2); ctx.fillStyle='#9ff0c8'; ctx.font='800 23px ui-monospace,monospace'; ctx.textAlign='center'; ctx.shadowColor='#3effa0'; ctx.shadowBlur=14; ctx.fillText(gapFxMsg,W/2,H*0.3); ctx.shadowBlur=0; ctx.globalAlpha=1; ctx.textAlign='left'; }
   // LEVERAGE badge — pulses & shifts cyan→green as it grows
   if(!CORE_TEST_MODE && mult>1.05 && screen!=='dead'){ const g3=clamp((mult-1)/7,0,1), col=mix([90,225,255],[120,255,170],clamp(g3*1.4,0,1));
-    ctx.save(); ctx.textAlign='center'; ctx.translate(W/2,116); const sc=1+(multPulse||0)*0.55; ctx.scale(sc,sc);
+    ctx.save(); ctx.textAlign='center'; ctx.translate(W/2,102); const sc=1+(multPulse||0)*0.55; ctx.scale(sc,sc);   // b85: поднял (116→102) — освобождаю центр-верх под байка (рамка ЗАФИКСИТЬ налазила на байкера)
     ctx.font='800 26px ui-monospace,monospace'; ctx.shadowColor=col; ctx.shadowBlur=12+(multPulse||0)*18; ctx.fillStyle=col; ctx.fillText('×'+mult.toFixed(1),0,0); ctx.shadowBlur=0;
     ctx.font='600 9px ui-monospace,monospace'; ctx.fillStyle='rgba(200,220,240,0.72)'; ctx.fillText('КОМБО',0,12); ctx.restore(); ctx.textAlign='left'; }   // b71: renamed LEVERAGE→КОМБО (the in-run combo mult) to free the name ПЛЕЧО for the player's leverage BET
   // b71: TAKE-PROFIT button (Endless) — sits BELOW the КОМБО badge, clear of the top dev overlays; shows live bankable gems (coins × leverage)
@@ -1148,7 +1148,7 @@ function draw(){
     const gShow=Math.max(0,Math.round((coins||0)*COIN_GEM*leverage));
     const wgapC=bike.x-wave, dngC=clamp(1-wgapC/(W*0.62),0,1), urge=dngC>0.4;   // b84: близко дамп → кнопка кричит «ЗАБЕРИ» (момент «фиксь сейчас или жадничай»)
     const pulse=0.5+0.5*Math.sin(t*(0.16+0.55*dngC));
-    UI.cashBtn={x:W/2-94,y:150,w:188,h:38}; ctx.textAlign='center';
+    UI.cashBtn={x:W/2-94,y:124,w:188,h:38}; ctx.textAlign='center';   // b85: поднял 150→124 (низ 188→162) — рамка ЗАФИКСИТЬ больше не налазит на байкера в прыжке
     ctx.fillStyle=urge?'rgba(50,22,18,0.9)':'rgba(16,42,28,0.86)'; if(ctx.roundRect){ctx.beginPath();ctx.roundRect(UI.cashBtn.x,UI.cashBtn.y,188,38,10);ctx.fill();ctx.strokeStyle=(urge?'rgba(255,150,120,':'rgba(120,255,180,')+pulse+')';ctx.lineWidth=urge?2.6:2;ctx.stroke();}else ctx.fillRect(UI.cashBtn.x,UI.cashBtn.y,188,38);
     ctx.fillStyle=urge?'#ffd0a8':'#9ff0c8'; ctx.font='800 15px ui-monospace,monospace'; ctx.fillText((urge?'💰 ЗАБЕРИ ◆':'💰 ЗАФИКСИТЬ ◆')+gShow+'  ×'+leverage, W/2, UI.cashBtn.y+25);
     ctx.textAlign='left';
