@@ -52,7 +52,7 @@ function lerp(a,b,t){return a+(b-a)*t;} function clamp(v,a,b){return v<a?a:v>b?b
 // false → full game everywhere. Single switch. Systems are GATED, never deleted.
 const CORE_TEST_MODE = false;   // b70: META LIVE — building the progression spine (upgrades/bikes with teeth, career, economy) on the confirmed rigid-body core
 // build stamp — bump on every change so a phone refresh can confirm it loaded fresh code (cache!)
-const BUILD = '2026-06-24 · b88';
+const BUILD = '2026-06-24 · b89';
 
 // ---------- procedural market terrain ----------
 // height map sampled every STEP px; generated forward as we ride. Market character:
@@ -195,7 +195,7 @@ function terrainAt(x){ // interpolated height + slope at world x
 
 // ---------- bike ----------
 let bike, cam, t, coins, dist, best, screen, wipe, parts, stars, dust, shake, flash, daycycle, trail, streaks, mult, pnl, bestPnl, airT, nearMissed, hitstop, gflash, floats, multPulse, maxMult, lean, rush, prevVx, wave, waveSpd, deathBy, boost, boosting, zone, biomeBanner, biomeBannerT, BSKY, BLINE, BRIDGE, lastMile, newDepth, camAir=0, wheelieT=0;
-let posPulse=0,_posPrev=0,_dangBuzz=0;   // b84 degen-момент: posPulse=пульс главного числа при росте позиции (number-go-up); _dangBuzz=одноразовый вибро при входе дампа в зону удара
+let posPulse=0,_posPrev=0,_dangBuzz=0,prMax=0,prMin=0;   // b84 degen-момент: posPulse=пульс числа при росте позиции; _dangBuzz=вибро на входе дампа. b89: prMax/prMin = недавний коридор ЦЕНЫ (высоты графика) для фиксации-по-цене (sell-the-top)
 try{best=+localStorage.getItem('cipher_run_best')||0;}catch(e){}
 try{bestPnl=+localStorage.getItem('cipher_best_earn')||0;}catch(e){}   // b87: bestPnl = лучшая зафиксированная ВЫПЛАТА за забег (◆), не $-очки
 let down=false, brake=false, jumpReq=0, jumpCd=0, coyote=0, jumpGrace=0, activeTouches={}, touchLowY={};   // jumpReq = buffered press; coyote/jumpGrace = jump grace windows; touchLowY = per-touch low point for swipe-up
@@ -385,6 +385,7 @@ try{const _c=localStorage.getItem('cipher_career2'); career=(_c===null||!(+_c>=0
 function upgOwned(id){ return upg[id]||0; }   // BOUGHT level — shop display + buy logic (always the real stored level, regardless of mode)
 function upgLvl(id){ return (!CORE_TEST_MODE || gameMode==='career') ? (upg[id]||0) : 0; }   // EFFECTIVE level in physics: CAREER applies your upgrades (the progression gate); the ENDLESS core stays STOCK (the pure feel-reference). Full game (CORE_TEST off) applies everywhere.
 function safeLev(){ return Math.round(4 + 4*upgLvl('wave') + 1.5*upgLvl('eng') + selBike*2); }   // b77 МАХОВИК: безопасный ПОТОЛОК ПЛЕЧА — растят ЩИТ(wave)+ДВИГАТЕЛЬ(eng)+тир байка. Плечо ВЫШЕ потолка разгоняет волну (over-leveraged) → железо даёт безопасно держать БÓЛЬШЕЕ плечо = больше профит = маховик. Сток ~4, макс ~30+
+function priceMul(){ if(!bike)return 1; const sp=prMax-prMin; if(sp<50)return 1; const f=clamp(((baseY-bike.y)-prMin)/sp,0,1); return 0.6+0.9*f; }   // b89 SELL-THE-TOP: выплата × позиция в недавнем коридоре ЦЕНЫ — вершина пампа ×1.5, дно дампа ×0.6, узкий боковик ×1. Курс калибруется руками (0.6/0.9)
 function rankFor(c){ let r=RANKS[0]; for(const x of RANKS)if(c>=x.at)r=x; return r; }
 function nextRank(c){ for(const x of RANKS)if(c<x.at)return x; return null; }
 function saveProg(){ try{localStorage.setItem('cipher_upg',JSON.stringify(upg));localStorage.setItem('cipher_career2',career);}catch(e){} }
@@ -503,7 +504,7 @@ function reset(){
   bike={x:60,y:terrainAt(60).y-27.5,vx:0,vy:0,ang:terrainAt(60).ang,angV:0,onG:true,wheel:0,rShift:0};   // rShift = rider weight-shift state (-1 back .. +1 forward), smoothed from the drag input (b47 two-body)
   cam={x:bike.x-W*0.5,y:bike.y-H*0.46}; camAir=0; t=0; coins=0; dist=0; lastMile=0; newDepth=false; wipe=0; screen='play'; shake=0; flash=0; popT=0; daycycle=Math.random()*6.28;
   mult=1; pnl=0; airT=0; nearMissed=false; hitstop=0; gflash=0; multPulse=0; maxMult=1; flipCount=0; flipAcc=0; wheelieT=0; cashedOut=false; runGems=0;
-  flipsTotal=0; topKmh=0; lastLandDiff=0; lean=0; rush=0; prevVx=0; down=false; brake=false; jumpReq=0; jumpCd=0; coyote=0; jumpGrace=0; activeTouches={}; leanX=0; ctrlId=null; leanKeyL=false; leanKeyR=false; leanCmd=0; rShiftVel=0; wave=bike.x-W*0.95; waveSpd=0; deathBy=''; boost=0; boosting=0; posPulse=0; _posPrev=0; _dangBuzz=0;
+  flipsTotal=0; topKmh=0; lastLandDiff=0; lean=0; rush=0; prevVx=0; down=false; brake=false; jumpReq=0; jumpCd=0; coyote=0; jumpGrace=0; activeTouches={}; leanX=0; ctrlId=null; leanKeyL=false; leanKeyR=false; leanCmd=0; rShiftVel=0; wave=bike.x-W*0.95; waveSpd=0; deathBy=''; boost=0; boosting=0; posPulse=0; _posPrev=0; _dangBuzz=0; prMax=0; prMin=0;
   zone=-1; biomeBanner=''; biomeBannerT=0; BSKY=['rgb(20,16,48)','rgb(46,30,78)','rgb(150,80,110)','rgb(230,150,110)']; BLINE='228,250,255'; BRIDGE='60,40,90'; rollMissions();
   parts=[]; dust=[]; trail=[]; streaks=[]; floats=[];
   stars=[]; for(let i=0;i<90;i++)stars.push({x:Math.random()*W,y:Math.random()*H*0.7,z:0.2+Math.random()*0.6,s:Math.random()*1.6+0.4});
@@ -861,6 +862,7 @@ function update(){
   maxMult=Math.max(maxMult,mult);
   pnl += bike.vx*mult*0.05*rankMul;                          // profit ∝ speed × leverage × rank
   topKmh=Math.max(topKmh,bike.vx*12);
+  { const _pr=baseY-bike.y; prMax+=(_pr-prMax)*(_pr>prMax?0.5:0.006); prMin+=(_pr-prMin)*(_pr<prMin?0.5:0.006); }   // b89: rolling коридор ЦЕНЫ (высоты графика) — быстро к новому пику/дну, медленно обратно = недавний локальный диапазон для priceMul()
   multPulse*=0.92; gflash*=0.9;
   for(const f of floats){ f.y+=f.vy; f.vy+=0.02; f.life-=0.018; } floats=floats.filter(f=>f.life>0);
   checkMissions();
@@ -894,7 +896,7 @@ function wipeout(reason){ deathBy=reason||'crash'; screen='dead'; shake=20; flas
   if(!CORE_TEST_MODE){ if(gameMode==='endless'){ cashedOut=false; const pen=Math.min(Math.round(bank*leverage*LIQ_PEN), Math.round(bank*LIQ_PEN_MAX)); runGems=-pen; bank=Math.max(0,bank-pen); } else { bank+=coins; }   // b76 ENDLESS ликвидация = реальная потеря (∝ плечу, кап LIQ_PEN_MAX, пол ≥0). b87: ликвидация НЕ рекорд и НЕ растит ранг — заработка нет
     const gain87=(gameMode==='career')?careerDeathGems:0; const oi=rankIdx(career); career+=gain87; const ni=rankIdx(career); if(ni>oi){ let bonus=0; for(let r=oi+1;r<=ni;r++)bonus+=RANKS[r].rew; bank+=bonus; rankedUp={rank:RANKS[ni],bonus:bonus}; sfxRankUp(); buzz([25,50,25,70]); } saveProg(); saveMeta(); } }
 function cashOut(){ if(screen!=='play'||gameMode!=='endless'||(pnl||0)<=0)return;   // b71: TAKE PROFIT — bank the FULL leveraged PnL & end the run safely (the greed↔safety decision)
-  cashedOut=true; pnl=Math.floor(pnl); runGems=Math.round((coins||0)*COIN_GEM*leverage); bank+=runGems; deathBy='cashout';
+  cashedOut=true; pnl=Math.floor(pnl); runGems=Math.round((coins||0)*COIN_GEM*leverage*priceMul()); bank+=runGems; deathBy='cashout';   // b89: выплата по ТЕКУЩЕЙ цене (фиксь на пике пампа = бонус)
   if(runGems>bestPnl){bestPnl=runGems;try{localStorage.setItem('cipher_best_earn',bestPnl);}catch(e){}}   // b87: BEST = лучшая зафиксированная ВЫПЛАТА (◆)
   if(dist>best){best=dist;try{localStorage.setItem('cipher_run_best',best);}catch(e){}}
   const oi=rankIdx(career); career+=runGems; const ni=rankIdx(career); if(ni>oi){ let bonus=0; for(let r=oi+1;r<=ni;r++)bonus+=RANKS[r].rew; bank+=bonus; rankedUp={rank:RANKS[ni],bonus:bonus}; }   // b87: ФИКС растит lifetime earned → ранг
@@ -1145,12 +1147,12 @@ function draw(){
     ctx.font='600 9px ui-monospace,monospace'; ctx.fillStyle='rgba(200,220,240,0.72)'; ctx.fillText('КОМБО',0,12); ctx.restore(); ctx.textAlign='left'; }   // b71: renamed LEVERAGE→КОМБО (the in-run combo mult) to free the name ПЛЕЧО for the player's leverage BET
   // b71: TAKE-PROFIT button (Endless) — sits BELOW the КОМБО badge, clear of the top dev overlays; shows live bankable gems (coins × leverage)
   if(screen==='play' && gameMode==='endless' && !CORE_TEST_MODE && (coins||0)>=3){
-    const gShow=Math.max(0,Math.round((coins||0)*COIN_GEM*leverage));
+    const _pmB=priceMul(); const gShow=Math.max(0,Math.round((coins||0)*COIN_GEM*leverage*_pmB)), peak=_pmB>=1.12;   // b89: выплата по ТЕКУЩЕЙ цене; peak = на пике пампа → «ПИК! ЗАБЕРИ»
     const wgapC=bike.x-wave, dngC=clamp(1-wgapC/(W*0.62),0,1), urge=dngC>0.4;   // b84: близко дамп → кнопка кричит «ЗАБЕРИ» (момент «фиксь сейчас или жадничай»)
     const pulse=0.5+0.5*Math.sin(t*(0.16+0.55*dngC));
     UI.cashBtn={x:W/2-94,y:124,w:188,h:38}; ctx.textAlign='center';   // b85: поднял 150→124 (низ 188→162) — рамка ЗАФИКСИТЬ больше не налазит на байкера в прыжке
     ctx.fillStyle=urge?'rgba(50,22,18,0.9)':'rgba(16,42,28,0.86)'; if(ctx.roundRect){ctx.beginPath();ctx.roundRect(UI.cashBtn.x,UI.cashBtn.y,188,38,10);ctx.fill();ctx.strokeStyle=(urge?'rgba(255,150,120,':'rgba(120,255,180,')+pulse+')';ctx.lineWidth=urge?2.6:2;ctx.stroke();}else ctx.fillRect(UI.cashBtn.x,UI.cashBtn.y,188,38);
-    ctx.fillStyle=urge?'#ffd0a8':'#9ff0c8'; ctx.font='800 15px ui-monospace,monospace'; ctx.fillText((urge?'💰 ЗАБЕРИ ◆':'💰 ЗАФИКСИТЬ ◆')+gShow+'  ×'+leverage, W/2, UI.cashBtn.y+25);
+    ctx.fillStyle=peak?'#ffe66a':(urge?'#ffd0a8':'#9ff0c8'); ctx.font='800 15px ui-monospace,monospace'; ctx.fillText((peak?'📈 ПИК! ЗАБЕРИ ◆':urge?'💰 ЗАБЕРИ ◆':'💰 ЗАФИКСИТЬ ◆')+gShow+'  ×'+leverage, W/2, UI.cashBtn.y+25);
     ctx.textAlign='left';
   } else UI.cashBtn=null;
   // dead overlay
@@ -1281,9 +1283,9 @@ function draw(){
   const pnlEl=document.getElementById('pnl'), subC=document.getElementById('coins');
   if(CORE_TEST_MODE){ pnlEl.textContent=dist+' m'; pnlEl.style.transform='none'; subC.textContent='★ рекорд '+(best||0)+'m'; }
   else if(gameMode==='endless'){   // b84 DEGEN-МОМЕНТ: главное число = ПОЗИЦИЯ на кону (◆ = ровно что зафиксишь = монеты×плечо), пухнет с соком — не абстрактный $профит
-    const pos=Math.max(0,Math.round((coins||0)*COIN_GEM*leverage));
+    const _pm=priceMul(); const pos=Math.max(0,Math.round((coins||0)*COIN_GEM*leverage*_pm));   // b89: позиция × текущая ЦЕНА — взлетает на пампе, проседает на дампе (sell-the-top)
     pnlEl.textContent='◆ '+pos.toLocaleString('en-US');
-    subC.textContent='ПЛЕЧО ×'+leverage+'  ·  '+coins+' монет';
+    subC.textContent='ПЛЕЧО ×'+leverage+'   ·   ЦЕНА '+(_pm>=1.12?'📈':_pm<=0.88?'📉':'·')+'×'+_pm.toFixed(2);
     if(pos>_posPrev)posPulse=1; _posPrev=pos; posPulse*=0.86;
     pnlEl.style.transform=posPulse>0.012?('scale('+(1+0.16*posPulse)+')'):'none';
   } else { pnlEl.textContent=dist+' м'; pnlEl.style.transform='none'; subC.textContent='◆ '+coins+(finishDist>0?('   /   '+finishDist+'м'):''); }   /* b87 career: крупно дистанция (нет плеча/фикса — цель доехать), не $ — убрал последний видимый $ из забега */
