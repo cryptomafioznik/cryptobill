@@ -52,7 +52,7 @@ function lerp(a,b,t){return a+(b-a)*t;} function clamp(v,a,b){return v<a?a:v>b?b
 // false → full game everywhere. Single switch. Systems are GATED, never deleted.
 const CORE_TEST_MODE = false;   // b70: META LIVE — building the progression spine (upgrades/bikes with teeth, career, economy) on the confirmed rigid-body core
 // build stamp — bump on every change so a phone refresh can confirm it loaded fresh code (cache!)
-const BUILD = '2026-06-24 · b89';
+const BUILD = '2026-06-24 · b90';
 
 // ---------- procedural market terrain ----------
 // height map sampled every STEP px; generated forward as we ride. Market character:
@@ -195,7 +195,7 @@ function terrainAt(x){ // interpolated height + slope at world x
 
 // ---------- bike ----------
 let bike, cam, t, coins, dist, best, screen, wipe, parts, stars, dust, shake, flash, daycycle, trail, streaks, mult, pnl, bestPnl, airT, nearMissed, hitstop, gflash, floats, multPulse, maxMult, lean, rush, prevVx, wave, waveSpd, deathBy, boost, boosting, zone, biomeBanner, biomeBannerT, BSKY, BLINE, BRIDGE, lastMile, newDepth, camAir=0, wheelieT=0;
-let posPulse=0,_posPrev=0,_dangBuzz=0,prMax=0,prMin=0;   // b84 degen-момент: posPulse=пульс числа при росте позиции; _dangBuzz=вибро на входе дампа. b89: prMax/prMin = недавний коридор ЦЕНЫ (высоты графика) для фиксации-по-цене (sell-the-top)
+let posPulse=0,_posPrev=0,_dangBuzz=0,prMax=0,prMin=0,slowmo=0;   // b84 degen-момент: posPulse=пульс числа при росте позиции; _dangBuzz=вибро на входе дампа. b89: prMax/prMin = коридор ЦЕНЫ (sell-the-top). b90: slowmo = кадры slow-mo на эпик-моменте (пропуск каждого 2-го update)
 try{best=+localStorage.getItem('cipher_run_best')||0;}catch(e){}
 try{bestPnl=+localStorage.getItem('cipher_best_earn')||0;}catch(e){}   // b87: bestPnl = лучшая зафиксированная ВЫПЛАТА за забег (◆), не $-очки
 let down=false, brake=false, jumpReq=0, jumpCd=0, coyote=0, jumpGrace=0, activeTouches={}, touchLowY={};   // jumpReq = buffered press; coyote/jumpGrace = jump grace windows; touchLowY = per-touch low point for swipe-up
@@ -448,6 +448,7 @@ function resumeAudio(){ initAudio(); try{ if(actx&&actx.state==='suspended')actx
 function blip(freq,dur,type,vol){ if(!actx||muted)return; try{ const o=actx.createOscillator(),g=actx.createGain(),n=actx.currentTime; o.type=type||'square'; o.frequency.setValueAtTime(freq,n); o.connect(g); g.connect(master); g.gain.setValueAtTime(0.0001,n); g.gain.exponentialRampToValueAtTime(vol||0.3,n+0.012); g.gain.exponentialRampToValueAtTime(0.0001,n+(dur||0.12)); o.start(n); o.stop(n+(dur||0.12)+0.03);}catch(e){} }
 function sfxCoin(){ blip(940,0.09,'triangle',0.2); blip(1400,0.07,'triangle',0.11); }
 function sfxFlip(){ blip(260,0.2,'sawtooth',0.16); }
+function sfxFlipCrescendo(n){ blip(240+Math.min(n,6)*95,0.2,'sawtooth',0.16); if(n>=2)blip(560+n*70,0.13,'square',0.10); }   // b90 КРЕЩЕНДО: тон выше с каждым флипом в цепи
 function sfxNear(){ blip(1250,0.12,'sine',0.16); }
 function sfxLand(){ blip(150,0.09,'square',0.2); }
 function sfxCrash(){ blip(80,0.45,'sawtooth',0.38); blip(120,0.3,'square',0.22); }
@@ -504,7 +505,7 @@ function reset(){
   bike={x:60,y:terrainAt(60).y-27.5,vx:0,vy:0,ang:terrainAt(60).ang,angV:0,onG:true,wheel:0,rShift:0};   // rShift = rider weight-shift state (-1 back .. +1 forward), smoothed from the drag input (b47 two-body)
   cam={x:bike.x-W*0.5,y:bike.y-H*0.46}; camAir=0; t=0; coins=0; dist=0; lastMile=0; newDepth=false; wipe=0; screen='play'; shake=0; flash=0; popT=0; daycycle=Math.random()*6.28;
   mult=1; pnl=0; airT=0; nearMissed=false; hitstop=0; gflash=0; multPulse=0; maxMult=1; flipCount=0; flipAcc=0; wheelieT=0; cashedOut=false; runGems=0;
-  flipsTotal=0; topKmh=0; lastLandDiff=0; lean=0; rush=0; prevVx=0; down=false; brake=false; jumpReq=0; jumpCd=0; coyote=0; jumpGrace=0; activeTouches={}; leanX=0; ctrlId=null; leanKeyL=false; leanKeyR=false; leanCmd=0; rShiftVel=0; wave=bike.x-W*0.95; waveSpd=0; deathBy=''; boost=0; boosting=0; posPulse=0; _posPrev=0; _dangBuzz=0; prMax=0; prMin=0;
+  flipsTotal=0; topKmh=0; lastLandDiff=0; lean=0; rush=0; prevVx=0; down=false; brake=false; jumpReq=0; jumpCd=0; coyote=0; jumpGrace=0; activeTouches={}; leanX=0; ctrlId=null; leanKeyL=false; leanKeyR=false; leanCmd=0; rShiftVel=0; wave=bike.x-W*0.95; waveSpd=0; deathBy=''; boost=0; boosting=0; posPulse=0; _posPrev=0; _dangBuzz=0; prMax=0; prMin=0; slowmo=0;
   zone=-1; biomeBanner=''; biomeBannerT=0; BSKY=['rgb(20,16,48)','rgb(46,30,78)','rgb(150,80,110)','rgb(230,150,110)']; BLINE='228,250,255'; BRIDGE='60,40,90'; rollMissions();
   parts=[]; dust=[]; trail=[]; streaks=[]; floats=[];
   stars=[]; for(let i=0;i<90;i++)stars.push({x:Math.random()*W,y:Math.random()*H*0.7,z:0.2+Math.random()*0.6,s:Math.random()*1.6+0.4});
@@ -779,7 +780,8 @@ function update(){
       bike.angV*=0.4;   // b68: just damp residual spin on touchdown — the rigid body + air auto-level already settle the angle; the old teleport-snap fought the rigid body
       if(airT>28){ const ab=Math.round(airT*2.2*mult); pnl+=ab; mult+=0.4; boost=Math.min(1,(boost||0)+0.3); multPulse=1; popText('BIG AIR  +$'+ab.toLocaleString('en-US')); floatPop(bike.x,bike.y-30,'+$'+ab,'#9ff0ff'); gflash=0.6; shake=7; sfxAir(); buzz(18); }
       else if(diff<0.16 && airT>10){ coins+=2; floatPop(bike.x,bike.y-34,'CLEAN +◆2','#aef0ff'); }
-      if(flipCount){ flipsTotal+=flipCount; mult+=flipCount*0.6; boost=Math.min(1,(boost||0)+0.22*flipCount); multPulse=1; const gain=Math.round(flipCount*40*mult); pnl+=gain; coins+=flipCount; popText('FLIP ×'+flipCount+'   +$'+gain.toLocaleString('en-US')); shake=9; hitstop=4; gflash=0.7; sfxFlip(); }
+      if(flipCount){ flipsTotal+=flipCount; mult+=flipCount*0.6; boost=Math.min(1,(boost||0)+0.22*flipCount); multPulse=1; const gain=Math.round(flipCount*40*mult); pnl+=gain; coins+=flipCount; popText('FLIP ×'+flipCount+'   +$'+gain.toLocaleString('en-US')); shake=9; hitstop=4; gflash=0.7; sfxFlipCrescendo(flipCount); }
+      if((flipCount>=2 || airT>40) && diff<0.5){ slowmo=Math.max(slowmo,16); shake=Math.max(shake,13); gflash=0.95; flash=Math.max(flash,0.3); popText('🔥 EPIC'+(flipCount>=2?' ×'+flipCount:'')); for(let z=0;z<22;z++)parts.push({x:bike.x,y:bike.y-10,vx:(Math.random()-0.5)*9,vy:-Math.random()*7-1,life:1,gold:1,r:Math.random()*3+1.5}); sfxRankUp(); buzz([30,50,30,90]); }   // b90 ЭПИК-ЛЕНДИНГ: крупный трюк чисто (≥2 флипа ИЛИ большой эйр, не боком) = вирусный момент → slow-mo + золотой взрыв + фанфара
       nearMissed=false; airT=0; flipCount=0; flipAcc=0; }
   }
   // loop-out / endo: over-rotate while grounded = crash (the GD skill — too much gas on a climb loops you backward)
@@ -1436,7 +1438,7 @@ function dbgTick(){
     +'<b>'+(dist||0)+'</b>m · дамп <span class="'+wc+'">'+gapM+'m</span><br>'
     +'<span class="lab">'+state+' · CORE '+(CORE_TEST_MODE?'ON':'OFF')+' · '+BUILD+'</span>';
 }
-function loop(){ requestAnimationFrame(loop); try{ if(screen==='play')update(); draw(); musicTick(); dbgTick(); }catch(e){ if(!loop._e){loop._e=1; console.error('CHART loop error (self-healed, screen='+screen+'):',e&&e.stack||e); } } }   // b65: rAF re-requested FIRST + try/catch → one bad frame can no longer permanently FREEZE the game (was: any throw skipped the re-request → stuck until a page refresh, matching the "магазин дёргается/не работает до обновления" report). The first error is logged so the real cause surfaces.
+function loop(){ requestAnimationFrame(loop); try{ if(screen==='play'){ if(slowmo>0){ slowmo--; if(!(slowmo&1))update(); } else update(); } draw(); musicTick(); dbgTick(); }catch(e){ if(!loop._e){loop._e=1; console.error('CHART loop error (self-healed, screen='+screen+'):',e&&e.stack||e); } } }   // b65: rAF re-requested FIRST + try/catch → one bad frame can no longer permanently FREEZE the game (was: any throw skipped the re-request → stuck until a page refresh, matching the "магазин дёргается/не работает до обновления" report). The first error is logged so the real cause surfaces.
 function shakeApply(){} // (shake folded into camera draw via translate jitter)
 toTitle();
 // apply shake in draw by jittering before skyGrad
