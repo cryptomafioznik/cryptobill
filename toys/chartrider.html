@@ -52,7 +52,7 @@ function lerp(a,b,t){return a+(b-a)*t;} function clamp(v,a,b){return v<a?a:v>b?b
 // false → full game everywhere. Single switch. Systems are GATED, never deleted.
 const CORE_TEST_MODE = false;   // b70: META LIVE — building the progression spine (upgrades/bikes with teeth, career, economy) on the confirmed rigid-body core
 // build stamp — bump on every change so a phone refresh can confirm it loaded fresh code (cache!)
-const BUILD = '2026-06-24 · b92';
+const BUILD = '2026-06-24 · b94';
 
 // ---------- procedural market terrain ----------
 // height map sampled every STEP px; generated forward as we ride. Market character:
@@ -299,31 +299,7 @@ const BASE_PHYS={POW:PHYS.POW, AIRTQ:PHYS.AIRTQ, LOOP:PHYS.LOOP};   // frozen ba
 // с ценовой линией) + момент двигателя на заднем + гравитация на ЦТ + вес райдера = момент тангажа.
 // ВСЁ эмерджентно (вылет=колёса оторвались, сальто=момент в воздухе, посадка=подвеска гасит, луп=перегаз).
 // Геометрия совпадает со спрайтом (колёса ±DX, ЦТ DY выше) → рендер не трогаем. Юзер подтвердил фил руками.
-// ===================== BALANCE_TUNE — ЭТАП 1: БАЛАНС КАК ЯДРО (Gravity Defied) =====================
-// Склон ВАЛИТ байк (подъём → назад/нос вверх, спуск → носом вниз); держишь кнопками наклона НОС↑/НОС↓.
-// Дефолты = СРЕДНЯЯ строгость (НЕ финал — финал калибруем ПОСЛЕ Этапа 2 под крутой рельеф). КРУТИ РУКАМИ:
-const BALANCE_TUNE={
-  BAL_PENDULUM:  0.045,   // перевёрнутый маятник = САМА УГРОЗА (гуляние у равновесия → микро-поправки). b80: 0.045 под аналоговый ввод — «не сваливается от касания» держит ДОЗИРОВАННЫЙ ВВОД, а не слабый маятник. ГЛАВНАЯ РУЧКА: спокойно → подними; хрупко → опусти. крути руками
-  BAL_RECOVER:   0.03,    // мягкий возврат к склону у центра (мёртвая зона, без твича). Чистая неустойчивость = BAL_PENDULUM − BAL_RECOVER (сейчас +0.02 = есть угроза). крути руками
-  BAL_GRAV_TIP:  0.014,   // СМЕЩЕНИЕ от склона ∝ sin(крутизна): подъём биасит назад, спуск — носом вниз. крути руками (средне; не максимум)
-  BAL_SPEED_TIP: 0.0016,  // добавка дестабилизации ∝ vx·sin(склон): быстрее в гору = сильнее кидает назад. крути руками
-  BAL_LEAN_GND:  0.03,    // b82: 0.045→0.03 — мягче момент наклона (плавнее набор до кап-темпа). авторитет кнопок на земле. крути руками
-  BAL_TIP_LIMIT: 1.3,     // |тангаж − склон| (рад ≈ 75°), за которым уже не вытянуть = ПАДЕНИЕ. крути руками (средне; не 1.15)
-  BAL_GND_AVMAX: 0.13,    // b82 ГЛАВНОЕ ПРОТИВ «РЕЗКО»: кап угловой скорости НА ЗЕМЛЕ (рад/кадр) — как БЫСТРО может наклоняться байк. НИЗКО = плавно/сдержанно (было avMax 0.42 = щелчок). крути руками
-  BAL_GND_DAMP:  0.90,    // b82: доп. демпфер угла на земле — момент не копится в рывок, наклон плавно набирает/гасит. ниже = плавнее/ленивее. крути руками
-};
-// ===================== LEAN_FEEL — АНАЛОГОВЫЙ ВВОД НАКЛОНА (эндуро-дозирование) =====================
-// Вместо мгновенного leanX=±1: удержание кнопки НАРАЩИВАЕТ усилие (leanCmd) за LEAN_RAMP, спадает за LEAN_RELEASE
-// (короткий тап = слабая поправка, удержание = сильный наклон = «сила нажатия» через длительность). Затем
-// фактическое смещение веса rShift догоняет команду через МАССА-ПРУЖИНА-ДЕМПФЕР (инерция, без телепорта).
-// Дефолты = реалистично-мягко, но живо. КРУТИ РУКАМИ:
-const LEAN_FEEL={
-  LEAN_RAMP:    30,    // b81: 20→30 — СДЕРЖАННЕЕ набор наклона (≈0.5с до макс), тоньше дозирование. Меньше = резче; больше = плавнее/медленнее. крути руками
-  LEAN_RELEASE: 14,    // кадров спада усилия к 0 после отпускания. крути руками
-  LEAN_MASS:    1.3,   // b81: 1.0→1.3 — тяжелее/сдержаннее перенос веса (плавнее, меньше дёрготни). крути руками
-  LEAN_SPRING:  0.035, // b81: 0.05→0.035 — мягче пружина (плавнее догоняет команду, сдержаннее). крути руками
-  LEAN_DAMP:    0.42,  // демпфер скорости смещения (≈критический 2·√(SPRING·MASS)=0.45 → плавно, почти без отскока). крути руками
-};
+// b94 ЧИСТКА: BALANCE_TUNE + LEAN_FEEL (GD-эксперимент b78-b82) УДАЛЕНЫ — откатаны в b83 к аркаде, 0 чтений в живой физике. История в git. Будущий GD — только ЭМЕРДЖЕНТНО/в изоляции, НЕ bolt-on (см. HANDOFF / [[physics-rigidbody]]).
 const RB={
   grav:0.26, mass:1.0, inertia:230,          // гравитация на ЦТ / масса / момент инерции (выше = лениво крутится)
   wb:26, oy:15.5, wr:12,                       // полубаза (±колёса) / ЦТ выше оси / радиус колеса — = спрайту
@@ -512,6 +488,12 @@ function reset(){
   document.getElementById('hint').innerHTML=(TOUCH?'<b>удерживай</b> = газ · <b>влево-вправо</b> = наклон · <b>свайп вверх</b> = прыжок':'<b>ПРОБЕЛ</b> газ · <b>←/→</b> наклон · <b>↑</b> прыжок')+' · отпустил — катишься';
 }
 function toTitle(){ reset(); screen='title'; if(!CORE_TEST_MODE)checkDaily(); }
+function shareRun(){   // b93 ВИРАЛЬНОСТЬ: похвастаться забегом (тикток/чат) — navigator.share, fallback = буфер
+  const url=(location.href.split('?')[0]); const r=RANKS[rankIdx(career)];
+  const txt=(cashedOut?('💎 Зафиксил ◆'+(runGems||0)+' профита на плече ×'+leverage+' ('+r.e+r.n+')'):('☠ Ликвиднулся на ×'+leverage+', но дошёл '+dist+'м'))+' в CHART RUNNER 📈🏍 Побей мой результат: ';
+  try{ if(navigator.share){ navigator.share({title:'CHART RUNNER',text:txt,url:url}).catch(()=>{}); }
+    else if(navigator.clipboard){ navigator.clipboard.writeText(txt+url).then(()=>popText('СКОПИРОВАНО — кидай в чат')).catch(()=>{}); }
+    else popText(url); }catch(e){} }
 const UI={}; // button rects in screen space, refreshed each draw for hit-testing
 function hit(p,r){ return r&&p.x>=r.x&&p.x<=r.x+r.w&&p.y>=r.y&&p.y<=r.y+r.h; }
 function toggleMute(){ muted=!muted; if(master)master.gain.value=muted?0:0.42; saveMeta(); }
@@ -565,6 +547,7 @@ function pointerDown(p){
     if(UI.dgarage && hit(p,UI.dgarage)){ garageRet='dead'; screen='garage'; sfxClick(); return; }
     if(UI.dtracks && hit(p,UI.dtracks)){ gameMode='career'; screen='career'; sfxClick(); return; }
     if(UI.dretry && hit(p,UI.dretry)){ reset(); sfxClick(); return; }
+    if(UI.dshare && hit(p,UI.dshare)){ shareRun(); sfxClick(); return; }   // b93: тап по «ПОДЕЛИТЬСЯ» не рестартит
     if(gameMode==='career'){ sfxClick(); return; }   // career: only the explicit buttons act (no tap-anywhere-retry → avoids mis-taps near ГАРАЖ)
     if(hit(p,UI.menu)) toTitle(); else reset(); sfxClick(); return; }
   if(hit(p,UI.pause)){ screen='paused'; sfxClick(); return null; }
@@ -1186,7 +1169,10 @@ function draw(){
     ctx.fillStyle=isBest?'#ffd678':'#7a6f9a';ctx.fillText((isBest?'★ РЕКОРД ВЫПЛАТЫ   ◆':'BEST   ◆')+bestPnl.toLocaleString('en-US'),W/2,H*0.34+108);
     ctx.fillStyle=cashedOut?'#9ff0c8':'#ffb0a0';ctx.font='800 13px ui-monospace,monospace';ctx.fillText((cashedOut?'💰 ПРОФИТ ЗАФИКСИРОВАН':'☠ ЛИКВИДИРОВАН (плечо ×'+leverage+')')+'    капитал ◆'+bank,W/2,H*0.34+130);
     { const tip=deathBy==='wave'?'🛡 качай ЩИТ ОТ ВОЛНЫ — оторвёшься от дампа':(deathBy==='loop'||deathBy==='endo')?'◎ качай СЦЕПЛЕНИЕ — прощает кувырки':deathBy==='crash'?'◎ качай СЦЕПЛЕНИЕ — мягче посадки':'⚙ качай ДВИЖОК — быстрее уедешь'; ctx.fillStyle='#9fd0ea';ctx.font='11px ui-monospace,monospace';ctx.fillText(tip,W/2,H*0.34+150); } }
-    if(gameMode!=='career'){ ctx.fillStyle='#6effc0';ctx.font='13px ui-monospace,monospace';ctx.fillText('коснись — снова',W/2,H*0.34+172); } }
+    if(gameMode!=='career'){ UI.dshare={x:W/2-94,y:H*0.34+162,w:188,h:36}; const sp=0.55+0.45*Math.sin(t*0.18);   // b93 ВИРАЛЬНОСТЬ: кнопка похвастаться (для тиктоков/чатов)
+      ctx.fillStyle='rgba(40,30,62,0.88)'; if(ctx.roundRect){ctx.beginPath();ctx.roundRect(UI.dshare.x,UI.dshare.y,188,36,10);ctx.fill();ctx.strokeStyle='rgba(160,140,255,'+sp+')';ctx.lineWidth=2;ctx.stroke();}else ctx.fillRect(UI.dshare.x,UI.dshare.y,188,36);
+      ctx.fillStyle='#d2c2ff';ctx.font='800 14px ui-monospace,monospace';ctx.textAlign='center';ctx.fillText('📤 ПОХВАСТАТЬСЯ',W/2,UI.dshare.y+24);
+      ctx.fillStyle='#6effc0';ctx.font='13px ui-monospace,monospace';ctx.fillText('коснись мимо — снова',W/2,H*0.34+222); } else UI.dshare=null; }
   if(screen==='won'){ ctx.fillStyle='rgba(8,20,12,0.72)';ctx.fillRect(0,0,W,H); ctx.textAlign='center'; const T=CAREER_TRACKS[careerTrack]||CAREER_TRACKS[0]; const last=careerTrack>=CAREER_TRACKS.length-1;
     ctx.fillStyle='rgba(120,255,180,'+(0.75+0.25*Math.sin(t*0.2))+')';ctx.font='800 32px ui-monospace,monospace';ctx.shadowColor='#6effc0';ctx.shadowBlur=18;ctx.fillText('🏁 ФИНИШ!',W/2,H*0.25);ctx.shadowBlur=0;
     ctx.fillStyle='#eafaff';ctx.font='800 20px ui-monospace,monospace';ctx.fillText(T.name+' ПРОЙДЕН',W/2,H*0.25+36);
