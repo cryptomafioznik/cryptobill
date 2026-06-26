@@ -52,7 +52,7 @@ function lerp(a,b,t){return a+(b-a)*t;} function clamp(v,a,b){return v<a?a:v>b?b
 // false → full game everywhere. Single switch. Systems are GATED, never deleted.
 const CORE_TEST_MODE = false;   // b70: META LIVE — building the progression spine (upgrades/bikes with teeth, career, economy) on the confirmed rigid-body core
 // build stamp — bump on every change so a phone refresh can confirm it loaded fresh code (cache!)
-const BUILD = '2026-06-24 · b91';
+const BUILD = '2026-06-24 · b92';
 
 // ---------- procedural market terrain ----------
 // height map sampled every STEP px; generated forward as we ride. Market character:
@@ -849,6 +849,10 @@ function update(){
   const leadCap = W*lerp(0.92, 0.36, clamp((dist||0)/320,0,1));   // dump closes in over the first ~320m → then a constant chase (front sits at the left edge)
   if(bike.x - wave > leadCap) wave = bike.x - leadCap;
   if(screen==='play' && (bike.x-wave)<W*0.45 && dist>140) tut('wave','◀ ДАМП НАСТИГАЕТ — ГАЗУЙ, НЕ ГЛОХНИ');
+  if(gameMode==='endless' && screen==='play'){   // b92 ОНБОРДИНГ DEGEN-ЯДРА (уникальный хук — раньше не объяснялся)
+    if((coins||0)>=12 && !cashedOut) tut('cashout','💰 ◆ ПОЗИЦИЯ РАСТЁТ — Жми «ЗАФИКСИТЬ» вверху: банкуй профит, пока ДАМП не догнал');
+    if(priceMul()>=1.25 && (coins||0)>=8) tut('selltop','📈 ЦЕНА НА ПИКЕ — фиксируй ЗДЕСЬ = больше ◆ («продай на верхах»)');
+  }
   if(wave >= bike.x-18) wipeout('wave');
   // camera — on BIG AIR (trick kicker) frame higher + follow faster + zoom out (draw) so the high launch AND the landing stay on-screen
   const _airH = bike.onG ? 0 : Math.max(0, terrainAt(bike.x).y-(bike.y+DY));
