@@ -52,7 +52,7 @@ function lerp(a,b,t){return a+(b-a)*t;} function clamp(v,a,b){return v<a?a:v>b?b
 // false → full game everywhere. Single switch. Systems are GATED, never deleted.
 const CORE_TEST_MODE = false;   // b70: META LIVE — building the progression spine (upgrades/bikes with teeth, career, economy) on the confirmed rigid-body core
 // build stamp — bump on every change so a phone refresh can confirm it loaded fresh code (cache!)
-const BUILD = '2026-06-24 · b90';
+const BUILD = '2026-06-24 · b91';
 
 // ---------- procedural market terrain ----------
 // height map sampled every STEP px; generated forward as we ride. Market character:
@@ -767,7 +767,7 @@ function update(){
     airT++;
     if(airT===14) tut('air','✦ В ВОЗДУХЕ: ↓ НОС ВНИЗ К СКЛОНУ ДЛЯ РОВНОЙ ПОСАДКИ');
     const skim=terrainAt(bike.x).y-(bike.y+DY);                        // gap of lower wheel above surface
-    if(airT>16 && skim>0 && skim<16 && bike.vx>6 && !nearMissed){ nearMissed=true; mult+=0.5; boost=Math.min(1,(boost||0)+0.15); multPulse=1; const g2=Math.round(30*mult); pnl+=g2; floatPop(bike.x,bike.y-22,'NEAR MISS +$'+g2,'#9ff0ff'); shake=4; hitstop=2; gflash=0.4; sfxNear(); }
+    if(airT>16 && skim>0 && skim<16 && bike.vx>6 && !nearMissed){ nearMissed=true; mult+=0.5; boost=Math.min(1,(boost||0)+0.15); multPulse=1; const g2=1.5*mult; coins+=g2; floatPop(bike.x,bike.y-22,'NEAR MISS +◆'+Math.round(g2),'#9ff0ff'); shake=4; hitstop=2; gflash=0.4; sfxNear(); }
     flipAcc+=Math.abs(bike.angV); if(flipAcc>6.283){flipAcc-=6.283;flipCount++;}
   }
   if(wasG && !grounded){ airT=0; nearMissed=false; }                   // just launched
@@ -778,10 +778,10 @@ function update(){
     else { sfxLand();
       // b65: on a REAL-AIR landing (airT>10 — a jump/flip, not a tiny whoop-skip) SETTLE the touchdown to wheels-down (nearest full turn relative to the slope) + kill most residual spin → a COMPLETED flip no longer instantly LOOPS-OUT on the same grounded frame (the loop-check below ran on the leftover nose-up angle/spin). Skill = the air rotation; the touchdown is forgiven (b55/b61 intent). Crash-check above still rejects a truly sideways landing. rel is recomputed so the loop/endo check sees the corrected angle. Tiny terrain-skips (airT≤10) keep their flow (gentle damp only).
       bike.angV*=0.4;   // b68: just damp residual spin on touchdown — the rigid body + air auto-level already settle the angle; the old teleport-snap fought the rigid body
-      if(airT>28){ const ab=Math.round(airT*2.2*mult); pnl+=ab; mult+=0.4; boost=Math.min(1,(boost||0)+0.3); multPulse=1; popText('BIG AIR  +$'+ab.toLocaleString('en-US')); floatPop(bike.x,bike.y-30,'+$'+ab,'#9ff0ff'); gflash=0.6; shake=7; sfxAir(); buzz(18); }
+      if(airT>28){ const ab=airT*0.1*mult; coins+=ab; mult+=0.4; boost=Math.min(1,(boost||0)+0.3); multPulse=1; popText('BIG AIR  +◆'+Math.round(ab)); floatPop(bike.x,bike.y-30,'+◆'+Math.round(ab),'#9ff0ff'); gflash=0.6; shake=7; sfxAir(); buzz(18); }
       else if(diff<0.16 && airT>10){ coins+=2; floatPop(bike.x,bike.y-34,'CLEAN +◆2','#aef0ff'); }
-      if(flipCount){ flipsTotal+=flipCount; mult+=flipCount*0.6; boost=Math.min(1,(boost||0)+0.22*flipCount); multPulse=1; const gain=Math.round(flipCount*40*mult); pnl+=gain; coins+=flipCount; popText('FLIP ×'+flipCount+'   +$'+gain.toLocaleString('en-US')); shake=9; hitstop=4; gflash=0.7; sfxFlipCrescendo(flipCount); }
-      if((flipCount>=2 || airT>40) && diff<0.5){ slowmo=Math.max(slowmo,16); shake=Math.max(shake,13); gflash=0.95; flash=Math.max(flash,0.3); popText('🔥 EPIC'+(flipCount>=2?' ×'+flipCount:'')); for(let z=0;z<22;z++)parts.push({x:bike.x,y:bike.y-10,vx:(Math.random()-0.5)*9,vy:-Math.random()*7-1,life:1,gold:1,r:Math.random()*3+1.5}); sfxRankUp(); buzz([30,50,30,90]); }   // b90 ЭПИК-ЛЕНДИНГ: крупный трюк чисто (≥2 флипа ИЛИ большой эйр, не боком) = вирусный момент → slow-mo + золотой взрыв + фанфара
+      if(flipCount){ flipsTotal+=flipCount; mult+=flipCount*0.6; boost=Math.min(1,(boost||0)+0.22*flipCount); multPulse=1; const gain=flipCount*2*mult; coins+=gain; popText('FLIP ×'+flipCount+'   +◆'+Math.round(gain)); shake=9; hitstop=4; gflash=0.7; sfxFlipCrescendo(flipCount); }   // b91: ФЛИП = реальный профит ◆ (× комбо) — не мёртвый $
+      if((flipCount>=2 || airT>40) && diff<0.5){ const eb=5+flipCount*2; coins+=eb; slowmo=Math.max(slowmo,16); shake=Math.max(shake,13); gflash=0.95; flash=Math.max(flash,0.3); popText('🔥 EPIC'+(flipCount>=2?' ×'+flipCount:'')+'  +◆'+eb); floatPop(bike.x,bike.y-46,'+◆'+eb,'#ffe66a'); for(let z=0;z<22;z++)parts.push({x:bike.x,y:bike.y-10,vx:(Math.random()-0.5)*9,vy:-Math.random()*7-1,life:1,gold:1,r:Math.random()*3+1.5}); sfxRankUp(); buzz([30,50,30,90]); }   // b90 ЭПИК-ЛЕНДИНГ (slow-mo+взрыв+фанфара). b91: даёт РЕАЛЬНЫЙ профит ◆ (был только визуал)
       nearMissed=false; airT=0; flipCount=0; flipAcc=0; }
   }
   // loop-out / endo: over-rotate while grounded = crash (the GD skill — too much gas on a climb loops you backward)
@@ -792,10 +792,10 @@ function update(){
   if(grounded && !rearBal && screen==='play' && Math.abs(rel)>0.55 && bike.vx>1.5 && !(rel>0 && supA<-0.1) && TUNE.wheelieRew>0){   // wheelie (rel<0) counts anywhere; stoppie (rel>0) NOT on a climb (that's just weight-forward climbing, not a trick)
     wheelieT++;
     if(wheelieT===12){ floatPop(bike.x,bike.y-42,(rel<0?'ВИЛЛИ':'СТОППИ')+'!','#9ff0ff'); sfxNear&&sfxNear(); }
-    if(wheelieT>12){ boost=Math.min(1,(boost||0)+0.006*TUNE.wheelieRew); if(wheelieT%18===0){ const g=Math.round(10*mult); pnl+=g; floatPop(bike.x,bike.y-46,'+$'+g,'#aef0ff'); } }
+    if(wheelieT>12){ boost=Math.min(1,(boost||0)+0.006*TUNE.wheelieRew); if(wheelieT%18===0){ const g=0.5*mult; coins+=g; floatPop(bike.x,bike.y-46,'+◆'+Math.round(g),'#aef0ff'); } }
   } else { if(wheelieT>40){ mult+=0.2; multPulse=1; } wheelieT=0; }   // long hold → leverage bump on release
   // coins along terrain
-  const magR=36*(1+0.40*upgLvl('mag')); const ci=Math.floor(bike.x/STEP); for(let k=ci-3;k<=ci+3;k++){ const c=terr[k]; if(c&&c.coin){ const cx=c.x,cy=c.y-30; if(Math.hypot(cx-bike.x,cy-bike.y)<magR){ c.coin=false; coins++; sfxCoin(); boost=Math.min(1,(boost||0)+0.04); const gv=Math.round(25*mult); pnl+=gv; floatPop(cx,cy,'+$'+gv,'#ffd678'); for(let z=0;z<8;z++)parts.push({x:cx,y:cy,vx:(Math.random()-0.5)*3.5,vy:-Math.random()*3-1,life:1,gold:1,r:2});} } }
+  const magR=36*(1+0.40*upgLvl('mag')); const ci=Math.floor(bike.x/STEP); for(let k=ci-3;k<=ci+3;k++){ const c=terr[k]; if(c&&c.coin){ const cx=c.x,cy=c.y-30; if(Math.hypot(cx-bike.x,cy-bike.y)<magR){ c.coin=false; coins++; sfxCoin(); boost=Math.min(1,(boost||0)+0.04); floatPop(cx,cy,'+◆','#ffd678'); for(let z=0;z<8;z++)parts.push({x:cx,y:cy,vx:(Math.random()-0.5)*3.5,vy:-Math.random()*3-1,life:1,gold:1,r:2});} } }
   // ---- GAPS are EMERGENT: you fly off the kicker as a projectile (∝ your speed). Reach the far side → land. Come up short → fall into the pit (visible & fair — NO edge-instadeath). Near-miss catches the far edge. ----
   { const gn=terr[ci0];
     if(gn && gn.gap){
@@ -824,7 +824,7 @@ function update(){
   { const bn=terr[ci], nowEv=bn?(bn.ev||''):'';
     for(let k=ci+2;k<=ci+8;k++){ const c=terr[k]; if(c&&c.ev){ if(!(terr[k-1]&&terr[k-1].ev===c.ev) && c.x!==lastWarnX){ lastWarnX=c.x; evWarnType=c.ev; evBanner=EVENTS[c.ev].icon+'  '+EVENTS[c.ev].warn; evBannerT=1; evColor=EVENTS[c.ev].col; sfxLev(); } break; } }
     if(nowEv!==curEvType){ if(nowEv){ curEvType=nowEv; evColor=EVENTS[nowEv].col; evBonus=0; } else { resolveEvent(curEvType); curEvType=''; } }
-    if(curEvType==='rally'){ const b=bike.vx*mult*0.06; pnl+=b; evBonus+=b; boost=Math.min(1,(boost||0)+0.011); mult=Math.min(12,mult+0.010); evGlow=Math.min(1,evGlow+0.06); }
+    if(curEvType==='rally'){ const b=bike.vx*mult*0.012; coins+=b; evBonus+=b; boost=Math.min(1,(boost||0)+0.011); mult=Math.min(12,mult+0.010); evGlow=Math.min(1,evGlow+0.06); }   // b91: памп-ралли кормит позицию ◆
     else if(curEvType){ evGlow=Math.min(1,evGlow+0.06); }
     else evGlow*=0.90; }
   // trail history for the neon ribbon behind the bike
@@ -862,7 +862,7 @@ function update(){
   else if(bike.vx>11){ mult=Math.min(12,mult+0.0035); }     // sustained speed builds slowly
   else if(bike.vx<6){ mult=Math.max(1,mult-0.01); }         // crawling bleeds it off
   maxMult=Math.max(maxMult,mult);
-  pnl += bike.vx*mult*0.05*rankMul;                          // profit ∝ speed × leverage × rank
+  coins += bike.vx*mult*0.001*rankMul;                      // b91: СКОРОСТЬ кормит ПОЗИЦИЮ (◆) — едешь быстро/в комбо = копишь профит. ∝ speed × combo × rank (было мёртвый pnl)
   topKmh=Math.max(topKmh,bike.vx*12);
   { const _pr=baseY-bike.y; prMax+=(_pr-prMax)*(_pr>prMax?0.5:0.006); prMin+=(_pr-prMin)*(_pr<prMin?0.5:0.006); }   // b89: rolling коридор ЦЕНЫ (высоты графика) — быстро к новому пику/дну, медленно обратно = недавний локальный диапазон для priceMul()
   multPulse*=0.92; gflash*=0.9;
@@ -889,15 +889,15 @@ function popText(m){ if(CORE_TEST_MODE)return; popMsg=m;popT=1;}                
 function floatPop(x,y,txt,col){ if(CORE_TEST_MODE)return; if(!floats)floats=[]; floats.push({x:x,y:y,txt:txt,col:col,vy:-0.9,life:1}); }
 function activateBoost(){ if((boost||0)<1||boosting>0||screen!=='play')return; boost=0; boosting=Math.round(TUNE.pumpDur*(1+0.22*upgLvl('pump'))); if(bike){ bike.vx+=2; bike.wheel+=4; for(let e=0;e<12;e++)dust.push({x:bike.x-24+Math.random()*10,y:bike.y+22,vx:-(2+Math.random()*4.5),vy:-Math.random()*2.2,life:1,r:Math.random()*2.6+1.5}); } rush=1; shake=4; gflash=0.4; multPulse=1; popText('⚡ PUMP!'); sfxLev(); buzz(28); }   // wheelspin roost on launch (traction-break juice)   // small instant nudge + long gentle push (see TUNE.pumpForce/pumpDur); no more vx-snap-to-18
 function resolveEvent(type){ if(screen!=='play')return;          // payoff when the bike clears an event block
-  if(type==='rally'){ const r=Math.round(evBonus); coins+=3; popText('ПАМП-РАЛЛИ  +$'+r.toLocaleString('en-US')); floatPop(bike.x,bike.y-34,'+◆3','#9ff0c8'); gflash=0.7; multPulse=1; sfxAir(); }
-  else if(type==='whale'){ wave=Math.min(wave, bike.x-W*0.9); const r=Math.round(160*mult); pnl+=r; boost=Math.min(1,(boost||0)+0.25); popText('ОТОРВАЛСЯ ОТ КИТА  +$'+r.toLocaleString('en-US')); floatPop(bike.x,bike.y-34,'+$'+r,'#9ff0c8'); gflash=0.6; sfxLev(); }
-  else if(type==='flash'){ wave=Math.min(wave, bike.x-W*0.95); const r=Math.round(280*mult); pnl+=r; coins+=2; popText('КУПИЛ ДНО  +$'+r.toLocaleString('en-US')); floatPop(bike.x,bike.y-34,'+$'+r,'#ffd678'); gflash=0.7; multPulse=1; sfxAir(); } }
+  if(type==='rally'){ coins+=3; popText('ПАМП-РАЛЛИ  +◆'+(Math.round(evBonus)+3)); floatPop(bike.x,bike.y-34,'+◆','#9ff0c8'); gflash=0.7; multPulse=1; sfxAir(); }
+  else if(type==='whale'){ wave=Math.min(wave, bike.x-W*0.9); const r=4*mult; coins+=r; boost=Math.min(1,(boost||0)+0.25); popText('ОТОРВАЛСЯ ОТ КИТА  +◆'+Math.round(r)); floatPop(bike.x,bike.y-34,'+◆'+Math.round(r),'#9ff0c8'); gflash=0.6; sfxLev(); }
+  else if(type==='flash'){ wave=Math.min(wave, bike.x-W*0.95); const r=6*mult; coins+=r; popText('КУПИЛ ДНО  +◆'+Math.round(r)); floatPop(bike.x,bike.y-34,'+◆'+Math.round(r),'#ffd678'); gflash=0.7; multPulse=1; sfxAir(); } }   // b91: события кормят позицию ◆ (был мёртвый $)
 function winRun(){ careerWon=true; screen='won'; const T=CAREER_TRACKS[careerTrack]; if(careerTrack>=careerMax && careerTrack<CAREER_TRACKS.length-1){ careerMax=careerTrack+1; saveCareer(); } bank+=T.gems||0; career+=T.gems||0; saveProg(); saveMeta(); /* b87: карьерный финиш = заработок ◆ → растит lifetime earned (ранг) */ if(dist>best){best=dist;try{localStorage.setItem('cipher_run_best',best);}catch(e){}} flash=0.6; gflash=0.85; shake=8; sfxRankUp(); buzz([25,40,25,60]); }   // b60: career track FINISHED → unlock next + award gems
 function wipeout(reason){ deathBy=reason||'crash'; screen='dead'; shake=20; flash=1; sfxCrash(); buzz((reason==='wave')?[70,40,110]:[50,30,70]); for(let i=0;i<28;i++)parts.push({x:bike.x,y:bike.y,vx:(Math.random()-0.5)*8,vy:-Math.random()*6,life:1,r:Math.random()*3+1}); if(dist>best){best=dist;try{localStorage.setItem('cipher_run_best',best);}catch(e){}} pnl=Math.floor(pnl);
   careerDeathGems=0; if(gameMode==='career'){ const T=CAREER_TRACKS[careerTrack]||CAREER_TRACKS[0]; careerDeathGems=Math.round((T.gems||0)*clamp(dist/Math.max(1,finishDist),0,1)*0.4); if(careerDeathGems>0){ bank+=careerDeathGems; saveMeta(); } }   // CAREER consolation: partial gems by distance reached → failing a gate still funds upgrades (no soft-lock); finishing pays the full T.gems
-  if(!CORE_TEST_MODE){ if(gameMode==='endless'){ cashedOut=false; const pen=Math.min(Math.round(bank*leverage*LIQ_PEN), Math.round(bank*LIQ_PEN_MAX)); runGems=-pen; bank=Math.max(0,bank-pen); } else { bank+=coins; }   // b76 ENDLESS ликвидация = реальная потеря (∝ плечу, кап LIQ_PEN_MAX, пол ≥0). b87: ликвидация НЕ рекорд и НЕ растит ранг — заработка нет
+  if(!CORE_TEST_MODE){ if(gameMode==='endless'){ cashedOut=false; const pen=Math.min(Math.round(bank*leverage*LIQ_PEN), Math.round(bank*LIQ_PEN_MAX)); runGems=-pen; bank=Math.max(0,bank-pen); } else { bank+=Math.round(coins); }   // b76 ENDLESS ликвидация = реальная потеря (∝ плечу, кап LIQ_PEN_MAX, пол ≥0). b87: ликвидация НЕ рекорд и НЕ растит ранг — заработка нет
     const gain87=(gameMode==='career')?careerDeathGems:0; const oi=rankIdx(career); career+=gain87; const ni=rankIdx(career); if(ni>oi){ let bonus=0; for(let r=oi+1;r<=ni;r++)bonus+=RANKS[r].rew; bank+=bonus; rankedUp={rank:RANKS[ni],bonus:bonus}; sfxRankUp(); buzz([25,50,25,70]); } saveProg(); saveMeta(); } }
-function cashOut(){ if(screen!=='play'||gameMode!=='endless'||(pnl||0)<=0)return;   // b71: TAKE PROFIT — bank the FULL leveraged PnL & end the run safely (the greed↔safety decision)
+function cashOut(){ if(screen!=='play'||gameMode!=='endless'||(coins||0)<=0)return;   // b91: фиксить если есть ПОЗИЦИЯ (coins), не мёртвый pnl. b71: TAKE PROFIT — bank the FULL leveraged PnL & end the run safely (the greed↔safety decision)
   cashedOut=true; pnl=Math.floor(pnl); runGems=Math.round((coins||0)*COIN_GEM*leverage*priceMul()); bank+=runGems; deathBy='cashout';   // b89: выплата по ТЕКУЩЕЙ цене (фиксь на пике пампа = бонус)
   if(runGems>bestPnl){bestPnl=runGems;try{localStorage.setItem('cipher_best_earn',bestPnl);}catch(e){}}   // b87: BEST = лучшая зафиксированная ВЫПЛАТА (◆)
   if(dist>best){best=dist;try{localStorage.setItem('cipher_run_best',best);}catch(e){}}
@@ -1290,7 +1290,7 @@ function draw(){
     subC.textContent='ПЛЕЧО ×'+leverage+'   ·   ЦЕНА '+(_pm>=1.12?'📈':_pm<=0.88?'📉':'·')+'×'+_pm.toFixed(2);
     if(pos>_posPrev)posPulse=1; _posPrev=pos; posPulse*=0.86;
     pnlEl.style.transform=posPulse>0.012?('scale('+(1+0.16*posPulse)+')'):'none';
-  } else { pnlEl.textContent=dist+' м'; pnlEl.style.transform='none'; subC.textContent='◆ '+coins+(finishDist>0?('   /   '+finishDist+'м'):''); }   /* b87 career: крупно дистанция (нет плеча/фикса — цель доехать), не $ — убрал последний видимый $ из забега */
+  } else { pnlEl.textContent=dist+' м'; pnlEl.style.transform='none'; subC.textContent='◆ '+Math.round(coins)+(finishDist>0?('   /   '+finishDist+'м'):''); }   /* b87 career: крупно дистанция (нет плеча/фикса — цель доехать), не $ — убрал последний видимый $ из забега */
   document.getElementById('dist').textContent=dist;
   document.getElementById('kmh').textContent=Math.round(bike.vx*12);
   const m=document.getElementById('mood'); const slope=terrainAt(bike.x+40).y-terrainAt(bike.x).y;
