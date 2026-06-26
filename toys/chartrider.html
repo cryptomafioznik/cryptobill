@@ -52,7 +52,7 @@ function lerp(a,b,t){return a+(b-a)*t;} function clamp(v,a,b){return v<a?a:v>b?b
 // false → full game everywhere. Single switch. Systems are GATED, never deleted.
 const CORE_TEST_MODE = false;   // b70: META LIVE — building the progression spine (upgrades/bikes with teeth, career, economy) on the confirmed rigid-body core
 // build stamp — bump on every change so a phone refresh can confirm it loaded fresh code (cache!)
-const BUILD = '2026-06-24 · b85';
+const BUILD = '2026-06-24 · b86';
 
 // ---------- procedural market terrain ----------
 // height map sampled every STEP px; generated forward as we ride. Market character:
@@ -1322,7 +1322,7 @@ function drawMenus(){
         ctx.fillStyle='rgba(30,40,62,0.75)'; if(ctx.roundRect){ctx.beginPath();ctx.roundRect(bx,by,bw,7,3.5);ctx.fill();}else ctx.fillRect(bx,by,bw,7);
         ctx.fillStyle='rgba(120,220,255,0.92)'; if(ctx.roundRect){ctx.beginPath();ctx.roundRect(bx,by,Math.max(3,bw*prog),7,3.5);ctx.fill();}else ctx.fillRect(bx,by,bw*prog,7);
         ctx.fillStyle='rgba(180,200,230,0.72)'; ctx.font='10px ui-monospace,monospace'; ctx.fillText('до '+nr.e+' '+nr.n+': $'+Math.max(0,nr.at-career).toLocaleString('en-US')+'  ▸ +◆'+nr.rew,W/2,by+20); } }
-    if(!CORE_TEST_MODE){ UI.lev={x:W/2-104,y:H*0.37,w:208,h:42}; const _sl=safeLev(), _over=leverage>_sl;   // b77: показываем безопасный ПОТОЛОК плеча (от железа); красный = выше потолка
+    if(!CORE_TEST_MODE){ UI.lev={x:W/2-104,y:H*0.155+124,w:208,h:42}; const _sl=safeLev(), _over=leverage>_sl;   // b86: привязал чип ПЛЕЧО к низу ранг-блока (было H*0.37 — налазил на превью байка); гарантир. отступ на любой высоте экрана
       ctx.fillStyle=_over?'rgba(58,20,16,0.85)':'rgba(40,30,16,0.82)'; if(ctx.roundRect){ctx.beginPath();ctx.roundRect(UI.lev.x,UI.lev.y,208,42,11);ctx.fill();ctx.strokeStyle=_over?'rgba(255,110,90,0.9)':'rgba(255,200,120,0.85)';ctx.lineWidth=1.8;ctx.stroke();}else ctx.fillRect(UI.lev.x,UI.lev.y,208,42);
       ctx.textAlign='center'; ctx.fillStyle=_over?'#ff9a7a':'#ffd678'; ctx.font='800 18px ui-monospace,monospace'; ctx.fillText('⚡ ПЛЕЧО  ×'+leverage, W/2, UI.lev.y+18);
       ctx.fillStyle=_over?'rgba(255,150,120,0.95)':'rgba(205,185,140,0.82)'; ctx.font='600 9px ui-monospace,monospace'; ctx.fillText(_over?('⚠ выше потолка ×'+_sl+' — волна догонит'):('безопасно до ×'+_sl+' · качай ЩИТ/ДВИЖОК'), W/2, UI.lev.y+33); }
