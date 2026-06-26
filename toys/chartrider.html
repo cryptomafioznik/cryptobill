@@ -52,7 +52,7 @@ function lerp(a,b,t){return a+(b-a)*t;} function clamp(v,a,b){return v<a?a:v>b?b
 // false → full game everywhere. Single switch. Systems are GATED, never deleted.
 const CORE_TEST_MODE = false;   // b70: META LIVE — building the progression spine (upgrades/bikes with teeth, career, economy) on the confirmed rigid-body core
 // build stamp — bump on every change so a phone refresh can confirm it loaded fresh code (cache!)
-const BUILD = '2026-06-24 · b87';
+const BUILD = '2026-06-24 · b88';
 
 // ---------- procedural market terrain ----------
 // height map sampled every STEP px; generated forward as we ride. Market character:
@@ -364,13 +364,14 @@ function tut(id,txt){ if(seenTut[id]||screen!=='play')return; seenTut[id]=1; tut
 // ---- META PROGRESSION: degen-career upgrades + trader ranks (the persistent spine) ----
 const UPGRADES=[
   {id:'eng', name:'ДВИЖОК',        max:5, icon:'⚙', eff:l=>'+'+(8*l)+'% к скорости'},
-  {id:'grip',name:'СЦЕПЛЕНИЕ',     max:5, icon:'◎', eff:l=>'+'+(10*l)+'% мягче посадка'},
+  {id:'grip',name:'СЦЕПЛЕНИЕ',     max:5, icon:'◎', eff:l=>'+'+(15*l)+'% хватка: тяга в гору + посадка'},
+  {id:'susp',name:'ПОДВЕСКА',      max:4, icon:'🔩', eff:l=>'+'+(22*l)+'% гасит жёсткие приземления (большие полёты)'},
   {id:'pump',name:'СИЛА PUMP',     max:5, icon:'⚡', eff:l=>'+'+(22*l)+'% длина рывка'},
   {id:'wave',name:'ЩИТ ОТ ВОЛНЫ',  max:5, icon:'🛡', eff:l=>'−'+(7*l)+'% скорость дампа'},
   {id:'air', name:'ВОЗД.КОНТРОЛЬ', max:4, icon:'✦', eff:l=>'+'+(14*l)+'% верчение'},
   {id:'mag', name:'МАГНИТ',        max:4, icon:'◆', eff:l=>'+'+(40*l)+'% радиус сбора'},
 ];
-function upgCost(id,lvl){ const base={eng:45,grip:55,pump:55,wave:65,air:50,mag:40}[id]||50; return Math.round(base*(1+lvl*0.95)); }
+function upgCost(id,lvl){ const base={eng:45,grip:55,susp:55,pump:55,wave:65,air:50,mag:40}[id]||50; return Math.round(base*(1+lvl*0.95)); }
 const RANKS=[{n:'КРЕВЕТКА',e:'🦐',at:0,rew:0},{n:'КРАБ',e:'🦀',at:400,rew:80},{n:'РЫБА',e:'🐟',at:1500,rew:180},{n:'ДЕЛЬФИН',e:'🐬',at:5000,rew:400},{n:'АКУЛА',e:'🦈',at:16000,rew:800},{n:'КИТ',e:'🐋',at:45000,rew:1500}];   // b87: ранг от НАКОПЛЕННОГО ЗАРАБОТКА (lifetime ◆ earned = career), не от $pnl — пороги в ◆
 let upg={}, career=0, buyFlash=0, buyRow=-1, rankMul=1, rankedUp=null;
 // b71: LEVERAGE BET (Endless) — pick ×2..100 → multiplies the gem payout AND the risk (faster dump). TAKE-PROFIT (cash out) banks it; crash/caught = LIQUIDATION (lose all but a small insurance). PnL is fed by distance+coins+tricks → collecting coins at high leverage = the greed hook.
@@ -488,9 +489,7 @@ function musicTick(){ if(!musicOn||!actx)return; try{
 function reset(){
   if(gameMode==='career'){ const T=CAREER_TRACKS[careerTrack]||CAREER_TRACKS[0]; diffOffset=T.diff; finishDist=T.len; careerWaveMul=T.waveMul||1; } else { diffOffset=0; finishDist=0; careerWaveMul=1; }   // b60: career track sets the difficulty offset + the finish distance
   careerWon=false;
-  PHYS.POW=BASE_PHYS.POW*(1+0.08*upgLvl('eng'));         // ДВИЖОК → top speed/accel (+8%/lvl)
-  PHYS.AIRTQ=BASE_PHYS.AIRTQ*(1+0.14*upgLvl('air'));     // ВОЗД.КОНТРОЛЬ → faster air rotation (+14%/lvl)
-  PHYS.LOOP=BASE_PHYS.LOOP+0.06*upgLvl('grip');          // СЦЕПЛЕНИЕ → more loop/endo forgiveness
+  PHYS.LOOP=BASE_PHYS.LOOP+0.06*upgLvl('grip');          // СЦЕПЛЕНИЕ → порог индикатора опрокидывания (живой, читается в draw ~1207). b88: убрал мёртвые PHYS.POW/AIRTQ (rigidStep их НЕ читает — реальные движок/воздух = engScale/leanAirEff в rigidStep)
   rankMul=CORE_TEST_MODE?1:1+0.07*rankIdx(career); rankedUp=null;   // CORE TEST: no rank profit multiplier
   baseY=H*0.6; terr=[]; genX=0; walk=0; regimeLeft=0; lastHazIdx=-99;
   evGenType=''; evGenLeft=0; nextEvGenX=3000; curEvType=''; evBanner=''; evBannerT=0; evGlow=0; evBonus=0; lastWarnX=-1; evWarnType='';   // first event ~300m (onboarding breathing room)
@@ -627,10 +626,11 @@ addEventListener('touchcancel',e=>{ for(const tch of e.changedTouches){ delete t
 function rigidStep(){
   const R=RB, sdt=1/R.subSteps;
   // b70: UPGRADES + BIKE STATS get TEETH on the rigid body. Stock HODLER lvl0 = unchanged feel (all multipliers = 1); upgrades/tiers add ON TOP.
-  const _bk=BK(), _eL=upgLvl('eng'), _gL=upgLvl('grip'), _aL=upgLvl('air');
-  const engScale=(_bk.accel/0.49)*(1+0.08*_eL);            // ДВИГАТЕЛЬ: bike accel × engine-upgrade → climb power / accel / top speed (outrun the wave)
-  const muEff=R.mu*(_bk.grip/1.40)*(1+0.10*_gL);           // СЦЕПЛЕНИЕ: bike grip (1.40 = HODLER base → stock = R.mu) × grip-upgrade → REAL climb traction (lezet ne buksuya)
-  const leanAirEff=R.leanAir*(1+0.12*_aL);                 // ВОЗД.КОНТРОЛЬ: faster/controllable flip rotation (capped by avMax)
+  const _bk=BK(), _eL=upgLvl('eng'), _gL=upgLvl('grip'), _aL=upgLvl('air'), _sL=upgLvl('susp');   // b88: +ПОДВЕСКА. Сток (все lvl0) = одобренный аркадный фил — апгрейды добавляют СВЕРХУ
+  const engScale=(_bk.accel/0.49)*(1+0.13*_eL);            // ДВИГАТЕЛЬ b88: 0.08→0.13/lvl — заметнее разгон/максималка (обгон волны, лезет круче)
+  const muEff=R.mu*(_bk.grip/1.40)*(1+0.15*_gL);           // СЦЕПЛЕНИЕ b88: 0.10→0.15/lvl — заметно больше тяги в гору (maxF=muEff·Fn → меньше букс на крутом) + прощает посадку
+  const leanAirEff=R.leanAir*(1+0.18*_aL);                 // ВОЗД.КОНТРОЛЬ b88: 0.12→0.18/lvl — заметно быстрее/контролируемее флипы (capped avMax)
+  const springCeff=R.springC*(1+0.22*_sL);                 // ПОДВЕСКА b88: больше демпфер → мягче глотает жёсткие приземления, меньше отскок (сток susp0 = R.springC = не трогает фил)
   bike.thr = lerp(bike.thr||0, down?1:0, R.thrRamp);        // АНАЛОГОВЫЙ ГАЗ: рампа 0→1 → тяга/вилли ∝ тому, сколько газу даёшь (не бинарно)
   const thr=bike.thr;
   const ci0=Math.floor(bike.x/STEP), onMud=!!(terr[ci0]&&terr[ci0].mud);
@@ -649,7 +649,7 @@ function rigidStep(){
         const rx=wx-bike.x, ry=wy-bike.y;
         const vpx=bike.vx-bike.angV*ry, vpy=bike.vy+bike.angV*rx;   // velocity of the chassis point at the hub
         const vn=vpx*nx+vpy*ny;
-        let Fn=R.springK*pen-R.springC*vn; if(Fn<0)Fn=0;   // SUSPENSION spring − damper (ground can't pull)
+        let Fn=R.springK*pen-springCeff*vn; if(Fn<0)Fn=0;   // SUSPENSION spring − damper (ground can't pull). b88: springCeff = демпфер × ПОДВЕСКА-апгрейд
         fx+=Fn*nx; fy+=Fn*ny; tq+=rx*(Fn*ny)-ry*(Fn*nx);
         const vt=vpx*tx+vpy*ty;
         let Ft=-vt*(onMud?R.mudRoll:R.rollResist);          // wheel ROLLS (slight resistance; mud = more = sap)
@@ -772,7 +772,7 @@ function update(){
   else if(!wasG && grounded){                                          // just landed
     jumpGrace=0;                                                       // jump arc over
     let diff=Math.abs(rel); lastLandDiff=diff;
-    if(airT>14 && (diff > RB.crashAngle + 0.12*upgLvl('grip') + Math.max(0,(BK().grip-1.40))*0.4 || Math.abs(bike.angV) > RB.spinCrash + 0.03*upgLvl('grip'))){ wipeout('crash'); }   // b72 СКИЛЛ-БИТ (Trials): land too far off wheels-down OR still SPINNING fast = CRASH (botched/over-rotated flip costs). СЦЕПЛЕНИЕ upgrade + grippy bike widen tolerance (interconnected). Tune RB.crashAngle/spinCrash by hand
+    if(airT>14 && (diff > RB.crashAngle + 0.12*upgLvl('grip') + 0.10*upgLvl('susp') + Math.max(0,(BK().grip-1.40))*0.4 || Math.abs(bike.angV) > RB.spinCrash + 0.03*upgLvl('grip'))){ wipeout('crash'); }   // b88: ПОДВЕСКА расширяет конус прощения посадки (большие полёты приземляются мягче/безопаснее)   // b72 СКИЛЛ-БИТ (Trials): land too far off wheels-down OR still SPINNING fast = CRASH (botched/over-rotated flip costs). СЦЕПЛЕНИЕ upgrade + grippy bike widen tolerance (interconnected). Tune RB.crashAngle/spinCrash by hand
     else { sfxLand();
       // b65: on a REAL-AIR landing (airT>10 — a jump/flip, not a tiny whoop-skip) SETTLE the touchdown to wheels-down (nearest full turn relative to the slope) + kill most residual spin → a COMPLETED flip no longer instantly LOOPS-OUT on the same grounded frame (the loop-check below ran on the leftover nose-up angle/spin). Skill = the air rotation; the touchdown is forgiven (b55/b61 intent). Crash-check above still rejects a truly sideways landing. rel is recomputed so the loop/endo check sees the corrected angle. Tiny terrain-skips (airT≤10) keep their flow (gentle damp only).
       bike.angV*=0.4;   // b68: just damp residual spin on touchdown — the rigid body + air auto-level already settle the angle; the old teleport-snap fought the rigid body
@@ -1378,7 +1378,7 @@ function drawMenus(){
     ctx.fillStyle='#ffd678'; ctx.font='800 20px ui-monospace,monospace'; ctx.fillText('◆ '+bank,W/2,76);
     { const rk=rankFor(career), nr=nextRank(career); ctx.fillStyle='#9fe0c8'; ctx.font='700 12px ui-monospace,monospace'; ctx.fillText(rk.e+' '+rk.n+(nr?'   до '+nr.e+': $'+Math.max(0,nr.at-career).toLocaleString('en-US'):'   — ВЕРШИНА'),W/2,98); }
     if(buyFlash>0)buyFlash-=0.05;
-    UI.upgRows=[]; const rowH=72, gap=7, x0=18, w0=W-36, y0=114;
+    UI.upgRows=[]; const rowH=64, gap=7, x0=18, w0=W-36, y0=114;   // b88: rowH 72→64 — 7-й апгрейд (ПОДВЕСКА) влезает в список
     for(let i=0;i<UPGRADES.length;i++){ const u=UPGRADES[i], lvl=upgOwned(u.id), maxed=lvl>=u.max, cost=upgCost(u.id,lvl), afford=!maxed&&bank>=cost, ry=y0+i*(rowH+gap), fl=(buyRow===i)?Math.max(0,buyFlash):0;
       UI.upgRows.push({x:x0,y:ry,w:w0,h:rowH});
       ctx.fillStyle=fl>0?'rgba('+Math.round(lerp(28,90,fl))+','+Math.round(lerp(48,255,fl))+','+Math.round(lerp(40,180,fl))+',0.82)':(afford?'rgba(28,48,40,0.72)':'rgba(20,22,38,0.62)');
