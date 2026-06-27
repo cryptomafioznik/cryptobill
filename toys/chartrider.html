@@ -52,7 +52,7 @@ function lerp(a,b,t){return a+(b-a)*t;} function clamp(v,a,b){return v<a?a:v>b?b
 // false → full game everywhere. Single switch. Systems are GATED, never deleted.
 const CORE_TEST_MODE = false;   // b70: META LIVE — building the progression spine (upgrades/bikes with teeth, career, economy) on the confirmed rigid-body core
 // build stamp — bump on every change so a phone refresh can confirm it loaded fresh code (cache!)
-const BUILD = '2026-06-27 · b97';
+const BUILD = '2026-06-27 · b98';
 
 // ---------- procedural market terrain ----------
 // height map sampled every STEP px; generated forward as we ride. Market character:
@@ -209,10 +209,12 @@ function buildTickerTrack(candles){   // b96: реальная свеча OHLC �
       terr.push({x:genX, y:y, open:head?Yc(o):y, close:y, hi:head?Yc(hi):y, lo:head?Yc(lo):y, up:cl>o, haz:false, coin:(head&&Math.random()<0.30), ev:'', gap:false, lipY:0, step:false, topY:0, kick:false, whoop:false, mud:false, drop:false});
       genX+=STEP; }
     prevC=cl; }
+  let vs=0,vn=0; for(let i=1;i<candles.length;i++){ if(candles[i-1][3]>0){ vs+=Math.abs(candles[i][3]-candles[i-1][3])/candles[i-1][3]; vn++; } }   // b98: РЕАЛЬНАЯ волатильность монеты (средн. |Δ|/цена) из данных
+  const vol=vn?vs/vn:0.018; tickerVolMul=clamp(vol/0.018,0.85,2.4); tickerVolLabel=vol<0.022?'НИЗКАЯ':vol<0.035?'СРЕДНЯЯ':vol<0.06?'ВЫСОКАЯ':'ЭКСТРИМ';   // → скорость волны = сложность (DOGE/мемы быстрее BTC), эмерджентно
 }
 // b97: LIVE-загрузка реальных свечей с Binance. Разная монета → реальные данные → волатильность → сложность (эмерджентно, без ручной настройки).
 const TICKERS=[{k:'btc',sym:'BTCUSDT',name:'BTC'},{k:'eth',sym:'ETHUSDT',name:'ETH'},{k:'sol',sym:'SOLUSDT',name:'SOL'},{k:'doge',sym:'DOGEUSDT',name:'DOGE'}];
-let tickerData=null, tickerName='BTC', tickerLoadErr=false, tickerLoadT=0;
+let tickerData=null, tickerName='BTC', tickerLoadErr=false, tickerLoadT=0, tickerVolMul=1, tickerVolLabel='';   // b98: волатильность монеты → множитель скорости дамп-волны (сложность)
 async function loadCandles(t){   // кэш 1ч → live fetch Binance → fallback встроенный BTC (CORS/офлайн = всегда играбельно)
   const ck='cipher_kl_'+t.k;
   try{ const c=JSON.parse(localStorage.getItem(ck)||'null'); if(c&&c.d&&c.d.length&&(Date.now()-c.ts)<3600000) return c.d; }catch(e){}
@@ -512,7 +514,7 @@ function reset(){
   whoopRunup=0; whoopLeft=0; whoopPhase=0; nextWhoopX=TUNE.whoopStart*10;   // WHOOPS: first rhythm section after whoopStart
   mudLeft=0; mudRamp=0; mudRunup=0; nextMudX=TUNE.mudStart*10;   // MUD: first boggy section after mudStart
   dropLandLeft=0; nextDropX=TUNE.dropStart*10;   // DROPS/CLIFFS: first cliff after dropStart
-  if(trackSource==='ticker'){ buildTickerTrack(tickerData||MARKET_DATA.btc.data); finishDist=Math.floor((terr.length-1)*STEP/10); }   // b96/b97: трасса из РЕАЛЬНЫХ данных (live или fallback; конечная, есть финиш)
+  if(trackSource==='ticker'){ buildTickerTrack(tickerData||MARKET_DATA.btc.data); finishDist=Math.floor((terr.length-1)*STEP/10); popText(tickerName+' · ВОЛАТИЛЬНОСТЬ '+tickerVolLabel+(tickerLoadErr?' (нет связи — BTC)':'')); }   // b96/b97: трасса из РЕАЛЬНЫХ данных (live или fallback; конечная, есть финиш). b98: показать сложность монеты
   else { for(let i=0;i<Math.ceil(W/STEP)+8;i++)genSeg(); }
   bike={x:60,y:terrainAt(60).y-27.5,vx:0,vy:0,ang:terrainAt(60).ang,angV:0,onG:true,wheel:0,rShift:0};   // rShift = rider weight-shift state (-1 back .. +1 forward), smoothed from the drag input (b47 two-body)
   cam={x:bike.x-W*0.5,y:bike.y-H*0.46}; camAir=0; t=0; coins=0; dist=0; lastMile=0; newDepth=false; wipe=0; screen='play'; shake=0; flash=0; popT=0; daycycle=Math.random()*6.28;
@@ -871,7 +873,7 @@ function update(){
   if((boost||0)>=1 && screen==='play') tut('pump','⚡ PUMP ЗАРЯЖЕН — '+('ontouchstart'in window?'ЖМИ ⚡PUMP':'SHIFT')+' ЧТОБ ОТОРВАТЬСЯ');
   if(tutT>0) tutT-=0.0062;
   // chasing LIQUIDATION wave (the dump): ramps with distance + biome, caps its lead so it always looms; catch = death
-  waveSpd = (TUNE.waveSpeed + (Math.min((dist||0)/150, 4.8) + Math.max(0,((dist||0)-700)/620))*TUNE.waveAccel) * BIOMES[(((zone||0)%BIOMES.length)+BIOMES.length)%BIOMES.length].wave * (curEvType==='whale'?1.75:1) * lerp(0.6,1,clamp((dist||0)/TUNE.easeInDist,0,1)) * (1-0.07*upgLvl('wave')) * (gameMode==='endless'?(1+Math.max(0,leverage-safeLev())*0.02):1) * careerWaveMul;   // b77 МАХОВИК: волна разгоняется только за плечо ВЫШЕ безопасного потолка (safeLev от железа) → качай ЩИТ/ДВИЖОК → выше потолок → безопасно больше плечо. b72: careerWaveMul = per-stage wave (POWER-GATE). ramps, then keeps creeping past 700m (no cap) → an eventual wall that ДВИЖОК/ЩИТ push deeper   // re-tuned for the heavier momentum bike; surges during a whale dump
+  waveSpd = (TUNE.waveSpeed + (Math.min((dist||0)/150, 4.8) + Math.max(0,((dist||0)-700)/620))*TUNE.waveAccel) * BIOMES[(((zone||0)%BIOMES.length)+BIOMES.length)%BIOMES.length].wave * (curEvType==='whale'?1.75:1) * lerp(0.6,1,clamp((dist||0)/TUNE.easeInDist,0,1)) * (1-0.07*upgLvl('wave')) * (gameMode==='endless'?(1+Math.max(0,leverage-safeLev())*0.02):1) * careerWaveMul * (trackSource==='ticker'?tickerVolMul:1);   // b98: волатильность РЕАЛЬНОЙ монеты → скорость дамп-волны = СЛОЖНОСТЬ причинно (DOGE быстрее BTC, без ручной настройки). b77 МАХОВИК: волна разгоняется только за плечо ВЫШЕ безопасного потолка (safeLev от железа) → качай ЩИТ/ДВИЖОК → выше потолок → безопасно больше плечо. b72: careerWaveMul = per-stage wave (POWER-GATE). ramps, then keeps creeping past 700m (no cap) → an eventual wall that ДВИЖОК/ЩИТ push deeper   // re-tuned for the heavier momentum bike; surges during a whale dump
   wave += waveSpd;
   const leadCap = W*lerp(0.92, 0.36, clamp((dist||0)/320,0,1));   // dump closes in over the first ~320m → then a constant chase (front sits at the left edge)
   if(bike.x - wave > leadCap) wave = bike.x - leadCap;
