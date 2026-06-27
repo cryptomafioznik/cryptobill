@@ -52,7 +52,7 @@ function lerp(a,b,t){return a+(b-a)*t;} function clamp(v,a,b){return v<a?a:v>b?b
 // false → full game everywhere. Single switch. Systems are GATED, never deleted.
 const CORE_TEST_MODE = false;   // b70: META LIVE — building the progression spine (upgrades/bikes with teeth, career, economy) on the confirmed rigid-body core
 // build stamp — bump on every change so a phone refresh can confirm it loaded fresh code (cache!)
-const BUILD = '2026-06-24 · b96';
+const BUILD = '2026-06-27 · b97';
 
 // ---------- procedural market terrain ----------
 // height map sampled every STEP px; generated forward as we ride. Market character:
@@ -195,14 +195,14 @@ function terrainAt(x){ // interpolated height + slope at world x
 // ===================== РЕАЛЬНЫЕ ТИКЕРЫ (b96) — реальный крипто-график = трасса =====================
 // ПРИЧИННАЯ модель (доказана на реальных данных BTC): свеча OHLC → нормализатор (масштаб ИЗ диапазона данных)
 // → высота Y; каждая свеча дробится на SUB под-узлов (крутые движения РАСТЯГИВАЮТСЯ в играбельный склон,
-// СОХРАНЯЯ реальную форму графика); волатильность монеты → крутизна → СЛОЖНОСТЬ эмерджентно. Узел terr уже =
+// СОХРАНЯЯ реальную форму графика); каждая монета нормализуется В ЭКРАН (форма играбельна). ⚠️ ЧЕСТНО (проверено симом b97): «волатильность=сложность» НЕ из крутизны — нормализация стирает абсолютную амплитуду (DOGE даже положе BTC). Сложность от волатильности дадим через СКОРОСТЬ ДАМП-ВОЛНЫ на реальном движении (следующий шаг). Узел terr уже =
 // свеча → физика/рендер НЕ трогаются. trackSource переключает источник; конечная трасса (есть финиш на конце).
 let trackSource='proc', selTicker='btc';   // 'proc' = процедурный endless/career | 'ticker' = реальный график
 const MARKET_DATA={ btc:{ name:'BTC', sym:'₿', data:[[65872,67760,63030,66973],[66973,68200,65056,65776],[65776,70096,65259,68830],[68830,69258,66158,68338],[68338,74050,67400,72667],[72667,73558,70645,70891],[70891,71420,67745,68114],[68114,68551,66915,67263],[67263,68200,65618,65971],[65971,69517,65822,68432],[68432,71777,68391,69949],[69949,71321,68978,70192],[70192,70800,69206,70541],[70541,73914,70386,70930],[70930,71308,70317,71212],[71212,73199,70859,72815],[72815,74909,72270,74885],[74885,76000,73399,73909],[73909,74672,70500,71247],[71247,71614,68793,69930],[69930,71367,69388,70511],[70511,71101,68571,68918],[68918,69589,67361,67859],[67859,71817,67445,70906],[70906,71400,68923,70557],[70557,72026,70408,71337],[71337,71437,68153,68820],[68820,69179,65548,66407],[66407,67289,65932,66377],[66377,67131,65000,66011],[66011,68170,65801,66797],[66797,68589,65998,68284],[68284,69310,67579,68114],[68114,68653,65712,66902],[66902,67370,66282,66964],[66964,67563,66776,67300],[67300,69136,66612,69034],[69034,70351,68300,68854],[68854,72761,67732,71924],[71924,72857,70707,71070],[71070,73145,70466,71788],[71788,73434,71426,72963],[72963,73790,72513,73043],[73043,73137,70506,70741],[70742,74900,70567,74418],[74418,76038,73795,74132],[74132,75425,73514,74810],[74810,75535,73310,75154],[75154,78333,74529,77072],[77072,77420,75445,75692],[75692,76241,73763,73802],[73802,76559,73724,75841],[75841,76928,74822,76336],[76336,79473,76133,78178],[78178,78663,76960,78257],[78257,78582,77264,77437],[77437,77885,77140,77625],[77625,78961,77327,78658],[78658,79486,76460,77371],[77371,77478,75667,76343],[76343,77905,74938,75780],[75780,76669,75324,76347],[76347,78914,76320,78231],[78231,79199,78040,78687],[78687,79447,78084,78569],[78569,80777,78202,79861],[79861,81791,79809,80906],[80906,82850,80731,81447],[81447,81708,79500,80006],[80006,80500,79181,80193],[80193,81080,80130,80678],[80678,82479,80280,82210],[82210,82380,80463,81746],[81746,81788,79844,80504],[80504,81325,78755,79314],[79314,82048,78922,81090],[81090,81664,78659,79113],[79113,79228,77640,78148],[78148,78600,76735,77458],[77458,77800,76051,77002],[77002,77415,76145,76834],[76834,77853,76517,77552],[77552,78200,76719,77616],[77616,77900,75359,75540],[75540,77404,74290,76752],[76752,77543,76108,77065],[77065,77906,76914,77322],[77322,78080,75678,75930],[75930,76174,74244,74449],[74449,74591,72583,73618],[73618,74514,72512,73461],[73461,74144,73216,73884],[73884,74276,73400,73674],[73674,74092,70687,71409],[71409,71409,66193,66761],[66761,67516,64092,64143],[64143,64764,61384,63886],[63886,63978,59131,61056],[61056,61530,59500,60885],[60885,64235,60746,63332],[63332,64200,62408,63086],[63086,63526,60780,61730],[61730,62858,60755,61511],[61511,63933,61511,63626],[63626,64394,62830,63580],[63580,64763,63419,64458],[64458,65800,63679,65746],[65746,67292,65354,66329],[66329,66992,65361,65675],[65675,66446,63916,64509],[64509,64806,62272,62958],[62958,63666,62316,63544],[63544,64388,63184,64298],[64298,64588,63270,63312],[63312,65623,63312,64020],[64020,64275,61938,62735],[62735,63239,59103,61078],[61078,61962,58115,59794],[59795,60760,58337,60097],[60097,60728,59876,60617]] } };
 function buildTickerTrack(candles){   // b96: реальная свеча OHLC → узел terr (та же структура, что genSeg). Логика доказана на реальных данных
   terr=[]; genX=0; const SUB=3;
   let pMin=Infinity,pMax=-Infinity; for(const c of candles){ if(c[2]<pMin)pMin=c[2]; if(c[1]>pMax)pMax=c[1]; }   // c=[open,high,low,close]
-  const pMid=(pMin+pMax)/2, k=(H*0.52)/Math.max(1,pMax-pMin), Yc=p=>clamp(baseY+(pMid-p)*k,56,H*0.94);   // масштаб ИЗ диапазона цены → высота
+  const pMid=(pMin+pMax)/2, k=(H*0.52)/Math.max(1e-9,pMax-pMin), Yc=p=>clamp(baseY+(pMid-p)*k,56,H*0.94);   // масштаб ИЗ диапазона цены → высота. b97: 1e-9 (НЕ 1) — иначе дешёвые монеты (DOGE pRange≈0.05<1) получают неверный масштаб = плоская трасса
   let prevC=candles.length?candles[0][0]:baseY;
   for(let i=0;i<candles.length;i++){ const o=candles[i][0],hi=candles[i][1],lo=candles[i][2],cl=candles[i][3];
     for(let s=1;s<=SUB;s++){ const t=s/SUB, head=s===SUB, cI=prevC+(cl-prevC)*t, y=Yc(cI);   // ride-линия плавно интерполируется внутри свечи; тело свечи (open/hi/lo) живёт на HEAD-узле
@@ -210,6 +210,23 @@ function buildTickerTrack(candles){   // b96: реальная свеча OHLC �
       genX+=STEP; }
     prevC=cl; }
 }
+// b97: LIVE-загрузка реальных свечей с Binance. Разная монета → реальные данные → волатильность → сложность (эмерджентно, без ручной настройки).
+const TICKERS=[{k:'btc',sym:'BTCUSDT',name:'BTC'},{k:'eth',sym:'ETHUSDT',name:'ETH'},{k:'sol',sym:'SOLUSDT',name:'SOL'},{k:'doge',sym:'DOGEUSDT',name:'DOGE'}];
+let tickerData=null, tickerName='BTC', tickerLoadErr=false, tickerLoadT=0;
+async function loadCandles(t){   // кэш 1ч → live fetch Binance → fallback встроенный BTC (CORS/офлайн = всегда играбельно)
+  const ck='cipher_kl_'+t.k;
+  try{ const c=JSON.parse(localStorage.getItem(ck)||'null'); if(c&&c.d&&c.d.length&&(Date.now()-c.ts)<3600000) return c.d; }catch(e){}
+  try{
+    const r=await fetch('https://api.binance.com/api/v3/klines?symbol='+t.sym+'&interval=1d&limit=150');
+    if(!r.ok) throw 0; const j=await r.json();
+    const d=j.map(k=>[+k[1],+k[2],+k[3],+k[4]]).filter(c=>c.length===4&&c.every(v=>v>0&&isFinite(v)));   // b97: НЕ округлять — дешёвые монеты (DOGE ~$0.06) округлились бы в 0 → плоская трасса. Нормализатору важна относительная форма
+    if(d.length<20) throw 0;
+    try{ localStorage.setItem(ck,JSON.stringify({ts:Date.now(),d})); }catch(e){}
+    tickerLoadErr=false; return d;
+  }catch(e){ tickerLoadErr=true; return MARKET_DATA.btc.data; }
+}
+function startTicker(idx){ const t=TICKERS[idx]||TICKERS[0]; selTicker=t.k; tickerName=t.name; screen='tickerload'; tickerLoadT=0;
+  loadCandles(t).then(d=>{ tickerData=(d&&d.length?d:MARKET_DATA.btc.data); trackSource='ticker'; gameMode='endless'; reset(); }); }
 
 // ---------- bike ----------
 let bike, cam, t, coins, dist, best, screen, wipe, parts, stars, dust, shake, flash, daycycle, trail, streaks, mult, pnl, bestPnl, airT, nearMissed, hitstop, gflash, floats, multPulse, maxMult, lean, rush, prevVx, wave, waveSpd, deathBy, boost, boosting, zone, biomeBanner, biomeBannerT, BSKY, BLINE, BRIDGE, lastMile, newDepth, camAir=0, wheelieT=0;
@@ -495,7 +512,7 @@ function reset(){
   whoopRunup=0; whoopLeft=0; whoopPhase=0; nextWhoopX=TUNE.whoopStart*10;   // WHOOPS: first rhythm section after whoopStart
   mudLeft=0; mudRamp=0; mudRunup=0; nextMudX=TUNE.mudStart*10;   // MUD: first boggy section after mudStart
   dropLandLeft=0; nextDropX=TUNE.dropStart*10;   // DROPS/CLIFFS: first cliff after dropStart
-  if(trackSource==='ticker'){ buildTickerTrack((MARKET_DATA[selTicker]||MARKET_DATA.btc).data); finishDist=Math.floor((terr.length-1)*STEP/10); }   // b96: трасса из РЕАЛЬНЫХ данных (конечная, есть финиш)
+  if(trackSource==='ticker'){ buildTickerTrack(tickerData||MARKET_DATA.btc.data); finishDist=Math.floor((terr.length-1)*STEP/10); }   // b96/b97: трасса из РЕАЛЬНЫХ данных (live или fallback; конечная, есть финиш)
   else { for(let i=0;i<Math.ceil(W/STEP)+8;i++)genSeg(); }
   bike={x:60,y:terrainAt(60).y-27.5,vx:0,vy:0,ang:terrainAt(60).ang,angV:0,onG:true,wheel:0,rShift:0};   // rShift = rider weight-shift state (-1 back .. +1 forward), smoothed from the drag input (b47 two-body)
   cam={x:bike.x-W*0.5,y:bike.y-H*0.46}; camAir=0; t=0; coins=0; dist=0; lastMile=0; newDepth=false; wipe=0; screen='play'; shake=0; flash=0; popT=0; daycycle=Math.random()*6.28;
@@ -533,7 +550,7 @@ function pointerDown(p){
     if(UI.lev && hit(p,UI.lev)){ leverage=LEVS[(LEVS.indexOf(leverage)+1)%LEVS.length]; saveLev(); sfxClick(); return; }   // b71: cycle LEVERAGE bet
     const b=BIKES[selBike];
     if(owned.indexOf(selBike)<0){ if(hit(p,UI.action)){ if(bank>=b.cost){ bank-=b.cost; owned.push(selBike); saveMeta(); sfxLev(); } else sfxClick(); } return; }
-    if(UI.tickerBtn && hit(p,UI.tickerBtn)){ trackSource='ticker'; gameMode='endless'; reset(); sfxClick(); return; }   // b96: реальный график BTC
+    if(UI.tickRow) for(let i=0;i<UI.tickRow.length;i++){ if(hit(p,UI.tickRow[i])){ startTicker(i); sfxClick(); return; } }   // b97: выбрал монету → live-загрузка → едешь по реальному графику
     if(hit(p,UI.action)){ trackSource='proc'; gameMode='endless'; reset(); sfxClick(); }   // b60: ▶ ЭНДЛЕСС
     return;
   }
@@ -938,6 +955,10 @@ function farCandles(par,baseY,alpha){ // distant blurred candle skyline — adds
     ctx.fillRect(sx, baseY-hgt, fs*0.62, hgt); }
 }
 function draw(){
+  if(screen==='tickerload'){ tickerLoadT++; ctx.fillStyle='#0a0a1a'; ctx.fillRect(0,0,W,H); hudEl.style.opacity='0'; spdEl.style.opacity='0'; hintEl.style.opacity='0'; ctx.textAlign='center';   // b97: экран загрузки live-графика
+    ctx.fillStyle='#bfe0ff'; ctx.font='800 22px ui-monospace,monospace'; ctx.fillText('📡 ЗАГРУЗКА ГРАФИКА',W/2,H*0.42);
+    ctx.fillStyle='#9ff0c8'; ctx.font='800 32px ui-monospace,monospace'; ctx.fillText(tickerName,W/2,H*0.42+46);
+    ctx.fillStyle='#7a8bb0'; ctx.font='600 12px ui-monospace,monospace'; ctx.fillText('реальные данные с биржи'+('.'.repeat(Math.floor(tickerLoadT/12)%4)),W/2,H*0.42+78); ctx.textAlign='left'; return; }
   if(screen==='garage'||screen==='settings'||screen==='career'){ ctx.fillStyle='#0a0a1a'; ctx.fillRect(0,0,W,H); hudEl.style.opacity='0'; spdEl.style.opacity='0'; hintEl.style.opacity='0'; drawMenus(); return; }   // menu-only: skip the whole world render (was redrawing the full game every frame → stutter)
   { const ZL=520, zf=(dist||0)/ZL, zi=Math.floor(zf)%BIOMES.length, zn=(zi+1)%BIOMES.length, fr=zf-Math.floor(zf), tb=clamp((fr-0.86)/0.14,0,1), A=BIOMES[zi], Bz=BIOMES[zn];   // b58: 700→520м (match the banner zone length)
     BSKY=[mix(A.sky[0],Bz.sky[0],tb),mix(A.sky[1],Bz.sky[1],tb),mix(A.sky[2],Bz.sky[2],tb),mix(A.sky[3],Bz.sky[3],tb)];
@@ -1368,8 +1389,12 @@ function drawMenus(){
     if(own){ UI.career={x:W/2-105,y:UI.action.y+52,w:210,h:44};   // b60: CAREER entry
       panel(UI.career.x,UI.career.y,210,44,'rgba(255,200,120,0.9)','rgba(150,110,30,0.26)');
       ctx.fillStyle='#ffd678'; ctx.font='700 15px ui-monospace,monospace'; ctx.fillText('🏁  КАРЬЕРА  ·  '+Math.min(careerMax+1,CAREER_TRACKS.length)+'/'+CAREER_TRACKS.length,W/2,UI.career.y+28); } else UI.career=null;
-    if(!CORE_TEST_MODE && UI.career){ UI.tickerBtn={x:W/2-105,y:UI.career.y+52,w:210,h:40};   // b96: реальный график BTC (тест-кнопка; позже — экран выбора монет)
-      panel(UI.tickerBtn.x,UI.tickerBtn.y,210,40,'rgba(120,200,255,0.85)','rgba(28,66,116,0.32)'); ctx.fillStyle='#bfe0ff'; ctx.font='700 14px ui-monospace,monospace'; ctx.fillText('📈  РЕАЛЬНЫЙ ГРАФИК · BTC',W/2,UI.tickerBtn.y+26); } else UI.tickerBtn=null;
+    if(!CORE_TEST_MODE && UI.career){ const ty=UI.career.y+52;   // b97: РЯД РЕАЛЬНЫХ МОНЕТ (live-график) — тап = загрузка с Binance → едешь
+      ctx.fillStyle='#9fb6dc'; ctx.font='600 10px ui-monospace,monospace'; ctx.fillText('📈 РЕАЛЬНЫЙ ГРАФИК (live):',W/2,ty);
+      UI.tickRow=[]; const bw=48, gp=6, tot=TICKERS.length*bw+(TICKERS.length-1)*gp, x0=W/2-tot/2;
+      for(let i=0;i<TICKERS.length;i++){ const bx=x0+i*(bw+gp); UI.tickRow.push({x:bx,y:ty+8,w:bw,h:34});
+        panel(bx,ty+8,bw,34,'rgba(120,200,255,0.8)','rgba(28,66,116,0.34)'); ctx.fillStyle='#bfe0ff'; ctx.font='700 12px ui-monospace,monospace'; ctx.fillText(TICKERS[i].name,bx+bw/2,ty+30); }
+    } else UI.tickRow=null;
     if(CORE_TEST_MODE){ /* CAREER replaces the old CORE TEST note */ }
     else {
     ctx.fillStyle='#7a8bb0'; ctx.font='600 10px ui-monospace,monospace'; ctx.fillText('— ЦЕЛИ ЗАБЕГА —',W/2,UI.action.y+(UI.career?166:78));   // b96: ниже кнопок КАРЬЕРА+ТИКЕР (не налазит)
