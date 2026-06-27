@@ -52,7 +52,7 @@ function lerp(a,b,t){return a+(b-a)*t;} function clamp(v,a,b){return v<a?a:v>b?b
 // false → full game everywhere. Single switch. Systems are GATED, never deleted.
 const CORE_TEST_MODE = false;   // b70: META LIVE — building the progression spine (upgrades/bikes with teeth, career, economy) on the confirmed rigid-body core
 // build stamp — bump on every change so a phone refresh can confirm it loaded fresh code (cache!)
-const BUILD = '2026-06-27 · b99';
+const BUILD = '2026-06-27 · b100';
 
 // ---------- procedural market terrain ----------
 // height map sampled every STEP px; generated forward as we ride. Market character:
@@ -683,10 +683,11 @@ function rigidStep(){
         fx+=Fn*nx; fy+=Fn*ny; tq+=rx*(Fn*ny)-ry*(Fn*nx);
         const vt=vpx*tx+vpy*ty;
         let Ft=-vt*(onMud?R.mudRoll:R.rollResist);          // wheel ROLLS (slight resistance; mud = more = sap)
-        const maxF=muEff*Fn;                                // traction cone (b70: bike grip + СЦЕПЛЕНИЕ upgrade)
-        if(drive&&thr>0.02){ const want=R.engine*engScale*thr; if(want>maxF){ const over=clamp((want-maxF)/maxF,0,1); Ft+=maxF*(1-(1-R.spinGrip)*over); spun=over>0.35; } else Ft+=want; }   // БУКС (ПЛАВНО, не вкл/выкл — иначе стук «торможения» на подъёме): газу больше сцепления → колесо СРЫВАЕТ постепенно, передаётся кинетич. Дозируешь = держит и лезет; молотишь на подъёме/старте = буксует
+        const maxF=muEff*Fn;                                // боковой/тормоз cone — мгновенный Fn (физика приземления/стабильности цела)
+        const FnDrive=Math.max(Fn, R.mass*R.grav*0.85), maxFd=muEff*FnDrive;   // b100: ТЯГА вперёд опирается на СТАБИЛЬНУЮ нагрузку (floor). Корень «залипания»: Fn пульсирует на неровностях (колесо разгружается на гребнях) → maxF дёргался → тяга проваливалась. Floor убирает дёрготню = лезет РОВНО
+        if(drive&&thr>0.02){ const want=R.engine*engScale*thr; Ft += Math.min(want, maxFd); spun=want>maxFd*1.2; }   // b100: тяга до стабильного предела — букс МЯГКИЙ (юзер: «залипание/торможение мешает, особ. с волной — убрать»)
         if(brake) Ft+=-Math.sign(vt)*R.brakeF;
-        if(Ft>maxF)Ft=maxF; else if(Ft<-maxF)Ft=-maxF;
+        if(Ft>maxFd)Ft=maxFd; else if(Ft<-maxF)Ft=-maxF;   // b100: верхний cap по СТАБИЛЬНОЙ тяге (не пульсирует = не залипает), нижний/боковой по мгновенному maxF
         fx+=Ft*tx; fy+=Ft*ty; tq+=rx*(Ft*ty)-ry*(Ft*tx);
       }
     }
