@@ -52,7 +52,7 @@ function lerp(a,b,t){return a+(b-a)*t;} function clamp(v,a,b){return v<a?a:v>b?b
 // false → full game everywhere. Single switch. Systems are GATED, never deleted.
 const CORE_TEST_MODE = false;   // b70: META LIVE — building the progression spine (upgrades/bikes with teeth, career, economy) on the confirmed rigid-body core
 // build stamp — bump on every change so a phone refresh can confirm it loaded fresh code (cache!)
-const BUILD = '2026-06-27 · b101';
+const BUILD = '2026-06-27 · b102';
 
 // ---------- procedural market terrain ----------
 // height map sampled every STEP px; generated forward as we ride. Market character:
@@ -202,7 +202,7 @@ const MARKET_DATA={ btc:{ name:'BTC', sym:'₿', data:[[65872,67760,63030,66973]
 function buildTickerTrack(candles){   // b96: реальная свеча OHLC → узел terr (та же структура, что genSeg). Логика доказана на реальных данных
   terr=[]; genX=0; const SUB=3;
   let pMin=Infinity,pMax=-Infinity; for(const c of candles){ if(c[2]<pMin)pMin=c[2]; if(c[1]>pMax)pMax=c[1]; }   // c=[open,high,low,close]
-  const pMid=(pMin+pMax)/2, k=(H*0.62)/Math.max(1e-9,pMax-pMin), Yc=p=>clamp(baseY+(pMid-p)*k,56,H*0.94);   // масштаб ИЗ диапазона цены → высота. b101: 0.52→0.62 вертикальный размах = ДЕРЗЧЕ склоны (стен ≤3%). b97: 1e-9 (НЕ 1) — дешёвые монеты иначе плоские
+  const pMid=(pMin+pMax)/2, k=(H*0.70)/Math.max(1e-9,pMax-pMin), Yc=p=>clamp(baseY+(pMid-p)*k,56,H*0.94);   // масштаб ИЗ диапазона цены → высота. b102: 0.62→0.70 размах (с 5m = ещё дерзче). b97: 1e-9 — дешёвые монеты иначе плоские
   let prevC=candles.length?candles[0][0]:baseY;
   for(let i=0;i<candles.length;i++){ const o=candles[i][0],hi=candles[i][1],lo=candles[i][2],cl=candles[i][3];
     for(let s=1;s<=SUB;s++){ const t=s/SUB, head=s===SUB, cI=prevC+(cl-prevC)*t, y=Yc(cI);   // ride-линия плавно интерполируется внутри свечи; тело свечи (open/hi/lo) живёт на HEAD-узле
@@ -219,7 +219,7 @@ async function loadCandles(t){   // кэш 1ч → live fetch Binance → fallba
   const ck='cipher_kl_'+t.k;
   try{ const c=JSON.parse(localStorage.getItem(ck)||'null'); if(c&&c.d&&c.d.length&&(Date.now()-c.ts)<3600000) return c.d; }catch(e){}
   try{
-    const r=await fetch('https://api.binance.com/api/v3/klines?symbol='+t.sym+'&interval=1h&limit=300');   // b101: 1d→1h таймфрейм — график ДЕРЗЧЕ (проверено на данных: 1h склоны p90 19-23° vs 1d 12-13°), резкие локальные движения. 300св = ~2340м
+    const r=await fetch('https://api.binance.com/api/v3/klines?symbol='+t.sym+'&interval=5m&limit=300');   // b102: 1h→5m таймфрейм — ещё ДЕРЗЧЕ/динамичнее (проверено: 5m p90 24° vs 1h 19°, внутридневная дёрготня), стабильно на всех монетах. ~2340м
     if(!r.ok) throw 0; const j=await r.json();
     const d=j.map(k=>[+k[1],+k[2],+k[3],+k[4]]).filter(c=>c.length===4&&c.every(v=>v>0&&isFinite(v)));   // b97: НЕ округлять — дешёвые монеты (DOGE ~$0.06) округлились бы в 0 → плоская трасса. Нормализатору важна относительная форма
     if(d.length<20) throw 0;
