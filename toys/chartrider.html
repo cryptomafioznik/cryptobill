@@ -52,7 +52,7 @@ function lerp(a,b,t){return a+(b-a)*t;} function clamp(v,a,b){return v<a?a:v>b?b
 // false → full game everywhere. Single switch. Systems are GATED, never deleted.
 const CORE_TEST_MODE = false;   // b70: META LIVE — building the progression spine (upgrades/bikes with teeth, career, economy) on the confirmed rigid-body core
 // build stamp — bump on every change so a phone refresh can confirm it loaded fresh code (cache!)
-const BUILD = '2026-06-27 · b100';
+const BUILD = '2026-06-27 · b101';
 
 // ---------- procedural market terrain ----------
 // height map sampled every STEP px; generated forward as we ride. Market character:
@@ -202,7 +202,7 @@ const MARKET_DATA={ btc:{ name:'BTC', sym:'₿', data:[[65872,67760,63030,66973]
 function buildTickerTrack(candles){   // b96: реальная свеча OHLC → узел terr (та же структура, что genSeg). Логика доказана на реальных данных
   terr=[]; genX=0; const SUB=3;
   let pMin=Infinity,pMax=-Infinity; for(const c of candles){ if(c[2]<pMin)pMin=c[2]; if(c[1]>pMax)pMax=c[1]; }   // c=[open,high,low,close]
-  const pMid=(pMin+pMax)/2, k=(H*0.52)/Math.max(1e-9,pMax-pMin), Yc=p=>clamp(baseY+(pMid-p)*k,56,H*0.94);   // масштаб ИЗ диапазона цены → высота. b97: 1e-9 (НЕ 1) — иначе дешёвые монеты (DOGE pRange≈0.05<1) получают неверный масштаб = плоская трасса
+  const pMid=(pMin+pMax)/2, k=(H*0.62)/Math.max(1e-9,pMax-pMin), Yc=p=>clamp(baseY+(pMid-p)*k,56,H*0.94);   // масштаб ИЗ диапазона цены → высота. b101: 0.52→0.62 вертикальный размах = ДЕРЗЧЕ склоны (стен ≤3%). b97: 1e-9 (НЕ 1) — дешёвые монеты иначе плоские
   let prevC=candles.length?candles[0][0]:baseY;
   for(let i=0;i<candles.length;i++){ const o=candles[i][0],hi=candles[i][1],lo=candles[i][2],cl=candles[i][3];
     for(let s=1;s<=SUB;s++){ const t=s/SUB, head=s===SUB, cI=prevC+(cl-prevC)*t, y=Yc(cI);   // ride-линия плавно интерполируется внутри свечи; тело свечи (open/hi/lo) живёт на HEAD-узле
@@ -219,7 +219,7 @@ async function loadCandles(t){   // кэш 1ч → live fetch Binance → fallba
   const ck='cipher_kl_'+t.k;
   try{ const c=JSON.parse(localStorage.getItem(ck)||'null'); if(c&&c.d&&c.d.length&&(Date.now()-c.ts)<3600000) return c.d; }catch(e){}
   try{
-    const r=await fetch('https://api.binance.com/api/v3/klines?symbol='+t.sym+'&interval=1d&limit=300');   // b99: 150→300 свечей = вдвое ДЛИННЕЕ трасса (юзер прошёл до конца, хотел длиннее)
+    const r=await fetch('https://api.binance.com/api/v3/klines?symbol='+t.sym+'&interval=1h&limit=300');   // b101: 1d→1h таймфрейм — график ДЕРЗЧЕ (проверено на данных: 1h склоны p90 19-23° vs 1d 12-13°), резкие локальные движения. 300св = ~2340м
     if(!r.ok) throw 0; const j=await r.json();
     const d=j.map(k=>[+k[1],+k[2],+k[3],+k[4]]).filter(c=>c.length===4&&c.every(v=>v>0&&isFinite(v)));   // b97: НЕ округлять — дешёвые монеты (DOGE ~$0.06) округлились бы в 0 → плоская трасса. Нормализатору важна относительная форма
     if(d.length<20) throw 0;
@@ -1218,12 +1218,12 @@ function draw(){
     ctx.fillStyle=cashedOut?(isBest?'#ffd678':'#6effc0'):'#ff7a8a';ctx.font='800 42px ui-monospace,monospace';ctx.fillText((cashedOut?'◆ +':'◆ ')+gain.toLocaleString('en-US'),W/2,H*0.34+54);
     ctx.fillStyle=newDepth?'#9ff0c8':'#cdbef0';ctx.font=(newDepth?'800 ':'')+'13px ui-monospace,monospace';ctx.fillText(dist+'м'+(newDepth?'  ★ НОВАЯ ГЛУБИНА':'   ·   ⛏ рекорд '+(best||0)+'м')+'   ПЛЕЧО ×'+leverage+'   комбо ×'+maxMult.toFixed(1),W/2,H*0.34+84);
     ctx.fillStyle=isBest?'#ffd678':'#7a6f9a';ctx.fillText((isBest?'★ РЕКОРД ВЫПЛАТЫ   ◆':'BEST   ◆')+bestPnl.toLocaleString('en-US'),W/2,H*0.34+108);
-    ctx.fillStyle=cashedOut?'#9ff0c8':'#ffb0a0';ctx.font='800 13px ui-monospace,monospace';ctx.fillText((cashedOut?'💰 ПРОФИТ ЗАФИКСИРОВАН':'☠ ЛИКВИДИРОВАН (плечо ×'+leverage+')')+'    капитал ◆'+bank,W/2,H*0.34+130);
+    ctx.fillStyle=cashedOut?'#9ff0c8':'#ffb0a0';ctx.font='800 13px ui-monospace,monospace';ctx.fillText((cashedOut?'капитал ◆'+bank:'☠ ЛИКВИДИРОВАН ×'+leverage+'  ·  капитал ◆'+bank),W/2,H*0.34+130);   // b101: убрал дубль «ПРОФИТ ЗАФИКСИРОВАН» (он уже крупно в заголовке ~1205)
     { const tip=deathBy==='wave'?'🛡 качай ЩИТ ОТ ВОЛНЫ — оторвёшься от дампа':(deathBy==='loop'||deathBy==='endo')?'◎ качай СЦЕПЛЕНИЕ — прощает кувырки':deathBy==='crash'?'◎ качай СЦЕПЛЕНИЕ — мягче посадки':'⚙ качай ДВИЖОК — быстрее уедешь'; ctx.fillStyle='#9fd0ea';ctx.font='11px ui-monospace,monospace';ctx.fillText(tip,W/2,H*0.34+150); } }
     if(gameMode!=='career'){ UI.dshare={x:W/2-94,y:H*0.34+162,w:188,h:36}; const sp=0.55+0.45*Math.sin(t*0.18);   // b93 ВИРАЛЬНОСТЬ: кнопка похвастаться (для тиктоков/чатов)
       ctx.fillStyle='rgba(40,30,62,0.88)'; if(ctx.roundRect){ctx.beginPath();ctx.roundRect(UI.dshare.x,UI.dshare.y,188,36,10);ctx.fill();ctx.strokeStyle='rgba(160,140,255,'+sp+')';ctx.lineWidth=2;ctx.stroke();}else ctx.fillRect(UI.dshare.x,UI.dshare.y,188,36);
       ctx.fillStyle='#d2c2ff';ctx.font='800 14px ui-monospace,monospace';ctx.textAlign='center';ctx.fillText('📤 ПОХВАСТАТЬСЯ',W/2,UI.dshare.y+24);
-      ctx.fillStyle='#6effc0';ctx.font='13px ui-monospace,monospace';ctx.fillText('коснись мимо — снова',W/2,H*0.34+222); } else UI.dshare=null; }
+    } else UI.dshare=null; }   // b101: убрал «коснись мимо — снова» — налезало на кнопки МЕНЮ/ГАРАЖ; есть явные кнопки
   if(screen==='won'){ ctx.fillStyle='rgba(8,20,12,0.72)';ctx.fillRect(0,0,W,H); ctx.textAlign='center'; const T=CAREER_TRACKS[careerTrack]||CAREER_TRACKS[0]; const last=careerTrack>=CAREER_TRACKS.length-1;
     ctx.fillStyle='rgba(120,255,180,'+(0.75+0.25*Math.sin(t*0.2))+')';ctx.font='800 32px ui-monospace,monospace';ctx.shadowColor='#6effc0';ctx.shadowBlur=18;ctx.fillText('🏁 ФИНИШ!',W/2,H*0.25);ctx.shadowBlur=0;
     ctx.fillStyle='#eafaff';ctx.font='800 20px ui-monospace,monospace';ctx.fillText(T.name+' ПРОЙДЕН',W/2,H*0.25+36);
@@ -1421,8 +1421,8 @@ function drawMenus(){
     else if(CORE_TEST_MODE){ UI.dgarage=null; UI.dretry=null; UI.dtracks=null; UI.menu={x:W/2-90,y:H*0.34+198,w:180,h:44}; panel(UI.menu.x,UI.menu.y,180,44,'rgba(150,170,210,0.5)'); ctx.fillStyle='#bcd0ee'; ctx.font='13px ui-monospace,monospace'; ctx.fillText('≡  МЕНЮ',W/2,UI.menu.y+27); }
     else {
     UI.dretry=null; UI.dtracks=null;
-    UI.menu={x:W/2-150,y:H*0.34+198,w:140,h:44}; panel(UI.menu.x,UI.menu.y,140,44,'rgba(150,170,210,0.5)'); ctx.fillStyle='#bcd0ee'; ctx.font='13px ui-monospace,monospace'; ctx.fillText('≡  МЕНЮ',UI.menu.x+70,UI.menu.y+27);
-    UI.dgarage={x:W/2+10,y:H*0.34+198,w:140,h:44}; panel(UI.dgarage.x,UI.dgarage.y,140,44,'rgba(120,255,180,0.7)','rgba(34,54,46,0.5)'); ctx.fillStyle='#9ff0c8'; ctx.font='800 13px ui-monospace,monospace'; ctx.fillText('🔧 ГАРАЖ',UI.dgarage.x+70,UI.dgarage.y+27); }
+    UI.menu={x:W/2-150,y:H*0.34+214,w:140,h:44}; panel(UI.menu.x,UI.menu.y,140,44,'rgba(150,170,210,0.5)'); ctx.fillStyle='#bcd0ee'; ctx.font='13px ui-monospace,monospace'; ctx.fillText('≡  МЕНЮ',UI.menu.x+70,UI.menu.y+27);   // b101: +198→+214 — под кнопкой ПОХВАСТАТЬСЯ (не слипается)
+    UI.dgarage={x:W/2+10,y:H*0.34+214,w:140,h:44}; panel(UI.dgarage.x,UI.dgarage.y,140,44,'rgba(120,255,180,0.7)','rgba(34,54,46,0.5)'); ctx.fillStyle='#9ff0c8'; ctx.font='800 13px ui-monospace,monospace'; ctx.fillText('🔧 ГАРАЖ',UI.dgarage.x+70,UI.dgarage.y+27); }
   } else if(screen==='garage'){
     ctx.fillStyle='rgba(6,5,16,0.94)'; ctx.fillRect(0,0,W,H);
     ctx.fillStyle='#eafaff'; ctx.font='800 24px ui-monospace,monospace'; ctx.fillText('🔧 ГАРАЖ',W/2,46);
