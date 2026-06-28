@@ -52,7 +52,7 @@ function lerp(a,b,t){return a+(b-a)*t;} function clamp(v,a,b){return v<a?a:v>b?b
 // false → full game everywhere. Single switch. Systems are GATED, never deleted.
 const CORE_TEST_MODE = false;   // b70: META LIVE — building the progression spine (upgrades/bikes with teeth, career, economy) on the confirmed rigid-body core
 // build stamp — bump on every change so a phone refresh can confirm it loaded fresh code (cache!)
-const BUILD = '2026-06-28 · b108';
+const BUILD = '2026-06-28 · b109';
 
 // ---------- procedural market terrain ----------
 // height map sampled every STEP px; generated forward as we ride. Market character:
@@ -391,8 +391,8 @@ function tut(id,txt){ if(seenTut[id]||screen!=='play')return; seenTut[id]=1; tut
 // ---- META PROGRESSION: degen-career upgrades + trader ranks (the persistent spine) ----
 const UPGRADES=[
   {id:'eng', name:'ДВИЖОК',        max:5, icon:'⚙', eff:l=>'+'+(8*l)+'% к скорости'},
-  {id:'grip',name:'СЦЕПЛЕНИЕ',     max:5, icon:'◎', eff:l=>'+'+(15*l)+'% хватка: тяга в гору + посадка'},
-  {id:'susp',name:'ПОДВЕСКА',      max:4, icon:'🔩', eff:l=>'+'+(22*l)+'% гасит жёсткие приземления (большие полёты)'},
+  {id:'grip',name:'СЦЕПЛЕНИЕ',     max:5, icon:'◎', eff:l=>'+'+(15*l)+'% хватка (подъём+посадка)'},
+  {id:'susp',name:'ПОДВЕСКА',      max:4, icon:'🔩', eff:l=>'+'+(22*l)+'% мягкая посадка'},
   {id:'pump',name:'СИЛА PUMP',     max:5, icon:'⚡', eff:l=>'+'+(22*l)+'% длина рывка'},
   {id:'wave',name:'ЩИТ ОТ ВОЛНЫ',  max:5, icon:'🛡', eff:l=>'−'+(7*l)+'% скорость дампа'},
   {id:'air', name:'ВОЗД.КОНТРОЛЬ', max:4, icon:'✦', eff:l=>'+'+(14*l)+'% верчение'},
@@ -1002,7 +1002,7 @@ function draw(){
     ctx.fillStyle='#bfe0ff'; ctx.font='800 22px ui-monospace,monospace'; ctx.fillText('📡 ЗАГРУЗКА ГРАФИКА',W/2,H*0.42);
     ctx.fillStyle='#9ff0c8'; ctx.font='800 32px ui-monospace,monospace'; ctx.fillText(tickerName,W/2,H*0.42+46);
     ctx.fillStyle='#7a8bb0'; ctx.font='600 12px ui-monospace,monospace'; ctx.fillText('реальные данные с биржи'+('.'.repeat(Math.floor(tickerLoadT/12)%4)),W/2,H*0.42+78); ctx.textAlign='left'; return; }
-  if(screen==='garage'||screen==='settings'||screen==='career'||screen==='setup'||screen==='bikes'||screen==='howto'){ ctx.fillStyle='#0a0a1a'; ctx.fillRect(0,0,W,H); hudEl.style.opacity='0'; spdEl.style.opacity='0'; hintEl.style.opacity='0'; drawMenus(); return; }   // menu-only: skip the whole world render (was redrawing the full game every frame → stutter)
+  if(screen==='garage'||screen==='settings'||screen==='career'||screen==='setup'||screen==='bikes'||screen==='howto'||screen==='title'){ ctx.fillStyle='#0a0a1a'; ctx.fillRect(0,0,W,H); hudEl.style.opacity='0'; spdEl.style.opacity='0'; hintEl.style.opacity='0'; drawMenus(); return; }   // menu-only: skip the whole world render (was redrawing the full game every frame → stutter)
   { const ZL=520, zf=(dist||0)/ZL, zi=Math.floor(zf)%BIOMES.length, zn=(zi+1)%BIOMES.length, fr=zf-Math.floor(zf), tb=clamp((fr-0.86)/0.14,0,1), A=BIOMES[zi], Bz=BIOMES[zn];   // b58: 700→520м (match the banner zone length)
     BSKY=[mix(A.sky[0],Bz.sky[0],tb),mix(A.sky[1],Bz.sky[1],tb),mix(A.sky[2],Bz.sky[2],tb),mix(A.sky[3],Bz.sky[3],tb)];
     BLINE=lerp3(A.line,Bz.line,tb).join(','); BRIDGE=lerp3(A.ridge,Bz.ridge,tb).join(','); }
@@ -1112,63 +1112,7 @@ function draw(){
   // ---- the rider + machine (readable silhouette, neon-rimmed) ----
   if(screen!=='dead'){
     ctx.save(); ctx.translate(bike.x,bike.y); ctx.rotate(bike.ang); ctx.translate(0,-1);   // seat the TIRE CONTACT on the price line (was +12 → wheels buried ~13px "in the track"); -1 aligns wheel-bottom with the CG-implied ground (bike.y = lineY-DY)
-    const B=BK();
-    // contact shadow on the ground
-    ctx.fillStyle='rgba(0,0,0,0.4)'; ctx.beginPath(); ctx.ellipse(0,29,30,4.5,0,0,7); ctx.fill();
-    // subtle ground underglow
-    ctx.save(); ctx.globalCompositeOperation='lighter';
-    const ug=ctx.createRadialGradient(0,26,2,0,26,44); ug.addColorStop(0,'rgba(70,200,255,0.12)'); ug.addColorStop(1,'rgba(70,200,255,0)'); ctx.fillStyle=ug; ctx.fillRect(-52,8,104,38); ctx.restore();
-    if(boosting>0){ ctx.save(); ctx.globalCompositeOperation='lighter'; const fl=26+Math.random()*18;
-      const ff=ctx.createLinearGradient(-28,0,-28-fl,0); ff.addColorStop(0,'rgba(255,210,130,0.85)'); ff.addColorStop(0.5,'rgba(255,120,80,0.45)'); ff.addColorStop(1,'rgba(255,120,80,0)');
-      ctx.fillStyle=ff; ctx.beginPath(); ctx.moveTo(-26,3); ctx.lineTo(-28-fl,9); ctx.lineTo(-28-fl,18); ctx.lineTo(-26,22); ctx.closePath(); ctx.fill(); ctx.restore(); }
-    // dirt roost kicked up when throttling
-    if(down&&bike.onG){ const n=bike.vx<3?6:3; for(let e=0;e<n;e++){ ctx.fillStyle='rgba(190,160,120,'+(0.22*Math.random())+')'; ctx.beginPath(); ctx.arc(-30-Math.random()*12,16+Math.random()*7,2+Math.random()*3,0,7); ctx.fill(); } }   // more roost when launching from low speed (wheelspin/traction-break)
-    // ===== WHEELS: big knobby dirt tires =====
-    for(const wx of [-27,27]){
-      const wg=ctx.createRadialGradient(wx-3,11,1,wx,15.5,13); wg.addColorStop(0,'#1a1e28'); wg.addColorStop(1,'#05060c');
-      ctx.fillStyle=wg; ctx.beginPath(); ctx.arc(wx,15.5,13,0,7); ctx.fill();
-      ctx.strokeStyle='rgba(16,18,26,0.95)'; ctx.lineWidth=3.2; for(let k=0;k<12;k++){ const a=bike.wheel*0.4+k*0.5236; ctx.beginPath(); ctx.moveTo(wx+Math.cos(a)*11.4,15.5+Math.sin(a)*11.4); ctx.lineTo(wx+Math.cos(a)*13.6,15.5+Math.sin(a)*13.6); ctx.stroke(); } // knobs
-      ctx.lineWidth=2; ctx.strokeStyle='rgba('+B.rim+',0.8)'; ctx.beginPath(); ctx.arc(wx,15.5,8.4,0,7); ctx.stroke(); // rim
-      ctx.fillStyle='#05060c'; ctx.beginPath(); ctx.arc(wx,15.5,5,0,7); ctx.fill();
-      ctx.strokeStyle='rgba(150,190,220,0.3)'; ctx.lineWidth=1; ctx.beginPath(); for(let s=0;s<5;s++){const a=bike.wheel+s*1.257; ctx.moveTo(wx,15.5); ctx.lineTo(wx+Math.cos(a)*7.4,15.5+Math.sin(a)*7.4);} ctx.stroke();
-      ctx.fillStyle='rgba(190,240,255,0.9)'; ctx.beginPath(); ctx.arc(wx,15.5,1.8,0,7); ctx.fill(); }
-    // ===== long-travel fork + swingarm =====
-    ctx.lineCap='round'; ctx.strokeStyle='rgba('+B.rim+',0.7)'; ctx.lineWidth=3.4; ctx.beginPath(); ctx.moveTo(27,15.5); ctx.lineTo(18,-16); ctx.stroke(); // front fork (long, raked)
-    ctx.lineWidth=2.6; ctx.beginPath(); ctx.moveTo(-27,15.5); ctx.lineTo(-6,3); ctx.stroke(); ctx.lineCap='butt'; // swingarm
-    // ===== slim dirtbike frame/bodywork (gradient + rim) =====
-    ctx.lineJoin='round'; const bg=ctx.createLinearGradient(0,-10,0,12); bg.addColorStop(0,B.body[0]); bg.addColorStop(0.55,B.body[1]); bg.addColorStop(1,B.body[2]);
-    ctx.beginPath(); ctx.moveTo(-20,7);
-    ctx.quadraticCurveTo(-23,-1,-11,-3);     // seat base
-    ctx.lineTo(-3,-4);                        // seat
-    ctx.quadraticCurveTo(6,-6,9,-11);         // tank/shroud rising
-    ctx.quadraticCurveTo(14,-13,19,-10);      // front shroud
-    ctx.lineTo(15,-1);                        // down to engine
-    ctx.quadraticCurveTo(5,3,-6,3);           // engine/belly
-    ctx.closePath(); ctx.fillStyle=bg; ctx.fill();
-    ctx.lineWidth=1.6; ctx.strokeStyle='rgba('+B.rim+',0.9)'; ctx.shadowColor='rgba('+B.rim+',0.5)'; ctx.shadowBlur=4; ctx.stroke(); ctx.shadowBlur=0;
-    // accent shroud + rear fender (kicked up) + front fender
-    ctx.fillStyle='rgba('+B.accent+',0.5)'; ctx.beginPath(); ctx.moveTo(7,-9); ctx.quadraticCurveTo(13,-12,18,-9); ctx.lineTo(15,-3); ctx.quadraticCurveTo(10,-5,7,-9); ctx.closePath(); ctx.fill();
-    ctx.strokeStyle='rgba('+B.rim+',0.8)'; ctx.lineWidth=2.4; ctx.lineCap='round'; ctx.beginPath(); ctx.moveTo(-11,-3); ctx.quadraticCurveTo(-24,-7,-31,-4); ctx.stroke(); // rear fender
-    ctx.lineWidth=2.2; ctx.beginPath(); ctx.moveTo(20,0); ctx.quadraticCurveTo(29,-2,33,3); ctx.stroke(); // front fender
-    ctx.strokeStyle='rgba('+B.rim+',0.85)'; ctx.lineWidth=2.4; ctx.beginPath(); ctx.moveTo(18,-16); ctx.lineTo(23,-19); ctx.stroke(); ctx.lineCap='butt'; // handlebars
-    // ===== RIDER: upright base, upper body shifts weight via `lean` (motivated) =====
-    ctx.strokeStyle='#080a0e'; ctx.lineWidth=5.5; ctx.lineCap='round';
-    ctx.beginPath(); ctx.moveTo(-4,9); ctx.lineTo(5,0); ctx.lineTo(-3,-10); ctx.stroke(); ctx.lineCap='butt'; // legs on pegs (fixed)
-    ctx.save(); ctx.translate(-3 + (bike.rShift||0)*TUNE.riderShiftPx, -10); ctx.rotate(lean||0); ctx.translate(3,10);   // upper body shifts fore/aft WITH the weight (rShift) + leans around the hip — rider is a visible second mass (b47)
-    const rg=ctx.createLinearGradient(0,-30,0,-10); rg.addColorStop(0,'#2c3447'); rg.addColorStop(1,'#0a0c12');
-    ctx.beginPath(); ctx.moveTo(-3,-10); ctx.quadraticCurveTo(-5,-21,-1,-26); ctx.quadraticCurveTo(2,-28,5,-25); ctx.lineTo(4,-13); ctx.quadraticCurveTo(1,-10,-3,-10); ctx.closePath(); ctx.fillStyle=rg; ctx.fill();
-    ctx.strokeStyle='rgba('+B.rider+',0.85)'; ctx.lineWidth=1.6; ctx.stroke();   // torso (upright base)
-    ctx.strokeStyle='rgba('+B.rider+',0.8)'; ctx.lineWidth=3.4; ctx.lineCap='round'; ctx.beginPath(); ctx.moveTo(3,-23); ctx.quadraticCurveTo(13,-22,22,-17); ctx.stroke(); ctx.lineCap='butt'; // arm to bars
-    const hg=ctx.createRadialGradient(0,-32,1,2,-30,6.4); hg.addColorStop(0,'#3a4358'); hg.addColorStop(1,'#0a0c12');
-    ctx.fillStyle=hg; ctx.beginPath(); ctx.arc(2,-30,6.2,0,7); ctx.fill();   // helmet
-    ctx.lineWidth=1.4; ctx.strokeStyle='rgba('+B.rim+',0.7)'; ctx.beginPath(); ctx.arc(2,-30,6.2,Math.PI*1.05,Math.PI*1.95); ctx.stroke();
-    ctx.strokeStyle='rgba(255,225,150,0.95)'; ctx.lineWidth=2.2; ctx.lineCap='round'; ctx.shadowColor='#ffcf7a'; ctx.shadowBlur=8; ctx.beginPath(); ctx.moveTo(4,-32); ctx.lineTo(8,-31); ctx.stroke(); ctx.shadowBlur=0; // visor
-    ctx.strokeStyle='rgba('+B.rim+',0.65)'; ctx.lineWidth=2; ctx.beginPath(); ctx.moveTo(6,-33.5); ctx.lineTo(11,-33); ctx.stroke(); ctx.lineCap='butt'; // mx peak
-    ctx.restore();
-    // lights
-    ctx.fillStyle='rgba(255,236,185,0.95)'; ctx.shadowColor='#ffd678'; ctx.shadowBlur=12; ctx.beginPath(); ctx.arc(31,-4,2.4,0,7); ctx.fill(); ctx.shadowBlur=0;
-    ctx.fillStyle='rgba(255,80,100,0.9)'; ctx.shadowColor='#ff5060'; ctx.shadowBlur=8; ctx.beginPath(); ctx.arc(-29,1,2,0,7); ctx.fill(); ctx.shadowBlur=0;
-    ctx.lineJoin='miter';
+    drawMachine(BK(), bike.wheel, bike.rShift, lean, down&&bike.onG, boosting);   // b109: спрайт вынесен в drawMachine (реюз на экране БАЙКИ)
     ctx.restore();
   }
   ctx.restore(); ctx.restore();   // world translate + camera zoom   // b104: убрал красную ликв-линию (заменено плечо→скорость волны)
@@ -1381,6 +1325,63 @@ function draw(){
   drawMenus();
 }
 function panel(x,y,w,h,line,fill){ ctx.fillStyle=fill||'rgba(16,18,34,0.5)'; ctx.fillRect(x,y,w,h); ctx.strokeStyle=line; ctx.lineWidth=1.5; ctx.strokeRect(x,y,w,h); }
+function drawMachine(B,wheelv,rShiftv,leanv,roost,boostv){   // b109: спрайт байка (вынесено — живой рендер + превью на экране БАЙКИ). ctx уже сдвинут/повёрнут в точку байка
+    // contact shadow on the ground
+    ctx.fillStyle='rgba(0,0,0,0.4)'; ctx.beginPath(); ctx.ellipse(0,29,30,4.5,0,0,7); ctx.fill();
+    // subtle ground underglow
+    ctx.save(); ctx.globalCompositeOperation='lighter';
+    const ug=ctx.createRadialGradient(0,26,2,0,26,44); ug.addColorStop(0,'rgba(70,200,255,0.12)'); ug.addColorStop(1,'rgba(70,200,255,0)'); ctx.fillStyle=ug; ctx.fillRect(-52,8,104,38); ctx.restore();
+    if(boostv>0){ ctx.save(); ctx.globalCompositeOperation='lighter'; const fl=26+Math.random()*18;
+      const ff=ctx.createLinearGradient(-28,0,-28-fl,0); ff.addColorStop(0,'rgba(255,210,130,0.85)'); ff.addColorStop(0.5,'rgba(255,120,80,0.45)'); ff.addColorStop(1,'rgba(255,120,80,0)');
+      ctx.fillStyle=ff; ctx.beginPath(); ctx.moveTo(-26,3); ctx.lineTo(-28-fl,9); ctx.lineTo(-28-fl,18); ctx.lineTo(-26,22); ctx.closePath(); ctx.fill(); ctx.restore(); }
+    // dirt roost kicked up when throttling
+    if(roost){ const n=bike.vx<3?6:3; for(let e=0;e<n;e++){ ctx.fillStyle='rgba(190,160,120,'+(0.22*Math.random())+')'; ctx.beginPath(); ctx.arc(-30-Math.random()*12,16+Math.random()*7,2+Math.random()*3,0,7); ctx.fill(); } }
+    // ===== WHEELS: big knobby dirt tires =====
+    for(const wx of [-27,27]){
+      const wg=ctx.createRadialGradient(wx-3,11,1,wx,15.5,13); wg.addColorStop(0,'#1a1e28'); wg.addColorStop(1,'#05060c');
+      ctx.fillStyle=wg; ctx.beginPath(); ctx.arc(wx,15.5,13,0,7); ctx.fill();
+      ctx.strokeStyle='rgba(16,18,26,0.95)'; ctx.lineWidth=3.2; for(let k=0;k<12;k++){ const a=wheelv*0.4+k*0.5236; ctx.beginPath(); ctx.moveTo(wx+Math.cos(a)*11.4,15.5+Math.sin(a)*11.4); ctx.lineTo(wx+Math.cos(a)*13.6,15.5+Math.sin(a)*13.6); ctx.stroke(); }
+      ctx.lineWidth=2; ctx.strokeStyle='rgba('+B.rim+',0.8)'; ctx.beginPath(); ctx.arc(wx,15.5,8.4,0,7); ctx.stroke();
+      ctx.fillStyle='#05060c'; ctx.beginPath(); ctx.arc(wx,15.5,5,0,7); ctx.fill();
+      ctx.strokeStyle='rgba(150,190,220,0.3)'; ctx.lineWidth=1; ctx.beginPath(); for(let s=0;s<5;s++){const a=wheelv+s*1.257; ctx.moveTo(wx,15.5); ctx.lineTo(wx+Math.cos(a)*7.4,15.5+Math.sin(a)*7.4);} ctx.stroke();
+      ctx.fillStyle='rgba(190,240,255,0.9)'; ctx.beginPath(); ctx.arc(wx,15.5,1.8,0,7); ctx.fill(); }
+    // ===== long-travel fork + swingarm =====
+    ctx.lineCap='round'; ctx.strokeStyle='rgba('+B.rim+',0.7)'; ctx.lineWidth=3.4; ctx.beginPath(); ctx.moveTo(27,15.5); ctx.lineTo(18,-16); ctx.stroke();
+    ctx.lineWidth=2.6; ctx.beginPath(); ctx.moveTo(-27,15.5); ctx.lineTo(-6,3); ctx.stroke(); ctx.lineCap='butt';
+    // ===== slim dirtbike frame/bodywork (gradient + rim) =====
+    ctx.lineJoin='round'; const bg=ctx.createLinearGradient(0,-10,0,12); bg.addColorStop(0,B.body[0]); bg.addColorStop(0.55,B.body[1]); bg.addColorStop(1,B.body[2]);
+    ctx.beginPath(); ctx.moveTo(-20,7);
+    ctx.quadraticCurveTo(-23,-1,-11,-3);
+    ctx.lineTo(-3,-4);
+    ctx.quadraticCurveTo(6,-6,9,-11);
+    ctx.quadraticCurveTo(14,-13,19,-10);
+    ctx.lineTo(15,-1);
+    ctx.quadraticCurveTo(5,3,-6,3);
+    ctx.closePath(); ctx.fillStyle=bg; ctx.fill();
+    ctx.lineWidth=1.6; ctx.strokeStyle='rgba('+B.rim+',0.9)'; ctx.shadowColor='rgba('+B.rim+',0.5)'; ctx.shadowBlur=4; ctx.stroke(); ctx.shadowBlur=0;
+    ctx.fillStyle='rgba('+B.accent+',0.5)'; ctx.beginPath(); ctx.moveTo(7,-9); ctx.quadraticCurveTo(13,-12,18,-9); ctx.lineTo(15,-3); ctx.quadraticCurveTo(10,-5,7,-9); ctx.closePath(); ctx.fill();
+    ctx.strokeStyle='rgba('+B.rim+',0.8)'; ctx.lineWidth=2.4; ctx.lineCap='round'; ctx.beginPath(); ctx.moveTo(-11,-3); ctx.quadraticCurveTo(-24,-7,-31,-4); ctx.stroke();
+    ctx.lineWidth=2.2; ctx.beginPath(); ctx.moveTo(20,0); ctx.quadraticCurveTo(29,-2,33,3); ctx.stroke();
+    ctx.strokeStyle='rgba('+B.rim+',0.85)'; ctx.lineWidth=2.4; ctx.beginPath(); ctx.moveTo(18,-16); ctx.lineTo(23,-19); ctx.stroke(); ctx.lineCap='butt';
+    // ===== RIDER =====
+    ctx.strokeStyle='#080a0e'; ctx.lineWidth=5.5; ctx.lineCap='round';
+    ctx.beginPath(); ctx.moveTo(-4,9); ctx.lineTo(5,0); ctx.lineTo(-3,-10); ctx.stroke(); ctx.lineCap='butt';
+    ctx.save(); ctx.translate(-3 + (rShiftv||0)*TUNE.riderShiftPx, -10); ctx.rotate(leanv||0); ctx.translate(3,10);
+    const rg=ctx.createLinearGradient(0,-30,0,-10); rg.addColorStop(0,'#2c3447'); rg.addColorStop(1,'#0a0c12');
+    ctx.beginPath(); ctx.moveTo(-3,-10); ctx.quadraticCurveTo(-5,-21,-1,-26); ctx.quadraticCurveTo(2,-28,5,-25); ctx.lineTo(4,-13); ctx.quadraticCurveTo(1,-10,-3,-10); ctx.closePath(); ctx.fillStyle=rg; ctx.fill();
+    ctx.strokeStyle='rgba('+B.rider+',0.85)'; ctx.lineWidth=1.6; ctx.stroke();
+    ctx.strokeStyle='rgba('+B.rider+',0.8)'; ctx.lineWidth=3.4; ctx.lineCap='round'; ctx.beginPath(); ctx.moveTo(3,-23); ctx.quadraticCurveTo(13,-22,22,-17); ctx.stroke(); ctx.lineCap='butt';
+    const hg=ctx.createRadialGradient(0,-32,1,2,-30,6.4); hg.addColorStop(0,'#3a4358'); hg.addColorStop(1,'#0a0c12');
+    ctx.fillStyle=hg; ctx.beginPath(); ctx.arc(2,-30,6.2,0,7); ctx.fill();
+    ctx.lineWidth=1.4; ctx.strokeStyle='rgba('+B.rim+',0.7)'; ctx.beginPath(); ctx.arc(2,-30,6.2,Math.PI*1.05,Math.PI*1.95); ctx.stroke();
+    ctx.strokeStyle='rgba(255,225,150,0.95)'; ctx.lineWidth=2.2; ctx.lineCap='round'; ctx.shadowColor='#ffcf7a'; ctx.shadowBlur=8; ctx.beginPath(); ctx.moveTo(4,-32); ctx.lineTo(8,-31); ctx.stroke(); ctx.shadowBlur=0;
+    ctx.strokeStyle='rgba('+B.rim+',0.65)'; ctx.lineWidth=2; ctx.beginPath(); ctx.moveTo(6,-33.5); ctx.lineTo(11,-33); ctx.stroke(); ctx.lineCap='butt';
+    ctx.restore();
+    // lights
+    ctx.fillStyle='rgba(255,236,185,0.95)'; ctx.shadowColor='#ffd678'; ctx.shadowBlur=12; ctx.beginPath(); ctx.arc(31,-4,2.4,0,7); ctx.fill(); ctx.shadowBlur=0;
+    ctx.fillStyle='rgba(255,80,100,0.9)'; ctx.shadowColor='#ff5060'; ctx.shadowBlur=8; ctx.beginPath(); ctx.arc(-29,1,2,0,7); ctx.fill(); ctx.shadowBlur=0;
+    ctx.lineJoin='miter';
+}
 function drawMenus(){
   ctx.textAlign='center'; ctx.textBaseline='alphabetic';
   if(screen==='career'){   // b60: CAREER track-select
@@ -1422,6 +1423,7 @@ function drawMenus(){
     ctx.fillStyle='#eafaff'; ctx.font='800 24px ui-monospace,monospace'; ctx.fillText('🏍 БАЙКИ',W/2,46);
     ctx.fillStyle='#ffd678'; ctx.font='800 16px ui-monospace,monospace'; ctx.fillText('◆ '+bank,W/2,76);
     UI.bkBack={x:14,y:18,w:78,h:34}; panel(UI.bkBack.x,UI.bkBack.y,78,34,'rgba(150,180,220,0.6)','rgba(30,40,62,0.5)'); ctx.fillStyle='#cfe0ff'; ctx.font='700 13px ui-monospace,monospace'; ctx.fillText('‹ НАЗАД',UI.bkBack.x+39,UI.bkBack.y+22);
+    ctx.save(); ctx.translate(W/2,H*0.27); ctx.scale(1.8,1.8); drawMachine(BIKES[selBike],0,0,0,false,0); ctx.restore();   // b109: живой спрайт байка (раньше не показывался)
     const b=BIKES[selBike], own=owned.indexOf(selBike)>=0, ay=H*0.40;
     UI.bkL={x:W/2-150,y:ay-30,w:50,h:64}; UI.bkR={x:W/2+100,y:ay-30,w:50,h:64};
     ctx.fillStyle='rgba(190,215,245,0.85)'; ctx.font='800 34px ui-monospace,monospace'; ctx.fillText('‹',UI.bkL.x+25,ay+12); ctx.fillText('›',UI.bkR.x+25,ay+12);
@@ -1454,7 +1456,8 @@ function drawMenus(){
   }
   if(screen==='title'){
     const og=ctx.createLinearGradient(0,0,0,H); og.addColorStop(0,'rgba(6,5,16,0.62)'); og.addColorStop(0.38,'rgba(6,5,16,0.04)'); og.addColorStop(0.72,'rgba(6,5,16,0.12)'); og.addColorStop(1,'rgba(6,5,16,0.9)'); ctx.fillStyle=og; ctx.fillRect(0,0,W,H);
-    // b108: МИНИМАЛИСТИЧНАЯ ГЛАВНАЯ — одна задача (играть); мета/плечо/выбор-байка ушли с экрана (плечо→ЗАЕЗД, байк→ГАРАЖ, миссии→в забег)
+    // b108: МИНИМАЛИСТИЧНАЯ ГЛАВНАЯ — одна задача (играть); b109: отдельный экран (мир больше НЕ просвечивает — байк не лезет под кнопки)
+    if(stars)for(const s of stars){ ctx.fillStyle='rgba(220,225,255,'+(0.18+0.3*Math.abs(Math.sin(t*0.03+s.x)))+')'; ctx.fillRect(s.x,s.y,s.s||1,s.s||1); }
     ctx.textAlign='center';
     UI.settings={x:16,y:16,w:46,h:38}; ctx.fillStyle='rgba(30,40,62,0.6)'; if(ctx.roundRect){ctx.beginPath();ctx.roundRect(16,16,46,38,10);ctx.fill();ctx.strokeStyle='rgba(150,180,220,0.5)';ctx.lineWidth=1.4;ctx.stroke();} ctx.fillStyle='#cfe0ff'; ctx.font='20px ui-monospace,monospace'; ctx.fillText('⚙',39,42);
     if(CORE_TEST_MODE){ UI.garage=null; UI.bankChip=null; }
@@ -1551,7 +1554,9 @@ let _fpsT=performance.now(), _fpsN=0, _fps=0;
 const dbgEl=document.getElementById('dbg');
 let dbgMin=false; try{ dbgMin=localStorage.getItem('cipher_dbg')==='0'; }catch(e){}
 dbgEl.classList.toggle('min',dbgMin);
-function dbgToggle(){ dbgMin=!dbgMin; dbgEl.classList.toggle('min',dbgMin); try{localStorage.setItem('cipher_dbg',dbgMin?'0':'1');}catch(e){} if(dbgMin)dbgEl.innerHTML='🐞'; }
+function setPhyslink(){ try{ const pl=document.getElementById('physlink'); if(pl)pl.style.display=dbgMin?'none':''; }catch(e){} }   // b109: dev-ссылка физлаба налазила на заголовки меню → прячем когда debug свёрнут
+setPhyslink();
+function dbgToggle(){ dbgMin=!dbgMin; dbgEl.classList.toggle('min',dbgMin); setPhyslink(); try{localStorage.setItem('cipher_dbg',dbgMin?'0':'1');}catch(e){} if(dbgMin)dbgEl.innerHTML='🐞'; }
 dbgEl.addEventListener('touchstart',e=>{ e.stopPropagation(); e.preventDefault(); dbgToggle(); },{passive:false});  // tap overlay to collapse/expand (don't drive the bike)
 dbgEl.addEventListener('mousedown',e=>{ e.stopPropagation(); dbgToggle(); });
 function dbgTick(){
