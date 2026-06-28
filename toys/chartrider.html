@@ -52,7 +52,7 @@ function lerp(a,b,t){return a+(b-a)*t;} function clamp(v,a,b){return v<a?a:v>b?b
 // false → full game everywhere. Single switch. Systems are GATED, never deleted.
 const CORE_TEST_MODE = false;   // b70: META LIVE — building the progression spine (upgrades/bikes with teeth, career, economy) on the confirmed rigid-body core
 // build stamp — bump on every change so a phone refresh can confirm it loaded fresh code (cache!)
-const BUILD = '2026-06-27 · b103';
+const BUILD = '2026-06-27 · b104';
 
 // ---------- procedural market terrain ----------
 // height map sampled every STEP px; generated forward as we ride. Market character:
@@ -877,7 +877,7 @@ function update(){
   if((boost||0)>=1 && screen==='play') tut('pump','⚡ PUMP ЗАРЯЖЕН — '+('ontouchstart'in window?'ЖМИ ⚡PUMP':'SHIFT')+' ЧТОБ ОТОРВАТЬСЯ');
   if(tutT>0) tutT-=0.0062;
   // chasing LIQUIDATION wave (the dump): ramps with distance + biome, caps its lead so it always looms; catch = death
-  waveSpd = (TUNE.waveSpeed + (Math.min((dist||0)/150, 4.8) + Math.max(0,((dist||0)-700)/620))*TUNE.waveAccel) * BIOMES[(((zone||0)%BIOMES.length)+BIOMES.length)%BIOMES.length].wave * (curEvType==='whale'?1.75:1) * lerp(0.6,1,clamp((dist||0)/TUNE.easeInDist,0,1)) * (1-0.07*upgLvl('wave')) * (gameMode==='endless'?(1+Math.max(0,leverage-safeLev())*0.02):1) * careerWaveMul * (trackSource==='ticker'?tickerVolMul:1);   // b98: волатильность РЕАЛЬНОЙ монеты → скорость дамп-волны = СЛОЖНОСТЬ причинно (DOGE быстрее BTC, без ручной настройки). b77 МАХОВИК: волна разгоняется только за плечо ВЫШЕ безопасного потолка (safeLev от железа) → качай ЩИТ/ДВИЖОК → выше потолок → безопасно больше плечо. b72: careerWaveMul = per-stage wave (POWER-GATE). ramps, then keeps creeping past 700m (no cap) → an eventual wall that ДВИЖОК/ЩИТ push deeper   // re-tuned for the heavier momentum bike; surges during a whale dump
+  waveSpd = (TUNE.waveSpeed + (Math.min((dist||0)/150, 4.8) + Math.max(0,((dist||0)-700)/620))*TUNE.waveAccel) * BIOMES[(((zone||0)%BIOMES.length)+BIOMES.length)%BIOMES.length].wave * (curEvType==='whale'?1.75:1) * lerp(0.6,1,clamp((dist||0)/TUNE.easeInDist,0,1)) * (1-0.07*upgLvl('wave')) * (gameMode==='endless'?(1+Math.max(0,leverage-safeLev())*0.02):1) * careerWaveMul * (trackSource==='ticker'?tickerVolMul*clamp(1+(leverage-2)*0.01,1,2.0):1);   // b98 волатильность монеты + b104 ПЛЕЧО → скорость дамп-волны (высокое плечо = волна быстрее = РИСК, но агентность: газуй/фиксируй; заменило безвыходную ликв-линию b103). ×2→×1, ×100→×2. Под руки. b77 МАХОВИК: волна разгоняется за плечо выше потолка (safeLev от железа) → качай ЩИТ/ДВИЖОК → выше потолок → безопасно больше плечо. b72: careerWaveMul = per-stage wave (POWER-GATE). ramps, then keeps creeping past 700m (no cap) → an eventual wall that ДВИЖОК/ЩИТ push deeper   // re-tuned for the heavier momentum bike; surges during a whale dump
   wave += waveSpd;
   const leadCap = W*lerp(0.92, 0.36, clamp((dist||0)/320,0,1));   // dump closes in over the first ~320m → then a constant chase (front sits at the left edge)
   if(bike.x - wave > leadCap) wave = bike.x - leadCap;
@@ -887,7 +887,7 @@ function update(){
     if(priceMul()>=1.25 && (coins||0)>=8) tut('selltop','📈 ЦЕНА НА ПИКЕ — фиксируй ЗДЕСЬ = больше ◆ («продай на верхах»)');
   }
   if(wave >= bike.x-18) wipeout('wave');
-  if(trackSource==='ticker' && screen==='play' && dist>30){ const _cp=tkMid-(terrainAt(bike.x).y-baseY)/tkK; if(_cp<=liqPrice) wipeout('liq'); }   // b103: ЖЁСТКОЕ ПЛЕЧО — реальная цена графика дошла до ликв.уровня = ВЫНОС (degen «как в жизни»; chase-волна = отдельный слой времени)
+  // b104: ликвидация-ЛИНИЯ убрана (юзер: игрок НЕ контролирует график → безвыходно, не подходит для игры). Плечо теперь = СКОРОСТЬ ВОЛНЫ (агентность: газуй/фиксируй вовремя) — см. waveSpd ниже
   // camera — on BIG AIR (trick kicker) frame higher + follow faster + zoom out (draw) so the high launch AND the landing stay on-screen
   const _airH = bike.onG ? 0 : Math.max(0, terrainAt(bike.x).y-(bike.y+DY));
   camAir = lerp(camAir, clamp(_airH/280,0,1), _airH>camAir*280?0.25:0.08);   // rise fast into big air, ease out smoothly
@@ -1135,8 +1135,7 @@ function draw(){
     ctx.lineJoin='miter';
     ctx.restore();
   }
-  if(trackSource==='ticker' && screen==='play' && liqY>-9000){ ctx.save(); const pul=0.4+0.25*Math.sin(t*0.2); ctx.strokeStyle='rgba(255,55,75,'+(0.35+pul)+')'; ctx.lineWidth=2.5; ctx.setLineDash([11,9]); ctx.beginPath(); ctx.moveTo(cam.x-30,liqY); ctx.lineTo(cam.x+W+30,liqY); ctx.stroke(); ctx.setLineDash([]); ctx.fillStyle='rgba(255,95,115,0.95)'; ctx.font='800 11px ui-monospace,monospace'; ctx.fillText('⚠ ЛИКВИДАЦИЯ ×'+leverage, cam.x+10, liqY-6); ctx.restore(); }   // b103: красная линия ликвидации — цена графика дойдёт = ВЫНОС
-  ctx.restore(); ctx.restore();   // world translate + camera zoom
+  ctx.restore(); ctx.restore();   // world translate + camera zoom   // b104: убрал красную ликв-линию (заменено плечо→скорость волны)
   // speed streaks (motion) — intensify with velocity
   const spF=rush||0;
   if(spF>0.01&&screen==='play'){ ctx.lineCap='round'; for(const s of streaks){ const al=Math.min(0.55,s.life*0.6)*s.depth*spF; if(al<0.01)continue; ctx.strokeStyle='rgba(205,242,255,'+al+')'; ctx.lineWidth=s.depth*1.7; ctx.beginPath(); ctx.moveTo(s.x,s.y); ctx.lineTo(s.x+s.len,s.y); ctx.stroke(); } ctx.lineCap='butt'; }
