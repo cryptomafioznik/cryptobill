@@ -52,7 +52,7 @@ function lerp(a,b,t){return a+(b-a)*t;} function clamp(v,a,b){return v<a?a:v>b?b
 // false → full game everywhere. Single switch. Systems are GATED, never deleted.
 const CORE_TEST_MODE = false;   // b70: META LIVE — building the progression spine (upgrades/bikes with teeth, career, economy) on the confirmed rigid-body core
 // build stamp — bump on every change so a phone refresh can confirm it loaded fresh code (cache!)
-const BUILD = '2026-06-28 · b110';
+const BUILD = '2026-06-28 · b111';
 
 // ---------- procedural market terrain ----------
 // height map sampled every STEP px; generated forward as we ride. Market character:
@@ -202,16 +202,17 @@ const MARKET_DATA={ btc:{ name:'BTC', sym:'₿', data:[[65872,67760,63030,66973]
 function buildTickerTrack(candles){   // b96: реальная свеча OHLC → узел terr (та же структура, что genSeg). Логика доказана на реальных данных
   terr=[]; genX=0; const SUB=3;
   let pMin=Infinity,pMax=-Infinity; for(const c of candles){ if(c[2]<pMin)pMin=c[2]; if(c[1]>pMax)pMax=c[1]; }   // c=[open,high,low,close]
-  const pMid=(pMin+pMax)/2, k=(H*0.70)/Math.max(1e-9,pMax-pMin), Yc=p=>clamp(baseY+(pMid-p)*k,56,H*0.94);   // масштаб ИЗ диапазона цены → высота. b102: 0.62→0.70 размах (с 5m = ещё дерзче). b97: 1e-9 — дешёвые монеты иначе плоские
+  let vs=0,vn=0; for(let i=1;i<candles.length;i++){ if(candles[i-1][3]>0){ vs+=Math.abs(candles[i][3]-candles[i-1][3])/candles[i-1][3]; vn++; } }   // b98 РЕАЛЬНАЯ волатильность монеты (средн |Δ|/цена)
+  const vol=vn?vs/vn:0.0008; tickerVolMul=volMulOf(vol); tickerVolLabel=volTier(vol);
+  const bandFrac=clamp(0.40+0.30*(tickerVolMul-0.85),0.40,0.70);   // b111 №2: РАЗМАХ террейна ∝ волатильности — амплитуда в РАЙД, не только в кошельке. Спокойная монета площе (BTC p90 27→17°, «чилл»), дикая на потолке проезжаемости (WIF 0.70, не трогаем — уже max~50°). 0.85→0.40 · 2.4→0.70(кап)
+  const pMid=(pMin+pMax)/2, k=(H*bandFrac)/Math.max(1e-9,pMax-pMin), Yc=p=>clamp(baseY+(pMid-p)*k,56,H*0.94);   // масштаб ИЗ диапазона × bandFrac. b97: 1e-9 — дешёвые монеты иначе плоские
   let prevC=candles.length?candles[0][0]:baseY;
   for(let i=0;i<candles.length;i++){ const o=candles[i][0],hi=candles[i][1],lo=candles[i][2],cl=candles[i][3];
     for(let s=1;s<=SUB;s++){ const t=s/SUB, head=s===SUB, cI=prevC+(cl-prevC)*t, y=Yc(cI);   // ride-линия плавно интерполируется внутри свечи; тело свечи (open/hi/lo) живёт на HEAD-узле
       terr.push({x:genX, y:y, open:head?Yc(o):y, close:y, hi:head?Yc(hi):y, lo:head?Yc(lo):y, up:cl>o, haz:false, coin:(head&&Math.random()<0.30), ev:'', gap:false, lipY:0, step:false, topY:0, kick:false, whoop:false, mud:false, drop:false});
       genX+=STEP; }
     prevC=cl; }
-  let vs=0,vn=0; for(let i=1;i<candles.length;i++){ if(candles[i-1][3]>0){ vs+=Math.abs(candles[i][3]-candles[i-1][3])/candles[i-1][3]; vn++; } }   // b98: РЕАЛЬНАЯ волатильность монеты (средн. |Δ|/цена) из данных
-  const vol=vn?vs/vn:0.0008; tickerVolMul=volMulOf(vol); tickerVolLabel=volTier(vol);   // → скорость волны = сложность (DOGE/мемы быстрее BTC), эмерджентно
-  tkK=k; tkMid=pMid;   // b103: сохраняем масштаб для конверсии высота↔цена (ликвидация на реальном движении)
+  tkK=k; tkMid=pMid;   // b103: масштаб для конверсии высота↔цена (реальная цена/позиция b106). Волатильность/размах посчитаны выше b111
 }
 // b97: LIVE-загрузка реальных свечей с Binance. Разная монета → реальные данные → волатильность → сложность (эмерджентно, без ручной настройки).
 const TICKERS=[{k:'btc',sym:'BTCUSDT',name:'BTC'},{k:'eth',sym:'ETHUSDT',name:'ETH'},{k:'sol',sym:'SOLUSDT',name:'SOL'},{k:'doge',sym:'DOGEUSDT',name:'DOGE'},{k:'pepe',sym:'PEPEUSDT',name:'PEPE'},{k:'wif',sym:'WIFUSDT',name:'WIF'}];   // b99: +волатильные МЕМЫ (реальная разница сложности: WIF волна ×2.2 vs BTC ×1.03; топовые были слишком похожи). Спектр НИЗКАЯ→ВЫСОКАЯ
