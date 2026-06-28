@@ -52,7 +52,7 @@ function lerp(a,b,t){return a+(b-a)*t;} function clamp(v,a,b){return v<a?a:v>b?b
 // false → full game everywhere. Single switch. Systems are GATED, never deleted.
 const CORE_TEST_MODE = false;   // b70: META LIVE — building the progression spine (upgrades/bikes with teeth, career, economy) on the confirmed rigid-body core
 // build stamp — bump on every change so a phone refresh can confirm it loaded fresh code (cache!)
-const BUILD = '2026-06-28 · b109';
+const BUILD = '2026-06-28 · b110';
 
 // ---------- procedural market terrain ----------
 // height map sampled every STEP px; generated forward as we ride. Market character:
@@ -913,7 +913,7 @@ function update(){
   if((boost||0)>=1 && screen==='play') tut('pump','⚡ PUMP ЗАРЯЖЕН — '+('ontouchstart'in window?'ЖМИ ⚡PUMP':'SHIFT')+' ЧТОБ ОТОРВАТЬСЯ');
   if(tutT>0) tutT-=0.0062;
   // chasing LIQUIDATION wave (the dump): ramps with distance + biome, caps its lead so it always looms; catch = death
-  waveSpd = (TUNE.waveSpeed + (Math.min((dist||0)/150, 4.8) + Math.max(0,((dist||0)-700)/620))*TUNE.waveAccel) * BIOMES[(((zone||0)%BIOMES.length)+BIOMES.length)%BIOMES.length].wave * (curEvType==='whale'?1.75:1) * lerp(0.6,1,clamp((dist||0)/TUNE.easeInDist,0,1)) * (1-0.07*upgLvl('wave')) * (gameMode==='endless'?(1+Math.max(0,leverage-safeLev())*0.02):1) * careerWaveMul * (trackSource==='ticker'?tickerVolMul*clamp(1+(leverage-2)*0.01,1,2.0):1);   // b98 волатильность монеты + b104 ПЛЕЧО → скорость дамп-волны (высокое плечо = волна быстрее = РИСК, но агентность: газуй/фиксируй; заменило безвыходную ликв-линию b103). ×2→×1, ×100→×2. Под руки. b77 МАХОВИК: волна разгоняется за плечо выше потолка (safeLev от железа) → качай ЩИТ/ДВИЖОК → выше потолок → безопасно больше плечо. b72: careerWaveMul = per-stage wave (POWER-GATE). ramps, then keeps creeping past 700m (no cap) → an eventual wall that ДВИЖОК/ЩИТ push deeper   // re-tuned for the heavier momentum bike; surges during a whale dump
+  waveSpd = (TUNE.waveSpeed + (Math.min((dist||0)/150, 4.8) + Math.max(0,((dist||0)-700)/620))*TUNE.waveAccel) * BIOMES[(((zone||0)%BIOMES.length)+BIOMES.length)%BIOMES.length].wave * (curEvType==='whale'?1.75:1) * lerp(0.6,1,clamp((dist||0)/TUNE.easeInDist,0,1)) * (1-0.07*upgLvl('wave')) * (gameMode==='endless'?(1+Math.max(0,leverage-safeLev())*0.02):1) * careerWaveMul * (trackSource==='ticker'?tickerVolMul:1);   // b109 №3: убран ДУБЛЬ плеча в волне. Плечо теперь = усилитель РЕАЛЬНОЙ цены (posFactor b106) + штраф ликвидации; волну ускоряет ТОЛЬКО через safeLev-флайвил (плечо выше потолка железа = волна быстрее → качай ЩИТ/ДВИЖОК). tickerVolMul = сложность МОНЕТЫ (волатильность). b72: careerWaveMul = per-stage wave. ramps, then creeps past 700m (no cap) → стена, которую ДВИЖОК/ЩИТ продавливают   // surges during a whale dump
   wave += waveSpd;
   const leadCap = W*lerp(0.92, 0.36, clamp((dist||0)/320,0,1));   // dump closes in over the first ~320m → then a constant chase (front sits at the left edge)
   if(bike.x - wave > leadCap) wave = bike.x - leadCap;
