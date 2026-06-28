@@ -52,7 +52,7 @@ function lerp(a,b,t){return a+(b-a)*t;} function clamp(v,a,b){return v<a?a:v>b?b
 // false → full game everywhere. Single switch. Systems are GATED, never deleted.
 const CORE_TEST_MODE = false;   // b70: META LIVE — building the progression spine (upgrades/bikes with teeth, career, economy) on the confirmed rigid-body core
 // build stamp — bump on every change so a phone refresh can confirm it loaded fresh code (cache!)
-const BUILD = '2026-06-28 · b107';
+const BUILD = '2026-06-28 · b108';
 
 // ---------- procedural market terrain ----------
 // height map sampled every STEP px; generated forward as we ride. Market character:
@@ -230,9 +230,9 @@ async function loadCandles(t){   // кэш 1ч → live fetch Binance → fallba
   }catch(e){ tickerLoadErr=true; return MARKET_DATA.btc.data; }
 }
 function startTicker(idx){ const t=TICKERS[idx]||TICKERS[0]; selTicker=t.k; tickerName=t.name; screen='tickerload'; tickerLoadT=0;
-  try{localStorage.setItem('cipher_last_tk',idx);}catch(e){} lastTk=idx;   // b107: запомнить последний заезд (hero «Продолжить» на Главной b108)
+  try{localStorage.setItem('cipher_last_tk',idx);}catch(e){} lastTk=idx; hasLast=true;   // b107: запомнить последний заезд (hero «Продолжить» на Главной b108)
   loadCandles(t).then(d=>{ tickerData=(d&&d.length?d:MARKET_DATA.btc.data); trackSource='ticker'; gameMode='endless'; reset(); }); }
-let lastTk=0; try{lastTk=+localStorage.getItem('cipher_last_tk')||0;}catch(e){}
+let lastTk=0, hasLast=false, seenHowto=false; try{lastTk=+localStorage.getItem('cipher_last_tk')||0; hasLast=localStorage.getItem('cipher_last_tk')!==null; seenHowto=localStorage.getItem('cipher_howto')==='1';}catch(e){}
 let tkPrev={}, setupSel=0;   // b107: экран ЗАЕЗД (терминал) — превью монет (цена/24ч%/волатильность/спарклайн) из РЕАЛЬНЫХ свечей, тот же кэш что трасса (не косметика)
 function volTier(v){ return v<0.0009?'НИЗК':v<0.0016?'СРЕД':v<0.0024?'ВЫС':'ЭКСТРИМ'; }   // b107: пороги под 5m-таймфрейм (b102) — на дневных были в ~30× больше → ВСЁ читалось НИЗК. Live-спектр: BTC~0.0007 · SOL~0.0013 · WIF~0.0029
 function volMulOf(v){ return clamp(v/0.0008,0.85,2.4); }   // волатильность монеты → скорость дамп-волны = сложность. Делитель под 5m (был 0.018 → зажимал ВСЕХ в пол 0.85 = механика была мертва). Под руки
@@ -546,7 +546,7 @@ function reset(){
   stars=[]; for(let i=0;i<90;i++)stars.push({x:Math.random()*W,y:Math.random()*H*0.7,z:0.2+Math.random()*0.6,s:Math.random()*1.6+0.4});
   document.getElementById('hint').innerHTML=(TOUCH?'<b>удерживай</b> = газ · <b>влево-вправо</b> = наклон · <b>свайп вверх</b> = прыжок':'<b>ПРОБЕЛ</b> газ · <b>←/→</b> наклон · <b>↑</b> прыжок')+' · отпустил — катишься';
 }
-function toTitle(){ reset(); screen='title'; if(!CORE_TEST_MODE)checkDaily(); }
+function toTitle(){ reset(); screen='title'; if(!CORE_TEST_MODE){ checkDaily(); loadAllPreviews(); if(!seenHowto) screen='howto'; } }   // b108: превью монет для hero · первый запуск → онбординг learn-by-doing
 function shareRun(){   // b93 ВИРАЛЬНОСТЬ: похвастаться забегом (тикток/чат) — navigator.share, fallback = буфер
   const url=(location.href.split('?')[0]); const r=RANKS[rankIdx(career)];
   const txt=(cashedOut?('💎 Зафиксил ◆'+(runGems||0)+' профита на плече ×'+leverage+' ('+r.e+r.n+')'):('☠ Ликвиднулся на ×'+leverage+', но дошёл '+dist+'м'))+' в CHART RUNNER 📈🏍 Побей мой результат: ';
@@ -563,18 +563,16 @@ function hit(p,r){ return r&&p.x>=r.x&&p.x<=r.x+r.w&&p.y>=r.y&&p.y<=r.y+r.h; }
 function toggleMute(){ muted=!muted; if(master)master.gain.value=muted?0:0.42; saveMeta(); }
 function pointerDown(p){
   resumeAudio();
-  if(screen==='title'){
-    if(hit(p,UI.garage)){ screen='garage'; sfxClick(); return; }
-    if(hit(p,UI.left)){ selBike=(selBike+BIKES.length-1)%BIKES.length; saveMeta(); sfxClick(); return; }
-    if(hit(p,UI.right)){ selBike=(selBike+1)%BIKES.length; saveMeta(); sfxClick(); return; }
-    if(hit(p,UI.mute)){ toggleMute(); sfxClick(); return; }
+  if(screen==='title'){   // b108: минимал-Главная
     if(hit(p,UI.settings)){ settingsRet='title'; screen='settings'; sfxClick(); return; }
-    if(UI.career && hit(p,UI.career)){ trackSource='proc'; screen='career'; sfxClick(); return; }   // b60: enter career track-select
-    if(UI.lev && hit(p,UI.lev)){ leverage=LEVS[(LEVS.indexOf(leverage)+1)%LEVS.length]; saveLev(); sfxClick(); return; }   // b71: cycle LEVERAGE bet
-    const b=BIKES[selBike];
-    if(owned.indexOf(selBike)<0){ if(hit(p,UI.action)){ if(bank>=b.cost){ bank-=b.cost; owned.push(selBike); saveMeta(); sfxLev(); } else sfxClick(); } return; }
-    if(UI.coinBtn && hit(p,UI.coinBtn)){ setupSel=Math.min(lastTk,TICKERS.length-1); loadAllPreviews(); screen='setup'; sfxClick(); return; }   // b107: → экран ЗАЕЗД (терминал)
-    if(hit(p,UI.action)){ trackSource='proc'; gameMode='endless'; reset(); sfxClick(); }   // b60: ▶ ЭНДЛЕСС
+    if(UI.garage && hit(p,UI.garage)){ garageRet='title'; screen='garage'; sfxClick(); return; }
+    if(UI.bankChip && hit(p,UI.bankChip)){ garageRet='title'; screen='garage'; sfxClick(); return; }
+    if(UI.replay && hit(p,UI.replay)){ startTicker(lastTk); sfxClick(); return; }   // продолжить последний заезд
+    if(UI.coinBtn && hit(p,UI.coinBtn)){ setupSel=Math.min(lastTk,TICKERS.length-1); loadAllPreviews(); screen='setup'; sfxClick(); return; }   // → терминал ЗАЕЗД
+    if(UI.careerBtn && hit(p,UI.careerBtn)){ trackSource='proc'; screen='career'; sfxClick(); return; }
+    if(UI.trainBtn && hit(p,UI.trainBtn)){ trackSource='proc'; gameMode='endless'; reset(); sfxClick(); return; }   // 🎯 тренажёр = proc эндлесс
+    if(UI.help && hit(p,UI.help)){ screen='howto'; sfxClick(); return; }
+    if(UI.action && hit(p,UI.action)){ trackSource='proc'; gameMode='endless'; reset(); sfxClick(); return; }   // CORE_TEST play
     return;
   }
   if(screen==='setup'){   // b107: экран ЗАЕЗД (терминал)
@@ -582,6 +580,18 @@ function pointerDown(p){
     if(UI.suRows) for(let i=0;i<UI.suRows.length;i++){ if(hit(p,UI.suRows[i])){ setupSel=i; sfxClick(); return; } }   // тап монеты = выбрать
     if(UI.suLev && hit(p,UI.suLev)){ leverage=LEVS[(LEVS.indexOf(leverage)+1)%LEVS.length]; saveLev(); sfxClick(); return; }
     if(UI.suGo && hit(p,UI.suGo)){ startTicker(setupSel); sfxClick(); return; }
+    return;
+  }
+  if(screen==='bikes'){   // b108
+    if(hit(p,UI.bkBack)){ screen='garage'; sfxClick(); return; }
+    if(hit(p,UI.bkL)){ selBike=(selBike+BIKES.length-1)%BIKES.length; saveMeta(); sfxClick(); return; }
+    if(hit(p,UI.bkR)){ selBike=(selBike+1)%BIKES.length; saveMeta(); sfxClick(); return; }
+    if(UI.bkAction && hit(p,UI.bkAction)){ const b=BIKES[selBike]; if(owned.indexOf(selBike)<0 && bank>=b.cost){ bank-=b.cost; owned.push(selBike); saveMeta(); sfxLev(); } else sfxClick(); return; }
+    return;
+  }
+  if(screen==='howto'){   // b108
+    if(UI.howGo && hit(p,UI.howGo)){ seenHowto=true; try{localStorage.setItem('cipher_howto','1');}catch(e){} loadAllPreviews(); setupSel=Math.min(lastTk,TICKERS.length-1); screen='setup'; sfxClick(); return; }
+    if(UI.howSkip && hit(p,UI.howSkip)){ seenHowto=true; try{localStorage.setItem('cipher_howto','1');}catch(e){} screen='title'; sfxClick(); return; }
     return;
   }
   if(screen==='career'){
@@ -599,6 +609,7 @@ function pointerDown(p){
   }
   if(screen==='garage'){
     if(hit(p,UI.gback)){ screen=garageRet||'career'; sfxClick(); return; }
+    if(UI.gbikes && hit(p,UI.gbikes)){ screen='bikes'; sfxClick(); return; }
     if(UI.upgRows) for(let i=0;i<UI.upgRows.length;i++){ if(hit(p,UI.upgRows[i])){ const u=UPGRADES[i], lvl=upgOwned(u.id), cost=upgCost(u.id,lvl); if(lvl<u.max && bank>=cost){ bank-=cost; upg[u.id]=lvl+1; saveProg(); saveMeta(); sfxLev(); blip(1300,0.07,'triangle',0.12); buyFlash=1; buyRow=i; } else sfxClick(); return; } }
     return;
   }
@@ -991,7 +1002,7 @@ function draw(){
     ctx.fillStyle='#bfe0ff'; ctx.font='800 22px ui-monospace,monospace'; ctx.fillText('📡 ЗАГРУЗКА ГРАФИКА',W/2,H*0.42);
     ctx.fillStyle='#9ff0c8'; ctx.font='800 32px ui-monospace,monospace'; ctx.fillText(tickerName,W/2,H*0.42+46);
     ctx.fillStyle='#7a8bb0'; ctx.font='600 12px ui-monospace,monospace'; ctx.fillText('реальные данные с биржи'+('.'.repeat(Math.floor(tickerLoadT/12)%4)),W/2,H*0.42+78); ctx.textAlign='left'; return; }
-  if(screen==='garage'||screen==='settings'||screen==='career'||screen==='setup'){ ctx.fillStyle='#0a0a1a'; ctx.fillRect(0,0,W,H); hudEl.style.opacity='0'; spdEl.style.opacity='0'; hintEl.style.opacity='0'; drawMenus(); return; }   // menu-only: skip the whole world render (was redrawing the full game every frame → stutter)
+  if(screen==='garage'||screen==='settings'||screen==='career'||screen==='setup'||screen==='bikes'||screen==='howto'){ ctx.fillStyle='#0a0a1a'; ctx.fillRect(0,0,W,H); hudEl.style.opacity='0'; spdEl.style.opacity='0'; hintEl.style.opacity='0'; drawMenus(); return; }   // menu-only: skip the whole world render (was redrawing the full game every frame → stutter)
   { const ZL=520, zf=(dist||0)/ZL, zi=Math.floor(zf)%BIOMES.length, zn=(zi+1)%BIOMES.length, fr=zf-Math.floor(zf), tb=clamp((fr-0.86)/0.14,0,1), A=BIOMES[zi], Bz=BIOMES[zn];   // b58: 700→520м (match the banner zone length)
     BSKY=[mix(A.sky[0],Bz.sky[0],tb),mix(A.sky[1],Bz.sky[1],tb),mix(A.sky[2],Bz.sky[2],tb),mix(A.sky[3],Bz.sky[3],tb)];
     BLINE=lerp3(A.line,Bz.line,tb).join(','); BRIDGE=lerp3(A.ridge,Bz.ridge,tb).join(','); }
@@ -1406,53 +1417,70 @@ function drawMenus(){
     UI.suGo={x:x0+lw+10,y:lb,w:w0-lw-10,h:48}; panel(UI.suGo.x,UI.suGo.y,UI.suGo.w,48,'rgba(120,255,180,0.9)','rgba(18,58,40,0.55)'); ctx.fillStyle='#9ff0c8'; ctx.font='800 16px ui-monospace,monospace'; ctx.fillText('▶ ПОГНАЛИ',UI.suGo.x+UI.suGo.w/2,lb+22); ctx.fillStyle='rgba(150,255,200,0.8)'; ctx.font='600 9px ui-monospace,monospace'; ctx.fillText(TICKERS[setupSel].name+' ×'+leverage,UI.suGo.x+UI.suGo.w/2,lb+37);
     ctx.textAlign='left'; return;
   }
+  if(screen==='bikes'){   // b108: выбор/покупка байка (перенесён с титула — гараж = снаряга)
+    ctx.textAlign='center';
+    ctx.fillStyle='#eafaff'; ctx.font='800 24px ui-monospace,monospace'; ctx.fillText('🏍 БАЙКИ',W/2,46);
+    ctx.fillStyle='#ffd678'; ctx.font='800 16px ui-monospace,monospace'; ctx.fillText('◆ '+bank,W/2,76);
+    UI.bkBack={x:14,y:18,w:78,h:34}; panel(UI.bkBack.x,UI.bkBack.y,78,34,'rgba(150,180,220,0.6)','rgba(30,40,62,0.5)'); ctx.fillStyle='#cfe0ff'; ctx.font='700 13px ui-monospace,monospace'; ctx.fillText('‹ НАЗАД',UI.bkBack.x+39,UI.bkBack.y+22);
+    const b=BIKES[selBike], own=owned.indexOf(selBike)>=0, ay=H*0.40;
+    UI.bkL={x:W/2-150,y:ay-30,w:50,h:64}; UI.bkR={x:W/2+100,y:ay-30,w:50,h:64};
+    ctx.fillStyle='rgba(190,215,245,0.85)'; ctx.font='800 34px ui-monospace,monospace'; ctx.fillText('‹',UI.bkL.x+25,ay+12); ctx.fillText('›',UI.bkR.x+25,ay+12);
+    ctx.fillStyle='#eafaff'; ctx.font='800 26px ui-monospace,monospace'; ctx.fillText(b.name,W/2,ay);
+    { const sp=clamp((b.accel-0.28)/(0.62-0.28),0,1), gr=clamp((b.grip-1.06)/(1.78-1.06),0,1);
+      const sbar=(lab,val,col,yy)=>{ const bw=120, bx=W/2-30; ctx.textAlign='right'; ctx.fillStyle='rgba(190,205,235,0.8)'; ctx.font='700 10px ui-monospace,monospace'; ctx.fillText(lab,bx-8,yy+7); ctx.fillStyle='rgba(30,40,62,0.7)'; ctx.fillRect(bx,yy,bw,7); ctx.fillStyle=col; ctx.fillRect(bx,yy,bw*val,7); ctx.textAlign='center'; };
+      sbar('СКОР',sp,'rgba(120,255,180,0.92)',ay+26); sbar('ХВАТ',gr,'rgba(120,200,255,0.92)',ay+42);
+      ctx.fillStyle='rgba(165,185,215,0.74)'; ctx.font='11px ui-monospace,monospace'; ctx.fillText(b.tag,W/2,ay+72); }
+    UI.bkAction={x:W/2-110,y:ay+96,w:220,h:50};
+    panel(UI.bkAction.x,UI.bkAction.y,220,50, own?'rgba(120,255,180,0.85)':(bank>=b.cost?'rgba(255,214,120,0.85)':'rgba(150,150,170,0.45)'), own?'rgba(36,120,84,0.3)':(bank>=b.cost?'rgba(150,110,30,0.28)':'rgba(80,80,96,0.22)'));
+    ctx.fillStyle=own?'#9ff0c8':(bank>=b.cost?'#ffd678':'#9092a6'); ctx.font='800 16px ui-monospace,monospace'; ctx.fillText(own?'✓ ВЫБРАН':('РАЗБЛОКИРОВАТЬ  ◆'+b.cost),W/2,UI.bkAction.y+31);
+    ctx.fillStyle='rgba(150,170,200,0.6)'; ctx.font='600 10px ui-monospace,monospace'; ctx.fillText('‹ › листай · байк влияет на физику и потолок плеча',W/2,ay+172);
+    ctx.textAlign='left'; return;
+  }
+  if(screen==='howto'){   // b108: онбординг degen-петли (learn-by-doing — дальше учат подсказки в забеге)
+    ctx.textAlign='center';
+    ctx.fillStyle='#eafaff'; ctx.font='800 23px ui-monospace,monospace'; ctx.fillText('КАК ИГРАТЬ',W/2,H*0.16);
+    const cx=W/2-150, cw=300; let cy=H*0.16+30;
+    const step=(n,title,sub,col)=>{ ctx.fillStyle='rgba(18,22,40,0.7)'; if(ctx.roundRect){ctx.beginPath();ctx.roundRect(cx,cy,cw,66,12);ctx.fill();ctx.strokeStyle='rgba(120,140,180,0.3)';ctx.lineWidth=1;ctx.stroke();}
+      ctx.textAlign='left'; ctx.fillStyle=col; ctx.font='800 26px ui-monospace,monospace'; ctx.fillText(n,cx+16,cy+42);
+      ctx.fillStyle='#eafaff'; ctx.font='800 14px ui-monospace,monospace'; ctx.fillText(title,cx+52,cy+27);
+      ctx.fillStyle='rgba(160,180,210,0.8)'; ctx.font='600 10px ui-monospace,monospace'; ctx.fillText(sub,cx+52,cy+46); ctx.textAlign='center'; cy+=78; };
+    step('1','ОСЕДЛАЙ РЕАЛЬНЫЙ ГРАФИК','едешь по живому графику крипто-монеты','#9ff0c8');
+    step('2','ПЛЕЧО МНОЖИТ ДВИЖЕНИЕ','цена вверх × плечо = позиция растёт','#ffd678');
+    step('3','ЗАФИКСЬ ДО ВОЛНЫ','фиксь на пампе, пока волна не догнала','#ff9a7a');
+    ctx.fillStyle='rgba(150,170,200,0.7)'; ctx.font='600 10px ui-monospace,monospace'; ctx.fillText('теряешь — только от волны/краша, не от цены',W/2,cy+4);
+    UI.howGo={x:W/2-130,y:cy+18,w:260,h:50}; panel(UI.howGo.x,UI.howGo.y,260,50,'rgba(120,255,180,0.9)','rgba(18,58,40,0.55)'); ctx.fillStyle='#9ff0c8'; ctx.font='800 16px ui-monospace,monospace'; ctx.fillText('▶  ВЫБРАТЬ МОНЕТУ',W/2,UI.howGo.y+31);
+    UI.howSkip={x:W/2-70,y:cy+78,w:140,h:28}; ctx.fillStyle='rgba(160,175,205,0.6)'; ctx.font='600 11px ui-monospace,monospace'; ctx.fillText('позже',W/2,cy+96);
+    ctx.textAlign='left'; return;
+  }
   if(screen==='title'){
     const og=ctx.createLinearGradient(0,0,0,H); og.addColorStop(0,'rgba(6,5,16,0.62)'); og.addColorStop(0.38,'rgba(6,5,16,0.04)'); og.addColorStop(0.72,'rgba(6,5,16,0.12)'); og.addColorStop(1,'rgba(6,5,16,0.9)'); ctx.fillStyle=og; ctx.fillRect(0,0,W,H);
-    ctx.fillStyle='#eafaff'; ctx.font='800 33px ui-monospace,monospace'; ctx.shadowColor='rgba(80,220,255,0.55)'; ctx.shadowBlur=16; ctx.fillText('CHART RUNNER',W/2,H*0.155); ctx.shadowBlur=0;
-    ctx.fillStyle='#9fb0d0'; ctx.font='11px ui-monospace,monospace'; ctx.fillText('оседлай график · ставь ПЛЕЧО · зафиксь профит до ликвидации',W/2,H*0.155+22);
-    ctx.fillStyle='#ffd678'; ctx.font='700 15px ui-monospace,monospace'; ctx.fillText(CORE_TEST_MODE?('⛏ РЕКОРД  '+(best||0)+' m'):('BEST  ◆'+bestPnl.toLocaleString('en-US')+'   ·   ⛏ '+(best||0)+'м'),W/2,H*0.155+50);   // b87: BEST = лучшая зафиксированная выплата (◆), не $-очки
-    if(!CORE_TEST_MODE) ctx.fillStyle='#9ff0c8'; if(!CORE_TEST_MODE) ctx.font='13px ui-monospace,monospace'; if(!CORE_TEST_MODE) ctx.fillText('банк  ◆ '+bank,W/2,H*0.155+70);
-    if(!CORE_TEST_MODE){ const ri=rankIdx(career), rk=RANKS[ri], nr=RANKS[ri+1], yy=H*0.155+90;
-      ctx.fillStyle='#bfe0ff'; ctx.font='700 13px ui-monospace,monospace'; ctx.fillText(rk.e+'  '+rk.n,W/2,yy);
-      if(nr){ const prog=clamp((career-rk.at)/(nr.at-rk.at),0,1), bw=214, bx=W/2-bw/2, by=yy+11;
-        ctx.fillStyle='rgba(30,40,62,0.75)'; if(ctx.roundRect){ctx.beginPath();ctx.roundRect(bx,by,bw,7,3.5);ctx.fill();}else ctx.fillRect(bx,by,bw,7);
-        ctx.fillStyle='rgba(120,220,255,0.92)'; if(ctx.roundRect){ctx.beginPath();ctx.roundRect(bx,by,Math.max(3,bw*prog),7,3.5);ctx.fill();}else ctx.fillRect(bx,by,bw*prog,7);
-        ctx.fillStyle='rgba(180,200,230,0.72)'; ctx.font='10px ui-monospace,monospace'; ctx.fillText('до '+nr.e+' '+nr.n+': $'+Math.max(0,nr.at-career).toLocaleString('en-US')+'  ▸ +◆'+nr.rew,W/2,by+20); } }
-    if(!CORE_TEST_MODE){ UI.lev={x:W/2-104,y:H*0.155+124,w:208,h:42}; const _sl=safeLev(), _over=leverage>_sl;   // b86: привязал чип ПЛЕЧО к низу ранг-блока (было H*0.37 — налазил на превью байка); гарантир. отступ на любой высоте экрана
-      ctx.fillStyle=_over?'rgba(58,20,16,0.85)':'rgba(40,30,16,0.82)'; if(ctx.roundRect){ctx.beginPath();ctx.roundRect(UI.lev.x,UI.lev.y,208,42,11);ctx.fill();ctx.strokeStyle=_over?'rgba(255,110,90,0.9)':'rgba(255,200,120,0.85)';ctx.lineWidth=1.8;ctx.stroke();}else ctx.fillRect(UI.lev.x,UI.lev.y,208,42);
-      ctx.textAlign='center'; ctx.fillStyle=_over?'#ff9a7a':'#ffd678'; ctx.font='800 18px ui-monospace,monospace'; ctx.fillText('⚡ ПЛЕЧО  ×'+leverage, W/2, UI.lev.y+18);
-      ctx.fillStyle=_over?'rgba(255,150,120,0.95)':'rgba(205,185,140,0.82)'; ctx.font='600 9px ui-monospace,monospace'; ctx.fillText(_over?('⚠ выше потолка ×'+_sl+' — волна догонит'):('безопасно до ×'+_sl+' · качай ЩИТ/ДВИЖОК'), W/2, UI.lev.y+33); }
-    else UI.lev=null;
-    if(CORE_TEST_MODE){ UI.garage=null; }
-    else { UI.garage={x:W-112,y:18,w:94,h:38}; ctx.fillStyle='rgba(34,54,46,0.72)'; if(ctx.roundRect){ctx.beginPath();ctx.roundRect(UI.garage.x,UI.garage.y,94,38,10);ctx.fill();ctx.strokeStyle='rgba(120,255,180,0.65)';ctx.lineWidth=1.5;ctx.stroke();}else ctx.fillRect(UI.garage.x,UI.garage.y,94,38);
-      ctx.fillStyle='#9ff0c8'; ctx.font='800 13px ui-monospace,monospace'; ctx.fillText('🔧 ГАРАЖ',UI.garage.x+47,UI.garage.y+24); }
-    UI.settings={x:16,y:16,w:46,h:38}; ctx.fillStyle='rgba(30,40,62,0.6)'; if(ctx.roundRect){ctx.beginPath();ctx.roundRect(UI.settings.x,UI.settings.y,46,38,10);ctx.fill();ctx.strokeStyle='rgba(150,180,220,0.5)';ctx.lineWidth=1.4;ctx.stroke();}else ctx.fillRect(UI.settings.x,UI.settings.y,46,38); ctx.fillStyle='#cfe0ff'; ctx.font='20px ui-monospace,monospace'; ctx.fillText('⚙',UI.settings.x+23,UI.settings.y+26);
-    const b=BIKES[selBike], own=owned.indexOf(selBike)>=0, ay=H*0.45;
-    UI.left={x:W/2-148,y:ay-26,w:46,h:52}; UI.right={x:W/2+102,y:ay-26,w:46,h:52};
-    ctx.fillStyle='rgba(190,215,245,0.85)'; ctx.font='800 30px ui-monospace,monospace'; ctx.fillText('‹',UI.left.x+23,ay+10); ctx.fillText('›',UI.right.x+23,ay+10);
-    ctx.fillStyle='#eafaff'; ctx.font='800 21px ui-monospace,monospace'; ctx.fillText(b.name,W/2,H*0.605);
-    { const sp=clamp((b.accel-0.28)/(0.62-0.28),0,1), gr=clamp((b.grip-1.06)/(1.78-1.06),0,1);
-      const sbar=(lab,val,col,yy)=>{ const bw=104, bx=W/2-22; ctx.textAlign='right'; ctx.fillStyle='rgba(190,205,235,0.8)'; ctx.font='700 9px ui-monospace,monospace'; ctx.fillText(lab,bx-8,yy+6);
-        ctx.fillStyle='rgba(30,40,62,0.7)'; ctx.fillRect(bx,yy,bw,6); ctx.fillStyle=col; ctx.fillRect(bx,yy,bw*val,6); ctx.textAlign='center'; };
-      sbar('СКОР',sp,'rgba(120,255,180,0.92)',H*0.605+12); sbar('ХВАТ',gr,'rgba(120,200,255,0.92)',H*0.605+25);
-      ctx.fillStyle='rgba(165,185,215,0.74)'; ctx.font='10px ui-monospace,monospace'; ctx.fillText(b.tag,W/2,H*0.605+46); }
-    UI.action={x:W/2-105,y:H*0.605+50,w:210,h:44};
-    panel(UI.action.x,UI.action.y,210,44, own?'rgba(120,255,180,0.85)':(bank>=b.cost?'rgba(255,214,120,0.85)':'rgba(150,150,170,0.45)'), own?'rgba(36,120,84,0.3)':(bank>=b.cost?'rgba(150,110,30,0.28)':'rgba(80,80,96,0.22)'));
-    ctx.fillStyle=own?'#9ff0c8':(bank>=b.cost?'#ffd678':'#9092a6'); ctx.font='700 15px ui-monospace,monospace';
-    ctx.fillText(own?'▶  ЭНДЛЕСС':('РАЗБЛОКИРОВАТЬ  ◆'+b.cost),W/2,UI.action.y+28);
-    if(own){ UI.career={x:W/2-105,y:UI.action.y+52,w:210,h:44};   // b60: CAREER entry
-      panel(UI.career.x,UI.career.y,210,44,'rgba(255,200,120,0.9)','rgba(150,110,30,0.26)');
-      ctx.fillStyle='#ffd678'; ctx.font='700 15px ui-monospace,monospace'; ctx.fillText('🏁  КАРЬЕРА  ·  '+Math.min(careerMax+1,CAREER_TRACKS.length)+'/'+CAREER_TRACKS.length,W/2,UI.career.y+28); } else UI.career=null;
-    if(!CORE_TEST_MODE && UI.career){ UI.coinBtn={x:W/2-105,y:UI.career.y+52,w:210,h:44};   // b107: вход в терминал ЗАЕЗД (было 6 чипов на титуле — каша)
-      panel(UI.coinBtn.x,UI.coinBtn.y,210,44,'rgba(120,200,255,0.9)','rgba(28,66,116,0.4)'); ctx.fillStyle='#cfeaff'; ctx.font='800 15px ui-monospace,monospace'; ctx.fillText('🪙  ВЫБРАТЬ МОНЕТУ',W/2,UI.coinBtn.y+27);
-    } else UI.coinBtn=null;
-    if(CORE_TEST_MODE){ /* CAREER replaces the old CORE TEST note */ }
+    // b108: МИНИМАЛИСТИЧНАЯ ГЛАВНАЯ — одна задача (играть); мета/плечо/выбор-байка ушли с экрана (плечо→ЗАЕЗД, байк→ГАРАЖ, миссии→в забег)
+    ctx.textAlign='center';
+    UI.settings={x:16,y:16,w:46,h:38}; ctx.fillStyle='rgba(30,40,62,0.6)'; if(ctx.roundRect){ctx.beginPath();ctx.roundRect(16,16,46,38,10);ctx.fill();ctx.strokeStyle='rgba(150,180,220,0.5)';ctx.lineWidth=1.4;ctx.stroke();} ctx.fillStyle='#cfe0ff'; ctx.font='20px ui-monospace,monospace'; ctx.fillText('⚙',39,42);
+    if(CORE_TEST_MODE){ UI.garage=null; UI.bankChip=null; }
+    else { UI.garage={x:W-112,y:16,w:96,h:38}; ctx.fillStyle='rgba(34,54,46,0.72)'; if(ctx.roundRect){ctx.beginPath();ctx.roundRect(W-112,16,96,38,10);ctx.fill();ctx.strokeStyle='rgba(120,255,180,0.65)';ctx.lineWidth=1.5;ctx.stroke();} ctx.fillStyle='#9ff0c8'; ctx.font='800 13px ui-monospace,monospace'; ctx.fillText('🔧 ГАРАЖ',W-64,40);
+      const ri=rankIdx(career), rk=RANKS[ri]; UI.bankChip={x:W/2-100,y:18,w:150,h:34}; ctx.fillStyle='rgba(24,28,46,0.7)'; if(ctx.roundRect){ctx.beginPath();ctx.roundRect(W/2-100,18,150,34,10);ctx.fill();ctx.strokeStyle='rgba(120,140,180,0.35)';ctx.lineWidth=1;ctx.stroke();} ctx.fillStyle='#ffd678'; ctx.font='800 13px ui-monospace,monospace'; ctx.fillText('◆ '+bank+'   '+rk.e,W/2-25,40); }
+    ctx.fillStyle='#eafaff'; ctx.font='800 31px ui-monospace,monospace'; ctx.shadowColor='rgba(80,220,255,0.55)'; ctx.shadowBlur=16; ctx.fillText('CHART RUNNER',W/2,H*0.20); ctx.shadowBlur=0;
+    ctx.fillStyle='#9fb0d0'; ctx.font='11px ui-monospace,monospace'; ctx.fillText('оседлай реальный крипто-график',W/2,H*0.20+22);
+    if(CORE_TEST_MODE){ UI.action={x:W/2-105,y:H*0.5,w:210,h:48}; panel(UI.action.x,UI.action.y,210,48,'rgba(120,255,180,0.85)'); ctx.fillStyle='#9ff0c8'; ctx.font='800 16px ui-monospace,monospace'; ctx.fillText('▶ ИГРАТЬ',W/2,UI.action.y+30); UI.replay=UI.coinBtn=UI.careerBtn=UI.trainBtn=UI.help=UI.lev=UI.left=UI.right=UI.career=null; }
     else {
-    ctx.fillStyle='#7a8bb0'; ctx.font='600 10px ui-monospace,monospace'; ctx.fillText('— ЦЕЛИ ЗАБЕГА —',W/2,UI.action.y+(UI.career?166:78));   // b96: ниже кнопок КАРЬЕРА+ТИКЕР (не налазит)
-    ctx.fillStyle='#c6d4ee'; ctx.font='12px ui-monospace,monospace';
-    for(let i=0;i<missions.length;i++) ctx.fillText('◆'+missions[i].rew+'   '+missions[i].txt,W/2,UI.action.y+(UI.career?184:98)+i*18); }
-    if(dailyBonusT>0){ dailyBonusT-=0.006; const a=clamp(Math.min(dailyBonusT*4,1),0,1); ctx.globalAlpha=a; ctx.fillStyle='#ffd678'; ctx.font='800 16px ui-monospace,monospace'; ctx.shadowColor='#ffd678'; ctx.shadowBlur=14; ctx.fillText('🎁 ЕЖЕДНЕВНЫЙ БОНУС  +◆'+dailyBonus,W/2,H*0.36); ctx.shadowBlur=0; ctx.globalAlpha=1; }
-    ctx.fillStyle='rgba(125,140,180,0.55)'; ctx.font='10px ui-monospace,monospace'; ctx.fillText('build '+BUILD,W/2,H-12);   // confirm a fresh load on the phone (cache check)
+    let hy=H*0.30; const lc=TICKERS[lastTk]||TICKERS[0], pv=tkPrev[lc.k];
+    if(hasLast){ UI.replay={x:W/2-140,y:hy,w:280,h:96}; ctx.fillStyle='rgba(16,35,26,0.9)'; if(ctx.roundRect){ctx.beginPath();ctx.roundRect(UI.replay.x,hy,280,96,16);ctx.fill();ctx.strokeStyle='rgba(63,207,142,0.9)';ctx.lineWidth=2;ctx.stroke();}
+      ctx.textAlign='left'; ctx.fillStyle='rgba(150,180,200,0.8)'; ctx.font='600 9px ui-monospace,monospace'; ctx.fillText('ПРОДОЛЖИТЬ ПОСЛЕДНИЙ',UI.replay.x+18,hy+20);
+      ctx.fillStyle='#eafaff'; ctx.font='800 19px ui-monospace,monospace'; ctx.fillText(lc.name+'  ×'+leverage,UI.replay.x+18,hy+44);
+      if(pv){ const tc=pv.volLabel==='НИЗК'?'#9ff0c8':pv.volLabel==='СРЕД'?'#ffd678':pv.volLabel==='ВЫС'?'#ffb070':'#ff7a6a'; ctx.fillStyle=tc; ctx.font='700 9px ui-monospace,monospace'; ctx.fillText('волат '+pv.volLabel,UI.replay.x+18,hy+60); drawSpark(pv.spark,UI.replay.x+150,hy+26,110,30,pv.up?'#7fe6a8':'#ff7a6a'); }
+      ctx.fillStyle='rgba(18,58,40,0.85)'; if(ctx.roundRect){ctx.beginPath();ctx.roundRect(UI.replay.x+18,hy+70,244,18,7);ctx.fill();} ctx.textAlign='center'; ctx.fillStyle='#9ff0c8'; ctx.font='800 12px ui-monospace,monospace'; ctx.fillText('▶  ПОГНАЛИ',W/2,hy+83);
+      hy+=110; } else UI.replay=null;
+    const big=!hasLast; UI.coinBtn={x:W/2-140,y:hy,w:280,h:big?56:46};
+    panel(UI.coinBtn.x,UI.coinBtn.y,280,UI.coinBtn.h,'rgba(120,200,255,0.9)','rgba(28,66,116,0.4)'); ctx.textAlign='center'; ctx.fillStyle='#cfeaff'; ctx.font=(big?'800 18px':'800 15px')+' ui-monospace,monospace'; ctx.fillText(big?'🪙  ВЫБРАТЬ МОНЕТУ':'🪙  ДРУГАЯ МОНЕТА',W/2,UI.coinBtn.y+UI.coinBtn.h/2+6);
+    hy+=UI.coinBtn.h+12;
+    UI.careerBtn={x:W/2-140,y:hy,w:135,h:42}; panel(UI.careerBtn.x,hy,135,42,'rgba(255,200,120,0.75)','rgba(150,110,30,0.22)'); ctx.fillStyle='#ffd678'; ctx.font='700 13px ui-monospace,monospace'; ctx.fillText('🏁 КАРЬЕРА',UI.careerBtn.x+67,hy+26);
+    UI.trainBtn={x:W/2+5,y:hy,w:135,h:42}; panel(UI.trainBtn.x,hy,135,42,'rgba(150,170,210,0.5)','rgba(30,40,62,0.4)'); ctx.fillStyle='#bcd0ee'; ctx.font='700 13px ui-monospace,monospace'; ctx.fillText('🎯 ТРЕНАЖЁР',UI.trainBtn.x+67,hy+26);
+    hy+=56;
+    UI.help={x:W/2-70,y:hy,w:140,h:30}; ctx.fillStyle='rgba(180,200,230,0.7)'; ctx.font='600 12px ui-monospace,monospace'; ctx.fillText('❓ как играть',W/2,hy+20);
+    UI.lev=UI.left=UI.right=UI.career=UI.action=null;
+    if(dailyBonusT>0){ dailyBonusT-=0.006; const a=clamp(Math.min(dailyBonusT*4,1),0,1); ctx.globalAlpha=a; ctx.fillStyle='#ffd678'; ctx.font='800 16px ui-monospace,monospace'; ctx.shadowColor='#ffd678'; ctx.shadowBlur=14; ctx.fillText('🎁 ЕЖЕДНЕВНЫЙ БОНУС  +◆'+dailyBonus,W/2,H*0.92); ctx.shadowBlur=0; ctx.globalAlpha=1; } }
+    ctx.fillStyle='rgba(125,140,180,0.55)'; ctx.font='10px ui-monospace,monospace'; ctx.fillText('build '+BUILD,W/2,H-12);
     UI.mute=null; UI.pause=null;
   } else if(screen==='paused'){
     ctx.fillStyle='rgba(6,5,16,0.62)'; ctx.fillRect(0,0,W,H);
@@ -1474,6 +1502,7 @@ function drawMenus(){
   } else if(screen==='garage'){
     ctx.fillStyle='rgba(6,5,16,0.94)'; ctx.fillRect(0,0,W,H);
     ctx.fillStyle='#eafaff'; ctx.font='800 24px ui-monospace,monospace'; ctx.fillText('🔧 ГАРАЖ',W/2,46);
+    UI.gbikes={x:W-110,y:18,w:94,h:34}; panel(UI.gbikes.x,UI.gbikes.y,94,34,'rgba(120,200,255,0.7)','rgba(28,66,116,0.4)'); ctx.fillStyle='#bfe0ff'; ctx.font='800 13px ui-monospace,monospace'; ctx.fillText('🏍 БАЙКИ',UI.gbikes.x+47,UI.gbikes.y+22);   // b108: выбор байка переехал сюда
     ctx.fillStyle='#ffd678'; ctx.font='800 20px ui-monospace,monospace'; ctx.fillText('◆ '+bank,W/2,76);
     { const rk=rankFor(career), nr=nextRank(career); ctx.fillStyle='#9fe0c8'; ctx.font='700 12px ui-monospace,monospace'; ctx.fillText(rk.e+' '+rk.n+(nr?'   до '+nr.e+': $'+Math.max(0,nr.at-career).toLocaleString('en-US'):'   — ВЕРШИНА'),W/2,98); }
     if(buyFlash>0)buyFlash-=0.05;
