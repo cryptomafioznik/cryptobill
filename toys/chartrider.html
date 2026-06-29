@@ -52,7 +52,7 @@ function lerp(a,b,t){return a+(b-a)*t;} function clamp(v,a,b){return v<a?a:v>b?b
 // false → full game everywhere. Single switch. Systems are GATED, never deleted.
 const CORE_TEST_MODE = false;   // b70: META LIVE — building the progression spine (upgrades/bikes with teeth, career, economy) on the confirmed rigid-body core
 // build stamp — bump on every change so a phone refresh can confirm it loaded fresh code (cache!)
-const BUILD = '2026-06-29 · b112';
+const BUILD = '2026-06-29 · b113';
 
 // ---------- procedural market terrain ----------
 // height map sampled every STEP px; generated forward as we ride. Market character:
@@ -414,11 +414,12 @@ function upgOwned(id){ return upg[id]||0; }   // BOUGHT level — shop display +
 function upgLvl(id){ return (!CORE_TEST_MODE || gameMode==='career') ? (upg[id]||0) : 0; }   // EFFECTIVE level in physics: CAREER applies your upgrades (the progression gate); the ENDLESS core stays STOCK (the pure feel-reference). Full game (CORE_TEST off) applies everywhere.
 function safeLev(){ return Math.round(4 + 4*upgLvl('wave') + 1.5*upgLvl('eng') + selBike*2); }   // b77 МАХОВИК: безопасный ПОТОЛОК ПЛЕЧА — растят ЩИТ(wave)+ДВИГАТЕЛЬ(eng)+тир байка. Плечо ВЫШЕ потолка разгоняет волну (over-leveraged) → железо даёт безопасно держать БÓЛЬШЕЕ плечо = больше профит = маховик. Сток ~4, макс ~30+
 function priceMul(){ if(!bike)return 1; const sp=prMax-prMin; if(sp<50)return 1; const f=clamp(((baseY-bike.y)-prMin)/sp,0,1); return 0.6+0.9*f; }   // b89 SELL-THE-TOP: выплата × позиция в недавнем коридоре ЦЕНЫ — вершина пампа ×1.5, дно дампа ×0.6, узкий боковик ×1. Курс калибруется руками (0.6/0.9)
-const TK_STAKE=10;   // b106 тикер: базовый размер позиции (≈ маржа × условное плечо); курс множит сверху. Центр (цена=вход) держит выплату ~уровня среднего плеча для экономики. Калибровка — руки
+const STAKE_BASE=8, STAKE_PER=0.008, STAKE_CAP=30;   // b113 ЭТАП2: маржа (размер позиции) РАСТЁТ от $-стека → больше $ = крупнее ставка = быстрее компаунд. Капано STAKE_CAP → излишек $ логично ЗАКРЕПЛЯТЬ в ◆ (вот причина не выводить всё). b106 был флэт 10. Калибровка — руки
+function tkStake(){ return clamp(STAKE_BASE+(bank||0)*STAKE_PER, STAKE_BASE, STAKE_CAP); }
 function tickerChg(){ if(trackSource!=='ticker'||!bike||!entryPrice)return 0; const cur=tkMid-(terrainAt(bike.x).y-baseY)/tkK; return cur/entryPrice-1; }   // b106 реальное изменение цены монеты от входа (для HUD/пика)
 function posFactor(){   // b106 множитель к размеру позиции (coins×COIN_GEM) при выплате/показе
-  if(trackSource==='ticker'){ if(!bike||!entryPrice)return TK_STAKE;
-    return TK_STAKE*Math.max(0,1+leverage*tickerChg()); }   // РЕАЛЬНЫЙ курс × плечо; пол 0 — цена НЕ ликвидирует капитал (только волна/краш, b104). Плечо живёт ТОЛЬКО здесь (без дубля)
+  if(trackSource==='ticker'){ if(!bike||!entryPrice)return tkStake();
+    return tkStake()*Math.max(0,1+leverage*tickerChg()); }   // b113 размер = маржа от $-стека × реальный курс × плечо   // РЕАЛЬНЫЙ курс × плечо; пол 0 — цена НЕ ликвидирует капитал (только волна/краш, b104). Плечо живёт ТОЛЬКО здесь (без дубля)
   return leverage*priceMul(); }   // proc endless/карьера: плоское плечо × sell-the-top (флайвил без изменений)
 function rankFor(c){ let r=RANKS[0]; for(const x of RANKS)if(c>=x.at)r=x; return r; }
 function nextRank(c){ for(const x of RANKS)if(c<x.at)return x; return null; }
@@ -984,7 +985,7 @@ function diamondHand(){   // b112: ВЫВЕСТИ В ХОЛОД — $ (банк,
   const oi=rankIdx(career); career+=amt; bank=0; const ni=rankIdx(career);
   if(ni>oi){ let bonus=0; for(let r=oi+1;r<=ni;r++)bonus+=RANKS[r].rew; bank+=bonus; rankedUp={rank:RANKS[ni],bonus:bonus}; sfxRankUp(); buzz([25,50,25,70]); }
   else { sfxLev(); buzz([20,40,20]); }
-  saveProg(); saveMeta(); gflash=0.85; flash=0.3; popText('💎 В ХОЛОД  ◆+'+amt); }
+  saveProg(); saveMeta(); gflash=0.85; flash=0.3; popText('💎 ЗАКРЕПЛЕНО ◆+'+amt+' (навсегда)'); }
 
 // ---------- render (Alto-style dusk, layered) ----------
 function skyGrad(){
@@ -1488,7 +1489,7 @@ function drawMenus(){
     UI.careerBtn={x:W/2-140,y:hy,w:135,h:42}; panel(UI.careerBtn.x,hy,135,42,'rgba(255,200,120,0.75)','rgba(150,110,30,0.22)'); ctx.fillStyle='#ffd678'; ctx.font='700 13px ui-monospace,monospace'; ctx.fillText('🏁 КАРЬЕРА',UI.careerBtn.x+67,hy+26);
     UI.trainBtn={x:W/2+5,y:hy,w:135,h:42}; panel(UI.trainBtn.x,hy,135,42,'rgba(150,170,210,0.5)','rgba(30,40,62,0.4)'); ctx.fillStyle='#bcd0ee'; ctx.font='700 13px ui-monospace,monospace'; ctx.fillText('🎯 ТРЕНАЖЁР',UI.trainBtn.x+67,hy+26);
     hy+=56;
-    if(bank>0){ UI.ddiamond={x:W/2-140,y:hy,w:280,h:36}; ctx.fillStyle='rgba(16,32,42,0.85)'; if(ctx.roundRect){ctx.beginPath();ctx.roundRect(W/2-140,hy,280,36,10);ctx.fill();ctx.strokeStyle='rgba(120,200,255,0.7)';ctx.lineWidth=1.4;ctx.stroke();} ctx.fillStyle='#bfe0ff'; ctx.font='800 12px ui-monospace,monospace'; ctx.fillText('💎 ВЫВЕСТИ $'+bank+' В ХОЛОД ◆ (ранг)',W/2,hy+23); hy+=46; } else UI.ddiamond=null;   // b112: $→◆ diamond hands
+    if(bank>0){ UI.ddiamond={x:W/2-140,y:hy,w:280,h:46}; ctx.fillStyle='rgba(16,32,42,0.85)'; if(ctx.roundRect){ctx.beginPath();ctx.roundRect(W/2-140,hy,280,46,11);ctx.fill();ctx.strokeStyle='rgba(120,200,255,0.7)';ctx.lineWidth=1.4;ctx.stroke();} ctx.fillStyle='#bfe0ff'; ctx.font='800 14px ui-monospace,monospace'; ctx.fillText('💎 ЗАКРЕПИТЬ $'+bank+' → ◆',W/2,hy+20); ctx.fillStyle='rgba(150,180,210,0.82)'; ctx.font='600 9px ui-monospace,monospace'; ctx.fillText('навсегда · растит РАНГ · ликвидация не тронет',W/2,hy+37); hy+=56; } else UI.ddiamond=null;   // b113: яснее — глагол ЗАКРЕПИТЬ + размен
     UI.help={x:W/2-70,y:hy,w:140,h:30}; ctx.fillStyle='rgba(180,200,230,0.7)'; ctx.font='600 12px ui-monospace,monospace'; ctx.fillText('❓ как играть',W/2,hy+20);
     UI.lev=UI.left=UI.right=UI.career=UI.action=null;
     if(dailyBonusT>0){ dailyBonusT-=0.006; const a=clamp(Math.min(dailyBonusT*4,1),0,1); ctx.globalAlpha=a; ctx.fillStyle='#ffd678'; ctx.font='800 16px ui-monospace,monospace'; ctx.shadowColor='#ffd678'; ctx.shadowBlur=14; ctx.fillText('🎁 ЕЖЕДНЕВНЫЙ БОНУС  +$'+dailyBonus,W/2,H*0.92); ctx.shadowBlur=0; ctx.globalAlpha=1; } }
