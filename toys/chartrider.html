@@ -52,7 +52,7 @@ function lerp(a,b,t){return a+(b-a)*t;} function clamp(v,a,b){return v<a?a:v>b?b
 // false → full game everywhere. Single switch. Systems are GATED, never deleted.
 const CORE_TEST_MODE = false;   // b70: META LIVE — building the progression spine (upgrades/bikes with teeth, career, economy) on the confirmed rigid-body core
 // build stamp — bump on every change so a phone refresh can confirm it loaded fresh code (cache!)
-const BUILD = '2026-06-29 · b114';
+const BUILD = '2026-06-29 · b115';
 
 // ---------- procedural market terrain ----------
 // height map sampled every STEP px; generated forward as we ride. Market character:
@@ -438,6 +438,7 @@ const BIKES=[
   {name:'DEGEN',  body:['#48243f','#2a1230','#120612'], rim:'255,130,180', accent:'255,90,150',  rider:'150,235,255', cost:120, accel:0.60, grip:1.12, tag:'быстрый, нервный'},
   {name:'WHALE',  body:['#3a3826','#26210e','#100c04'], rim:'255,228,150', accent:'255,205,90',  rider:'150,235,255', cost:300, accel:0.30, grip:1.74, tag:'медленный, прощающий'},
   {name:'SATOSHI',body:['#1f3a30','#0e261c','#04120c'], rim:'130,255,196', accent:'80,255,170',  rider:'255,200,140', cost:600, accel:0.49, grip:1.52, tag:'универсал'},
+  {name:'DIAMOND',body:['#1c3a4a','#0e2230','#04121c'], rim:'150,240,255', accent:'200,255,255', rider:'255,225,160', cost:1200, accel:0.56, grip:1.66, tag:'премиум · ровный зверь', reqRank:3},   // b115 ЭТАП3b: ◆-АНЛОК — открывается РАНГОМ (ДЕЛЬФИН, idx3), потом покупка за $. Прокачал ◆-холод → ранг → доступ к премиум-гиру (◆ не тратится → ранг не падает)
 ];
 function BK(){ return BIKES[selBike]||BIKES[0]; }
 // market-era biomes — environment shifts with distance (smooth transitions)
@@ -529,6 +530,7 @@ function reset(){
   if(gameMode==='career'){ const T=CAREER_TRACKS[careerTrack]||CAREER_TRACKS[0]; diffOffset=T.diff; finishDist=T.len; careerWaveMul=T.waveMul||1; } else { diffOffset=0; finishDist=0; careerWaveMul=1; }   // b60: career track sets the difficulty offset + the finish distance
   careerWon=false;
   PHYS.LOOP=BASE_PHYS.LOOP+0.06*upgLvl('grip');          // СЦЕПЛЕНИЕ → порог индикатора опрокидывания (живой, читается в draw ~1207). b88: убрал мёртвые PHYS.POW/AIRTQ (rigidStep их НЕ читает — реальные движок/воздух = engScale/leanAirEff в rigidStep)
+  if(owned.indexOf(selBike)<0) selBike=owned.length?owned[owned.length-1]:0;   // b115: едем ТОЛЬКО на купленном (превью некупленного на экране БАЙКИ не даёт ездить бесплатно)
   rankMul=CORE_TEST_MODE?1:1+0.07*rankIdx(career); rankedUp=null;   // CORE TEST: no rank profit multiplier
   baseY=H*0.6; terr=[]; genX=0; walk=0; regimeLeft=0; lastHazIdx=-99;
   evGenType=''; evGenLeft=0; nextEvGenX=3000; curEvType=''; evBanner=''; evBannerT=0; evGlow=0; evBonus=0; lastWarnX=-1; evWarnType='';   // first event ~300m (onboarding breathing room)
@@ -591,7 +593,7 @@ function pointerDown(p){
     if(hit(p,UI.bkBack)){ screen='garage'; sfxClick(); return; }
     if(hit(p,UI.bkL)){ selBike=(selBike+BIKES.length-1)%BIKES.length; saveMeta(); sfxClick(); return; }
     if(hit(p,UI.bkR)){ selBike=(selBike+1)%BIKES.length; saveMeta(); sfxClick(); return; }
-    if(UI.bkAction && hit(p,UI.bkAction)){ const b=BIKES[selBike]; if(owned.indexOf(selBike)<0 && bank>=b.cost){ bank-=b.cost; owned.push(selBike); saveMeta(); sfxLev(); } else sfxClick(); return; }
+    if(UI.bkAction && hit(p,UI.bkAction)){ const b=BIKES[selBike], locked=b.reqRank && rankIdx(career)<b.reqRank; if(owned.indexOf(selBike)<0 && !locked && bank>=b.cost){ bank-=b.cost; owned.push(selBike); saveMeta(); sfxLev(); } else sfxClick(); return; }   // b115: нельзя купить запертый рангом
     return;
   }
   if(screen==='howto'){   // b108
@@ -1443,9 +1445,11 @@ function drawMenus(){
       const sbar=(lab,val,col,yy)=>{ const bw=120, bx=W/2-30; ctx.textAlign='right'; ctx.fillStyle='rgba(190,205,235,0.8)'; ctx.font='700 10px ui-monospace,monospace'; ctx.fillText(lab,bx-8,yy+7); ctx.fillStyle='rgba(30,40,62,0.7)'; ctx.fillRect(bx,yy,bw,7); ctx.fillStyle=col; ctx.fillRect(bx,yy,bw*val,7); ctx.textAlign='center'; };
       sbar('СКОР',sp,'rgba(120,255,180,0.92)',ay+26); sbar('ХВАТ',gr,'rgba(120,200,255,0.92)',ay+42);
       ctx.fillStyle='rgba(165,185,215,0.74)'; ctx.font='11px ui-monospace,monospace'; ctx.fillText(b.tag,W/2,ay+72); }
+    const locked=b.reqRank && rankIdx(career)<b.reqRank;   // b115: премиум-байк заперт рангом ◆
     UI.bkAction={x:W/2-110,y:ay+96,w:220,h:50};
-    panel(UI.bkAction.x,UI.bkAction.y,220,50, own?'rgba(120,255,180,0.85)':(bank>=b.cost?'rgba(255,214,120,0.85)':'rgba(150,150,170,0.45)'), own?'rgba(36,120,84,0.3)':(bank>=b.cost?'rgba(150,110,30,0.28)':'rgba(80,80,96,0.22)'));
-    ctx.fillStyle=own?'#9ff0c8':(bank>=b.cost?'#ffd678':'#9092a6'); ctx.font='800 16px ui-monospace,monospace'; ctx.fillText(own?'✓ ВЫБРАН':('РАЗБЛОКИРОВАТЬ  $'+b.cost),W/2,UI.bkAction.y+31);
+    panel(UI.bkAction.x,UI.bkAction.y,220,50, own?'rgba(120,255,180,0.85)':locked?'rgba(120,140,200,0.5)':(bank>=b.cost?'rgba(255,214,120,0.85)':'rgba(150,150,170,0.45)'), own?'rgba(36,120,84,0.3)':(bank>=b.cost&&!locked?'rgba(150,110,30,0.28)':'rgba(80,80,96,0.22)'));
+    ctx.fillStyle=own?'#9ff0c8':locked?'#b9c8ee':(bank>=b.cost?'#ffd678':'#9092a6'); ctx.font='800 15px ui-monospace,monospace'; ctx.fillText(own?'✓ ВЫБРАН':locked?('🔒 РАНГ '+RANKS[b.reqRank].e+RANKS[b.reqRank].n):('РАЗБЛОКИРОВАТЬ  $'+b.cost),W/2,UI.bkAction.y+31);
+    if(locked){ ctx.fillStyle='rgba(150,180,230,0.7)'; ctx.font='600 9px ui-monospace,monospace'; ctx.fillText('закрепляй $→◆ до ранга '+RANKS[b.reqRank].n+' (◆'+RANKS[b.reqRank].at+')',W/2,UI.bkAction.y+44); }
     ctx.fillStyle='rgba(150,170,200,0.6)'; ctx.font='600 10px ui-monospace,monospace'; ctx.fillText('‹ › листай · байк влияет на физику и потолок плеча',W/2,ay+172);
     ctx.textAlign='left'; return;
   }
