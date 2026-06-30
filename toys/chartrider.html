@@ -52,7 +52,7 @@ function lerp(a,b,t){return a+(b-a)*t;} function clamp(v,a,b){return v<a?a:v>b?b
 // false → full game everywhere. Single switch. Systems are GATED, never deleted.
 const CORE_TEST_MODE = false;   // b70: META LIVE — building the progression spine (upgrades/bikes with teeth, career, economy) on the confirmed rigid-body core
 // build stamp — bump on every change so a phone refresh can confirm it loaded fresh code (cache!)
-const BUILD = '2026-06-30 · b133';
+const BUILD = '2026-06-30 · b134';
 
 // ---------- procedural market terrain ----------
 // height map sampled every STEP px; generated forward as we ride. Market character:
@@ -599,7 +599,7 @@ function reset(){
   bike={x:60,y:terrainAt(60).y-27.5,vx:0,vy:0,ang:terrainAt(60).ang,angV:0,onG:true,wheel:0,rShift:0};   // rShift = rider weight-shift state (-1 back .. +1 forward), smoothed from the drag input (b47 two-body)
   cam={x:bike.x-W*0.5,y:bike.y-H*0.46}; camAir=0; t=0; coins=0; dist=0; lastMile=0; newDepth=false; wipe=0; screen='play'; shake=0; flash=0; popT=0; daycycle=Math.random()*6.28;
   chalResult=null;   // b118: новый заезд — итог вызова сброшен (activeChal НЕ трогаем: задан в startTicker до reset)
-  mult=1; airT=0; nearMissed=false; hitstop=0; gflash=0; multPulse=0; maxMult=1; flipCount=0; flipAcc=0; wheelieT=0; cashedOut=false; runGems=0;
+  mult=1; airT=0; nearMissed=false; hitstop=0; gflash=0; multPulse=0; maxMult=1; flipCount=0; flipAcc=0; wheelieT=0; cashedOut=false; runGems=0; cashCelebT=0;
   flipsTotal=0; topKmh=0; lastLandDiff=0; lean=0; rush=0; prevVx=0; down=false; brake=false; jumpReq=0; jumpCd=0; coyote=0; jumpGrace=0; activeTouches={}; leanX=0; ctrlId=null; leanKeyL=false; leanKeyR=false; leanCmd=0; rShiftVel=0; wave=bike.x-W*0.95; waveSpd=0; deathBy=''; boost=0; boosting=0; posPulse=0; _posPrev=0; _dangBuzz=0; prMax=0; prMin=0; slowmo=0;
   zone=-1; biomeBanner=''; biomeBannerT=0; BSKY=['rgb(20,16,48)','rgb(46,30,78)','rgb(150,80,110)','rgb(230,150,110)']; BLINE='228,250,255'; BRIDGE='60,40,90'; rollMissions();
   parts=[]; dust=[]; trail=[]; streaks=[]; floats=[];
@@ -823,6 +823,7 @@ function rigidStep(){
 }
 function update(){
   if(hitstop>0){ hitstop--; return; }   // brief freeze for impact punch
+  if(cashCelebT>0){ celebStep(); return; }   // b134: праздник фикса проигрывается В МИРЕ перед экраном итога (см. celebStep/cashOut)
   if(boosting>0)boosting--;
   if(ctrlScheme==='btn2'){ down=!brake; }   // b56: AUTO-GAS — always driving unless you press brake (lean comes from the НОС↑/НОС↓ buttons, like btn4)
   t++; daycycle+=0.0009;
@@ -1032,7 +1033,7 @@ function update(){
   for(const s of streaks){ s.x-=s.v; s.life-=0.025; } streaks=streaks.filter(s=>s.life>0&&s.x>-260);
   if(bike.onG&&bike.vx>9) shake=Math.max(shake,Math.min(3.2,(bike.vx-9)*0.45));
 }
-let flipAcc=0, flipCount=0, popMsg='', popT=0;
+let flipAcc=0, flipCount=0, popMsg='', popT=0, cashCelebT=0;
 function popText(m){ if(CORE_TEST_MODE)return; popMsg=m;popT=1;}                                        // CORE TEST: no score popups
 function floatPop(x,y,txt,col){ if(CORE_TEST_MODE)return; if(!floats)floats=[]; floats.push({x:x,y:y,txt:txt,col:col,vy:-0.9,life:1}); }
 function activateBoost(){ if((boost||0)<1||boosting>0||screen!=='play')return; boost=0; boosting=Math.round(TUNE.pumpDur*(1+0.22*upgLvl('pump'))); if(bike){ bike.vx+=2; bike.wheel+=4; for(let e=0;e<12;e++)dust.push({x:bike.x-24+Math.random()*10,y:bike.y+22,vx:-(2+Math.random()*4.5),vy:-Math.random()*2.2,life:1,r:Math.random()*2.6+1.5}); } rush=1; shake=4; gflash=0.4; multPulse=1; popText('⚡ PUMP!'); sfxLev(); buzz(28); }   // wheelspin roost on launch (traction-break juice)   // small instant nudge + long gentle push (see TUNE.pumpForce/pumpDur); no more vx-snap-to-18
@@ -1046,14 +1047,27 @@ function wipeout(reason){ deathBy=reason||'crash'; screen='dead'; shake=20; flas
   if(!CORE_TEST_MODE){ if(gameMode==='endless'){ cashedOut=false; const pen=Math.min(Math.round(bank*leverage*LIQ_PEN), Math.round(bank*LIQ_PEN_MAX)); runGems=-pen; bank=Math.max(0,bank-pen); } else { bank+=Math.round(coins); }   // b76 ENDLESS ликвидация = реальная потеря (∝ плечу, кап LIQ_PEN_MAX, пол ≥0). b87: ликвидация НЕ рекорд и НЕ растит ранг — заработка нет
     if(activeChal){ chalResult={name:activeChal.name,medal:-1,rew:0}; activeChal=null; }   // b118: смерть = вызов Пути провален
     payStaking(); saveProg(); saveMeta(); } }   // b112: ликвидация ест $; ◆-холод не трогает. b114: +стейкинг ◆→$ (камбэк после взрыва)
-function cashOut(){ if(screen!=='play'||gameMode!=='endless'||(coins||0)<=0)return;   // b91: фиксить если есть ПОЗИЦИЯ (coins), не мёртвый pnl. b71: TAKE PROFIT — bank the FULL leveraged PnL & end the run safely (the greed↔safety decision)
+function cashOut(){ if(screen!=='play'||gameMode!=='endless'||(coins||0)<=0||cashedOut||cashCelebT>0)return;   // b91: фиксить если есть ПОЗИЦИЯ (coins), не мёртвый pnl. b71: TAKE PROFIT — bank the FULL leveraged PnL & end the run safely (the greed↔safety decision). b134: guard от повторного фикса во время праздника
   cashedOut=true; runGems=Math.round((coins||0)*COIN_GEM*posFactor()); bank+=runGems; payStaking(); deathBy='cashout';   // b89: выплата по ТЕКУЩЕЙ цене; b114: +стейкинг ◆→$
   if(runGems>bestPnl){bestPnl=runGems;try{localStorage.setItem('cipher_best_earn',bestPnl);}catch(e){}}   // b87: BEST = лучшая зафиксированная ВЫПЛАТА (◆)
   if(dist>best){best=dist;try{localStorage.setItem('cipher_run_best',best);}catch(e){}}
   // b112: фикс платит в $ (банк); РАНГ растёт через «ВЫВЕСТИ В ХОЛОД» ($→◆), не авто
-  finishChallenge(); saveProg(); saveMeta(); const _big=clamp((runGems||0)/180,0,1); flash=0.4+0.34*_big; gflash=0.8+0.18*_big; shake=4+7*_big; if(_big>0.5)sfxRankUp(); else sfxLev(); buzz(_big>0.5?[25,40,25,60]:[20,40,20]);
-  if(bike){ for(let z=0;z<Math.round(8+34*_big);z++)parts.push({x:bike.x+(Math.random()-0.5)*44,y:bike.y,vx:(Math.random()-0.5)*7,vy:-Math.random()*9-2,life:1,gold:1,r:Math.random()*3+1.6}); }   // b122 ВАУ: золотой фонтан профита ∝ размеру фикса (виральный кадр победы)
-  screen='dead'; }   // b84: эйфория фикса ∝ размеру банкуемого
+  finishChallenge(); saveProg(); saveMeta(); const _big=clamp((runGems||0)/180,0,1); flash=0.5+0.4*_big; gflash=0.85+0.15*_big; shake=6+9*_big; if(_big>0.4)sfxRankUp(); else sfxLev(); buzz(_big>0.4?[25,40,25,60]:[20,40,20]);
+  // b134: ВЗРЫВ ПРОФИТА В МОМЕНТ ФИКСА — корень «не видел в чём фишка»: раньше cashOut() прыгал в 'dead' в ТОТ ЖЕ кадр → фонтан спавнился, но мир тут же переставал рисоваться. Теперь ~1.3с праздник В МИРЕ (слоумо + извержение золота + «ЗАФИКСИРОВАНО +$X»), ПОТОМ итог. Завязано на КОР-решение (фикс vs жадность) = вау, который хочется скринкастить.
+  if(runGems>0 && bike){ const burst=Math.round(20+44*_big); for(let z=0;z<burst;z++)parts.push({x:bike.x+(Math.random()-0.5)*48,y:bike.y-4,vx:(Math.random()-0.5)*8,vy:-Math.random()*11-3,life:1,gold:1,r:Math.random()*3.2+1.8});   // b122/b134: золотой фонтан ∝ фиксу (виральный кадр победы) — крупнее + извергается
+    popText('💰 ЗАФИКСИРОВАНО  +$'+runGems.toLocaleString('en-US')); floatPop(bike.x,bike.y-56,'+$'+runGems.toLocaleString('en-US'),'#ffd678');
+    cashCelebT=58; slowmo=Math.max(slowmo,50); }   // праздник в мире, затем celebStep → screen='dead'
+  else screen='dead'; }   // нет профита (edge) → сразу итог. b84: эйфория фикса ∝ размеру банкуемого
+function celebStep(){   // b134: кадр-праздник ФИКСА в мире (фонтан + слоумо + докат до триумфального стопа) ДО экрана итога. Волна/физика заморожены — забег уже безопасно закрыт (cashedOut). По окончании → screen='dead'.
+  cashCelebT--; t++;
+  if(bike){ bike.vx*=0.84; bike.x+=bike.vx; bike.wheel+=bike.vx*0.08;   // докатывается и замирает
+    if(cashCelebT>14 && t%2===0){ for(let z=0;z<3;z++)parts.push({x:bike.x+(Math.random()-0.5)*46,y:bike.y-6,vx:(Math.random()-0.5)*6,vy:-Math.random()*10-3,life:1,gold:1,r:Math.random()*3+1.7}); }   // непрерывное извержение золота
+    cam.x=lerp(cam.x,bike.x-W*0.32,0.1); cam.y=lerp(cam.y,bike.y-H*0.5,0.08); }
+  for(const p of parts){p.x+=p.vx;p.y+=p.vy;p.vy+=0.12;p.vx*=0.97;p.life-=0.02;} parts=parts.filter(p=>p.life>0);
+  for(const d of dust){d.x+=d.vx;d.y+=d.vy;d.vy+=0.04;d.life-=0.04;} dust=dust.filter(d=>d.life>0);
+  for(const f of floats){ f.y+=f.vy; f.vy+=0.02; f.life-=0.014; } floats=floats.filter(f=>f.life>0);
+  if(shake>0)shake*=0.9; if(flash>0)flash*=0.93; if(gflash>0)gflash*=0.95;
+  if(cashCelebT<=0) screen='dead'; }
 function diamondHand(){   // b112: ВЫВЕСТИ В ХОЛОД — $ (банк, рисковый) → ◆ (career = холод/diamond hands, навсегда). Растит РАНГ. Ликвидация ◆ не трогает. Цена прогресса: $ ушёл из оборота (потом — из него маржа b-этап2) → выбор «качать $ vs закрепить ◆»
   const amt=Math.round(bank||0); if(amt<1){ sfxClick(); return; }
   const oi=rankIdx(career); career+=amt; bank=0; const ni=rankIdx(career);
@@ -1289,7 +1303,7 @@ function draw(){
       ctx.fillStyle=nb?'#ffd678':'#9ff0c8';ctx.font='800 46px ui-monospace,monospace';ctx.fillText(dist+' m',W/2,H*0.34+58);
       ctx.fillStyle=nb?'#ffd678':'#7a8bb0';ctx.font='700 14px ui-monospace,monospace';ctx.fillText(nb?'★ НОВЫЙ РЕКОРД':'рекорд  '+(best||0)+' m',W/2,H*0.34+90);
     } else {
-    if(!cashedOut){ ctx.save(); ctx.translate(W/2,H*0.34-6); ctx.rotate(-0.1); const ps=1+0.5*Math.max(0,flash); ctx.scale(ps,ps); ctx.strokeStyle='rgba(255,90,110,0.6)'; ctx.lineWidth=3; if(ctx.roundRect){ctx.beginPath();ctx.roundRect(-100,-32,200,48,9);ctx.stroke();} ctx.fillStyle='rgba(255,64,86,0.97)'; ctx.font='900 40px ui-monospace,monospace'; ctx.shadowColor='#ff2040'; ctx.shadowBlur=18; ctx.fillText('💀 REKT',0,3); ctx.shadowBlur=0; ctx.restore();
+    if(!cashedOut){ ctx.save(); ctx.translate(W/2,H*0.34-100); ctx.rotate(-0.1); const ps=1+0.5*Math.max(0,flash); ctx.scale(ps,ps); ctx.strokeStyle='rgba(255,90,110,0.6)'; ctx.lineWidth=3; if(ctx.roundRect){ctx.beginPath();ctx.roundRect(-100,-32,200,48,9);ctx.stroke();} ctx.fillStyle='rgba(255,64,86,0.97)'; ctx.font='900 40px ui-monospace,monospace'; ctx.shadowColor='#ff2040'; ctx.shadowBlur=18; ctx.fillText('💀 REKT',0,3); ctx.shadowBlur=0; ctx.restore();   // b134: штамп ПОДНЯТ над заголовком (был H*0.34-6 = на тексте «ЛИКВИДИРОВАН» → каша/налезание, юзер). Теперь слэм-штамп сверху, заголовок чист
       const taunt=(leverage>=50)?('×'+leverage+' — дерзко, рынок не прощает'):(deathBy==='wave')?'волна дампа догнала — газуй раньше':(deathBy==='crash'||deathBy==='loop'||deathBy==='endo')?'разбился — мягче приземляйся':'надо было ЗАФИКСИТЬ вовремя'; ctx.fillStyle='rgba(255,150,162,0.92)'; ctx.font='600 11px ui-monospace,monospace'; ctx.fillText('💀 '+taunt,W/2,H*0.34+16); }   // b117/b121: деген-слэм + контекстная подколка (виральный момент)
     const gain=runGems||0, isBest=cashedOut&&gain>=bestPnl&&gain>0;   // b87: degen-итог в ◆ — что зафиксил/потерял, не абстрактный $
     ctx.save(); const bigW=cashedOut&&gain>=400; if(bigW){ctx.shadowColor='#ffd678';ctx.shadowBlur=20;} ctx.fillStyle=cashedOut?(isBest?'#ffd678':'#6effc0'):'#ff7a8a'; const gf=cashedOut?Math.min(58,42+Math.sqrt(Math.max(0,gain))*0.6):42; ctx.font='800 '+Math.round(gf)+'px ui-monospace,monospace'; ctx.fillText((cashedOut?'$ +':'$ ')+gain.toLocaleString('en-US'),W/2,H*0.34+54); ctx.shadowBlur=0; ctx.restore();   // b122: число профита растёт+светится ∝ размеру (вау-кадр)
