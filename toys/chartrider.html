@@ -52,7 +52,7 @@ function lerp(a,b,t){return a+(b-a)*t;} function clamp(v,a,b){return v<a?a:v>b?b
 // false → full game everywhere. Single switch. Systems are GATED, never deleted.
 const CORE_TEST_MODE = false;   // b70: META LIVE — building the progression spine (upgrades/bikes with teeth, career, economy) on the confirmed rigid-body core
 // build stamp — bump on every change so a phone refresh can confirm it loaded fresh code (cache!)
-const BUILD = '2026-06-30 · b134';
+const BUILD = '2026-06-30 · b135';
 
 // ---------- procedural market terrain ----------
 // height map sampled every STEP px; generated forward as we ride. Market character:
@@ -901,6 +901,12 @@ function update(){
   } // === end disabled old block ===
   // === RIGID BODY (b68): the real bike physics over the price line. supA (above) = ground slope for downstream scoring/death/telegraphs. ===
   rigidStep();
+  // b135: КИКЕР / ПАМП-ТРАМПЛИН в ЖИВОЙ физике. БАГ-КОРЕНЬ: с миграции на rigidStep (b68) код кикера остался в МЁРТВОМ if(0)-блоке → пампы (b116) и трик-рампы НЕ запускали байк ВООБЩЕ (юзер: «гига-памп 2, не хватает флипов/трамплинов» — фича была физически мертва). Теперь большая зелёная свеча (.pump) / трик-рампа (.kick) реально пуляет ∝ скорости × силе пампа, с воздухом, которого хватает на флип. Коэф/кап/PUMP_K — руки.
+  { const ci0=Math.floor(bike.x/STEP), kn=terr[ci0];
+    if(bike.onG && kn && kn.kick && !kn.kicked && bike.vx>1.0){ kn.kicked=true; const _pm=(kn.pumpMag>0)?kn.pumpMag:1;
+      bike.vy=Math.min(bike.vy, Math.max(-26, -(bike.vx*1.5 + 7)*_pm)); bike.onG=false; airT=0; nearMissed=false; gflash=Math.max(gflash,0.4); shake=Math.max(shake,5); sfxAir();
+      for(let e=0;e<8;e++)dust.push({x:bike.x-8+Math.random()*16,y:bike.y+22,vx:(Math.random()-0.5)*3.2,vy:-Math.random()*2.8,life:1,r:Math.random()*2.6+1.2});
+      if(kn.pump){ const _big=_pm>=1.5; popText(_big?'🚀 ГИГА-ПАМП — НА ЛУНУ!':'🚀 ПАМП — ВЗЛЁТ!'); gflash=Math.max(gflash,_big?0.9:0.6); boost=Math.min(1,(boost||0)+0.25); shake=Math.max(shake,_big?14:9); if(_big)slowmo=Math.max(slowmo,14); for(let e=0;e<(_big?24:14);e++)parts.push({x:bike.x-18-Math.random()*12,y:bike.y+8+Math.random()*10,vx:-2-Math.random()*5,vy:0.4+Math.random()*3,life:1,r:Math.random()*3+1.6,gold:true}); } } }
   if(jumpReq>0){ if(bike.onG && jumpCd<=0){ bike.vy-=RB.jump; bike.onG=false; jumpReq=0; jumpCd=16; airT=0; nearMissed=false; jumpGrace=1; shake=Math.max(shake,3); for(let e=0;e<7;e++)dust.push({x:bike.x-10+Math.random()*20,y:bike.y+24,vx:(Math.random()-0.5)*2.4,vy:-Math.random()*2,life:1,r:Math.random()*2.4+1}); sfxAir(); } else jumpReq--; }   // swipe-up hop = vy impulse on the rigid body
   if(jumpCd>0)jumpCd--;
   const grounded=bike.onG, rearBal=false;
