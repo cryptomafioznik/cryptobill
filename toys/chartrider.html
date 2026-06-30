@@ -52,7 +52,7 @@ function lerp(a,b,t){return a+(b-a)*t;} function clamp(v,a,b){return v<a?a:v>b?b
 // false → full game everywhere. Single switch. Systems are GATED, never deleted.
 const CORE_TEST_MODE = false;   // b70: META LIVE — building the progression spine (upgrades/bikes with teeth, career, economy) on the confirmed rigid-body core
 // build stamp — bump on every change so a phone refresh can confirm it loaded fresh code (cache!)
-const BUILD = '2026-06-29 · b127';
+const BUILD = '2026-06-29 · b128';
 
 // ---------- procedural market terrain ----------
 // height map sampled every STEP px; generated forward as we ride. Market character:
@@ -437,12 +437,17 @@ const CAREER_TRACKS=[]; for(let i=0;i<12;i++){ CAREER_TRACKS.push({ name:'ЭТА
 let gameMode='endless', careerTrack=0, careerMax=0, diffOffset=0, finishDist=0, careerWon=false, careerWaveMul=1;   // careerMax = highest UNLOCKED track index (0 = only ЭТАП 1); diffOffset/finishDist set per track at reset
 // ---- ПУТЬ ТРЕЙДЕРА (b118): лестница ВЫЗОВОВ на РЕАЛЬНЫХ монетах (спокойные→дикие). Медали 🥉🥈🥇 = скилл-потолок/реиграбельность. Открытие по ◆-рангу. Награды кормят кор-петлю. Слой ПОВЕРХ тикер-заезда (не трогает proc). ----
 const CHALLENGES=[
-  {id:'btc1', coin:'btc', name:'Доехать до конца',     goal:'finish',                 rew:60,  reqRank:0},
-  {id:'btc2', coin:'btc', name:'Набанкать за круг',    goal:'bank', med:[300,700,1500], rew:100, reqRank:0},
-  {id:'eth1', coin:'eth', name:'Доехать до конца',     goal:'finish',                 rew:90,  reqRank:0},
-  {id:'sol1', coin:'sol', name:'Набанкать за круг',    goal:'bank', med:[500,1200,2500],rew:170, reqRank:1},
-  {id:'doge1',coin:'doge',name:'Доехать на диком',     goal:'finish',                 rew:230, reqRank:2},
-  {id:'wif1', coin:'wif', name:'Набанкать на экстриме',goal:'bank', med:[800,2000,4000],rew:420, reqRank:3},
+  {id:'btc1', coin:'btc', name:'Доехать до конца',     goal:'finish',                    rew:60,  reqRank:0},
+  {id:'btc2', coin:'btc', name:'Набанкать за круг',    goal:'bank', med:[300,700,1500],   rew:100, reqRank:0},
+  {id:'eth1', coin:'eth', name:'Доехать до конца',     goal:'finish',                    rew:90,  reqRank:0},
+  {id:'bnb1', coin:'bnb', name:'Набанкать за круг',    goal:'bank', med:[350,800,1700],   rew:130, reqRank:0},
+  {id:'sol1', coin:'sol', name:'Набанкать за круг',    goal:'bank', med:[500,1200,2500],  rew:180, reqRank:1},
+  {id:'xrp1', coin:'xrp', name:'Доехать до конца',     goal:'finish',                    rew:160, reqRank:1},
+  {id:'link1',coin:'link',name:'Набанкать за круг',    goal:'bank', med:[650,1500,3000],  rew:230, reqRank:1},
+  {id:'doge1',coin:'doge',name:'Набанкать на диком',   goal:'bank', med:[900,2200,4500],  rew:300, reqRank:2},
+  {id:'pepe1',coin:'pepe',name:'Набанкать на мем-коине',goal:'bank',med:[1200,3000,6000], rew:420, reqRank:3},
+  {id:'floki1',coin:'floki',name:'Доехать на экстриме',goal:'finish',                    rew:520, reqRank:3},
+  {id:'wif1', coin:'wif', name:'Набанкать на экстриме',goal:'bank', med:[2000,5000,10000],rew:700, reqRank:4},
 ];
 let chalDone={}; try{chalDone=JSON.parse(localStorage.getItem('cipher_chal')||'{}')||{};}catch(e){chalDone={};}   // {id: лучший медал-индекс 0/1/2}
 let activeChal=null, chalResult=null;   // activeChal = вызов в текущем заезде; chalResult = итог для экрана смерти
@@ -1448,13 +1453,13 @@ function drawMenus(){
     ctx.textAlign='center'; ctx.fillStyle='#eafaff'; ctx.font='800 21px ui-monospace,monospace'; ctx.shadowColor='rgba(255,200,120,0.5)'; ctx.shadowBlur=10; ctx.fillText('🏁 ПУТЬ ТРЕЙДЕРА',W/2,46); ctx.shadowBlur=0;
     const ri0=rankIdx(career), rk0=RANKS[ri0]; ctx.fillStyle='#9fb0d0'; ctx.font='600 10px ui-monospace,monospace'; ctx.fillText('ранг '+rk0.e+' '+rk0.n+'  ·  ◆'+career,W/2,66);
     UI.pback={x:14,y:16,w:74,h:32}; panel(UI.pback.x,UI.pback.y,74,32,'rgba(150,180,220,0.6)','rgba(30,40,62,0.5)'); ctx.fillStyle='#cfe0ff'; ctx.font='700 12px ui-monospace,monospace'; ctx.fillText('‹ НАЗАД',UI.pback.x+37,UI.pback.y+21);
-    UI.chalRows=[]; const rh=54, gp=7, lw=W-28, lx=14;
+    UI.chalRows=[]; const gp=7, lw=W-28, lx=14;
     { const dc=dailyChal(), dDone=(dailyDoneDay===dailyToday()), dtk=TICKERS[chalCoinIdx(dc.coin)]; UI.dailyRow={x:lx,y:82,w:lw,h:50};   // b125: ВЫЗОВ ДНЯ
       panel(lx,82,lw,50, dDone?'rgba(120,255,180,0.8)':'rgba(120,200,255,0.92)', dDone?'rgba(30,72,52,0.3)':'rgba(28,66,116,0.32)');
       ctx.textAlign='left'; ctx.fillStyle='#cfeaff'; ctx.font='800 13px ui-monospace,monospace'; ctx.fillText((dDone?'✓ ':'📅 ')+'ВЫЗОВ ДНЯ · '+dtk.name, lx+12, 103);
       ctx.fillStyle='rgba(185,210,240,0.82)'; ctx.font='600 9px ui-monospace,monospace'; ctx.fillText(dDone?'выполнен — завтра новый':(dc.name+'  ·  раз в день'), lx+12, 121);
       if(!dDone){ ctx.textAlign='right'; ctx.fillStyle='#ffd678'; ctx.font='700 13px ui-monospace,monospace'; ctx.fillText('+◆'+dc.rew, lx+lw-12, 112); ctx.textAlign='left'; } }
-    const top=144;
+    const top=144, rh=clamp(Math.floor((H-top-14)/CHALLENGES.length)-gp,40,56);   // b128: адаптивная высота — лестница вызовов влезает на любом экране
     for(let i=0;i<CHALLENGES.length;i++){ const ch=CHALLENGES[i], y=top+i*(rh+gp); const r={x:lx,y:y,w:lw,h:rh}; UI.chalRows.push(r);
       const locked=ri0<ch.reqRank, done=(ch.id in chalDone), med=done?chalDone[ch.id]:-1, tk=TICKERS[chalCoinIdx(ch.coin)];
       panel(r.x,r.y,lw,rh, done?'rgba(120,255,180,0.82)':locked?'rgba(90,95,115,0.34)':'rgba(255,200,120,0.85)', done?'rgba(30,72,52,0.3)':locked?'rgba(22,26,42,0.55)':'rgba(110,80,28,0.24)');
