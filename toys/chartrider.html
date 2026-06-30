@@ -52,7 +52,7 @@ function lerp(a,b,t){return a+(b-a)*t;} function clamp(v,a,b){return v<a?a:v>b?b
 // false → full game everywhere. Single switch. Systems are GATED, never deleted.
 const CORE_TEST_MODE = false;   // b70: META LIVE — building the progression spine (upgrades/bikes with teeth, career, economy) on the confirmed rigid-body core
 // build stamp — bump on every change so a phone refresh can confirm it loaded fresh code (cache!)
-const BUILD = '2026-06-29 · b128';
+const BUILD = '2026-06-29 · b129';
 
 // ---------- procedural market terrain ----------
 // height map sampled every STEP px; generated forward as we ride. Market character:
@@ -460,6 +460,19 @@ function dailyChal(){ const ds=dailyToday(); let h=0; for(let i=0;i<ds.length;i+
   const tk=TICKERS[h%TICKERS.length], isBank=((h>>4)&1)===0;
   const ch={id:'daily', coin:tk.k, daily:true, reqRank:0, rew:200, goal:isBank?'bank':'finish', name:isBank?('Набанкать на '+tk.name):('Доехать: '+tk.name)};
   if(isBank)ch.med=[400,1000,2200]; return ch; }
+// ---- СОБЫТИЯ-БОССЫ (b129): реальные ИСТОРИЧЕСКИЕ крахи рынка (Binance klines по startTime, проверено: COVID −30% / FTX −13% / авг24 −16%). Виральный хук «оседлай настоящий обвал». Кэш навсегда (история не меняется). ----
+const BOSSES=[
+  {id:'covid', sym:'BTCUSDT', startTime:1583971200000, short:'BLACK THURSDAY', name:'BTC −30% · 12.03.2020', rew:380},
+  {id:'aug24', sym:'BTCUSDT', startTime:1722816000000, short:'АВГУСТ-ОБВАЛ',   name:'BTC −16% · 05.08.2024', rew:300},
+  {id:'ftx',   sym:'BTCUSDT', startTime:1667952000000, short:'КРАХ FTX',       name:'BTC −13% · 09.11.2022', rew:260},
+];
+async function loadEvent(ev){ const ck='cipher_ev_'+ev.id;
+  try{ const c=JSON.parse(localStorage.getItem(ck)||'null'); if(c&&c.length)return c; }catch(e){}   // ист.данные неизменны → кэш навсегда
+  try{ const r=await fetch('https://api.binance.com/api/v3/klines?symbol='+ev.sym+'&interval=5m&startTime='+ev.startTime+'&limit=250'); if(!r.ok)throw 0; const j=await r.json(); const d=j.map(k=>[+k[1],+k[2],+k[3],+k[4]]).filter(c=>c.length===4&&c.every(v=>v>0&&isFinite(v))); if(d.length<20)throw 0; try{localStorage.setItem(ck,JSON.stringify(d));}catch(e){} return d; }
+  catch(e){ return MARKET_DATA.btc.data; } }
+function startEvent(ev){ selTicker='btc'; tickerName=ev.short; screen='tickerload'; tickerLoadT=0;
+  activeChal={id:'ev_'+ev.id, name:ev.short, goal:'finish', rew:ev.rew, daily:false};   // цель = ПЕРЕЖИТЬ обвал (доехать до конца). Награда раз (через chalDone)
+  loadEvent(ev).then(d=>{ tickerData=(d&&d.length?d:MARKET_DATA.btc.data); trackSource='ticker'; gameMode='endless'; reset(); }); }
 function finishChallenge(){   // b118: оценка вызова в конце тикер-заезда. runGems = банк за круг; finish = дошёл до конца графика
   if(!activeChal)return; const ch=activeChal; let medal=-1;
   if(ch.goal==='finish'){ if(dist>=finishDist)medal=2; }
@@ -639,8 +652,14 @@ function pointerDown(p){
     if(UI.howSkip && hit(p,UI.howSkip)){ seenHowto=true; try{localStorage.setItem('cipher_howto','1');}catch(e){} screen='title'; sfxClick(); return; }
     return;
   }
+  if(screen==='events'){   // b129: события-боссы
+    if(hit(p,UI.evBack)){ screen='path'; sfxClick(); return; }
+    if(UI.evRows)for(let i=0;i<UI.evRows.length;i++){ if(hit(p,UI.evRows[i])){ startEvent(BOSSES[i]); sfxClick(); return; } }
+    return;
+  }
   if(screen==='path'){   // b118: Путь трейдера
     if(hit(p,UI.pback)){ screen='title'; sfxClick(); return; }
+    if(UI.evBtn && hit(p,UI.evBtn)){ screen='events'; sfxClick(); return; }   // b129: боссы-крахи
     if(UI.dailyRow && hit(p,UI.dailyRow)){ if(dailyDoneDay!==dailyToday()) startChallenge(dailyChal()); else sfxClick(); sfxClick(); return; }   // b125: вызов дня
     if(UI.chalRows)for(let i=0;i<UI.chalRows.length;i++){ if(hit(p,UI.chalRows[i])){ const ch=CHALLENGES[i]; if(rankIdx(career)>=ch.reqRank){ startChallenge(ch); } else sfxClick(); sfxClick(); return; } }
     return;
@@ -1062,7 +1081,7 @@ function draw(){
     ctx.fillStyle='#bfe0ff'; ctx.font='800 22px ui-monospace,monospace'; ctx.fillText('📡 ЗАГРУЗКА ГРАФИКА',W/2,H*0.42);
     ctx.fillStyle='#9ff0c8'; ctx.font='800 32px ui-monospace,monospace'; ctx.fillText(tickerName,W/2,H*0.42+46);
     ctx.fillStyle='#7a8bb0'; ctx.font='600 12px ui-monospace,monospace'; ctx.fillText('реальные данные с биржи'+('.'.repeat(Math.floor(tickerLoadT/12)%4)),W/2,H*0.42+78); ctx.textAlign='left'; return; }
-  if(screen==='garage'||screen==='settings'||screen==='career'||screen==='path'||screen==='setup'||screen==='bikes'||screen==='howto'||screen==='title'){ ctx.fillStyle='#0a0a1a'; ctx.fillRect(0,0,W,H); hudEl.style.opacity='0'; spdEl.style.opacity='0'; hintEl.style.opacity='0'; drawMenus(); return; }   // menu-only: skip the whole world render (was redrawing the full game every frame → stutter)
+  if(screen==='events'||screen==='garage'||screen==='settings'||screen==='career'||screen==='path'||screen==='setup'||screen==='bikes'||screen==='howto'||screen==='title'){ ctx.fillStyle='#0a0a1a'; ctx.fillRect(0,0,W,H); hudEl.style.opacity='0'; spdEl.style.opacity='0'; hintEl.style.opacity='0'; drawMenus(); return; }   // menu-only: skip the whole world render (was redrawing the full game every frame → stutter)
   { const ZL=520, zf=(dist||0)/ZL, zi=Math.floor(zf)%BIOMES.length, zn=(zi+1)%BIOMES.length, fr=zf-Math.floor(zf), tb=clamp((fr-0.86)/0.14,0,1), A=BIOMES[zi], Bz=BIOMES[zn];   // b58: 700→520м (match the banner zone length)
     BSKY=[mix(A.sky[0],Bz.sky[0],tb),mix(A.sky[1],Bz.sky[1],tb),mix(A.sky[2],Bz.sky[2],tb),mix(A.sky[3],Bz.sky[3],tb)];
     BLINE=lerp3(A.line,Bz.line,tb).join(','); BRIDGE=lerp3(A.ridge,Bz.ridge,tb).join(','); }
@@ -1449,10 +1468,23 @@ function drawMachine(B,wheelv,rShiftv,leanv,roost,boostv){   // b109: спрай
 }
 function drawMenus(){
   ctx.textAlign='center'; ctx.textBaseline='alphabetic';
+  if(screen==='events'){   // b129: СОБЫТИЯ-БОССЫ — реальные исторические крахи
+    ctx.textAlign='center'; ctx.fillStyle='#eafaff'; ctx.font='800 21px ui-monospace,monospace'; ctx.shadowColor='rgba(255,120,90,0.5)'; ctx.shadowBlur=10; ctx.fillText('🔥 СОБЫТИЯ',W/2,46); ctx.shadowBlur=0;
+    ctx.fillStyle='#9fb0d0'; ctx.font='600 10px ui-monospace,monospace'; ctx.fillText('РЕАЛЬНЫЕ исторические крахи рынка — переживи обвал',W/2,66);
+    UI.evBack={x:14,y:16,w:74,h:32}; panel(UI.evBack.x,UI.evBack.y,74,32,'rgba(150,180,220,0.6)','rgba(30,40,62,0.5)'); ctx.fillStyle='#cfe0ff'; ctx.font='700 12px ui-monospace,monospace'; ctx.fillText('‹ НАЗАД',UI.evBack.x+37,UI.evBack.y+21);
+    UI.evRows=[]; const erh=72, egp=10, elw=W-28, elx=14, ey0=92;
+    for(let i=0;i<BOSSES.length;i++){ const ev=BOSSES[i], y=ey0+i*(erh+egp), done=('ev_'+ev.id in chalDone); UI.evRows.push({x:elx,y:y,w:elw,h:erh});
+      panel(elx,y,elw,erh, done?'rgba(120,255,180,0.8)':'rgba(255,122,74,0.9)', done?'rgba(30,72,52,0.3)':'rgba(60,24,16,0.5)');
+      ctx.textAlign='left'; ctx.fillStyle=done?'#9ff0c8':'#ffb0a0'; ctx.font='800 16px ui-monospace,monospace'; ctx.fillText((done?'✓ ':'💥 ')+ev.short,elx+14,y+27);
+      ctx.fillStyle='rgba(200,180,180,0.82)'; ctx.font='600 11px ui-monospace,monospace'; ctx.fillText(ev.name+'  —  переживи до конца',elx+14,y+48);
+      ctx.textAlign='right'; ctx.fillStyle='#ffd678'; ctx.font='800 14px ui-monospace,monospace'; ctx.fillText(done?'✓ пройдено':('+◆'+ev.rew),elx+elw-14,y+30); ctx.textAlign='left'; }
+    ctx.textAlign='left'; return;
+  }
   if(screen==='path'){   // b118: ПУТЬ ТРЕЙДЕРА — вызовы на реальных монетах (мобильно: W-относительно, без налезаний)
     ctx.textAlign='center'; ctx.fillStyle='#eafaff'; ctx.font='800 21px ui-monospace,monospace'; ctx.shadowColor='rgba(255,200,120,0.5)'; ctx.shadowBlur=10; ctx.fillText('🏁 ПУТЬ ТРЕЙДЕРА',W/2,46); ctx.shadowBlur=0;
     const ri0=rankIdx(career), rk0=RANKS[ri0]; ctx.fillStyle='#9fb0d0'; ctx.font='600 10px ui-monospace,monospace'; ctx.fillText('ранг '+rk0.e+' '+rk0.n+'  ·  ◆'+career,W/2,66);
     UI.pback={x:14,y:16,w:74,h:32}; panel(UI.pback.x,UI.pback.y,74,32,'rgba(150,180,220,0.6)','rgba(30,40,62,0.5)'); ctx.fillStyle='#cfe0ff'; ctx.font='700 12px ui-monospace,monospace'; ctx.fillText('‹ НАЗАД',UI.pback.x+37,UI.pback.y+21);
+    UI.evBtn={x:W-118,y:16,w:104,h:32}; ctx.fillStyle='rgba(42,20,16,0.85)'; if(ctx.roundRect){ctx.beginPath();ctx.roundRect(W-118,16,104,32,9);ctx.fill();ctx.strokeStyle='rgba(255,122,74,0.85)';ctx.lineWidth=1.4;ctx.stroke();} ctx.fillStyle='#ff9a7a'; ctx.font='800 12px ui-monospace,monospace'; ctx.fillText('🔥 СОБЫТИЯ',W-66,37);   // b129: боссы-крахи
     UI.chalRows=[]; const gp=7, lw=W-28, lx=14;
     { const dc=dailyChal(), dDone=(dailyDoneDay===dailyToday()), dtk=TICKERS[chalCoinIdx(dc.coin)]; UI.dailyRow={x:lx,y:82,w:lw,h:50};   // b125: ВЫЗОВ ДНЯ
       panel(lx,82,lw,50, dDone?'rgba(120,255,180,0.8)':'rgba(120,200,255,0.92)', dDone?'rgba(30,72,52,0.3)':'rgba(28,66,116,0.32)');
