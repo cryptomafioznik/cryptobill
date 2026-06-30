@@ -52,7 +52,7 @@ function lerp(a,b,t){return a+(b-a)*t;} function clamp(v,a,b){return v<a?a:v>b?b
 // false → full game everywhere. Single switch. Systems are GATED, never deleted.
 const CORE_TEST_MODE = false;   // b70: META LIVE — building the progression spine (upgrades/bikes with teeth, career, economy) on the confirmed rigid-body core
 // build stamp — bump on every change so a phone refresh can confirm it loaded fresh code (cache!)
-const BUILD = '2026-06-30 · b136';
+const BUILD = '2026-06-30 · b137';
 
 // ---------- procedural market terrain ----------
 // height map sampled every STEP px; generated forward as we ride. Market character:
@@ -377,7 +377,7 @@ try{bank=+localStorage.getItem('cipher_bank')||0;}catch(e){}
 try{owned=JSON.parse(localStorage.getItem('cipher_owned')||'[0]')||[0];}catch(e){owned=[0];}
 try{selBike=+localStorage.getItem('cipher_bike')||0;}catch(e){}
 try{muted=localStorage.getItem('cipher_muted')==='1';}catch(e){}
-let pumpSide='left', settingsRet='title', garageRet='career', careerDeathGems=0;   // PUMP button side (right-hander → left, configurable for lefties); settingsRet/garageRet = screen to return to; careerDeathGems = consolation gems from the last failed career run
+let pumpSide='left', settingsRet='title', garageRet='career', eventsRet='path', careerDeathGems=0;   // b137: eventsRet — боссы открываются и с титула, и с Пути → назад возвращает откуда пришёл   // PUMP button side (right-hander → left, configurable for lefties); settingsRet/garageRet = screen to return to; careerDeathGems = consolation gems from the last failed career run
 try{pumpSide=localStorage.getItem('cipher_pumpside')||'left';}catch(e){}
 function savePumpSide(){ try{localStorage.setItem('cipher_pumpside',pumpSide);}catch(e){} }
 // ---- control schemes: player picks in settings (gestures = his default; buttons/tilt for newcomers — widen the audience) ----
@@ -631,6 +631,7 @@ function pointerDown(p){
     if(UI.replay && hit(p,UI.replay)){ startTicker(lastTk); sfxClick(); return; }   // продолжить последний заезд
     if(UI.coinBtn && hit(p,UI.coinBtn)){ setupSel=Math.min(lastTk,TICKERS.length-1); loadAllPreviews(); screen='setup'; sfxClick(); return; }   // → терминал ЗАЕЗД
     if(UI.careerBtn && hit(p,UI.careerBtn)){ screen='path'; sfxClick(); return; }   // b118: Путь трейдера
+    if(UI.tEvents && hit(p,UI.tEvents)){ eventsRet='title'; screen='events'; sfxClick(); return; }   // b137: боссы — парадная дверь с титула
     if(UI.trainBtn && hit(p,UI.trainBtn)){ activeChal=null; trackSource='proc'; gameMode='endless'; reset(); sfxClick(); return; }   // 🎯 тренажёр = proc эндлесс
     if(UI.ddiamond && hit(p,UI.ddiamond)){ diamondHand(); sfxClick(); return; }
     if(UI.help && hit(p,UI.help)){ screen='howto'; sfxClick(); return; }
@@ -657,13 +658,13 @@ function pointerDown(p){
     return;
   }
   if(screen==='events'){   // b129: события-боссы
-    if(hit(p,UI.evBack)){ screen='path'; sfxClick(); return; }
+    if(hit(p,UI.evBack)){ screen=eventsRet||'path'; sfxClick(); return; }
     if(UI.evRows)for(let i=0;i<UI.evRows.length;i++){ if(hit(p,UI.evRows[i])){ startEvent(BOSSES[i]); sfxClick(); return; } }
     return;
   }
   if(screen==='path'){   // b118: Путь трейдера
     if(hit(p,UI.pback)){ screen='title'; sfxClick(); return; }
-    if(UI.evBtn && hit(p,UI.evBtn)){ screen='events'; sfxClick(); return; }   // b129: боссы-крахи
+    if(UI.evBtn && hit(p,UI.evBtn)){ eventsRet='path'; screen='events'; sfxClick(); return; }   // b129: боссы-крахи
     if(UI.dailyRow && hit(p,UI.dailyRow)){ if(dailyDoneDay!==dailyToday()) startChallenge(dailyChal()); else sfxClick(); sfxClick(); return; }   // b125: вызов дня
     if(UI.chalRows)for(let i=0;i<UI.chalRows.length;i++){ if(hit(p,UI.chalRows[i])){ const ch=CHALLENGES[i]; if(rankIdx(career)>=ch.reqRank){ startChallenge(ch); } else sfxClick(); sfxClick(); return; } }
     return;
@@ -1613,38 +1614,70 @@ function drawMenus(){
     ctx.textAlign='left'; return;
   }
   if(screen==='title'){
-    const og=ctx.createLinearGradient(0,0,0,H); og.addColorStop(0,'rgba(6,5,16,0.62)'); og.addColorStop(0.38,'rgba(6,5,16,0.04)'); og.addColorStop(0.72,'rgba(6,5,16,0.12)'); og.addColorStop(1,'rgba(6,5,16,0.9)'); ctx.fillStyle=og; ctx.fillRect(0,0,W,H);
-    // b108: МИНИМАЛИСТИЧНАЯ ГЛАВНАЯ — одна задача (играть); b109: отдельный экран (мир больше НЕ просвечивает — байк не лезет под кнопки)
+    // b137 ГЛАВНЫЙ ЭКРАН переделан (юзер: «слабый, непонятно что там»): герой-визуал (байк на живом неон-графике) + 3 РЕЖИМА явной структурой + ясная экономика ($⇄◆) + парадная дверь к боссам.
+    ctx.fillStyle='#070612'; ctx.fillRect(0,0,W,H);
     if(stars)for(const s of stars){ ctx.fillStyle='rgba(220,225,255,'+(0.18+0.3*Math.abs(Math.sin(t*0.03+s.x)))+')'; ctx.fillRect(s.x,s.y,s.s||1,s.s||1); }
     ctx.textAlign='center';
-    UI.settings={x:16,y:16,w:46,h:38}; ctx.fillStyle='rgba(30,40,62,0.6)'; if(ctx.roundRect){ctx.beginPath();ctx.roundRect(16,16,46,38,10);ctx.fill();ctx.strokeStyle='rgba(150,180,220,0.5)';ctx.lineWidth=1.4;ctx.stroke();} ctx.fillStyle='#cfe0ff'; ctx.font='20px ui-monospace,monospace'; ctx.fillText('⚙',39,42);
+    // ---- верхняя панель: ⚙ · экономика-чип ($ ◆ ранг) · 🔧 ГАРАЖ ----
+    UI.settings={x:16,y:16,w:46,h:38}; ctx.fillStyle='rgba(30,40,62,0.6)'; ctx.beginPath();ctx.roundRect(16,16,46,38,10);ctx.fill();ctx.strokeStyle='rgba(150,180,220,0.5)';ctx.lineWidth=1.4;ctx.stroke(); ctx.fillStyle='#cfe0ff'; ctx.font='20px ui-monospace,monospace'; ctx.fillText('⚙',39,42);
     if(CORE_TEST_MODE){ UI.garage=null; UI.bankChip=null; }
-    else { UI.garage={x:W-112,y:16,w:96,h:38}; ctx.fillStyle='rgba(34,54,46,0.72)'; if(ctx.roundRect){ctx.beginPath();ctx.roundRect(W-112,16,96,38,10);ctx.fill();ctx.strokeStyle='rgba(120,255,180,0.65)';ctx.lineWidth=1.5;ctx.stroke();} ctx.fillStyle='#9ff0c8'; ctx.font='800 13px ui-monospace,monospace'; ctx.fillText('🔧 ГАРАЖ',W-64,40);
-      const ri=rankIdx(career), rk=RANKS[ri], chW=W-184; UI.bankChip={x:66,y:18,w:chW,h:34}; ctx.fillStyle='rgba(24,28,46,0.7)'; if(ctx.roundRect){ctx.beginPath();ctx.roundRect(66,18,chW,34,10);ctx.fill();ctx.strokeStyle='rgba(120,140,180,0.35)';ctx.lineWidth=1;ctx.stroke();} ctx.fillStyle='#ffd678'; ctx.font='800 12px ui-monospace,monospace'; ctx.fillText('$'+bank+'  ◆'+career+'  '+rk.e,66+chW/2,39); }   // b112: $ рабочий · ◆ холод(diamond hands)
-    ctx.fillStyle='#eafaff'; ctx.font='800 31px ui-monospace,monospace'; ctx.shadowColor='rgba(80,220,255,0.55)'; ctx.shadowBlur=16; ctx.fillText('CHART RUNNER',W/2,H*0.20); ctx.shadowBlur=0;
-    ctx.fillStyle='#9fb0d0'; ctx.font='11px ui-monospace,monospace'; ctx.fillText('оседлай реальный крипто-график',W/2,H*0.20+22);
-    if(career>0){ ctx.fillStyle='rgba(150,200,255,0.72)'; ctx.font='600 10px ui-monospace,monospace'; ctx.fillText('💎 стейкинг: ◆'+career+' приносит +$'+Math.round(career*STAKE_YIELD)+' за круг',W/2,H*0.20+40); }   // b118: текст яснее (был «/заезд»); «за круг» = как у вызовов
-    if(CORE_TEST_MODE){ UI.action={x:W/2-105,y:H*0.5,w:210,h:48}; panel(UI.action.x,UI.action.y,210,48,'rgba(120,255,180,0.85)'); ctx.fillStyle='#9ff0c8'; ctx.font='800 16px ui-monospace,monospace'; ctx.fillText('▶ ИГРАТЬ',W/2,UI.action.y+30); UI.replay=UI.coinBtn=UI.careerBtn=UI.trainBtn=UI.help=UI.lev=UI.left=UI.right=UI.career=null; }
+    else { UI.garage={x:W-112,y:16,w:96,h:38}; ctx.fillStyle='rgba(34,54,46,0.72)'; ctx.beginPath();ctx.roundRect(W-112,16,96,38,10);ctx.fill();ctx.strokeStyle='rgba(120,255,180,0.65)';ctx.lineWidth=1.5;ctx.stroke(); ctx.fillStyle='#9ff0c8'; ctx.font='800 13px ui-monospace,monospace'; ctx.fillText('🔧 ГАРАЖ',W-64,40);
+      const ri=rankIdx(career), rk=RANKS[ri], chW=W-184; UI.bankChip={x:66,y:18,w:chW,h:34}; ctx.fillStyle='rgba(24,28,46,0.7)'; ctx.beginPath();ctx.roundRect(66,18,chW,34,10);ctx.fill();ctx.strokeStyle='rgba(120,140,180,0.35)';ctx.lineWidth=1;ctx.stroke();
+      ctx.textAlign='center'; ctx.font='800 13px ui-monospace,monospace'; ctx.fillStyle='#ffd678'; ctx.fillText('$'+bank,66+chW*0.30,38); ctx.fillStyle='#9fe0ff'; ctx.fillText('◆'+career,66+chW*0.68,38); ctx.font='14px ui-monospace,monospace'; ctx.fillText(rk.e,66+chW*0.92,39); }
+    // ---- ГЕРОЙ: живой неон-график + байк ----
+    const hbY=H*0.085, hbH=H*0.205, hcY=hbY+hbH*0.70;
+    const heroBike=(cx,cy,s,a)=>{ ctx.save(); ctx.translate(cx,cy); ctx.rotate(clamp(a,-0.5,0.5)); ctx.scale(s,s); ctx.lineCap='round'; ctx.shadowColor='#5cf0ff'; ctx.shadowBlur=8;
+      ctx.strokeStyle='#bfeaff'; ctx.lineWidth=2; ctx.beginPath(); ctx.arc(-11,0,6.3,0,6.283); ctx.moveTo(17.3,0); ctx.arc(11,0,6.3,0,6.283); ctx.stroke();
+      ctx.beginPath(); ctx.moveTo(-11,0); ctx.lineTo(-2,-7); ctx.lineTo(8,-7); ctx.lineTo(11,0); ctx.moveTo(-2,-7); ctx.lineTo(2,0); ctx.lineTo(11,0); ctx.moveTo(8,-7); ctx.lineTo(13,-12); ctx.stroke();
+      ctx.strokeStyle='#ffcf9a'; ctx.beginPath(); ctx.moveTo(1,-6); ctx.lineTo(4,-15); ctx.stroke(); ctx.fillStyle='#ffcf9a'; ctx.shadowBlur=4; ctx.beginPath(); ctx.arc(5,-18,2.8,0,6.283); ctx.fill(); ctx.restore(); };
+    // dim candlestick backdrop
+    for(let i=0;i<13;i++){ const cx=24+i*((W-48)/12); const ph=t*0.018+i*0.7, up=Math.sin(ph)>0, bh=14+20*Math.abs(Math.sin(ph*1.3)); ctx.fillStyle=up?'rgba(80,230,170,0.09)':'rgba(255,110,120,0.09)'; ctx.fillRect(cx-3, hcY-bh*0.5+8*Math.sin(ph), 6, bh); }
+    // neon price line
+    const N=46, pts=[]; for(let i=0;i<=N;i++){ const x=10+i*((W-20)/N); const ph=t*0.02 - i*0.27; const y=hcY-(Math.sin(ph)*15+Math.sin(ph*0.5+1)*20+Math.sin(ph*2.3)*5); pts.push({x:x,y:y}); }
+    ctx.save(); ctx.strokeStyle='#5cf0ff'; ctx.lineWidth=2.6; ctx.shadowColor='#5cf0ff'; ctx.shadowBlur=14; ctx.beginPath(); pts.forEach((p,i)=>i?ctx.lineTo(p.x,p.y):ctx.moveTo(p.x,p.y)); ctx.stroke();
+    const bi=Math.round(N*0.6), bp=pts[bi], bp2=pts[bi+1]||bp, ba=Math.atan2(bp2.y-bp.y,bp2.x-bp.x);
+    ctx.strokeStyle='rgba(120,240,255,0.55)'; ctx.lineWidth=4; ctx.beginPath(); for(let k=bi;k>=Math.max(0,bi-7);k--){ const q=pts[k]; k===bi?ctx.moveTo(q.x,q.y):ctx.lineTo(q.x,q.y); } ctx.stroke(); ctx.restore();
+    heroBike(bp.x,bp.y-9,1.15,ba);
+    // title over hero
+    ctx.fillStyle='#eafaff'; ctx.font='800 33px ui-monospace,monospace'; ctx.shadowColor='rgba(80,220,255,0.6)'; ctx.shadowBlur=18; ctx.fillText('CHART RUNNER',W/2,hbY+34); ctx.shadowBlur=0;
+    ctx.fillStyle='#9fb0d0'; ctx.font='11px ui-monospace,monospace'; ctx.fillText('гоняй по РЕАЛЬНОМУ крипто-графику',W/2,hbY+54);
+    if(CORE_TEST_MODE){ UI.action={x:W/2-105,y:H*0.5,w:210,h:48}; panel(UI.action.x,UI.action.y,210,48,'rgba(120,255,180,0.85)'); ctx.fillStyle='#9ff0c8'; ctx.font='800 16px ui-monospace,monospace'; ctx.fillText('▶ ИГРАТЬ',W/2,UI.action.y+30); UI.replay=UI.coinBtn=UI.careerBtn=UI.trainBtn=UI.tEvents=UI.help=UI.ddiamond=null; }
     else {
-    let hy=H*0.30; const lc=TICKERS[lastTk]||TICKERS[0], pv=tkPrev[lc.k];
-    if(hasLast){ UI.replay={x:W/2-140,y:hy,w:280,h:96}; ctx.fillStyle='rgba(16,35,26,0.9)'; if(ctx.roundRect){ctx.beginPath();ctx.roundRect(UI.replay.x,hy,280,96,16);ctx.fill();ctx.strokeStyle='rgba(63,207,142,0.9)';ctx.lineWidth=2;ctx.stroke();}
-      ctx.textAlign='left'; ctx.fillStyle='rgba(150,180,200,0.8)'; ctx.font='600 9px ui-monospace,monospace'; ctx.fillText('ПРОДОЛЖИТЬ ПОСЛЕДНИЙ',UI.replay.x+18,hy+20);
-      ctx.fillStyle='#eafaff'; ctx.font='800 19px ui-monospace,monospace'; ctx.fillText(lc.name+'  ×'+leverage,UI.replay.x+18,hy+44);
-      if(pv){ const tc=pv.volLabel==='НИЗК'?'#9ff0c8':pv.volLabel==='СРЕД'?'#ffd678':pv.volLabel==='ВЫС'?'#ffb070':'#ff7a6a'; ctx.fillStyle=tc; ctx.font='700 9px ui-monospace,monospace'; ctx.fillText('волат '+pv.volLabel,UI.replay.x+18,hy+60); drawSpark(pv.spark,UI.replay.x+150,hy+26,110,30,pv.up?'#7fe6a8':'#ff7a6a'); }
-      ctx.fillStyle='rgba(18,58,40,0.85)'; if(ctx.roundRect){ctx.beginPath();ctx.roundRect(UI.replay.x+18,hy+70,244,18,7);ctx.fill();} ctx.textAlign='center'; ctx.fillStyle='#9ff0c8'; ctx.font='800 12px ui-monospace,monospace'; ctx.fillText('▶  ПОГНАЛИ',W/2,hy+83);
-      hy+=110; } else UI.replay=null;
-    const big=!hasLast; UI.coinBtn={x:W/2-140,y:hy,w:280,h:big?56:46};
-    panel(UI.coinBtn.x,UI.coinBtn.y,280,UI.coinBtn.h,'rgba(120,200,255,0.9)','rgba(28,66,116,0.4)'); ctx.textAlign='center'; ctx.fillStyle='#cfeaff'; ctx.font=(big?'800 18px':'800 15px')+' ui-monospace,monospace'; ctx.fillText(big?'🪙  ВЫБРАТЬ МОНЕТУ':'🪙  ДРУГАЯ МОНЕТА',W/2,UI.coinBtn.y+UI.coinBtn.h/2+6);
-    hy+=UI.coinBtn.h+12;
-    UI.careerBtn={x:W/2-140,y:hy,w:135,h:42}; panel(UI.careerBtn.x,hy,135,42,'rgba(255,200,120,0.75)','rgba(150,110,30,0.22)'); ctx.fillStyle='#ffd678'; ctx.font='700 13px ui-monospace,monospace'; ctx.fillText('🏁 ПУТЬ',UI.careerBtn.x+67,hy+26);
-    UI.trainBtn={x:W/2+5,y:hy,w:135,h:42}; panel(UI.trainBtn.x,hy,135,42,'rgba(150,170,210,0.5)','rgba(30,40,62,0.4)'); ctx.fillStyle='#bcd0ee'; ctx.font='700 13px ui-monospace,monospace'; ctx.fillText('♾ ЭНДЛЕСС',UI.trainBtn.x+67,hy+26);   // b126: грайнд-режим «как глубоко» (волна мягче, ∝ прокачке)
-    hy+=56;
-    if(bank>0){ UI.ddiamond={x:W/2-140,y:hy,w:280,h:46}; ctx.fillStyle='rgba(16,32,42,0.85)'; if(ctx.roundRect){ctx.beginPath();ctx.roundRect(W/2-140,hy,280,46,11);ctx.fill();ctx.strokeStyle='rgba(120,200,255,0.7)';ctx.lineWidth=1.4;ctx.stroke();} ctx.fillStyle='#bfe0ff'; ctx.font='800 14px ui-monospace,monospace'; ctx.fillText('💎 ЗАКРЕПИТЬ $'+bank+' → ◆',W/2,hy+20); ctx.fillStyle='rgba(150,180,210,0.82)'; ctx.font='600 9px ui-monospace,monospace'; ctx.fillText('навсегда · растит РАНГ · ликвидация не тронет',W/2,hy+37); hy+=56; } else UI.ddiamond=null;   // b113: яснее — глагол ЗАКРЕПИТЬ + размен
-    UI.help={x:W/2-70,y:hy,w:140,h:30}; ctx.fillStyle='rgba(180,200,230,0.7)'; ctx.font='600 12px ui-monospace,monospace'; ctx.fillText('❓ как играть',W/2,hy+20);
+    // ---- 3 РЕЖИМА (явная структура) + боссы ----
+    const cx0=18, cw=W-36; let my=hbY+hbH+14;
+    const lc=TICKERS[lastTk]||TICKERS[0], pv=tkPrev[lc.k];
+    // 🏃 ЗАБЕГ (основной) — тап по карточке = терминал монет; кнопка ПОГНАЛИ = продолжить последний
+    const zh=hasLast?80:60; UI.coinBtn={x:cx0,y:my,w:cw,h:zh};
+    ctx.fillStyle='rgba(20,46,72,0.7)'; ctx.beginPath();ctx.roundRect(cx0,my,cw,zh,14);ctx.fill(); ctx.strokeStyle='rgba(120,200,255,0.9)';ctx.lineWidth=2;ctx.stroke();
+    ctx.textAlign='left'; ctx.fillStyle='#cfeaff'; ctx.font='800 18px ui-monospace,monospace'; ctx.fillText('🏃 ЗАБЕГ',cx0+16,my+27);
+    ctx.fillStyle='rgba(180,205,235,0.8)'; ctx.font='600 10px ui-monospace,monospace'; ctx.fillText('реальные монеты · риск ×плечо',cx0+16,my+(hasLast?46:48));
+    if(hasLast){ if(pv){ drawSpark(pv.spark,cx0+cw-114,my+11,98,19,pv.up?'#7fe6a8':'#ff7a6a'); }
+      UI.replay={x:cx0+cw-120,y:my+zh-30,w:104,h:22}; ctx.fillStyle='rgba(40,120,90,0.9)'; ctx.beginPath();ctx.roundRect(UI.replay.x,UI.replay.y,104,22,7);ctx.fill(); ctx.textAlign='center'; ctx.fillStyle='#9ff0c8'; ctx.font='800 12px ui-monospace,monospace'; ctx.fillText('▸ ПОГНАЛИ '+lc.name,UI.replay.x+52,UI.replay.y+15);
+      ctx.textAlign='left'; ctx.fillStyle='rgba(150,180,210,0.7)'; ctx.font='600 9px ui-monospace,monospace'; ctx.fillText('▾ сменить монету',cx0+16,my+zh-12); }
+    else { ctx.textAlign='right'; ctx.fillStyle='#9ff0c8'; ctx.font='800 13px ui-monospace,monospace'; ctx.fillText('ВЫБРАТЬ ▸',cx0+cw-18,my+37); UI.replay=null; }
+    ctx.textAlign='left'; my+=zh+10;
+    // 🏁 ПУТЬ
+    UI.careerBtn={x:cx0,y:my,w:cw,h:52}; ctx.fillStyle='rgba(60,44,16,0.6)'; ctx.beginPath();ctx.roundRect(cx0,my,cw,52,12);ctx.fill(); ctx.strokeStyle='rgba(255,200,120,0.7)';ctx.lineWidth=1.5;ctx.stroke();
+    ctx.fillStyle='#ffd678'; ctx.font='800 16px ui-monospace,monospace'; ctx.fillText('🏁 ПУТЬ',cx0+16,my+23); ctx.fillStyle='rgba(220,200,160,0.78)'; ctx.font='600 10px ui-monospace,monospace'; ctx.fillText('лестница вызовов: креветка → кит · медали',cx0+16,my+41);
+    { const ri=rankIdx(career); ctx.textAlign='right'; ctx.fillStyle='rgba(255,214,120,0.85)'; ctx.font='700 11px ui-monospace,monospace'; ctx.fillText(RANKS[ri].e+' '+RANKS[ri].n,cx0+cw-16,my+30); ctx.textAlign='left'; }
+    my+=62;
+    // ♾ ЭНДЛЕСС
+    UI.trainBtn={x:cx0,y:my,w:cw,h:52}; ctx.fillStyle='rgba(28,40,60,0.6)'; ctx.beginPath();ctx.roundRect(cx0,my,cw,52,12);ctx.fill(); ctx.strokeStyle='rgba(150,180,220,0.6)';ctx.lineWidth=1.5;ctx.stroke();
+    ctx.fillStyle='#cfe0ff'; ctx.font='800 16px ui-monospace,monospace'; ctx.fillText('♾ ЭНДЛЕСС',cx0+16,my+23); ctx.fillStyle='rgba(190,205,235,0.78)'; ctx.font='600 10px ui-monospace,monospace'; ctx.fillText('как ГЛУБОКО доедешь · грайнд ∝ прокачке',cx0+16,my+41);
+    my+=62;
+    // 🔥 СОБЫТИЯ-БОССЫ (парадная дверь — раньше юзер не находил)
+    UI.tEvents={x:cx0,y:my,w:cw,h:46}; ctx.fillStyle='rgba(54,24,18,0.7)'; ctx.beginPath();ctx.roundRect(cx0,my,cw,46,12);ctx.fill(); ctx.strokeStyle='rgba(255,122,74,0.85)';ctx.lineWidth=1.5;ctx.stroke();
+    ctx.fillStyle='#ffb59a'; ctx.font='800 14px ui-monospace,monospace'; ctx.fillText('🔥 СОБЫТИЯ-БОССЫ',cx0+16,my+21); ctx.fillStyle='rgba(240,205,195,0.8)'; ctx.font='600 9px ui-monospace,monospace'; ctx.fillText('оседлай реальный исторический крах рынка',cx0+16,my+37);
+    { const ev=BOSSES.filter(b=>('ev_'+b.id in chalDone)).length; ctx.textAlign='right'; ctx.fillStyle='#ffd678'; ctx.font='800 13px ui-monospace,monospace'; ctx.fillText(ev+'/'+BOSSES.length+' ▸',cx0+cw-16,my+28); ctx.textAlign='left'; }
+    my+=58;
+    // ---- ЭКОНОМИКА: $ (торговый) ⇄ ЗАКРЕПИТЬ ⇄ ◆ (холод) ----
+    if(bank>0){ UI.ddiamond={x:cx0,y:my,w:cw,h:48}; ctx.fillStyle='rgba(16,32,42,0.85)'; ctx.beginPath();ctx.roundRect(cx0,my,cw,48,12);ctx.fill(); ctx.strokeStyle='rgba(120,200,255,0.7)';ctx.lineWidth=1.6;ctx.stroke(); ctx.textAlign='center'; ctx.fillStyle='#bfe0ff'; ctx.font='800 14px ui-monospace,monospace'; ctx.fillText('💎 ЗАКРЕПИТЬ $'+bank+' → ◆',W/2,my+21); ctx.fillStyle='rgba(150,180,210,0.82)'; ctx.font='600 9px ui-monospace,monospace'; ctx.fillText('навсегда · растит РАНГ · ликвидация не тронет'+(career>0?' · рента +$'+Math.round(career*STAKE_YIELD)+'/заезд':''),W/2,my+37); my+=54; } else UI.ddiamond=null;
+    ctx.textAlign='center'; ctx.fillStyle='rgba(140,155,195,0.6)'; ctx.font='600 9px ui-monospace,monospace'; ctx.fillText('$ риск ×плечо    ·    ◆ холод: ранг + рента',W/2,my+10); my+=24;
+    UI.help={x:W/2-70,y:my,w:140,h:28}; ctx.fillStyle='rgba(180,200,230,0.7)'; ctx.font='600 12px ui-monospace,monospace'; ctx.fillText('❓ как играть',W/2,my+19);
     UI.lev=UI.left=UI.right=UI.career=UI.action=null;
-    if(dailyBonusT>0){ dailyBonusT-=0.006; const a=clamp(Math.min(dailyBonusT*4,1),0,1); ctx.globalAlpha=a; ctx.fillStyle='#ffd678'; ctx.font='800 16px ui-monospace,monospace'; ctx.shadowColor='#ffd678'; ctx.shadowBlur=14; ctx.fillText('🎁 ЕЖЕДНЕВНЫЙ БОНУС  +$'+dailyBonus,W/2,H*0.92); ctx.shadowBlur=0; ctx.globalAlpha=1; } }
+    if(dailyBonusT>0){ dailyBonusT-=0.006; const a=clamp(Math.min(dailyBonusT*4,1),0,1); ctx.globalAlpha=a; ctx.fillStyle='#ffd678'; ctx.font='800 16px ui-monospace,monospace'; ctx.shadowColor='#ffd678'; ctx.shadowBlur=14; ctx.fillText('🎁 ЕЖЕДНЕВНЫЙ БОНУС  +$'+dailyBonus,W/2,H*0.95); ctx.shadowBlur=0; ctx.globalAlpha=1; } }
     if(menuFx>0){ ctx.fillStyle='rgba(130,225,255,'+(menuFx*0.20)+')'; ctx.fillRect(0,0,W,H); ctx.textAlign='center'; ctx.fillStyle='rgba(195,245,255,'+menuFx+')'; ctx.font='800 24px ui-monospace,monospace'; ctx.shadowColor='#7fe6ff'; ctx.shadowBlur=16; ctx.fillText('💎 ЗАКРЕПЛЕНО ◆+'+menuFxAmt,W/2,H*0.5); ctx.shadowBlur=0; menuFx-=0.035; }   // b123: флёр фиксации в холод
-    ctx.fillStyle='rgba(125,140,180,0.55)'; ctx.font='10px ui-monospace,monospace'; ctx.fillText('build '+BUILD,W/2,H-12);
+    ctx.fillStyle='rgba(125,140,180,0.55)'; ctx.font='10px ui-monospace,monospace'; ctx.textAlign='center'; ctx.fillText('build '+BUILD,W/2,H-12);
     UI.mute=null; UI.pause=null;
   } else if(screen==='paused'){
     ctx.fillStyle='rgba(6,5,16,0.62)'; ctx.fillRect(0,0,W,H);
