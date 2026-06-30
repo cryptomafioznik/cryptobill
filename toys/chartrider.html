@@ -52,7 +52,7 @@ function lerp(a,b,t){return a+(b-a)*t;} function clamp(v,a,b){return v<a?a:v>b?b
 // false → full game everywhere. Single switch. Systems are GATED, never deleted.
 const CORE_TEST_MODE = false;   // b70: META LIVE — building the progression spine (upgrades/bikes with teeth, career, economy) on the confirmed rigid-body core
 // build stamp — bump on every change so a phone refresh can confirm it loaded fresh code (cache!)
-const BUILD = '2026-06-30 · b132';
+const BUILD = '2026-06-30 · b133';
 
 // ---------- procedural market terrain ----------
 // height map sampled every STEP px; generated forward as we ride. Market character:
@@ -1293,9 +1293,10 @@ function draw(){
       const taunt=(leverage>=50)?('×'+leverage+' — дерзко, рынок не прощает'):(deathBy==='wave')?'волна дампа догнала — газуй раньше':(deathBy==='crash'||deathBy==='loop'||deathBy==='endo')?'разбился — мягче приземляйся':'надо было ЗАФИКСИТЬ вовремя'; ctx.fillStyle='rgba(255,150,162,0.92)'; ctx.font='600 11px ui-monospace,monospace'; ctx.fillText('💀 '+taunt,W/2,H*0.34+16); }   // b117/b121: деген-слэм + контекстная подколка (виральный момент)
     const gain=runGems||0, isBest=cashedOut&&gain>=bestPnl&&gain>0;   // b87: degen-итог в ◆ — что зафиксил/потерял, не абстрактный $
     ctx.save(); const bigW=cashedOut&&gain>=400; if(bigW){ctx.shadowColor='#ffd678';ctx.shadowBlur=20;} ctx.fillStyle=cashedOut?(isBest?'#ffd678':'#6effc0'):'#ff7a8a'; const gf=cashedOut?Math.min(58,42+Math.sqrt(Math.max(0,gain))*0.6):42; ctx.font='800 '+Math.round(gf)+'px ui-monospace,monospace'; ctx.fillText((cashedOut?'$ +':'$ ')+gain.toLocaleString('en-US'),W/2,H*0.34+54); ctx.shadowBlur=0; ctx.restore();   // b122: число профита растёт+светится ∝ размеру (вау-кадр)
-    ctx.fillStyle=newDepth?'#9ff0c8':'#cdbef0';ctx.font=(newDepth?'800 ':'')+'13px ui-monospace,monospace';ctx.fillText(dist+'м'+(newDepth?'  ★ НОВАЯ ГЛУБИНА':'   ·   ⛏ рекорд '+(best||0)+'м')+'   ПЛЕЧО ×'+leverage+'   комбо ×'+maxMult.toFixed(1),W/2,H*0.34+84);
-    ctx.fillStyle=isBest?'#ffd678':'#7a6f9a';ctx.fillText((isBest?'★ РЕКОРД ВЫПЛАТЫ   $':'BEST   $')+bestPnl.toLocaleString('en-US'),W/2,H*0.34+108);
-    ctx.fillStyle=cashedOut?'#9ff0c8':'#ffb0a0';ctx.font='800 13px ui-monospace,monospace';ctx.fillText((cashedOut?'$ '+bank+'  ·  ◆ '+career:'☠ ЛИКВИДИРОВАН ×'+leverage+'  ·  $ '+bank)+(stakeIncome>0?'  💎+$'+stakeIncome:''),W/2,H*0.34+130);   // b101: убрал дубль «ПРОФИТ ЗАФИКСИРОВАН» (он уже крупно в заголовке ~1205)
+    // b132: ДЕКЛАТТЕР экрана смерти (юзер: «много мелкого непонятного текста / текст вылазит»). Старая ОДНА строка статов вылазила за края → разбита надвое: A = дистанция·рекорд (крупно), B = плечо·комбо (тускло). «BEST $0» убран (сбивал с толку при 0). Нижняя строка: убран дубль «ЛИКВИДИРОВАН» (он уже в заголовке) → просто «осталось $X».
+    ctx.fillStyle=newDepth?'#9ff0c8':'#cdbef0';ctx.font='800 15px ui-monospace,monospace';ctx.fillText(dist+'м  ·  рекорд '+(best||0)+'м'+(newDepth?'  ★ ГЛУБЖЕ':''),W/2,H*0.34+84);
+    ctx.fillStyle='#8a86a8';ctx.font='600 11px ui-monospace,monospace';ctx.fillText('ПЛЕЧО ×'+leverage+'    ·    макс. комбо ×'+maxMult.toFixed(1),W/2,H*0.34+104);
+    ctx.fillStyle=cashedOut?'#9ff0c8':'#ffb0a0';ctx.font='800 15px ui-monospace,monospace';ctx.fillText((cashedOut?'$ '+bank+'  ·  ◆ '+career:'осталось  $ '+bank)+(stakeIncome>0?'  💎+$'+stakeIncome:''),W/2,H*0.34+128);   // b101: убрал дубль «ПРОФИТ ЗАФИКСИРОВАН» (он уже крупно в заголовке)
     if(chalResult){ const md=chalResult.medal; ctx.fillStyle=md>=0?'#ffd678':'#ff9a8a'; ctx.font='800 12px ui-monospace,monospace'; ctx.fillText(md>=0?('🏁 ВЫЗОВ ПРОЙДЕН '+(['🥉','🥈','🥇'][md]||'')+(chalResult.rew>0?'  +◆'+chalResult.rew:'')):'🏁 ВЫЗОВ НЕ ПРОЙДЕН — ещё разок',W/2,H*0.34+150); }   // b118: итог вызова Пути (вместо гир-подсказки)
     else { const tip=deathBy==='wave'?'🛡 качай ЩИТ ОТ ВОЛНЫ — оторвёшься от дампа':(deathBy==='loop'||deathBy==='endo')?'◎ качай СЦЕПЛЕНИЕ — прощает кувырки':deathBy==='crash'?'◎ качай СЦЕПЛЕНИЕ — мягче посадки':'⚙ качай ДВИЖОК — быстрее уедешь'; ctx.fillStyle='#9fd0ea';ctx.font='11px ui-monospace,monospace';ctx.fillText(tip,W/2,H*0.34+150); } }
     if(gameMode!=='career'){ UI.dshare={x:W/2-94,y:H*0.34+162,w:188,h:36}; const sp=0.55+0.45*Math.sin(t*0.18);   // b93 ВИРАЛЬНОСТЬ: кнопка похвастаться (для тиктоков/чатов)
