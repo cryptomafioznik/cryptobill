@@ -52,7 +52,7 @@ function lerp(a,b,t){return a+(b-a)*t;} function clamp(v,a,b){return v<a?a:v>b?b
 // false → full game everywhere. Single switch. Systems are GATED, never deleted.
 const CORE_TEST_MODE = false;   // b70: META LIVE — building the progression spine (upgrades/bikes with teeth, career, economy) on the confirmed rigid-body core
 // build stamp — bump on every change so a phone refresh can confirm it loaded fresh code (cache!)
-const BUILD = '2026-06-30 · b137';
+const BUILD = '2026-06-30 · b138';
 
 // ---------- procedural market terrain ----------
 // height map sampled every STEP px; generated forward as we ride. Market character:
@@ -906,7 +906,7 @@ function update(){
   // b135: КИКЕР / ПАМП-ТРАМПЛИН в ЖИВОЙ физике. БАГ-КОРЕНЬ: с миграции на rigidStep (b68) код кикера остался в МЁРТВОМ if(0)-блоке → пампы (b116) и трик-рампы НЕ запускали байк ВООБЩЕ (юзер: «гига-памп 2, не хватает флипов/трамплинов» — фича была физически мертва). Теперь большая зелёная свеча (.pump) / трик-рампа (.kick) реально пуляет ∝ скорости × силе пампа, с воздухом, которого хватает на флип. Коэф/кап/PUMP_K — руки.
   { const ci0=Math.floor(bike.x/STEP), kn=terr[ci0];
     if(bike.onG && kn && kn.kick && !kn.kicked && bike.vx>1.0){ kn.kicked=true; const _pm=(kn.pumpMag>0)?kn.pumpMag:1;
-      bike.vy=Math.min(bike.vy, Math.max(-26, -(bike.vx*1.5 + 7)*_pm)); bike.onG=false; airT=0; nearMissed=false; gflash=Math.max(gflash,0.4); shake=Math.max(shake,5); sfxAir();
+      bike.vy=Math.min(bike.vy, Math.max(-23, -(bike.vx*1.3 + 5)*_pm)); bike.onG=false; airT=0; nearMissed=false; gflash=Math.max(gflash,0.4); shake=Math.max(shake,5); sfxAir();   // b138: ПЛАВНЕЕ (юзер: дерзко/бросает) — взлёт −26→−23, коэф 1.5+7→1.3+5: памп остаётся трамплином, но менее резко швыряет = контролируемее в воздухе. Сила/кап — РУКИ
       for(let e=0;e<8;e++)dust.push({x:bike.x-8+Math.random()*16,y:bike.y+22,vx:(Math.random()-0.5)*3.2,vy:-Math.random()*2.8,life:1,r:Math.random()*2.6+1.2});
       if(kn.pump){ const _big=_pm>=1.5; popText(_big?'🚀 ГИГА-ПАМП — НА ЛУНУ!':'🚀 ПАМП — ВЗЛЁТ!'); gflash=Math.max(gflash,_big?0.9:0.6); boost=Math.min(1,(boost||0)+0.25); shake=Math.max(shake,_big?14:9); if(_big)slowmo=Math.max(slowmo,14); for(let e=0;e<(_big?24:14);e++)parts.push({x:bike.x-18-Math.random()*12,y:bike.y+8+Math.random()*10,vx:-2-Math.random()*5,vy:0.4+Math.random()*3,life:1,r:Math.random()*3+1.6,gold:true}); } } }
   if(jumpReq>0){ if(bike.onG && jumpCd<=0){ bike.vy-=RB.jump; bike.onG=false; jumpReq=0; jumpCd=16; airT=0; nearMissed=false; jumpGrace=1; shake=Math.max(shake,3); for(let e=0;e<7;e++)dust.push({x:bike.x-10+Math.random()*20,y:bike.y+24,vx:(Math.random()-0.5)*2.4,vy:-Math.random()*2,life:1,r:Math.random()*2.4+1}); sfxAir(); } else jumpReq--; }   // swipe-up hop = vy impulse on the rigid body
@@ -927,7 +927,7 @@ function update(){
     if(airT>14 && (diff > RB.crashAngle + 0.12*upgLvl('grip') + 0.10*upgLvl('susp') + Math.max(0,(BK().grip-1.40))*0.4 || Math.abs(bike.angV) > RB.spinCrash + 0.03*upgLvl('grip'))){ wipeout('crash'); }   // b88: ПОДВЕСКА расширяет конус прощения посадки (большие полёты приземляются мягче/безопаснее)   // b72 СКИЛЛ-БИТ (Trials): land too far off wheels-down OR still SPINNING fast = CRASH (botched/over-rotated flip costs). СЦЕПЛЕНИЕ upgrade + grippy bike widen tolerance (interconnected). Tune RB.crashAngle/spinCrash by hand
     else { sfxLand();
       // b131: PLANT THE LANDING — settle the touchdown pitch toward wheels-down vs the slope. This was the b65 intent but got LOST when physics moved to rigidStep (b68 only damped angV, NOT the angle — the stale comment claimed the rigid body settles it, but sim proved it does NOT): a pitched touchdown (nose 0.5–1.3 rad up) rode REARED and bled speed frame-after-frame, never re-accelerating = the user's "залипает при приземлении" / "прилип к трассе". Fires ONLY on a real-air, non-crash landing (airT>10, crash already rejected above) when the rider is NOT holding a lean (|rShift|<0.4 → an intentional wheelie/flip-hold is preserved; a completed flip already scored its air rotation, so settling the residual lands it clean). rel is the normalized pitch-vs-slope → moving ang along it takes the short path even after multi-flips (bike.ang accumulates, never normalized).
-      if(airT>10 && Math.abs(bike.rShift)<0.4){ bike.ang -= rel*0.55; rel*=0.45; }   // 55% settle to slope-aligned wheels-down (not 100% = no teleport-snap pop); rel re-synced so the loop/endo checks below see the corrected angle
+      if(airT>10 && Math.abs(bike.rShift)<0.4){ bike.ang -= rel*0.38; bike.angV += -rel*0.10; rel*=0.62; }   // b138: ПЛАВНЕЕ (юзер: посадка резкая) — снап 0.55→0.38 (мягче за кадр) + доводка УГЛОВОЙ СКОРОСТЬЮ (доворачивается за пару кадров, не телепорт) → планирует без залипания, но без рывка. rel re-синк для loop/endo-чеков ниже
       bike.angV*=0.4;   // damp residual spin on touchdown
       if(airT>28){ const ab=airT*0.1*mult; coins+=ab; mult+=0.4; boost=Math.min(1,(boost||0)+0.3); multPulse=1; popText('BIG AIR  +$'+Math.round(ab)); floatPop(bike.x,bike.y-30,'+$'+Math.round(ab),'#9ff0ff'); gflash=0.6; shake=7; sfxAir(); buzz(18); }
       else if(diff<0.16 && airT>10){ coins+=2; floatPop(bike.x,bike.y-34,'CLEAN +$2','#aef0ff'); }
