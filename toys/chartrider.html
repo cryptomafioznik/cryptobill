@@ -52,7 +52,7 @@ function lerp(a,b,t){return a+(b-a)*t;} function clamp(v,a,b){return v<a?a:v>b?b
 // false → full game everywhere. Single switch. Systems are GATED, never deleted.
 const CORE_TEST_MODE = false;   // b70: META LIVE — building the progression spine (upgrades/bikes with teeth, career, economy) on the confirmed rigid-body core
 // build stamp — bump on every change so a phone refresh can confirm it loaded fresh code (cache!)
-const BUILD = '2026-06-29 · b116';
+const BUILD = '2026-06-29 · b117';
 
 // ---------- procedural market terrain ----------
 // height map sampled every STEP px; generated forward as we ride. Market character:
@@ -1214,6 +1214,7 @@ function draw(){
       ctx.fillStyle=nb?'#ffd678':'#9ff0c8';ctx.font='800 46px ui-monospace,monospace';ctx.fillText(dist+' m',W/2,H*0.34+58);
       ctx.fillStyle=nb?'#ffd678':'#7a8bb0';ctx.font='700 14px ui-monospace,monospace';ctx.fillText(nb?'★ НОВЫЙ РЕКОРД':'рекорд  '+(best||0)+' m',W/2,H*0.34+90);
     } else {
+    if(!cashedOut){ ctx.save(); ctx.translate(W/2,H*0.34-4); ctx.rotate(-0.12); const ps=1+0.45*Math.max(0,flash); ctx.scale(ps,ps); ctx.strokeStyle='rgba(255,90,110,0.55)'; ctx.lineWidth=2.5; if(ctx.roundRect){ctx.beginPath();ctx.roundRect(-92,-30,184,44,8);ctx.stroke();} ctx.fillStyle='rgba(255,64,86,0.95)'; ctx.font='900 36px ui-monospace,monospace'; ctx.shadowColor='#ff2040'; ctx.shadowBlur=16; ctx.fillText('💀 REKT',0,2); ctx.shadowBlur=0; ctx.restore(); }   // b117 косметика: деген-штамп при ликвидации (slam-in от flash)
     const gain=runGems||0, isBest=cashedOut&&gain>=bestPnl&&gain>0;   // b87: degen-итог в ◆ — что зафиксил/потерял, не абстрактный $
     ctx.fillStyle=cashedOut?(isBest?'#ffd678':'#6effc0'):'#ff7a8a';ctx.font='800 42px ui-monospace,monospace';ctx.fillText((cashedOut?'$ +':'$ ')+gain.toLocaleString('en-US'),W/2,H*0.34+54);
     ctx.fillStyle=newDepth?'#9ff0c8':'#cdbef0';ctx.font=(newDepth?'800 ':'')+'13px ui-monospace,monospace';ctx.fillText(dist+'м'+(newDepth?'  ★ НОВАЯ ГЛУБИНА':'   ·   ⛏ рекорд '+(best||0)+'м')+'   ПЛЕЧО ×'+leverage+'   комбо ×'+maxMult.toFixed(1),W/2,H*0.34+84);
