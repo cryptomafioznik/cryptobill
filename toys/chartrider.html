@@ -52,7 +52,7 @@ function lerp(a,b,t){return a+(b-a)*t;} function clamp(v,a,b){return v<a?a:v>b?b
 // false → full game everywhere. Single switch. Systems are GATED, never deleted.
 const CORE_TEST_MODE = false;   // b70: META LIVE — building the progression spine (upgrades/bikes with teeth, career, economy) on the confirmed rigid-body core
 // build stamp — bump on every change so a phone refresh can confirm it loaded fresh code (cache!)
-const BUILD = '2026-06-29 · b123';
+const BUILD = '2026-06-29 · b125';
 
 // ---------- procedural market terrain ----------
 // height map sampled every STEP px; generated forward as we ride. Market character:
@@ -449,11 +449,19 @@ let activeChal=null, chalResult=null;   // activeChal = вызов в текущ
 function saveChal(){ try{localStorage.setItem('cipher_chal',JSON.stringify(chalDone));}catch(e){} }
 function chalCoinIdx(c){ for(let i=0;i<TICKERS.length;i++)if(TICKERS[i].k===c)return i; return 0; }
 function startChallenge(ch){ startTicker(chalCoinIdx(ch.coin), ch); }   // грузит монету вызова с активной целью
+function dailyToday(){ try{return new Date().toDateString();}catch(e){return 'x';} }   // b125 ВЫЗОВ ДНЯ (ретеншн)
+let dailyDoneDay=''; try{dailyDoneDay=localStorage.getItem('cipher_daily_done')||'';}catch(e){}
+function dailyChal(){ const ds=dailyToday(); let h=0; for(let i=0;i<ds.length;i++)h=(h*31+ds.charCodeAt(i))>>>0;   // детерминирован по дню → одинаков весь день, меняется назавтра
+  const tk=TICKERS[h%TICKERS.length], isBank=((h>>4)&1)===0;
+  const ch={id:'daily', coin:tk.k, daily:true, reqRank:0, rew:200, goal:isBank?'bank':'finish', name:isBank?('Набанкать на '+tk.name):('Доехать: '+tk.name)};
+  if(isBank)ch.med=[400,1000,2200]; return ch; }
 function finishChallenge(){   // b118: оценка вызова в конце тикер-заезда. runGems = банк за круг; finish = дошёл до конца графика
   if(!activeChal)return; const ch=activeChal; let medal=-1;
   if(ch.goal==='finish'){ if(dist>=finishDist)medal=2; }
   else if(ch.goal==='bank'){ const m=ch.med||[1,1,1]; medal=(runGems>=m[2])?2:(runGems>=m[1])?1:(runGems>=m[0])?0:-1; }
-  let rew=0; if(medal>=0){ const prev=(ch.id in chalDone)?chalDone[ch.id]:-1; if(medal>prev)chalDone[ch.id]=medal; if(prev<0){rew=ch.rew; bank+=rew;} saveChal(); saveMeta(); }
+  let rew=0;
+  if(ch.daily){ if(medal>=0){ const td=dailyToday(); if(dailyDoneDay!==td){ dailyDoneDay=td; rew=ch.rew; bank+=rew; try{localStorage.setItem('cipher_daily_done',td);}catch(e){} saveMeta(); } } }   // b125: дейли — награда раз в день
+  else if(medal>=0){ const prev=(ch.id in chalDone)?chalDone[ch.id]:-1; if(medal>prev)chalDone[ch.id]=medal; if(prev<0){rew=ch.rew; bank+=rew;} saveChal(); saveMeta(); }
   chalResult={name:ch.name, medal:medal, rew:rew}; activeChal=null; }
 try{careerMax=+localStorage.getItem('cipher_career_max')||0;}catch(e){}
 function saveCareer(){ try{localStorage.setItem('cipher_career_max',careerMax);}catch(e){} }
@@ -628,6 +636,7 @@ function pointerDown(p){
   }
   if(screen==='path'){   // b118: Путь трейдера
     if(hit(p,UI.pback)){ screen='title'; sfxClick(); return; }
+    if(UI.dailyRow && hit(p,UI.dailyRow)){ if(dailyDoneDay!==dailyToday()) startChallenge(dailyChal()); else sfxClick(); sfxClick(); return; }   // b125: вызов дня
     if(UI.chalRows)for(let i=0;i<UI.chalRows.length;i++){ if(hit(p,UI.chalRows[i])){ const ch=CHALLENGES[i]; if(rankIdx(career)>=ch.reqRank){ startChallenge(ch); } else sfxClick(); sfxClick(); return; } }
     return;
   }
@@ -1131,11 +1140,11 @@ function draw(){
     ctx.beginPath(); ctx.moveTo(-7,1); ctx.lineTo(-7,-13); ctx.lineTo(-3.5,-7); ctx.lineTo(0,-17); ctx.lineTo(3.5,-7); ctx.lineTo(7,-13); ctx.lineTo(7,1); ctx.closePath(); ctx.fill(); ctx.stroke(); ctx.shadowBlur=0;
     ctx.restore();
     if(c.x>bike.x){ ctx.fillStyle='rgba(255,80,100,'+(0.4+0.4*Math.sin(t*0.3))+')'; ctx.textAlign='center'; ctx.font='700 12px ui-monospace,monospace'; ctx.fillText('▼',c.x,c.y-28); ctx.textAlign='left'; } } }
-  // coins floating above the surface — spinning gems (◆)
-  for(let i=i0;i<=i1;i++){const c=terr[i];if(c&&c.coin){const cy=c.y-30-2*Math.sin(t*0.08+i);const p=0.55+0.45*Math.sin(t*0.12+i);const sw=5.5+1.6*Math.abs(Math.sin(t*0.09+i));
-    ctx.save();ctx.translate(c.x,cy);ctx.rotate(0.785);ctx.shadowColor='#ffd678';ctx.shadowBlur=12;
-    ctx.fillStyle='rgba(255,205,110,'+(0.55+0.35*p)+')';ctx.fillRect(-sw/2,-sw/2,sw,sw);
-    ctx.fillStyle='rgba(255,248,222,'+p+')';ctx.fillRect(-sw/4,-sw/4,sw/2,sw/2);ctx.restore();ctx.shadowBlur=0;}}
+  // coins floating above the surface — $ tokens (b124: ромб→$-монета, совпадает с экономикой — собираешь $)
+  for(let i=i0;i<=i1;i++){const c=terr[i];if(c&&c.coin){const cy=c.y-30-2*Math.sin(t*0.08+i);const p=0.55+0.45*Math.sin(t*0.12+i);const rr=6+0.8*Math.abs(Math.sin(t*0.09+i));
+    ctx.save();ctx.translate(c.x,cy);ctx.shadowColor='#ffd678';ctx.shadowBlur=12;
+    ctx.fillStyle='rgba(255,205,110,'+(0.6+0.35*p)+')';ctx.beginPath();ctx.arc(0,0,rr,0,7);ctx.fill();ctx.shadowBlur=0;
+    ctx.fillStyle='rgba(110,72,16,'+(0.78+0.22*p)+')';ctx.font='800 '+Math.round(rr*1.4)+'px ui-monospace,monospace';ctx.textAlign='center';ctx.textBaseline='middle';ctx.fillText('$',0,0.5);ctx.restore();}}
   // floating score popups (gems / near-miss) — world space
   ctx.textAlign='center'; ctx.font='700 13px ui-monospace,monospace';
   for(const f of floats){ ctx.globalAlpha=Math.min(1,f.life*1.4); ctx.fillStyle=f.col; ctx.fillText(f.txt,f.x,f.y); } ctx.globalAlpha=1; ctx.textAlign='left';
@@ -1439,7 +1448,13 @@ function drawMenus(){
     ctx.textAlign='center'; ctx.fillStyle='#eafaff'; ctx.font='800 21px ui-monospace,monospace'; ctx.shadowColor='rgba(255,200,120,0.5)'; ctx.shadowBlur=10; ctx.fillText('🏁 ПУТЬ ТРЕЙДЕРА',W/2,46); ctx.shadowBlur=0;
     const ri0=rankIdx(career), rk0=RANKS[ri0]; ctx.fillStyle='#9fb0d0'; ctx.font='600 10px ui-monospace,monospace'; ctx.fillText('ранг '+rk0.e+' '+rk0.n+'  ·  ◆'+career,W/2,66);
     UI.pback={x:14,y:16,w:74,h:32}; panel(UI.pback.x,UI.pback.y,74,32,'rgba(150,180,220,0.6)','rgba(30,40,62,0.5)'); ctx.fillStyle='#cfe0ff'; ctx.font='700 12px ui-monospace,monospace'; ctx.fillText('‹ НАЗАД',UI.pback.x+37,UI.pback.y+21);
-    UI.chalRows=[]; const rh=54, gp=7, top=84, lw=W-28, lx=14;
+    UI.chalRows=[]; const rh=54, gp=7, lw=W-28, lx=14;
+    { const dc=dailyChal(), dDone=(dailyDoneDay===dailyToday()), dtk=TICKERS[chalCoinIdx(dc.coin)]; UI.dailyRow={x:lx,y:82,w:lw,h:50};   // b125: ВЫЗОВ ДНЯ
+      panel(lx,82,lw,50, dDone?'rgba(120,255,180,0.8)':'rgba(120,200,255,0.92)', dDone?'rgba(30,72,52,0.3)':'rgba(28,66,116,0.32)');
+      ctx.textAlign='left'; ctx.fillStyle='#cfeaff'; ctx.font='800 13px ui-monospace,monospace'; ctx.fillText((dDone?'✓ ':'📅 ')+'ВЫЗОВ ДНЯ · '+dtk.name, lx+12, 103);
+      ctx.fillStyle='rgba(185,210,240,0.82)'; ctx.font='600 9px ui-monospace,monospace'; ctx.fillText(dDone?'выполнен — завтра новый':(dc.name+'  ·  раз в день'), lx+12, 121);
+      if(!dDone){ ctx.textAlign='right'; ctx.fillStyle='#ffd678'; ctx.font='700 13px ui-monospace,monospace'; ctx.fillText('+◆'+dc.rew, lx+lw-12, 112); ctx.textAlign='left'; } }
+    const top=144;
     for(let i=0;i<CHALLENGES.length;i++){ const ch=CHALLENGES[i], y=top+i*(rh+gp); const r={x:lx,y:y,w:lw,h:rh}; UI.chalRows.push(r);
       const locked=ri0<ch.reqRank, done=(ch.id in chalDone), med=done?chalDone[ch.id]:-1, tk=TICKERS[chalCoinIdx(ch.coin)];
       panel(r.x,r.y,lw,rh, done?'rgba(120,255,180,0.82)':locked?'rgba(90,95,115,0.34)':'rgba(255,200,120,0.85)', done?'rgba(30,72,52,0.3)':locked?'rgba(22,26,42,0.55)':'rgba(110,80,28,0.24)');
