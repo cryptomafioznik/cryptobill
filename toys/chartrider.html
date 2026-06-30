@@ -52,7 +52,7 @@ function lerp(a,b,t){return a+(b-a)*t;} function clamp(v,a,b){return v<a?a:v>b?b
 // false → full game everywhere. Single switch. Systems are GATED, never deleted.
 const CORE_TEST_MODE = false;   // b70: META LIVE — building the progression spine (upgrades/bikes with teeth, career, economy) on the confirmed rigid-body core
 // build stamp — bump on every change so a phone refresh can confirm it loaded fresh code (cache!)
-const BUILD = '2026-06-29 · b117';
+const BUILD = '2026-06-29 · b118';
 
 // ---------- procedural market terrain ----------
 // height map sampled every STEP px; generated forward as we ride. Market character:
@@ -232,7 +232,8 @@ async function loadCandles(t){   // кэш 1ч → live fetch Binance → fallba
     tickerLoadErr=false; return d;
   }catch(e){ tickerLoadErr=true; return MARKET_DATA.btc.data; }
 }
-function startTicker(idx){ const t=TICKERS[idx]||TICKERS[0]; selTicker=t.k; tickerName=t.name; screen='tickerload'; tickerLoadT=0;
+function startTicker(idx,ch){ activeChal=ch||null;   // b118: ch = вызов Пути (null = свободный Забег)
+  const t=TICKERS[idx]||TICKERS[0]; selTicker=t.k; tickerName=t.name; screen='tickerload'; tickerLoadT=0;
   try{localStorage.setItem('cipher_last_tk',idx);}catch(e){} lastTk=idx; hasLast=true;   // b107: запомнить последний заезд (hero «Продолжить» на Главной b108)
   loadCandles(t).then(d=>{ tickerData=(d&&d.length?d:MARKET_DATA.btc.data); trackSource='ticker'; gameMode='endless'; reset(); }); }
 let lastTk=0, hasLast=false, seenHowto=false; try{lastTk=+localStorage.getItem('cipher_last_tk')||0; hasLast=localStorage.getItem('cipher_last_tk')!==null; seenHowto=localStorage.getItem('cipher_howto')==='1';}catch(e){}
@@ -433,6 +434,26 @@ function checkDaily(){ try{ const today=new Date().toDateString(); if(localStora
 // ---- CAREER MODE (b60): a campaign of TRACKS with a FINISH line, increasing difficulty via diffOffset (the track starts deeper in the distance-based difficulty ramp). Reuses the endless ride + the meta (gems/upgrades). ----
 const CAREER_TRACKS=[]; for(let i=0;i<12;i++){ CAREER_TRACKS.push({ name:'ЭТАП '+(i+1), len:600+i*230, diff:i*320, biome:i%5, gems:40+i*22, waveMul:1+i*0.09 }); }   // b74: POWER-GATE КРУЧЕ (юзер со скиллом проходил мягкий пресет на стоке легко) — len 600→3130, diff 0→3520, waveMul 1.0→1.99 (волна вдвое быстрее на эт.12). Без ДВИГАТЕЛЬ/ЩИТ/СЦЕПЛЕНИЕ не выехать. Юзер найдёт стену → калибруем   // biome:i%5 (BIOMES is declared below — avoid a TDZ ref at init; BIOMES[T.biome] is read later at draw time)
 let gameMode='endless', careerTrack=0, careerMax=0, diffOffset=0, finishDist=0, careerWon=false, careerWaveMul=1;   // careerMax = highest UNLOCKED track index (0 = only ЭТАП 1); diffOffset/finishDist set per track at reset
+// ---- ПУТЬ ТРЕЙДЕРА (b118): лестница ВЫЗОВОВ на РЕАЛЬНЫХ монетах (спокойные→дикие). Медали 🥉🥈🥇 = скилл-потолок/реиграбельность. Открытие по ◆-рангу. Награды кормят кор-петлю. Слой ПОВЕРХ тикер-заезда (не трогает proc). ----
+const CHALLENGES=[
+  {id:'btc1', coin:'btc', name:'Доехать до конца',     goal:'finish',                 rew:60,  reqRank:0},
+  {id:'btc2', coin:'btc', name:'Набанкать за круг',    goal:'bank', med:[300,700,1500], rew:100, reqRank:0},
+  {id:'eth1', coin:'eth', name:'Доехать до конца',     goal:'finish',                 rew:90,  reqRank:0},
+  {id:'sol1', coin:'sol', name:'Набанкать за круг',    goal:'bank', med:[500,1200,2500],rew:170, reqRank:1},
+  {id:'doge1',coin:'doge',name:'Доехать на диком',     goal:'finish',                 rew:230, reqRank:2},
+  {id:'wif1', coin:'wif', name:'Набанкать на экстриме',goal:'bank', med:[800,2000,4000],rew:420, reqRank:3},
+];
+let chalDone={}; try{chalDone=JSON.parse(localStorage.getItem('cipher_chal')||'{}')||{};}catch(e){chalDone={};}   // {id: лучший медал-индекс 0/1/2}
+let activeChal=null, chalResult=null;   // activeChal = вызов в текущем заезде; chalResult = итог для экрана смерти
+function saveChal(){ try{localStorage.setItem('cipher_chal',JSON.stringify(chalDone));}catch(e){} }
+function chalCoinIdx(c){ for(let i=0;i<TICKERS.length;i++)if(TICKERS[i].k===c)return i; return 0; }
+function startChallenge(ch){ startTicker(chalCoinIdx(ch.coin), ch); }   // грузит монету вызова с активной целью
+function finishChallenge(){   // b118: оценка вызова в конце тикер-заезда. runGems = банк за круг; finish = дошёл до конца графика
+  if(!activeChal)return; const ch=activeChal; let medal=-1;
+  if(ch.goal==='finish'){ if(dist>=finishDist)medal=2; }
+  else if(ch.goal==='bank'){ const m=ch.med||[1,1,1]; medal=(runGems>=m[2])?2:(runGems>=m[1])?1:(runGems>=m[0])?0:-1; }
+  let rew=0; if(medal>=0){ const prev=(ch.id in chalDone)?chalDone[ch.id]:-1; if(medal>prev)chalDone[ch.id]=medal; if(prev<0){rew=ch.rew; bank+=rew;} saveChal(); saveMeta(); }
+  chalResult={name:ch.name, medal:medal, rew:rew}; activeChal=null; }
 try{careerMax=+localStorage.getItem('cipher_career_max')||0;}catch(e){}
 function saveCareer(){ try{localStorage.setItem('cipher_career_max',careerMax);}catch(e){} }
 const BIKES=[
@@ -547,6 +568,7 @@ function reset(){
   else { for(let i=0;i<Math.ceil(W/STEP)+8;i++)genSeg(); }
   bike={x:60,y:terrainAt(60).y-27.5,vx:0,vy:0,ang:terrainAt(60).ang,angV:0,onG:true,wheel:0,rShift:0};   // rShift = rider weight-shift state (-1 back .. +1 forward), smoothed from the drag input (b47 two-body)
   cam={x:bike.x-W*0.5,y:bike.y-H*0.46}; camAir=0; t=0; coins=0; dist=0; lastMile=0; newDepth=false; wipe=0; screen='play'; shake=0; flash=0; popT=0; daycycle=Math.random()*6.28;
+  chalResult=null;   // b118: новый заезд — итог вызова сброшен (activeChal НЕ трогаем: задан в startTicker до reset)
   mult=1; airT=0; nearMissed=false; hitstop=0; gflash=0; multPulse=0; maxMult=1; flipCount=0; flipAcc=0; wheelieT=0; cashedOut=false; runGems=0;
   flipsTotal=0; topKmh=0; lastLandDiff=0; lean=0; rush=0; prevVx=0; down=false; brake=false; jumpReq=0; jumpCd=0; coyote=0; jumpGrace=0; activeTouches={}; leanX=0; ctrlId=null; leanKeyL=false; leanKeyR=false; leanCmd=0; rShiftVel=0; wave=bike.x-W*0.95; waveSpd=0; deathBy=''; boost=0; boosting=0; posPulse=0; _posPrev=0; _dangBuzz=0; prMax=0; prMin=0; slowmo=0;
   zone=-1; biomeBanner=''; biomeBannerT=0; BSKY=['rgb(20,16,48)','rgb(46,30,78)','rgb(150,80,110)','rgb(230,150,110)']; BLINE='228,250,255'; BRIDGE='60,40,90'; rollMissions();
@@ -577,8 +599,8 @@ function pointerDown(p){
     if(UI.bankChip && hit(p,UI.bankChip)){ garageRet='title'; screen='garage'; sfxClick(); return; }
     if(UI.replay && hit(p,UI.replay)){ startTicker(lastTk); sfxClick(); return; }   // продолжить последний заезд
     if(UI.coinBtn && hit(p,UI.coinBtn)){ setupSel=Math.min(lastTk,TICKERS.length-1); loadAllPreviews(); screen='setup'; sfxClick(); return; }   // → терминал ЗАЕЗД
-    if(UI.careerBtn && hit(p,UI.careerBtn)){ trackSource='proc'; screen='career'; sfxClick(); return; }
-    if(UI.trainBtn && hit(p,UI.trainBtn)){ trackSource='proc'; gameMode='endless'; reset(); sfxClick(); return; }   // 🎯 тренажёр = proc эндлесс
+    if(UI.careerBtn && hit(p,UI.careerBtn)){ screen='path'; sfxClick(); return; }   // b118: Путь трейдера
+    if(UI.trainBtn && hit(p,UI.trainBtn)){ activeChal=null; trackSource='proc'; gameMode='endless'; reset(); sfxClick(); return; }   // 🎯 тренажёр = proc эндлесс
     if(UI.ddiamond && hit(p,UI.ddiamond)){ diamondHand(); sfxClick(); return; }
     if(UI.help && hit(p,UI.help)){ screen='howto'; sfxClick(); return; }
     if(UI.action && hit(p,UI.action)){ trackSource='proc'; gameMode='endless'; reset(); sfxClick(); return; }   // CORE_TEST play
@@ -601,6 +623,11 @@ function pointerDown(p){
   if(screen==='howto'){   // b108
     if(UI.howGo && hit(p,UI.howGo)){ seenHowto=true; try{localStorage.setItem('cipher_howto','1');}catch(e){} loadAllPreviews(); setupSel=Math.min(lastTk,TICKERS.length-1); screen='setup'; sfxClick(); return; }
     if(UI.howSkip && hit(p,UI.howSkip)){ seenHowto=true; try{localStorage.setItem('cipher_howto','1');}catch(e){} screen='title'; sfxClick(); return; }
+    return;
+  }
+  if(screen==='path'){   // b118: Путь трейдера
+    if(hit(p,UI.pback)){ screen='title'; sfxClick(); return; }
+    if(UI.chalRows)for(let i=0;i<UI.chalRows.length;i++){ if(hit(p,UI.chalRows[i])){ const ch=CHALLENGES[i]; if(rankIdx(career)>=ch.reqRank){ startChallenge(ch); } else sfxClick(); sfxClick(); return; } }
     return;
   }
   if(screen==='career'){
@@ -910,7 +937,7 @@ function update(){
   if(trackSource!=='ticker') while(genX < bike.x + W + 200) genSeg();   // b96: ticker-трасса предзагружена (конечна) — не догенерируем
   dist=Math.max(dist,Math.floor(bike.x/10));
   if(gameMode==='career' && !careerWon && screen==='play' && dist>=finishDist) winRun();   // b60: reached the FINISH line → track complete
-  if(trackSource==='ticker' && screen==='play' && dist>=finishDist){ if((coins||0)>0){ cashOut(); } else { deathBy='cashout'; cashedOut=true; screen='dead'; } popText('🏁 ГРАФИК '+((MARKET_DATA[selTicker]||MARKET_DATA.btc).name)+' ПРОЙДЕН'); }   // b96: доехал до конца реального графика = финиш (фикс профита)
+  if(trackSource==='ticker' && screen==='play' && dist>=finishDist){ if((coins||0)>0){ cashOut(); } else { deathBy='cashout'; cashedOut=true; finishChallenge(); screen='dead'; } popText('🏁 ГРАФИК '+((MARKET_DATA[selTicker]||MARKET_DATA.btc).name)+' ПРОЙДЕН'); }   // b96: доехал до конца = финиш; b118: оценка вызова Пути
   // depth milestones: every 500m a gem reward (deeper = more) → going deeper directly funds upgrades
   if(!CORE_TEST_MODE && dist>=lastMile+500){ lastMile=Math.floor(dist/500)*500; const rew=20+Math.floor(lastMile/500)*10; coins+=rew; gflash=0.5; multPulse=1; popText('ГЛУБИНА '+lastMile+'м  +$'+rew); floatPop(bike.x,bike.y-40,'+$'+rew,'#9ff0c8'); sfxLev(); }
   if(!newDepth && (best||0)>0 && dist>best){ newDepth=true; gflash=0.6; popText('★ НОВАЯ ГЛУБИНА!'); }
@@ -979,13 +1006,14 @@ function winRun(){ careerWon=true; screen='won'; const T=CAREER_TRACKS[careerTra
 function wipeout(reason){ deathBy=reason||'crash'; screen='dead'; shake=20; flash=1; sfxCrash(); buzz((reason==='wave')?[70,40,110]:[50,30,70]); for(let i=0;i<28;i++)parts.push({x:bike.x,y:bike.y,vx:(Math.random()-0.5)*8,vy:-Math.random()*6,life:1,r:Math.random()*3+1}); if(dist>best){best=dist;try{localStorage.setItem('cipher_run_best',best);}catch(e){}}
   careerDeathGems=0; if(gameMode==='career'){ const T=CAREER_TRACKS[careerTrack]||CAREER_TRACKS[0]; careerDeathGems=Math.round((T.gems||0)*clamp(dist/Math.max(1,finishDist),0,1)*0.4); if(careerDeathGems>0){ bank+=careerDeathGems; saveMeta(); } }   // CAREER consolation: partial gems by distance reached → failing a gate still funds upgrades (no soft-lock); finishing pays the full T.gems
   if(!CORE_TEST_MODE){ if(gameMode==='endless'){ cashedOut=false; const pen=Math.min(Math.round(bank*leverage*LIQ_PEN), Math.round(bank*LIQ_PEN_MAX)); runGems=-pen; bank=Math.max(0,bank-pen); } else { bank+=Math.round(coins); }   // b76 ENDLESS ликвидация = реальная потеря (∝ плечу, кап LIQ_PEN_MAX, пол ≥0). b87: ликвидация НЕ рекорд и НЕ растит ранг — заработка нет
+    if(activeChal){ chalResult={name:activeChal.name,medal:-1,rew:0}; activeChal=null; }   // b118: смерть = вызов Пути провален
     payStaking(); saveProg(); saveMeta(); } }   // b112: ликвидация ест $; ◆-холод не трогает. b114: +стейкинг ◆→$ (камбэк после взрыва)
 function cashOut(){ if(screen!=='play'||gameMode!=='endless'||(coins||0)<=0)return;   // b91: фиксить если есть ПОЗИЦИЯ (coins), не мёртвый pnl. b71: TAKE PROFIT — bank the FULL leveraged PnL & end the run safely (the greed↔safety decision)
   cashedOut=true; runGems=Math.round((coins||0)*COIN_GEM*posFactor()); bank+=runGems; payStaking(); deathBy='cashout';   // b89: выплата по ТЕКУЩЕЙ цене; b114: +стейкинг ◆→$
   if(runGems>bestPnl){bestPnl=runGems;try{localStorage.setItem('cipher_best_earn',bestPnl);}catch(e){}}   // b87: BEST = лучшая зафиксированная ВЫПЛАТА (◆)
   if(dist>best){best=dist;try{localStorage.setItem('cipher_run_best',best);}catch(e){}}
   // b112: фикс платит в $ (банк); РАНГ растёт через «ВЫВЕСТИ В ХОЛОД» ($→◆), не авто
-  saveProg(); saveMeta(); screen='dead'; const _big=clamp((runGems||0)/180,0,1); flash=0.4+0.34*_big; gflash=0.8+0.18*_big; shake=4+7*_big; if(_big>0.5)sfxRankUp(); else sfxLev(); buzz(_big>0.5?[25,40,25,60]:[20,40,20]); }   // b84: эйфория фикса ∝ размеру банкуемого (крупный фикс = фанфары + сильнее вспышка/тряс)
+  finishChallenge(); saveProg(); saveMeta(); screen='dead'; const _big=clamp((runGems||0)/180,0,1); flash=0.4+0.34*_big; gflash=0.8+0.18*_big; shake=4+7*_big; if(_big>0.5)sfxRankUp(); else sfxLev(); buzz(_big>0.5?[25,40,25,60]:[20,40,20]); }   // b84: эйфория фикса ∝ размеру банкуемого (крупный фикс = фанфары + сильнее вспышка/тряс)
 function diamondHand(){   // b112: ВЫВЕСТИ В ХОЛОД — $ (банк, рисковый) → ◆ (career = холод/diamond hands, навсегда). Растит РАНГ. Ликвидация ◆ не трогает. Цена прогресса: $ ушёл из оборота (потом — из него маржа b-этап2) → выбор «качать $ vs закрепить ◆»
   const amt=Math.round(bank||0); if(amt<1){ sfxClick(); return; }
   const oi=rankIdx(career); career+=amt; bank=0; const ni=rankIdx(career);
@@ -1017,7 +1045,7 @@ function draw(){
     ctx.fillStyle='#bfe0ff'; ctx.font='800 22px ui-monospace,monospace'; ctx.fillText('📡 ЗАГРУЗКА ГРАФИКА',W/2,H*0.42);
     ctx.fillStyle='#9ff0c8'; ctx.font='800 32px ui-monospace,monospace'; ctx.fillText(tickerName,W/2,H*0.42+46);
     ctx.fillStyle='#7a8bb0'; ctx.font='600 12px ui-monospace,monospace'; ctx.fillText('реальные данные с биржи'+('.'.repeat(Math.floor(tickerLoadT/12)%4)),W/2,H*0.42+78); ctx.textAlign='left'; return; }
-  if(screen==='garage'||screen==='settings'||screen==='career'||screen==='setup'||screen==='bikes'||screen==='howto'||screen==='title'){ ctx.fillStyle='#0a0a1a'; ctx.fillRect(0,0,W,H); hudEl.style.opacity='0'; spdEl.style.opacity='0'; hintEl.style.opacity='0'; drawMenus(); return; }   // menu-only: skip the whole world render (was redrawing the full game every frame → stutter)
+  if(screen==='garage'||screen==='settings'||screen==='career'||screen==='path'||screen==='setup'||screen==='bikes'||screen==='howto'||screen==='title'){ ctx.fillStyle='#0a0a1a'; ctx.fillRect(0,0,W,H); hudEl.style.opacity='0'; spdEl.style.opacity='0'; hintEl.style.opacity='0'; drawMenus(); return; }   // menu-only: skip the whole world render (was redrawing the full game every frame → stutter)
   { const ZL=520, zf=(dist||0)/ZL, zi=Math.floor(zf)%BIOMES.length, zn=(zi+1)%BIOMES.length, fr=zf-Math.floor(zf), tb=clamp((fr-0.86)/0.14,0,1), A=BIOMES[zi], Bz=BIOMES[zn];   // b58: 700→520м (match the banner zone length)
     BSKY=[mix(A.sky[0],Bz.sky[0],tb),mix(A.sky[1],Bz.sky[1],tb),mix(A.sky[2],Bz.sky[2],tb),mix(A.sky[3],Bz.sky[3],tb)];
     BLINE=lerp3(A.line,Bz.line,tb).join(','); BRIDGE=lerp3(A.ridge,Bz.ridge,tb).join(','); }
@@ -1174,7 +1202,7 @@ function draw(){
   const TKR=(trackSource==='ticker'), priceAt=(y)=> TKR ? (tkMid-(y-baseY)/tkK) : (42000+(baseY-y)*6.2);   // b107: было хардкод 42000 (фейк «BTC $42k» даже на WIF) — теперь реальная цена графика
   if(screen==='play'||screen==='paused'){ const lvl2=Math.floor(cam.y/70)*70; for(let gy=lvl2;gy<cam.y+H;gy+=70){ const sy=gy-cam.y; if(sy<70||sy>H-30)continue; ctx.fillStyle='rgba(150,180,220,0.28)'; ctx.fillText(TKR?fmtPrice(priceAt(gy)):('$'+Math.round(priceAt(gy)).toLocaleString('en-US')),W-12,sy-3); } }
   // live price tag at the bike's level
-  const lp=priceAt(bike.y); const tk=document.getElementById('ticker'); tk.textContent=CORE_TEST_MODE?'CORE TEST':(TKR?(tickerName+'  '+fmtPrice(lp)):('BTC  $'+Math.round(lp).toLocaleString('en-US')));
+  const lp=priceAt(bike.y); const tk=document.getElementById('ticker'); tk.textContent=CORE_TEST_MODE?'CORE TEST':(activeChal?('🏁 '+activeChal.name):(TKR?(tickerName+'  '+fmtPrice(lp)):('BTC  $'+Math.round(lp).toLocaleString('en-US'))));   // b118: во время вызова — цель Пути
   ctx.textAlign='left';
   // pop text
   if(popT>0.01){popT-=0.02;ctx.globalAlpha=Math.min(1,popT*2);ctx.fillStyle='#ffd678';ctx.font='600 20px ui-monospace,monospace';ctx.textAlign='center';ctx.fillText(popMsg,W/2,H*0.34);ctx.globalAlpha=1;}
@@ -1220,7 +1248,8 @@ function draw(){
     ctx.fillStyle=newDepth?'#9ff0c8':'#cdbef0';ctx.font=(newDepth?'800 ':'')+'13px ui-monospace,monospace';ctx.fillText(dist+'м'+(newDepth?'  ★ НОВАЯ ГЛУБИНА':'   ·   ⛏ рекорд '+(best||0)+'м')+'   ПЛЕЧО ×'+leverage+'   комбо ×'+maxMult.toFixed(1),W/2,H*0.34+84);
     ctx.fillStyle=isBest?'#ffd678':'#7a6f9a';ctx.fillText((isBest?'★ РЕКОРД ВЫПЛАТЫ   $':'BEST   $')+bestPnl.toLocaleString('en-US'),W/2,H*0.34+108);
     ctx.fillStyle=cashedOut?'#9ff0c8':'#ffb0a0';ctx.font='800 13px ui-monospace,monospace';ctx.fillText((cashedOut?'$ '+bank+'  ·  ◆ '+career:'☠ ЛИКВИДИРОВАН ×'+leverage+'  ·  $ '+bank)+(stakeIncome>0?'  💎+$'+stakeIncome:''),W/2,H*0.34+130);   // b101: убрал дубль «ПРОФИТ ЗАФИКСИРОВАН» (он уже крупно в заголовке ~1205)
-    { const tip=deathBy==='wave'?'🛡 качай ЩИТ ОТ ВОЛНЫ — оторвёшься от дампа':(deathBy==='loop'||deathBy==='endo')?'◎ качай СЦЕПЛЕНИЕ — прощает кувырки':deathBy==='crash'?'◎ качай СЦЕПЛЕНИЕ — мягче посадки':'⚙ качай ДВИЖОК — быстрее уедешь'; ctx.fillStyle='#9fd0ea';ctx.font='11px ui-monospace,monospace';ctx.fillText(tip,W/2,H*0.34+150); } }
+    if(chalResult){ const md=chalResult.medal; ctx.fillStyle=md>=0?'#ffd678':'#ff9a8a'; ctx.font='800 12px ui-monospace,monospace'; ctx.fillText(md>=0?('🏁 ВЫЗОВ ПРОЙДЕН '+(['🥉','🥈','🥇'][md]||'')+(chalResult.rew>0?'  +◆'+chalResult.rew:'')):'🏁 ВЫЗОВ НЕ ПРОЙДЕН — ещё разок',W/2,H*0.34+150); }   // b118: итог вызова Пути (вместо гир-подсказки)
+    else { const tip=deathBy==='wave'?'🛡 качай ЩИТ ОТ ВОЛНЫ — оторвёшься от дампа':(deathBy==='loop'||deathBy==='endo')?'◎ качай СЦЕПЛЕНИЕ — прощает кувырки':deathBy==='crash'?'◎ качай СЦЕПЛЕНИЕ — мягче посадки':'⚙ качай ДВИЖОК — быстрее уедешь'; ctx.fillStyle='#9fd0ea';ctx.font='11px ui-monospace,monospace';ctx.fillText(tip,W/2,H*0.34+150); } }
     if(gameMode!=='career'){ UI.dshare={x:W/2-94,y:H*0.34+162,w:188,h:36}; const sp=0.55+0.45*Math.sin(t*0.18);   // b93 ВИРАЛЬНОСТЬ: кнопка похвастаться (для тиктоков/чатов)
       ctx.fillStyle='rgba(40,30,62,0.88)'; if(ctx.roundRect){ctx.beginPath();ctx.roundRect(UI.dshare.x,UI.dshare.y,188,36,10);ctx.fill();ctx.strokeStyle='rgba(160,140,255,'+sp+')';ctx.lineWidth=2;ctx.stroke();}else ctx.fillRect(UI.dshare.x,UI.dshare.y,188,36);
       ctx.fillStyle='#d2c2ff';ctx.font='800 14px ui-monospace,monospace';ctx.textAlign='center';ctx.fillText('📤 ПОХВАСТАТЬСЯ',W/2,UI.dshare.y+24);
@@ -1400,6 +1429,22 @@ function drawMachine(B,wheelv,rShiftv,leanv,roost,boostv){   // b109: спрай
 }
 function drawMenus(){
   ctx.textAlign='center'; ctx.textBaseline='alphabetic';
+  if(screen==='path'){   // b118: ПУТЬ ТРЕЙДЕРА — вызовы на реальных монетах (мобильно: W-относительно, без налезаний)
+    ctx.textAlign='center'; ctx.fillStyle='#eafaff'; ctx.font='800 21px ui-monospace,monospace'; ctx.shadowColor='rgba(255,200,120,0.5)'; ctx.shadowBlur=10; ctx.fillText('🏁 ПУТЬ ТРЕЙДЕРА',W/2,46); ctx.shadowBlur=0;
+    const ri0=rankIdx(career), rk0=RANKS[ri0]; ctx.fillStyle='#9fb0d0'; ctx.font='600 10px ui-monospace,monospace'; ctx.fillText('ранг '+rk0.e+' '+rk0.n+'  ·  ◆'+career,W/2,66);
+    UI.pback={x:14,y:16,w:74,h:32}; panel(UI.pback.x,UI.pback.y,74,32,'rgba(150,180,220,0.6)','rgba(30,40,62,0.5)'); ctx.fillStyle='#cfe0ff'; ctx.font='700 12px ui-monospace,monospace'; ctx.fillText('‹ НАЗАД',UI.pback.x+37,UI.pback.y+21);
+    UI.chalRows=[]; const rh=54, gp=7, top=84, lw=W-28, lx=14;
+    for(let i=0;i<CHALLENGES.length;i++){ const ch=CHALLENGES[i], y=top+i*(rh+gp); const r={x:lx,y:y,w:lw,h:rh}; UI.chalRows.push(r);
+      const locked=ri0<ch.reqRank, done=(ch.id in chalDone), med=done?chalDone[ch.id]:-1, tk=TICKERS[chalCoinIdx(ch.coin)];
+      panel(r.x,r.y,lw,rh, done?'rgba(120,255,180,0.82)':locked?'rgba(90,95,115,0.34)':'rgba(255,200,120,0.85)', done?'rgba(30,72,52,0.3)':locked?'rgba(22,26,42,0.55)':'rgba(110,80,28,0.24)');
+      ctx.textAlign='left'; ctx.fillStyle=locked?'#7a8098':'#eafaff'; ctx.font='800 14px ui-monospace,monospace'; ctx.fillText((done?'✓':locked?'🔒':'▶')+' '+tk.name+' · '+ch.name, r.x+12, y+22);
+      ctx.fillStyle=locked?'rgba(120,125,145,0.6)':'rgba(185,205,235,0.8)'; ctx.font='600 9px ui-monospace,monospace';
+      const sub=locked?('нужен ранг '+RANKS[ch.reqRank].e+' '+RANKS[ch.reqRank].n+' (◆'+RANKS[ch.reqRank].at.toLocaleString('en-US')+')'):(ch.goal==='bank'?('🥉$'+ch.med[0]+'   🥈$'+ch.med[1]+'   🥇$'+ch.med[2]):'доехать до конца графика');
+      ctx.fillText(sub, r.x+12, y+40);
+      ctx.textAlign='right'; if(done){ ctx.font='16px ui-monospace,monospace'; ctx.fillText(['🥉','🥈','🥇'][med]||'✓', r.x+lw-12, y+26); } else if(!locked){ ctx.fillStyle='#9ff0c8'; ctx.font='700 12px ui-monospace,monospace'; ctx.fillText('+◆'+ch.rew, r.x+lw-12, y+32); } ctx.textAlign='left';
+    }
+    ctx.textAlign='left'; return;
+  }
   if(screen==='career'){   // b60: CAREER track-select
     ctx.fillStyle='#eafaff'; ctx.font='800 26px ui-monospace,monospace'; ctx.shadowColor='rgba(255,200,120,0.5)'; ctx.shadowBlur=12; ctx.fillText('🏁 КАРЬЕРА',W/2,52); ctx.shadowBlur=0;
     ctx.fillStyle='#ffd678'; ctx.font='700 14px ui-monospace,monospace'; ctx.fillText('банк  $ '+bank,W/2,76);
@@ -1483,7 +1528,7 @@ function drawMenus(){
       const ri=rankIdx(career), rk=RANKS[ri], chW=W-184; UI.bankChip={x:66,y:18,w:chW,h:34}; ctx.fillStyle='rgba(24,28,46,0.7)'; if(ctx.roundRect){ctx.beginPath();ctx.roundRect(66,18,chW,34,10);ctx.fill();ctx.strokeStyle='rgba(120,140,180,0.35)';ctx.lineWidth=1;ctx.stroke();} ctx.fillStyle='#ffd678'; ctx.font='800 12px ui-monospace,monospace'; ctx.fillText('$'+bank+'  ◆'+career+'  '+rk.e,66+chW/2,39); }   // b112: $ рабочий · ◆ холод(diamond hands)
     ctx.fillStyle='#eafaff'; ctx.font='800 31px ui-monospace,monospace'; ctx.shadowColor='rgba(80,220,255,0.55)'; ctx.shadowBlur=16; ctx.fillText('CHART RUNNER',W/2,H*0.20); ctx.shadowBlur=0;
     ctx.fillStyle='#9fb0d0'; ctx.font='11px ui-monospace,monospace'; ctx.fillText('оседлай реальный крипто-график',W/2,H*0.20+22);
-    if(career>0){ ctx.fillStyle='rgba(150,200,255,0.72)'; ctx.font='600 10px ui-monospace,monospace'; ctx.fillText('💎 холод ◆'+career+' даёт +$'+Math.round(career*STAKE_YIELD)+'/заезд',W/2,H*0.20+40); }   // b114: ценность ◆ наглядна (стейкинг)
+    if(career>0){ ctx.fillStyle='rgba(150,200,255,0.72)'; ctx.font='600 10px ui-monospace,monospace'; ctx.fillText('💎 стейкинг: ◆'+career+' приносит +$'+Math.round(career*STAKE_YIELD)+' за круг',W/2,H*0.20+40); }   // b118: текст яснее (был «/заезд»); «за круг» = как у вызовов
     if(CORE_TEST_MODE){ UI.action={x:W/2-105,y:H*0.5,w:210,h:48}; panel(UI.action.x,UI.action.y,210,48,'rgba(120,255,180,0.85)'); ctx.fillStyle='#9ff0c8'; ctx.font='800 16px ui-monospace,monospace'; ctx.fillText('▶ ИГРАТЬ',W/2,UI.action.y+30); UI.replay=UI.coinBtn=UI.careerBtn=UI.trainBtn=UI.help=UI.lev=UI.left=UI.right=UI.career=null; }
     else {
     let hy=H*0.30; const lc=TICKERS[lastTk]||TICKERS[0], pv=tkPrev[lc.k];
@@ -1496,7 +1541,7 @@ function drawMenus(){
     const big=!hasLast; UI.coinBtn={x:W/2-140,y:hy,w:280,h:big?56:46};
     panel(UI.coinBtn.x,UI.coinBtn.y,280,UI.coinBtn.h,'rgba(120,200,255,0.9)','rgba(28,66,116,0.4)'); ctx.textAlign='center'; ctx.fillStyle='#cfeaff'; ctx.font=(big?'800 18px':'800 15px')+' ui-monospace,monospace'; ctx.fillText(big?'🪙  ВЫБРАТЬ МОНЕТУ':'🪙  ДРУГАЯ МОНЕТА',W/2,UI.coinBtn.y+UI.coinBtn.h/2+6);
     hy+=UI.coinBtn.h+12;
-    UI.careerBtn={x:W/2-140,y:hy,w:135,h:42}; panel(UI.careerBtn.x,hy,135,42,'rgba(255,200,120,0.75)','rgba(150,110,30,0.22)'); ctx.fillStyle='#ffd678'; ctx.font='700 13px ui-monospace,monospace'; ctx.fillText('🏁 КАРЬЕРА',UI.careerBtn.x+67,hy+26);
+    UI.careerBtn={x:W/2-140,y:hy,w:135,h:42}; panel(UI.careerBtn.x,hy,135,42,'rgba(255,200,120,0.75)','rgba(150,110,30,0.22)'); ctx.fillStyle='#ffd678'; ctx.font='700 13px ui-monospace,monospace'; ctx.fillText('🏁 ПУТЬ',UI.careerBtn.x+67,hy+26);
     UI.trainBtn={x:W/2+5,y:hy,w:135,h:42}; panel(UI.trainBtn.x,hy,135,42,'rgba(150,170,210,0.5)','rgba(30,40,62,0.4)'); ctx.fillStyle='#bcd0ee'; ctx.font='700 13px ui-monospace,monospace'; ctx.fillText('🎯 ТРЕНАЖЁР',UI.trainBtn.x+67,hy+26);
     hy+=56;
     if(bank>0){ UI.ddiamond={x:W/2-140,y:hy,w:280,h:46}; ctx.fillStyle='rgba(16,32,42,0.85)'; if(ctx.roundRect){ctx.beginPath();ctx.roundRect(W/2-140,hy,280,46,11);ctx.fill();ctx.strokeStyle='rgba(120,200,255,0.7)';ctx.lineWidth=1.4;ctx.stroke();} ctx.fillStyle='#bfe0ff'; ctx.font='800 14px ui-monospace,monospace'; ctx.fillText('💎 ЗАКРЕПИТЬ $'+bank+' → ◆',W/2,hy+20); ctx.fillStyle='rgba(150,180,210,0.82)'; ctx.font='600 9px ui-monospace,monospace'; ctx.fillText('навсегда · растит РАНГ · ликвидация не тронет',W/2,hy+37); hy+=56; } else UI.ddiamond=null;   // b113: яснее — глагол ЗАКРЕПИТЬ + размен
