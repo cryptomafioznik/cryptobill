@@ -52,7 +52,7 @@ function lerp(a,b,t){return a+(b-a)*t;} function clamp(v,a,b){return v<a?a:v>b?b
 // false → full game everywhere. Single switch. Systems are GATED, never deleted.
 const CORE_TEST_MODE = false;   // b70: META LIVE — building the progression spine (upgrades/bikes with teeth, career, economy) on the confirmed rigid-body core
 // build stamp — bump on every change so a phone refresh can confirm it loaded fresh code (cache!)
-const BUILD = '2026-07-01 · b141';
+const BUILD = '2026-07-01 · b142';
 
 // ---------- procedural market terrain ----------
 // height map sampled every STEP px; generated forward as we ride. Market character:
@@ -489,20 +489,26 @@ try{careerMax=+localStorage.getItem('cipher_career_max')||0;}catch(e){}
 function saveCareer(){ try{localStorage.setItem('cipher_career_max',careerMax);}catch(e){} }
 // ---- b141 КАМПАНИЯ (ПУТЬ): СТАТИЧНАЯ лестница из ФИКС-исторических графиков (Binance klines по startTime → детерминизм + кэш навсегда, как боссы). Сложность ИЗ реальной волатильности (калм→экстрим, окна проверены в превью: vol 0.0005→0.0127). Крахи вплавлены как ВЕХИ (boss:true). Анлок последовательный (пройди пред.→откроется след.) → сложность = гейт (без прокачки волна-дамп не пускает = «апгрейды очень сильно влияют», эмерджентно). Медали 🥉(доехал)🥈🥉(профит) = мастерство (трасса фикс → учится). ----
 const CAMPAIGN=[
-  {id:'c01', coin:'btc',  sym:'BTCUSDT', t:1567296000000, name:'Тихий вторник',     sub:'BTC · сентябрь 2019',  med:[80,200,450],     rew:40},
-  {id:'c02', coin:'eth',  sym:'ETHUSDT', t:1684800000000, name:'Штиль',             sub:'ETH · май 2023',       med:[120,300,650],    rew:60},
-  {id:'c03', coin:'sol',  sym:'SOLUSDT', t:1693526400000, name:'Раскачка',          sub:'SOL · сентябрь 2023',  med:[180,450,950],    rew:90},
-  {id:'c04', coin:'btc',  sym:'BTCUSDT', t:1731628800000, name:'Ралли',             sub:'BTC · ноябрь 2024',    med:[260,650,1400],   rew:120},
-  {id:'c05', coin:'xrp',  sym:'XRPUSDT', t:1640131200000, name:'Дрейф',             sub:'XRP · декабрь 2021',   med:[340,850,1800],   rew:150},
-  {id:'c06', coin:'link', sym:'LINKUSDT',t:1628812800000, name:'Памп +11%',         sub:'LINK · август 2021',   med:[450,1100,2300],  rew:190},
-  {id:'b1',  coin:'btc',  sym:'BTCUSDT', t:1667952000000, name:'💥 КРАХ FTX',        sub:'BTC −13% · 09.11.2022',med:[600,1400,3000],  rew:300, boss:true},
-  {id:'c07', coin:'avax', sym:'AVAXUSDT',t:1637280000000, name:'Памп +9%',          sub:'AVAX · ноябрь 2021',   med:[600,1500,3200],  rew:240},
-  {id:'c08', coin:'wif',  sym:'WIFUSDT', t:1711238400000, name:'WIF +15%',          sub:'WIF · март 2024',      med:[750,1900,4000],  rew:320},
-  {id:'c09', coin:'eth',  sym:'ETHUSDT', t:1620864000000, name:'Бычий шторм',       sub:'ETH · май 2021',       med:[900,2300,5000],  rew:380},
-  {id:'b2',  coin:'btc',  sym:'BTCUSDT', t:1722816000000, name:'💥 АВГУСТ-ОБВАЛ',    sub:'BTC −16% · 05.08.2024',med:[1000,2600,5500], rew:420, boss:true},
-  {id:'c10', coin:'doge', sym:'DOGEUSDT',t:1620432000000, name:'DOGE-безумие',      sub:'DOGE · май 2021',      med:[1200,3000,6500], rew:460},
-  {id:'b3',  coin:'btc',  sym:'BTCUSDT', t:1583971200000, name:'💥 BLACK THURSDAY',  sub:'BTC −28% · 12.03.2020',med:[1400,3600,8000], rew:560, boss:true},
-  {id:'c11', coin:'pepe', sym:'PEPEUSDT',t:1683849600000, name:'PEPE: ланч',        sub:'PEPE · май 2023 · +8%',med:[1800,4500,10000],rew:700},
+  {id:'c01', coin:'btc',  sym:'BTCUSDT', t:1567296000000, name:'Тихий вторник', short:'Тихий', sub:'BTC · сен 2019',  med:[80,200,450],     rew:40},
+  {id:'c02', coin:'eth',  sym:'ETHUSDT', t:1684800000000, name:'Штиль',         short:'Штиль', sub:'ETH · май 2023',  med:[110,280,600],    rew:60},
+  {id:'c03', coin:'doge', sym:'DOGEUSDT',t:1707350400000, name:'Прогрев',       short:'Прогрев',sub:'DOGE · фев 2024', med:[150,360,780],    rew:80},
+  {id:'c04', coin:'btc',  sym:'BTCUSDT', t:1640995200000, name:'Дрейф',         short:'Дрейф', sub:'BTC · янв 2022',  med:[220,540,1150],   rew:110},
+  {id:'c05', coin:'sol',  sym:'SOLUSDT', t:1693526400000, name:'Раскачка',      short:'Раскачка',sub:'SOL · сен 2023',med:[300,750,1600],   rew:140},
+  {id:'c06', coin:'eth',  sym:'ETHUSDT', t:1659312000000, name:'Сползание',     short:'Сполз.',sub:'ETH · авг 2022',  med:[380,950,2000],   rew:170},
+  {id:'c07', coin:'btc',  sym:'BTCUSDT', t:1731628800000, name:'Ралли',         short:'Ралли', sub:'BTC · ноя 2024',  med:[450,1100,2400],  rew:200},
+  {id:'c08', coin:'sol',  sym:'SOLUSDT', t:1636934400000, name:'Импульс',       short:'Импульс',sub:'SOL · ноя 2021', med:[540,1350,2900],  rew:230},
+  {id:'c09', coin:'xrp',  sym:'XRPUSDT', t:1640131200000, name:'Боковик',       short:'Боковик',sub:'XRP · дек 2021', med:[620,1500,3200],  rew:260},
+  {id:'c10', coin:'link', sym:'LINKUSDT',t:1628812800000, name:'Памп +11%',     short:'Памп+11',sub:'LINK · авг 2021',med:[720,1800,3800],  rew:300},
+  {id:'b1',  coin:'btc',  sym:'BTCUSDT', t:1667952000000, name:'КРАХ FTX',      short:'FTX −13%',sub:'BTC −13% · 11.2022',med:[800,2000,4300],rew:340, boss:true},
+  {id:'c11', coin:'bnb',  sym:'BNBUSDT', t:1622505600000, name:'Качели',        short:'Качели',sub:'BNB · июн 2021',  med:[850,2100,4500],  rew:360},
+  {id:'c12', coin:'avax', sym:'AVAXUSDT',t:1637280000000, name:'Памп +9%',      short:'Памп+9', sub:'AVAX · ноя 2021',med:[950,2400,5000],  rew:400},
+  {id:'c13', coin:'wif',  sym:'WIFUSDT', t:1711238400000, name:'WIF +15%',      short:'WIF+15', sub:'WIF · мар 2024', med:[1050,2700,5800], rew:440},
+  {id:'c14', coin:'eth',  sym:'ETHUSDT', t:1620864000000, name:'Бычий шторм',   short:'Шторм', sub:'ETH · май 2021',  med:[1200,3000,6500], rew:490},
+  {id:'b2',  coin:'btc',  sym:'BTCUSDT', t:1722816000000, name:'АВГУСТ-ОБВАЛ',  short:'АВГ −16%',sub:'BTC −16% · 08.2024',med:[1300,3300,7000],rew:540, boss:true},
+  {id:'c15', coin:'doge', sym:'DOGEUSDT',t:1620432000000, name:'DOGE-безумие',  short:'DOGE🐕', sub:'DOGE · май 2021', med:[1450,3600,7800], rew:560},
+  {id:'b3',  coin:'btc',  sym:'BTCUSDT', t:1583971200000, name:'BLACK THURSDAY',short:'BLACK −28%',sub:'BTC −28% · 03.2020',med:[1600,4000,8800],rew:640, boss:true},
+  {id:'c16', coin:'pepe', sym:'PEPEUSDT',t:1683849600000, name:'PEPE: ланч',    short:'PEPE+8', sub:'PEPE · май 2023',med:[1800,4500,10000],rew:720},
+  {id:'c17', coin:'bonk', sym:'BONKUSDT',t:1701907200000, name:'BONK обвал',    short:'BONK−19',sub:'BONK −19% · 12.2023',med:[2100,5200,11500],rew:850},
 ];
 function campaignLen(idx){ return 110+Math.round((idx||0)/Math.max(1,CAMPAIGN.length-1)*140); }   // b141 ДЛИНА = ось сложности: трасса 1 ~110 свечей (короткая → лёгкий онбординг, выигрывается на стоке) → финал ~250 (дольше держаться от волны). Калибровка — руки
 function loadCampaignTrack(tr,idx){ const ck='cipher_cmp_'+tr.id+'_'+campaignLen(idx);
@@ -1560,18 +1566,27 @@ function drawMenus(){
       ctx.textAlign='left'; ctx.fillStyle='#cfeaff'; ctx.font='800 12px ui-monospace,monospace'; ctx.fillText((dDone?'✓ ':'📅 ')+'ВЫЗОВ ДНЯ · '+dtk.name, lx+12, 92);
       ctx.fillStyle='rgba(185,210,240,0.82)'; ctx.font='600 8.5px ui-monospace,monospace'; ctx.fillText(dDone?'выполнен — завтра новый':(dc.name+'  ·  раз в день'), lx+12, 108);
       if(!dDone){ ctx.textAlign='right'; ctx.fillStyle='#ffd678'; ctx.font='700 12px ui-monospace,monospace'; ctx.fillText('+◆'+dc.rew, lx+lw-12, 100); ctx.textAlign='left'; } }
-    // b141 КАМПАНИЯ-ЛЕСТНИЦА — статичные ист.трассы калм→экстрим, боссы-крахи вплавлены как ВЕХИ. Последовательный анлок. Медали = мастерство.
-    const top=124, rh=clamp(Math.floor((H-top-12)/CAMPAIGN.length)-gp,34,52);
-    for(let i=0;i<CAMPAIGN.length;i++){ const tr=CAMPAIGN[i], y=top+i*(rh+gp); const r={x:lx,y:y,w:lw,h:rh}; UI.campRows.push(r);
+    // b142 КАМПАНИЯ = 2-КОЛОНОЧНАЯ СЕТКА УРОВНЕЙ (level-select; ~20 трасс влезают без скролла). Статичные ист.трассы калм→экстрим, боссы-крахи вплавлены вехами, последовательный анлок, медали=мастерство.
+    const N=CAMPAIGN.length, cols=2, rows=Math.ceil(N/cols), cgap=8, top=124;
+    const cwid=Math.floor((lw-cgap*(cols-1))/cols), rh=clamp(Math.floor((H-top-12)/rows)-cgap,40,64);
+    for(let i=0;i<N;i++){ const tr=CAMPAIGN[i], col=i%cols, row=Math.floor(i/cols);
+      const x=lx+col*(cwid+cgap), y=top+row*(rh+cgap); const r={x:x,y:y,w:cwid,h:rh}; UI.campRows.push(r);
       const unlocked=campaignUnlocked(i), done=campaignBeaten(i), med=done?chalDone['cmp_'+tr.id]:-1, boss=tr.boss;
-      const fill=done?'rgba(30,72,52,0.34)':!unlocked?'rgba(22,26,42,0.5)':boss?'rgba(54,24,18,0.5)':'rgba(38,44,68,0.45)';
-      const line=done?'rgba(120,255,180,0.82)':!unlocked?'rgba(86,92,112,0.3)':boss?'rgba(255,122,74,0.9)':'rgba(150,180,220,0.6)';
-      panel(r.x,r.y,lw,rh,line,fill);
-      ctx.textAlign='left'; ctx.fillStyle=!unlocked?'#6a7088':(boss?'#ffc2ad':'#eafaff'); ctx.font='800 13px ui-monospace,monospace';
-      ctx.fillText((done?'✓ ':!unlocked?'🔒 ':'')+(i+1)+'. '+tr.name, r.x+12, y+rh*0.46+2);
-      ctx.fillStyle=!unlocked?'rgba(120,125,145,0.55)':'rgba(185,205,235,0.72)'; ctx.font='600 8.5px ui-monospace,monospace';
-      ctx.fillText(unlocked?tr.sub:'пройди предыдущую трассу', r.x+12, y+rh*0.84);
-      ctx.textAlign='right'; if(done){ ctx.font='15px ui-monospace,monospace'; ctx.fillText(['🥉','🥈','🥇'][med]||'✓', r.x+lw-12, y+rh*0.62); } else if(unlocked){ ctx.fillStyle='#9ff0c8'; ctx.font='700 11px ui-monospace,monospace'; ctx.fillText('+◆'+tr.rew, r.x+lw-12, y+rh*0.64); } ctx.textAlign='left';
+      const fill=done?'rgba(30,72,52,0.36)':!unlocked?'rgba(22,26,42,0.5)':boss?'rgba(58,24,18,0.55)':'rgba(38,44,68,0.5)';
+      const line=done?'rgba(120,255,180,0.85)':!unlocked?'rgba(86,92,112,0.28)':boss?'rgba(255,122,74,0.95)':'rgba(150,180,220,0.65)';
+      ctx.fillStyle=fill; ctx.beginPath(); ctx.roundRect(x,y,cwid,rh,10); ctx.fill(); ctx.strokeStyle=line; ctx.lineWidth=boss?2:1.4; ctx.stroke();
+      ctx.textAlign='left';
+      // номер уровня (крупно, слева) — боссы помечены 💥
+      ctx.fillStyle=!unlocked?'#5a6080':(boss?'#ff9a6a':done?'#9ff0c8':'#ffd678'); ctx.font='800 17px ui-monospace,monospace';
+      const numTxt=boss?'💥':(''+(i+1)); ctx.fillText(numTxt, x+12, y+25);
+      // имя (short) — сдвиг по ширине номера
+      const nameX=x+12+(boss?26:(i+1>=10?26:16)); ctx.fillStyle=!unlocked?'#6a7088':(boss?'#ffc2ad':'#eafaff'); ctx.font='800 12px ui-monospace,monospace'; ctx.fillText(unlocked?(tr.short||tr.name):'', nameX, y+24);
+      // замок — в правый-ВЕРХ (не налезает на номер)
+      if(!unlocked){ ctx.textAlign='right'; ctx.font='13px ui-monospace,monospace'; ctx.fillText('🔒', x+cwid-12, y+25); ctx.textAlign='left'; }
+      // подпись (дата/монета) внизу-слева
+      ctx.fillStyle=!unlocked?'rgba(110,116,140,0.5)':'rgba(185,205,235,0.66)'; ctx.font='600 8px ui-monospace,monospace'; ctx.fillText(unlocked?tr.sub:'пройди пред.', x+12, y+rh-10);
+      // правый-низ: медаль / награда
+      ctx.textAlign='right'; if(done){ ctx.font='15px ui-monospace,monospace'; ctx.fillText(['🥉','🥈','🥇'][med]||'✓', x+cwid-12, y+rh-7); } else if(unlocked){ ctx.fillStyle='#9ff0c8'; ctx.font='700 10px ui-monospace,monospace'; ctx.fillText('+◆'+tr.rew, x+cwid-12, y+rh-9); } ctx.textAlign='left';
     }
     ctx.textAlign='left'; return;
   }
