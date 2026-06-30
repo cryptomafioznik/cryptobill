@@ -52,7 +52,7 @@ function lerp(a,b,t){return a+(b-a)*t;} function clamp(v,a,b){return v<a?a:v>b?b
 // false → full game everywhere. Single switch. Systems are GATED, never deleted.
 const CORE_TEST_MODE = false;   // b70: META LIVE — building the progression spine (upgrades/bikes with teeth, career, economy) on the confirmed rigid-body core
 // build stamp — bump on every change so a phone refresh can confirm it loaded fresh code (cache!)
-const BUILD = '2026-06-29 · b121';
+const BUILD = '2026-06-29 · b122';
 
 // ---------- procedural market terrain ----------
 // height map sampled every STEP px; generated forward as we ride. Market character:
@@ -1014,7 +1014,9 @@ function cashOut(){ if(screen!=='play'||gameMode!=='endless'||(coins||0)<=0)retu
   if(runGems>bestPnl){bestPnl=runGems;try{localStorage.setItem('cipher_best_earn',bestPnl);}catch(e){}}   // b87: BEST = лучшая зафиксированная ВЫПЛАТА (◆)
   if(dist>best){best=dist;try{localStorage.setItem('cipher_run_best',best);}catch(e){}}
   // b112: фикс платит в $ (банк); РАНГ растёт через «ВЫВЕСТИ В ХОЛОД» ($→◆), не авто
-  finishChallenge(); saveProg(); saveMeta(); screen='dead'; const _big=clamp((runGems||0)/180,0,1); flash=0.4+0.34*_big; gflash=0.8+0.18*_big; shake=4+7*_big; if(_big>0.5)sfxRankUp(); else sfxLev(); buzz(_big>0.5?[25,40,25,60]:[20,40,20]); }   // b84: эйфория фикса ∝ размеру банкуемого (крупный фикс = фанфары + сильнее вспышка/тряс)
+  finishChallenge(); saveProg(); saveMeta(); const _big=clamp((runGems||0)/180,0,1); flash=0.4+0.34*_big; gflash=0.8+0.18*_big; shake=4+7*_big; if(_big>0.5)sfxRankUp(); else sfxLev(); buzz(_big>0.5?[25,40,25,60]:[20,40,20]);
+  if(bike){ for(let z=0;z<Math.round(8+34*_big);z++)parts.push({x:bike.x+(Math.random()-0.5)*44,y:bike.y,vx:(Math.random()-0.5)*7,vy:-Math.random()*9-2,life:1,gold:1,r:Math.random()*3+1.6}); }   // b122 ВАУ: золотой фонтан профита ∝ размеру фикса (виральный кадр победы)
+  screen='dead'; }   // b84: эйфория фикса ∝ размеру банкуемого
 function diamondHand(){   // b112: ВЫВЕСТИ В ХОЛОД — $ (банк, рисковый) → ◆ (career = холод/diamond hands, навсегда). Растит РАНГ. Ликвидация ◆ не трогает. Цена прогресса: $ ушёл из оборота (потом — из него маржа b-этап2) → выбор «качать $ vs закрепить ◆»
   const amt=Math.round(bank||0); if(amt<1){ sfxClick(); return; }
   const oi=rankIdx(career); career+=amt; bank=0; const ni=rankIdx(career);
@@ -1246,7 +1248,7 @@ function draw(){
     if(!cashedOut){ ctx.save(); ctx.translate(W/2,H*0.34-6); ctx.rotate(-0.1); const ps=1+0.5*Math.max(0,flash); ctx.scale(ps,ps); ctx.strokeStyle='rgba(255,90,110,0.6)'; ctx.lineWidth=3; if(ctx.roundRect){ctx.beginPath();ctx.roundRect(-100,-32,200,48,9);ctx.stroke();} ctx.fillStyle='rgba(255,64,86,0.97)'; ctx.font='900 40px ui-monospace,monospace'; ctx.shadowColor='#ff2040'; ctx.shadowBlur=18; ctx.fillText('💀 REKT',0,3); ctx.shadowBlur=0; ctx.restore();
       const taunt=(leverage>=50)?('×'+leverage+' — дерзко, рынок не прощает'):(deathBy==='wave')?'волна дампа догнала — газуй раньше':(deathBy==='crash'||deathBy==='loop'||deathBy==='endo')?'разбился — мягче приземляйся':'надо было ЗАФИКСИТЬ вовремя'; ctx.fillStyle='rgba(255,150,162,0.92)'; ctx.font='600 11px ui-monospace,monospace'; ctx.fillText('💀 '+taunt,W/2,H*0.34+16); }   // b117/b121: деген-слэм + контекстная подколка (виральный момент)
     const gain=runGems||0, isBest=cashedOut&&gain>=bestPnl&&gain>0;   // b87: degen-итог в ◆ — что зафиксил/потерял, не абстрактный $
-    ctx.fillStyle=cashedOut?(isBest?'#ffd678':'#6effc0'):'#ff7a8a';ctx.font='800 42px ui-monospace,monospace';ctx.fillText((cashedOut?'$ +':'$ ')+gain.toLocaleString('en-US'),W/2,H*0.34+54);
+    ctx.save(); const bigW=cashedOut&&gain>=400; if(bigW){ctx.shadowColor='#ffd678';ctx.shadowBlur=20;} ctx.fillStyle=cashedOut?(isBest?'#ffd678':'#6effc0'):'#ff7a8a'; const gf=cashedOut?Math.min(58,42+Math.sqrt(Math.max(0,gain))*0.6):42; ctx.font='800 '+Math.round(gf)+'px ui-monospace,monospace'; ctx.fillText((cashedOut?'$ +':'$ ')+gain.toLocaleString('en-US'),W/2,H*0.34+54); ctx.shadowBlur=0; ctx.restore();   // b122: число профита растёт+светится ∝ размеру (вау-кадр)
     ctx.fillStyle=newDepth?'#9ff0c8':'#cdbef0';ctx.font=(newDepth?'800 ':'')+'13px ui-monospace,monospace';ctx.fillText(dist+'м'+(newDepth?'  ★ НОВАЯ ГЛУБИНА':'   ·   ⛏ рекорд '+(best||0)+'м')+'   ПЛЕЧО ×'+leverage+'   комбо ×'+maxMult.toFixed(1),W/2,H*0.34+84);
     ctx.fillStyle=isBest?'#ffd678':'#7a6f9a';ctx.fillText((isBest?'★ РЕКОРД ВЫПЛАТЫ   $':'BEST   $')+bestPnl.toLocaleString('en-US'),W/2,H*0.34+108);
     ctx.fillStyle=cashedOut?'#9ff0c8':'#ffb0a0';ctx.font='800 13px ui-monospace,monospace';ctx.fillText((cashedOut?'$ '+bank+'  ·  ◆ '+career:'☠ ЛИКВИДИРОВАН ×'+leverage+'  ·  $ '+bank)+(stakeIncome>0?'  💎+$'+stakeIncome:''),W/2,H*0.34+130);   // b101: убрал дубль «ПРОФИТ ЗАФИКСИРОВАН» (он уже крупно в заголовке ~1205)
