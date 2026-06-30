@@ -52,7 +52,7 @@ function lerp(a,b,t){return a+(b-a)*t;} function clamp(v,a,b){return v<a?a:v>b?b
 // false → full game everywhere. Single switch. Systems are GATED, never deleted.
 const CORE_TEST_MODE = false;   // b70: META LIVE — building the progression spine (upgrades/bikes with teeth, career, economy) on the confirmed rigid-body core
 // build stamp — bump on every change so a phone refresh can confirm it loaded fresh code (cache!)
-const BUILD = '2026-06-29 · b125';
+const BUILD = '2026-06-29 · b126';
 
 // ---------- procedural market terrain ----------
 // height map sampled every STEP px; generated forward as we ride. Market character:
@@ -959,9 +959,9 @@ function update(){
   if((boost||0)>=1 && screen==='play') tut('pump','⚡ PUMP ЗАРЯЖЕН — '+('ontouchstart'in window?'ЖМИ ⚡PUMP':'SHIFT')+' ЧТОБ ОТОРВАТЬСЯ');
   if(tutT>0) tutT-=0.0062;
   // chasing LIQUIDATION wave (the dump): ramps with distance + biome, caps its lead so it always looms; catch = death
-  waveSpd = (TUNE.waveSpeed + (Math.min((dist||0)/150, 4.8) + Math.max(0,((dist||0)-700)/620))*TUNE.waveAccel) * BIOMES[(((zone||0)%BIOMES.length)+BIOMES.length)%BIOMES.length].wave * (curEvType==='whale'?1.75:1) * lerp(0.6,1,clamp((dist||0)/TUNE.easeInDist,0,1)) * (1-0.07*upgLvl('wave')) * (gameMode==='endless'?(1+Math.max(0,leverage-safeLev())*0.02):1) * careerWaveMul * (trackSource==='ticker'?tickerVolMul:1);   // b109 №3: убран ДУБЛЬ плеча в волне. Плечо теперь = усилитель РЕАЛЬНОЙ цены (posFactor b106) + штраф ликвидации; волну ускоряет ТОЛЬКО через safeLev-флайвил (плечо выше потолка железа = волна быстрее → качай ЩИТ/ДВИЖОК). tickerVolMul = сложность МОНЕТЫ (волатильность). b72: careerWaveMul = per-stage wave. ramps, then creeps past 700m (no cap) → стена, которую ДВИЖОК/ЩИТ продавливают   // surges during a whale dump
+  waveSpd = (TUNE.waveSpeed + (Math.min((dist||0)/150, 4.8) + Math.max(0,((dist||0)-700)/620))*TUNE.waveAccel) * BIOMES[(((zone||0)%BIOMES.length)+BIOMES.length)%BIOMES.length].wave * (curEvType==='whale'?1.75:1) * lerp(0.6,1,clamp((dist||0)/TUNE.easeInDist,0,1)) * (1-0.07*upgLvl('wave')) * (gameMode==='endless'?(1+Math.max(0,leverage-safeLev())*0.02):1) * careerWaveMul * (trackSource==='ticker'?tickerVolMul:1) * ((gameMode==='endless'&&trackSource!=='ticker')?0.72:1);   // b126 ЭНДЛЕСС-ГРАЙНД: волна мягче (×0.72) → едешь дольше; глубина растёт с прокачкой (ЩИТ/ДВИЖОК). b109 №3: убран ДУБЛЬ плеча в волне. Плечо теперь = усилитель РЕАЛЬНОЙ цены (posFactor b106) + штраф ликвидации; волну ускоряет ТОЛЬКО через safeLev-флайвил (плечо выше потолка железа = волна быстрее → качай ЩИТ/ДВИЖОК). tickerVolMul = сложность МОНЕТЫ (волатильность). b72: careerWaveMul = per-stage wave. ramps, then creeps past 700m (no cap) → стена, которую ДВИЖОК/ЩИТ продавливают   // surges during a whale dump
   wave += waveSpd;
-  const leadCap = W*lerp(0.92, 0.36, clamp((dist||0)/320,0,1));   // dump closes in over the first ~320m → then a constant chase (front sits at the left edge)
+  const leadCap = W*lerp(0.92, (gameMode==='endless'&&trackSource!=='ticker')?0.52:0.36, clamp((dist||0)/320,0,1));   // b126 эндлесс-грайнд = больше форы (0.52) = просторнее долгий заезд; dump closes in over ~320m
   if(bike.x - wave > leadCap) wave = bike.x - leadCap;
   if(screen==='play' && (bike.x-wave)<W*0.45 && dist>140) tut('wave','◀ ДАМП НАСТИГАЕТ — ГАЗУЙ, НЕ ГЛОХНИ');
   if(gameMode==='endless' && screen==='play'){   // b92 ОНБОРДИНГ DEGEN-ЯДРА (уникальный хук — раньше не объяснялся)
@@ -1563,7 +1563,7 @@ function drawMenus(){
     panel(UI.coinBtn.x,UI.coinBtn.y,280,UI.coinBtn.h,'rgba(120,200,255,0.9)','rgba(28,66,116,0.4)'); ctx.textAlign='center'; ctx.fillStyle='#cfeaff'; ctx.font=(big?'800 18px':'800 15px')+' ui-monospace,monospace'; ctx.fillText(big?'🪙  ВЫБРАТЬ МОНЕТУ':'🪙  ДРУГАЯ МОНЕТА',W/2,UI.coinBtn.y+UI.coinBtn.h/2+6);
     hy+=UI.coinBtn.h+12;
     UI.careerBtn={x:W/2-140,y:hy,w:135,h:42}; panel(UI.careerBtn.x,hy,135,42,'rgba(255,200,120,0.75)','rgba(150,110,30,0.22)'); ctx.fillStyle='#ffd678'; ctx.font='700 13px ui-monospace,monospace'; ctx.fillText('🏁 ПУТЬ',UI.careerBtn.x+67,hy+26);
-    UI.trainBtn={x:W/2+5,y:hy,w:135,h:42}; panel(UI.trainBtn.x,hy,135,42,'rgba(150,170,210,0.5)','rgba(30,40,62,0.4)'); ctx.fillStyle='#bcd0ee'; ctx.font='700 13px ui-monospace,monospace'; ctx.fillText('🎯 ТРЕНАЖЁР',UI.trainBtn.x+67,hy+26);
+    UI.trainBtn={x:W/2+5,y:hy,w:135,h:42}; panel(UI.trainBtn.x,hy,135,42,'rgba(150,170,210,0.5)','rgba(30,40,62,0.4)'); ctx.fillStyle='#bcd0ee'; ctx.font='700 13px ui-monospace,monospace'; ctx.fillText('♾ ЭНДЛЕСС',UI.trainBtn.x+67,hy+26);   // b126: грайнд-режим «как глубоко» (волна мягче, ∝ прокачке)
     hy+=56;
     if(bank>0){ UI.ddiamond={x:W/2-140,y:hy,w:280,h:46}; ctx.fillStyle='rgba(16,32,42,0.85)'; if(ctx.roundRect){ctx.beginPath();ctx.roundRect(W/2-140,hy,280,46,11);ctx.fill();ctx.strokeStyle='rgba(120,200,255,0.7)';ctx.lineWidth=1.4;ctx.stroke();} ctx.fillStyle='#bfe0ff'; ctx.font='800 14px ui-monospace,monospace'; ctx.fillText('💎 ЗАКРЕПИТЬ $'+bank+' → ◆',W/2,hy+20); ctx.fillStyle='rgba(150,180,210,0.82)'; ctx.font='600 9px ui-monospace,monospace'; ctx.fillText('навсегда · растит РАНГ · ликвидация не тронет',W/2,hy+37); hy+=56; } else UI.ddiamond=null;   // b113: яснее — глагол ЗАКРЕПИТЬ + размен
     UI.help={x:W/2-70,y:hy,w:140,h:30}; ctx.fillStyle='rgba(180,200,230,0.7)'; ctx.font='600 12px ui-monospace,monospace'; ctx.fillText('❓ как играть',W/2,hy+20);
