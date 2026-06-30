@@ -52,7 +52,7 @@ function lerp(a,b,t){return a+(b-a)*t;} function clamp(v,a,b){return v<a?a:v>b?b
 // false → full game everywhere. Single switch. Systems are GATED, never deleted.
 const CORE_TEST_MODE = false;   // b70: META LIVE — building the progression spine (upgrades/bikes with teeth, career, economy) on the confirmed rigid-body core
 // build stamp — bump on every change so a phone refresh can confirm it loaded fresh code (cache!)
-const BUILD = '2026-06-29 · b118';
+const BUILD = '2026-06-29 · b119';
 
 // ---------- procedural market terrain ----------
 // height map sampled every STEP px; generated forward as we ride. Market character:
@@ -848,7 +848,7 @@ function update(){
     bike.wheel += 0.3;
   }
   // ---- TRICK KICKER lip: POP up ∝ speed (the ramp throws you — reward launch for flips; fly straight = safe, flip = risk/reward; NO chasm = no fall) ----
-  if(!rearBal && terr[ci0] && terr[ci0].kick && !terr[ci0].kicked && bike.vx>1.0){ terr[ci0].kicked=true; bike.vy=Math.min(bike.vy, Math.max(-22, -bike.vx*TUNE.kickPop)); grounded=false; airT=0; nearMissed=false; gflash=Math.max(gflash,0.4); shake=Math.max(shake,5); sfxAir(); for(let e=0;e<8;e++)dust.push({x:bike.x-8+Math.random()*16,y:bike.y+22,vx:(Math.random()-0.5)*3.2,vy:-Math.random()*2.8,life:1,r:Math.random()*2.6+1.2}); if(terr[ci0].pump){ popText('🚀 ПАМП — ВЗЛЁТ!'); gflash=Math.max(gflash,0.6); boost=Math.min(1,(boost||0)+0.2); } }   // b67: kicker launch now PURELY ∝ speed; b116: реальный памп = трамплин (+заряд PUMP) (dropped the +4 fixed impulse = the "jump even when slow" the rider flagged). Steep ramp hit FAST = big air, slow = small hop — real, not a scripted pop. kickPop = the ramp's launch coefficient (effective takeoff angle). Camera zooms OUT to keep big air on-screen
+  if(!rearBal && terr[ci0] && terr[ci0].kick && !terr[ci0].kicked && bike.vx>1.0){ terr[ci0].kicked=true; bike.vy=Math.min(bike.vy, Math.max(-22, -bike.vx*TUNE.kickPop)); grounded=false; airT=0; nearMissed=false; gflash=Math.max(gflash,0.4); shake=Math.max(shake,5); sfxAir(); for(let e=0;e<8;e++)dust.push({x:bike.x-8+Math.random()*16,y:bike.y+22,vx:(Math.random()-0.5)*3.2,vy:-Math.random()*2.8,life:1,r:Math.random()*2.6+1.2}); if(terr[ci0].pump){ popText('🚀 ПАМП — ВЗЛЁТ!'); gflash=Math.max(gflash,0.6); boost=Math.min(1,(boost||0)+0.2); shake=Math.max(shake,9); for(let e=0;e<14;e++)parts.push({x:bike.x-18-Math.random()*12,y:bike.y+8+Math.random()*10,vx:-2-Math.random()*4,vy:0.4+Math.random()*3,life:1,r:Math.random()*3+1.6,gold:true}); } }   // b67: kicker ∝ speed; b116: памп=трамплин; b119: золотой рокет-выхлоп на пампе (dropped the +4 fixed impulse = the "jump even when slow" the rider flagged). Steep ramp hit FAST = big air, slow = small hop — real, not a scripted pop. kickPop = the ramp's launch coefficient (effective takeoff angle). Camera zooms OUT to keep big air on-screen
   bike.vx*=P.DRAG; if(bike.vx<0)bike.vx*=0.95;                          // drag (emergent top speed, no hard cap) + roll-back resistance
   bike.angV*=P.ANGD;                                                   // angular damping — CONTROLLABLE rotation (b42's free-spin in air span the bike chaotically per playtest → reverted)
   if(bike.angV>P.AVMAX)bike.angV=P.AVMAX; else if(bike.angV<-P.AVMAX)bike.angV=-P.AVMAX;
