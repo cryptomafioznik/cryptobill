@@ -52,7 +52,7 @@ function lerp(a,b,t){return a+(b-a)*t;} function clamp(v,a,b){return v<a?a:v>b?b
 // false → full game everywhere. Single switch. Systems are GATED, never deleted.
 const CORE_TEST_MODE = false;   // b70: META LIVE — building the progression spine (upgrades/bikes with teeth, career, economy) on the confirmed rigid-body core
 // build stamp — bump on every change so a phone refresh can confirm it loaded fresh code (cache!)
-const BUILD = '2026-06-30 · b139';
+const BUILD = '2026-07-01 · b140';
 
 // ---------- procedural market terrain ----------
 // height map sampled every STEP px; generated forward as we ride. Market character:
@@ -1668,9 +1668,9 @@ function drawMenus(){
     ctx.fillStyle='#ffd678'; ctx.font='800 16px ui-monospace,monospace'; ctx.fillText('🏁 ПУТЬ',cx0+16,my+23); ctx.fillStyle='rgba(220,200,160,0.78)'; ctx.font='600 10px ui-monospace,monospace'; ctx.fillText('лестница вызовов: креветка → кит · медали',cx0+16,my+41);
     { const ri=rankIdx(career); ctx.textAlign='right'; ctx.fillStyle='rgba(255,214,120,0.85)'; ctx.font='700 11px ui-monospace,monospace'; ctx.fillText(RANKS[ri].e+' '+RANKS[ri].n,cx0+cw-16,my+30); ctx.textAlign='left'; }
     my+=62;
-    // ♾ ЭНДЛЕСС
+    // ♾ ОТРЫВ (b140: переименован ЭНДЛЕСС→ОТРЫВ — деген-слэнг «оторвись от дампа» + не англицизм)
     UI.trainBtn={x:cx0,y:my,w:cw,h:52}; ctx.fillStyle='rgba(28,40,60,0.6)'; ctx.beginPath();ctx.roundRect(cx0,my,cw,52,12);ctx.fill(); ctx.strokeStyle='rgba(150,180,220,0.6)';ctx.lineWidth=1.5;ctx.stroke();
-    ctx.fillStyle='#cfe0ff'; ctx.font='800 16px ui-monospace,monospace'; ctx.fillText('♾ ЭНДЛЕСС',cx0+16,my+23); ctx.fillStyle='rgba(190,205,235,0.78)'; ctx.font='600 10px ui-monospace,monospace'; ctx.fillText('как ГЛУБОКО доедешь · грайнд ∝ прокачке',cx0+16,my+41);
+    ctx.fillStyle='#cfe0ff'; ctx.font='800 16px ui-monospace,monospace'; ctx.fillText('♾ ОТРЫВ',cx0+16,my+23); ctx.fillStyle='rgba(190,205,235,0.78)'; ctx.font='600 10px ui-monospace,monospace'; ctx.fillText('оторвись от дампа · как ДАЛЕКО уедешь · ∝ прокачке',cx0+16,my+41);
     my+=62;
     // 🔥 СОБЫТИЯ-БОССЫ (парадная дверь — раньше юзер не находил)
     UI.tEvents={x:cx0,y:my,w:cw,h:46}; ctx.fillStyle='rgba(54,24,18,0.7)'; ctx.beginPath();ctx.roundRect(cx0,my,cw,46,12);ctx.fill(); ctx.strokeStyle='rgba(255,122,74,0.85)';ctx.lineWidth=1.5;ctx.stroke();
