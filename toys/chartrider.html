@@ -52,7 +52,7 @@ function lerp(a,b,t){return a+(b-a)*t;} function clamp(v,a,b){return v<a?a:v>b?b
 // false → full game everywhere. Single switch. Systems are GATED, never deleted.
 const CORE_TEST_MODE = false;   // b70: META LIVE — building the progression spine (upgrades/bikes with teeth, career, economy) on the confirmed rigid-body core
 // build stamp — bump on every change so a phone refresh can confirm it loaded fresh code (cache!)
-const BUILD = '2026-06-29 · b122';
+const BUILD = '2026-06-29 · b123';
 
 // ---------- procedural market terrain ----------
 // height map sampled every STEP px; generated forward as we ride. Market character:
@@ -251,7 +251,7 @@ function drawSpark(arr,sx,sy,sw,sh,col){ let mn=Infinity,mx=-Infinity; for(const
 
 // ---------- bike ----------
 let bike, cam, t, coins, dist, best, screen, wipe, parts, stars, dust, shake, flash, daycycle, trail, streaks, mult, bestPnl, airT, nearMissed, hitstop, gflash, floats, multPulse, maxMult, lean, rush, prevVx, wave, waveSpd, deathBy, boost, boosting, zone, biomeBanner, biomeBannerT, BSKY, BLINE, BRIDGE, lastMile, newDepth, camAir=0, wheelieT=0;
-let posPulse=0,_posPrev=0,_dangBuzz=0,prMax=0,prMin=0,slowmo=0;   // b84 degen-момент: posPulse=пульс числа при росте позиции; _dangBuzz=вибро на входе дампа. b89: prMax/prMin = коридор ЦЕНЫ (sell-the-top). b90: slowmo = кадры slow-mo на эпик-моменте (пропуск каждого 2-го update)
+let posPulse=0,_posPrev=0,_dangBuzz=0,prMax=0,prMin=0,slowmo=0,menuFx=0,menuFxAmt=0;   // b123: menuFx = вспышка-флёр «ЗАКРЕПЛЕНО» на меню-экране (parts/flash там не рисуются). b84 degen-момент: posPulse=пульс числа при росте позиции; _dangBuzz=вибро на входе дампа. b89: prMax/prMin = коридор ЦЕНЫ (sell-the-top). b90: slowmo = кадры slow-mo на эпик-моменте (пропуск каждого 2-го update)
 try{best=+localStorage.getItem('cipher_run_best')||0;}catch(e){}
 try{bestPnl=+localStorage.getItem('cipher_best_earn')||0;}catch(e){}   // b87: bestPnl = лучшая зафиксированная ВЫПЛАТА за забег (◆), не $-очки
 let down=false, brake=false, jumpReq=0, jumpCd=0, coyote=0, jumpGrace=0, activeTouches={}, touchLowY={};   // jumpReq = buffered press; coyote/jumpGrace = jump grace windows; touchLowY = per-touch low point for swipe-up
@@ -1022,7 +1022,7 @@ function diamondHand(){   // b112: ВЫВЕСТИ В ХОЛОД — $ (банк,
   const oi=rankIdx(career); career+=amt; bank=0; const ni=rankIdx(career);
   if(ni>oi){ let bonus=0; for(let r=oi+1;r<=ni;r++)bonus+=RANKS[r].rew; bank+=bonus; rankedUp={rank:RANKS[ni],bonus:bonus}; sfxRankUp(); buzz([25,50,25,70]); }
   else { sfxLev(); buzz([20,40,20]); }
-  saveProg(); saveMeta(); gflash=0.85; flash=0.3; popText('💎 ЗАКРЕПЛЕНО ◆+'+amt+' (навсегда)'); }
+  saveProg(); saveMeta(); gflash=0.85; flash=0.3; menuFx=1; menuFxAmt=amt; popText('💎 ЗАКРЕПЛЕНО ◆+'+amt+' (навсегда)'); }   // b123: menuFx → вспышка-флёр на Главной
 
 // ---------- render (Alto-style dusk, layered) ----------
 function skyGrad(){
@@ -1168,6 +1168,8 @@ function draw(){
   // vignette — tightens into a tunnel during a rush
   const spv=rush||0, vr=H*(0.3-0.1*spv);
   const v=ctx.createRadialGradient(W/2,H*0.5,vr,W/2,H*0.5,H*0.85); v.addColorStop(0,'rgba(0,0,0,0)'); v.addColorStop(1,'rgba(0,0,0,'+(0.5+0.22*spv)+')'); ctx.fillStyle=v; ctx.fillRect(0,0,W,H);
+  if(trackSource==='ticker'){ const hot=clamp((tickerVolMul-1)/1.4,0,1), cr=Math.round(50+205*hot),cg=Math.round(110-62*hot),cb=Math.round(210-185*hot),ca=(0.06+0.14*hot).toFixed(3);   // b123 ВАУ: тинт-атмосфера по волатильности монеты — спокойная (BTC) = холодный синий край, дикая (WIF) = горячий красный неон (идентичность монеты в атмосфере, к b111)
+    const vt=ctx.createRadialGradient(W/2,H*0.52,vr,W/2,H*0.52,H*0.92); vt.addColorStop(0,'rgba(0,0,0,0)'); vt.addColorStop(1,'rgba('+cr+','+cg+','+cb+','+ca+')'); ctx.fillStyle=vt; ctx.fillRect(0,0,W,H); }
   if(flash>0.01){ctx.fillStyle='rgba(255,90,110,'+(flash*0.4)+')';ctx.fillRect(0,0,W,H);}
   if(gflash>0.01){ctx.fillStyle='rgba(120,255,200,'+(gflash*0.16)+')';ctx.fillRect(0,0,W,H);}
   // danger glow + warning as the dump closes in
@@ -1552,6 +1554,7 @@ function drawMenus(){
     UI.help={x:W/2-70,y:hy,w:140,h:30}; ctx.fillStyle='rgba(180,200,230,0.7)'; ctx.font='600 12px ui-monospace,monospace'; ctx.fillText('❓ как играть',W/2,hy+20);
     UI.lev=UI.left=UI.right=UI.career=UI.action=null;
     if(dailyBonusT>0){ dailyBonusT-=0.006; const a=clamp(Math.min(dailyBonusT*4,1),0,1); ctx.globalAlpha=a; ctx.fillStyle='#ffd678'; ctx.font='800 16px ui-monospace,monospace'; ctx.shadowColor='#ffd678'; ctx.shadowBlur=14; ctx.fillText('🎁 ЕЖЕДНЕВНЫЙ БОНУС  +$'+dailyBonus,W/2,H*0.92); ctx.shadowBlur=0; ctx.globalAlpha=1; } }
+    if(menuFx>0){ ctx.fillStyle='rgba(130,225,255,'+(menuFx*0.20)+')'; ctx.fillRect(0,0,W,H); ctx.textAlign='center'; ctx.fillStyle='rgba(195,245,255,'+menuFx+')'; ctx.font='800 24px ui-monospace,monospace'; ctx.shadowColor='#7fe6ff'; ctx.shadowBlur=16; ctx.fillText('💎 ЗАКРЕПЛЕНО ◆+'+menuFxAmt,W/2,H*0.5); ctx.shadowBlur=0; menuFx-=0.035; }   // b123: флёр фиксации в холод
     ctx.fillStyle='rgba(125,140,180,0.55)'; ctx.font='10px ui-monospace,monospace'; ctx.fillText('build '+BUILD,W/2,H-12);
     UI.mute=null; UI.pause=null;
   } else if(screen==='paused'){
