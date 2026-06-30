@@ -52,7 +52,7 @@ function lerp(a,b,t){return a+(b-a)*t;} function clamp(v,a,b){return v<a?a:v>b?b
 // false → full game everywhere. Single switch. Systems are GATED, never deleted.
 const CORE_TEST_MODE = false;   // b70: META LIVE — building the progression spine (upgrades/bikes with teeth, career, economy) on the confirmed rigid-body core
 // build stamp — bump on every change so a phone refresh can confirm it loaded fresh code (cache!)
-const BUILD = '2026-07-01 · b140';
+const BUILD = '2026-07-01 · b141';
 
 // ---------- procedural market terrain ----------
 // height map sampled every STEP px; generated forward as we ride. Market character:
@@ -480,12 +480,42 @@ function finishChallenge(){   // b118: оценка вызова в конце �
   if(!activeChal)return; const ch=activeChal; let medal=-1;
   if(ch.goal==='finish'){ if(dist>=finishDist)medal=2; }
   else if(ch.goal==='bank'){ const m=ch.med||[1,1,1]; medal=(runGems>=m[2])?2:(runGems>=m[1])?1:(runGems>=m[0])?0:-1; }
+  else if(ch.goal==='campaign'){ const m=ch.med||[1,1,1]; if(dist>=finishDist) medal=(runGems>=m[2])?2:(runGems>=m[1])?1:0; }   // b141 КАМПАНИЯ: ДОЕХАЛ до конца = пройдено (бронза); профит за круг → серебро/золото (мастерство). Не доехал = −1 (волна-дамп догнала → качай гир)
   let rew=0;
   if(ch.daily){ if(medal>=0){ const td=dailyToday(); if(dailyDoneDay!==td){ dailyDoneDay=td; rew=ch.rew; bank+=rew; try{localStorage.setItem('cipher_daily_done',td);}catch(e){} saveMeta(); } } }   // b125: дейли — награда раз в день
   else if(medal>=0){ const prev=(ch.id in chalDone)?chalDone[ch.id]:-1; if(medal>prev)chalDone[ch.id]=medal; if(prev<0){rew=ch.rew; bank+=rew;} saveChal(); saveMeta(); }
   chalResult={name:ch.name, medal:medal, rew:rew}; activeChal=null; }
 try{careerMax=+localStorage.getItem('cipher_career_max')||0;}catch(e){}
 function saveCareer(){ try{localStorage.setItem('cipher_career_max',careerMax);}catch(e){} }
+// ---- b141 КАМПАНИЯ (ПУТЬ): СТАТИЧНАЯ лестница из ФИКС-исторических графиков (Binance klines по startTime → детерминизм + кэш навсегда, как боссы). Сложность ИЗ реальной волатильности (калм→экстрим, окна проверены в превью: vol 0.0005→0.0127). Крахи вплавлены как ВЕХИ (boss:true). Анлок последовательный (пройди пред.→откроется след.) → сложность = гейт (без прокачки волна-дамп не пускает = «апгрейды очень сильно влияют», эмерджентно). Медали 🥉(доехал)🥈🥉(профит) = мастерство (трасса фикс → учится). ----
+const CAMPAIGN=[
+  {id:'c01', coin:'btc',  sym:'BTCUSDT', t:1567296000000, name:'Тихий вторник',     sub:'BTC · сентябрь 2019',  med:[80,200,450],     rew:40},
+  {id:'c02', coin:'eth',  sym:'ETHUSDT', t:1684800000000, name:'Штиль',             sub:'ETH · май 2023',       med:[120,300,650],    rew:60},
+  {id:'c03', coin:'sol',  sym:'SOLUSDT', t:1693526400000, name:'Раскачка',          sub:'SOL · сентябрь 2023',  med:[180,450,950],    rew:90},
+  {id:'c04', coin:'btc',  sym:'BTCUSDT', t:1731628800000, name:'Ралли',             sub:'BTC · ноябрь 2024',    med:[260,650,1400],   rew:120},
+  {id:'c05', coin:'xrp',  sym:'XRPUSDT', t:1640131200000, name:'Дрейф',             sub:'XRP · декабрь 2021',   med:[340,850,1800],   rew:150},
+  {id:'c06', coin:'link', sym:'LINKUSDT',t:1628812800000, name:'Памп +11%',         sub:'LINK · август 2021',   med:[450,1100,2300],  rew:190},
+  {id:'b1',  coin:'btc',  sym:'BTCUSDT', t:1667952000000, name:'💥 КРАХ FTX',        sub:'BTC −13% · 09.11.2022',med:[600,1400,3000],  rew:300, boss:true},
+  {id:'c07', coin:'avax', sym:'AVAXUSDT',t:1637280000000, name:'Памп +9%',          sub:'AVAX · ноябрь 2021',   med:[600,1500,3200],  rew:240},
+  {id:'c08', coin:'wif',  sym:'WIFUSDT', t:1711238400000, name:'WIF +15%',          sub:'WIF · март 2024',      med:[750,1900,4000],  rew:320},
+  {id:'c09', coin:'eth',  sym:'ETHUSDT', t:1620864000000, name:'Бычий шторм',       sub:'ETH · май 2021',       med:[900,2300,5000],  rew:380},
+  {id:'b2',  coin:'btc',  sym:'BTCUSDT', t:1722816000000, name:'💥 АВГУСТ-ОБВАЛ',    sub:'BTC −16% · 05.08.2024',med:[1000,2600,5500], rew:420, boss:true},
+  {id:'c10', coin:'doge', sym:'DOGEUSDT',t:1620432000000, name:'DOGE-безумие',      sub:'DOGE · май 2021',      med:[1200,3000,6500], rew:460},
+  {id:'b3',  coin:'btc',  sym:'BTCUSDT', t:1583971200000, name:'💥 BLACK THURSDAY',  sub:'BTC −28% · 12.03.2020',med:[1400,3600,8000], rew:560, boss:true},
+  {id:'c11', coin:'pepe', sym:'PEPEUSDT',t:1683849600000, name:'PEPE: ланч',        sub:'PEPE · май 2023 · +8%',med:[1800,4500,10000],rew:700},
+];
+function campaignLen(idx){ return 110+Math.round((idx||0)/Math.max(1,CAMPAIGN.length-1)*140); }   // b141 ДЛИНА = ось сложности: трасса 1 ~110 свечей (короткая → лёгкий онбординг, выигрывается на стоке) → финал ~250 (дольше держаться от волны). Калибровка — руки
+function loadCampaignTrack(tr,idx){ const ck='cipher_cmp_'+tr.id+'_'+campaignLen(idx);
+  try{ const c=JSON.parse(localStorage.getItem(ck)||'null'); if(c&&c.length)return Promise.resolve(c); }catch(e){}   // ист.данные неизменны → кэш навсегда (офлайн ок); ключ включает длину
+  return fetch('https://api.binance.com/api/v3/klines?symbol='+tr.sym+'&interval=5m&startTime='+tr.t+'&limit='+campaignLen(idx))
+    .then(r=>{ if(!r.ok)throw 0; return r.json(); })
+    .then(j=>{ const d=j.map(k=>[+k[1],+k[2],+k[3],+k[4]]).filter(x=>x.length===4&&x.every(v=>v>0&&isFinite(v))); if(d.length<20)throw 0; try{localStorage.setItem(ck,JSON.stringify(d));}catch(e){} return d; })
+    .catch(()=>MARKET_DATA.btc.data); }
+function campaignBeaten(i){ return CAMPAIGN[i] && ('cmp_'+CAMPAIGN[i].id in chalDone); }
+function campaignUnlocked(i){ return i===0 || campaignBeaten(i-1); }   // последовательный анлок: пройди предыдущую → откроется следующая
+function startCampaignTrack(tr,idx){ selTicker=tr.coin||'btc'; tickerName=tr.name; screen='tickerload'; tickerLoadT=0;
+  activeChal={id:'cmp_'+tr.id, name:tr.name, goal:'campaign', med:tr.med, rew:tr.rew, camp:true};
+  loadCampaignTrack(tr,idx).then(d=>{ tickerData=(d&&d.length?d:MARKET_DATA.btc.data); trackSource='ticker'; gameMode='endless'; reset(); }); }
 const BIKES=[
   {name:'HODLER', body:['#323b50','#1b2030','#0a0c14'], rim:'150,225,255', accent:'60,210,255', rider:'255,178,120', cost:0,   accel:0.42, grip:1.40, tag:'баланс'},
   {name:'DEGEN',  body:['#48243f','#2a1230','#120612'], rim:'255,130,180', accent:'255,90,150',  rider:'150,235,255', cost:120, accel:0.60, grip:1.12, tag:'быстрый, нервный'},
@@ -666,9 +696,8 @@ function pointerDown(p){
   }
   if(screen==='path'){   // b118: Путь трейдера
     if(hit(p,UI.pback)){ screen='title'; sfxClick(); return; }
-    if(UI.evBtn && hit(p,UI.evBtn)){ eventsRet='path'; screen='events'; sfxClick(); return; }   // b129: боссы-крахи
     if(UI.dailyRow && hit(p,UI.dailyRow)){ if(dailyDoneDay!==dailyToday()) startChallenge(dailyChal()); else sfxClick(); sfxClick(); return; }   // b125: вызов дня
-    if(UI.chalRows)for(let i=0;i<UI.chalRows.length;i++){ if(hit(p,UI.chalRows[i])){ const ch=CHALLENGES[i]; if(rankIdx(career)>=ch.reqRank){ startChallenge(ch); } else sfxClick(); sfxClick(); return; } }
+    if(UI.campRows)for(let i=0;i<UI.campRows.length;i++){ if(hit(p,UI.campRows[i])){ if(campaignUnlocked(i)){ startCampaignTrack(CAMPAIGN[i],i); } else sfxClick(); sfxClick(); return; } }   // b141 кампания: последовательный анлок
     return;
   }
   if(screen==='career'){
@@ -1524,27 +1553,25 @@ function drawMenus(){
     const ri0=rankIdx(career), rk0=RANKS[ri0]; ctx.fillStyle='#9fb0d0'; ctx.font='600 10px ui-monospace,monospace'; ctx.fillText('ранг '+rk0.e+' '+rk0.n+'  ·  ◆'+career,W/2,66);
     UI.pback={x:14,y:16,w:74,h:32}; panel(UI.pback.x,UI.pback.y,74,32,'rgba(150,180,220,0.6)','rgba(30,40,62,0.5)'); ctx.fillStyle='#cfe0ff'; ctx.font='700 12px ui-monospace,monospace'; ctx.fillText('‹ НАЗАД',UI.pback.x+37,UI.pback.y+21);
     // b131: угловой чип «СОБЫТИЯ» УБРАН отсюда — он (а) налезал на центр-заголовок на узких экранах = баг юзера, (б) был невидим = юзер «не нашёл боссов». Теперь это заметная строка-кнопка ниже (см. UI.evBtn под ВЫЗОВОМ ДНЯ).
-    UI.chalRows=[]; const gp=7, lw=W-28, lx=14;
-    { const dc=dailyChal(), dDone=(dailyDoneDay===dailyToday()), dtk=TICKERS[chalCoinIdx(dc.coin)]; UI.dailyRow={x:lx,y:82,w:lw,h:50};   // b125: ВЫЗОВ ДНЯ
-      panel(lx,82,lw,50, dDone?'rgba(120,255,180,0.8)':'rgba(120,200,255,0.92)', dDone?'rgba(30,72,52,0.3)':'rgba(28,66,116,0.32)');
-      ctx.textAlign='left'; ctx.fillStyle='#cfeaff'; ctx.font='800 13px ui-monospace,monospace'; ctx.fillText((dDone?'✓ ':'📅 ')+'ВЫЗОВ ДНЯ · '+dtk.name, lx+12, 103);
-      ctx.fillStyle='rgba(185,210,240,0.82)'; ctx.font='600 9px ui-monospace,monospace'; ctx.fillText(dDone?'выполнен — завтра новый':(dc.name+'  ·  раз в день'), lx+12, 121);
-      if(!dDone){ ctx.textAlign='right'; ctx.fillStyle='#ffd678'; ctx.font='700 13px ui-monospace,monospace'; ctx.fillText('+◆'+dc.rew, lx+lw-12, 112); ctx.textAlign='left'; } }
-    // b131: СОБЫТИЯ-БОССЫ — заметная строка-кнопка (было: невидимый угловой чип → юзер «не нашёл боссов»). Виральный хук «оседлай реальный крах» теперь на виду.
-    { const evAll=BOSSES.length, evDone=BOSSES.filter(ev=>('ev_'+ev.id in chalDone)).length; UI.evBtn={x:lx,y:139,w:lw,h:46};
-      panel(lx,139,lw,46,'rgba(255,122,74,0.92)','rgba(54,24,18,0.42)');
-      ctx.textAlign='left'; ctx.fillStyle='#ffc2ad'; ctx.font='800 15px ui-monospace,monospace'; ctx.fillText('🔥 СОБЫТИЯ-БОССЫ', lx+12, 161);
-      ctx.fillStyle='rgba(240,205,195,0.82)'; ctx.font='600 9px ui-monospace,monospace'; ctx.fillText('оседлай реальный исторический крах — забери ◆', lx+12, 178);
-      ctx.textAlign='right'; ctx.fillStyle='#ffd678'; ctx.font='800 13px ui-monospace,monospace'; ctx.fillText(evDone+'/'+evAll+'  ›', lx+lw-12, 167); ctx.textAlign='left'; }
-    const top=196, rh=clamp(Math.floor((H-top-14)/CHALLENGES.length)-gp,40,56);   // b128: адаптивная высота — лестница вызовов влезает на любом экране (b131: top 144→196 — освободили строку под СОБЫТИЯ)
-    for(let i=0;i<CHALLENGES.length;i++){ const ch=CHALLENGES[i], y=top+i*(rh+gp); const r={x:lx,y:y,w:lw,h:rh}; UI.chalRows.push(r);
-      const locked=ri0<ch.reqRank, done=(ch.id in chalDone), med=done?chalDone[ch.id]:-1, tk=TICKERS[chalCoinIdx(ch.coin)];
-      panel(r.x,r.y,lw,rh, done?'rgba(120,255,180,0.82)':locked?'rgba(90,95,115,0.34)':'rgba(255,200,120,0.85)', done?'rgba(30,72,52,0.3)':locked?'rgba(22,26,42,0.55)':'rgba(110,80,28,0.24)');
-      ctx.textAlign='left'; ctx.fillStyle=locked?'#7a8098':'#eafaff'; ctx.font='800 14px ui-monospace,monospace'; ctx.fillText((done?'✓':locked?'🔒':'▶')+' '+tk.name+' · '+ch.name, r.x+12, y+22);
-      ctx.fillStyle=locked?'rgba(120,125,145,0.6)':'rgba(185,205,235,0.8)'; ctx.font='600 9px ui-monospace,monospace';
-      const sub=locked?('нужен ранг '+RANKS[ch.reqRank].e+' '+RANKS[ch.reqRank].n+' (◆'+RANKS[ch.reqRank].at.toLocaleString('en-US')+')'):(ch.goal==='bank'?('🥉$'+ch.med[0]+'   🥈$'+ch.med[1]+'   🥇$'+ch.med[2]):'доехать до конца графика');
-      ctx.fillText(sub, r.x+12, y+40);
-      ctx.textAlign='right'; if(done){ ctx.font='16px ui-monospace,monospace'; ctx.fillText(['🥉','🥈','🥇'][med]||'✓', r.x+lw-12, y+26); } else if(!locked){ ctx.fillStyle='#9ff0c8'; ctx.font='700 12px ui-monospace,monospace'; ctx.fillText('+◆'+ch.rew, r.x+lw-12, y+32); } ctx.textAlign='left';
+    UI.campRows=[]; const gp=6, lw=W-28, lx=14;
+    // ВЫЗОВ ДНЯ (live-монета, быстрый дейли — ретеншн; отдельно от статичной кампании)
+    { const dc=dailyChal(), dDone=(dailyDoneDay===dailyToday()), dtk=TICKERS[chalCoinIdx(dc.coin)]; UI.dailyRow={x:lx,y:74,w:lw,h:42};   // b125 ВЫЗОВ ДНЯ
+      panel(lx,74,lw,42, dDone?'rgba(120,255,180,0.8)':'rgba(120,200,255,0.92)', dDone?'rgba(30,72,52,0.3)':'rgba(28,66,116,0.32)');
+      ctx.textAlign='left'; ctx.fillStyle='#cfeaff'; ctx.font='800 12px ui-monospace,monospace'; ctx.fillText((dDone?'✓ ':'📅 ')+'ВЫЗОВ ДНЯ · '+dtk.name, lx+12, 92);
+      ctx.fillStyle='rgba(185,210,240,0.82)'; ctx.font='600 8.5px ui-monospace,monospace'; ctx.fillText(dDone?'выполнен — завтра новый':(dc.name+'  ·  раз в день'), lx+12, 108);
+      if(!dDone){ ctx.textAlign='right'; ctx.fillStyle='#ffd678'; ctx.font='700 12px ui-monospace,monospace'; ctx.fillText('+◆'+dc.rew, lx+lw-12, 100); ctx.textAlign='left'; } }
+    // b141 КАМПАНИЯ-ЛЕСТНИЦА — статичные ист.трассы калм→экстрим, боссы-крахи вплавлены как ВЕХИ. Последовательный анлок. Медали = мастерство.
+    const top=124, rh=clamp(Math.floor((H-top-12)/CAMPAIGN.length)-gp,34,52);
+    for(let i=0;i<CAMPAIGN.length;i++){ const tr=CAMPAIGN[i], y=top+i*(rh+gp); const r={x:lx,y:y,w:lw,h:rh}; UI.campRows.push(r);
+      const unlocked=campaignUnlocked(i), done=campaignBeaten(i), med=done?chalDone['cmp_'+tr.id]:-1, boss=tr.boss;
+      const fill=done?'rgba(30,72,52,0.34)':!unlocked?'rgba(22,26,42,0.5)':boss?'rgba(54,24,18,0.5)':'rgba(38,44,68,0.45)';
+      const line=done?'rgba(120,255,180,0.82)':!unlocked?'rgba(86,92,112,0.3)':boss?'rgba(255,122,74,0.9)':'rgba(150,180,220,0.6)';
+      panel(r.x,r.y,lw,rh,line,fill);
+      ctx.textAlign='left'; ctx.fillStyle=!unlocked?'#6a7088':(boss?'#ffc2ad':'#eafaff'); ctx.font='800 13px ui-monospace,monospace';
+      ctx.fillText((done?'✓ ':!unlocked?'🔒 ':'')+(i+1)+'. '+tr.name, r.x+12, y+rh*0.46+2);
+      ctx.fillStyle=!unlocked?'rgba(120,125,145,0.55)':'rgba(185,205,235,0.72)'; ctx.font='600 8.5px ui-monospace,monospace';
+      ctx.fillText(unlocked?tr.sub:'пройди предыдущую трассу', r.x+12, y+rh*0.84);
+      ctx.textAlign='right'; if(done){ ctx.font='15px ui-monospace,monospace'; ctx.fillText(['🥉','🥈','🥇'][med]||'✓', r.x+lw-12, y+rh*0.62); } else if(unlocked){ ctx.fillStyle='#9ff0c8'; ctx.font='700 11px ui-monospace,monospace'; ctx.fillText('+◆'+tr.rew, r.x+lw-12, y+rh*0.64); } ctx.textAlign='left';
     }
     ctx.textAlign='left'; return;
   }
@@ -1665,18 +1692,15 @@ function drawMenus(){
     ctx.textAlign='left'; my+=zh+10;
     // 🏁 ПУТЬ
     UI.careerBtn={x:cx0,y:my,w:cw,h:52}; ctx.fillStyle='rgba(60,44,16,0.6)'; ctx.beginPath();ctx.roundRect(cx0,my,cw,52,12);ctx.fill(); ctx.strokeStyle='rgba(255,200,120,0.7)';ctx.lineWidth=1.5;ctx.stroke();
-    ctx.fillStyle='#ffd678'; ctx.font='800 16px ui-monospace,monospace'; ctx.fillText('🏁 ПУТЬ',cx0+16,my+23); ctx.fillStyle='rgba(220,200,160,0.78)'; ctx.font='600 10px ui-monospace,monospace'; ctx.fillText('лестница вызовов: креветка → кит · медали',cx0+16,my+41);
+    ctx.fillStyle='#ffd678'; ctx.font='800 16px ui-monospace,monospace'; ctx.fillText('🏁 ПУТЬ',cx0+16,my+23); ctx.fillStyle='rgba(220,200,160,0.78)'; ctx.font='600 10px ui-monospace,monospace'; ctx.fillText('лестница трасс + боссы-крахи · калм → экстрим · медали',cx0+16,my+41);
     { const ri=rankIdx(career); ctx.textAlign='right'; ctx.fillStyle='rgba(255,214,120,0.85)'; ctx.font='700 11px ui-monospace,monospace'; ctx.fillText(RANKS[ri].e+' '+RANKS[ri].n,cx0+cw-16,my+30); ctx.textAlign='left'; }
     my+=62;
     // ♾ ОТРЫВ (b140: переименован ЭНДЛЕСС→ОТРЫВ — деген-слэнг «оторвись от дампа» + не англицизм)
     UI.trainBtn={x:cx0,y:my,w:cw,h:52}; ctx.fillStyle='rgba(28,40,60,0.6)'; ctx.beginPath();ctx.roundRect(cx0,my,cw,52,12);ctx.fill(); ctx.strokeStyle='rgba(150,180,220,0.6)';ctx.lineWidth=1.5;ctx.stroke();
     ctx.fillStyle='#cfe0ff'; ctx.font='800 16px ui-monospace,monospace'; ctx.fillText('♾ ОТРЫВ',cx0+16,my+23); ctx.fillStyle='rgba(190,205,235,0.78)'; ctx.font='600 10px ui-monospace,monospace'; ctx.fillText('оторвись от дампа · как ДАЛЕКО уедешь · ∝ прокачке',cx0+16,my+41);
     my+=62;
-    // 🔥 СОБЫТИЯ-БОССЫ (парадная дверь — раньше юзер не находил)
-    UI.tEvents={x:cx0,y:my,w:cw,h:46}; ctx.fillStyle='rgba(54,24,18,0.7)'; ctx.beginPath();ctx.roundRect(cx0,my,cw,46,12);ctx.fill(); ctx.strokeStyle='rgba(255,122,74,0.85)';ctx.lineWidth=1.5;ctx.stroke();
-    ctx.fillStyle='#ffb59a'; ctx.font='800 14px ui-monospace,monospace'; ctx.fillText('🔥 СОБЫТИЯ-БОССЫ',cx0+16,my+21); ctx.fillStyle='rgba(240,205,195,0.8)'; ctx.font='600 9px ui-monospace,monospace'; ctx.fillText('оседлай реальный исторический крах рынка',cx0+16,my+37);
-    { const ev=BOSSES.filter(b=>('ev_'+b.id in chalDone)).length; ctx.textAlign='right'; ctx.fillStyle='#ffd678'; ctx.font='800 13px ui-monospace,monospace'; ctx.fillText(ev+'/'+BOSSES.length+' ▸',cx0+cw-16,my+28); ctx.textAlign='left'; }
-    my+=58;
+    // b141: карточка СОБЫТИЯ-БОССЫ УБРАНА с титула — боссы-крахи вплавлены в лестницу ПУТЬ как вехи (см. CAMPAIGN). Доступ к ним через ПУТЬ.
+    UI.tEvents=null;
     // ---- ЭКОНОМИКА: $ (торговый) ⇄ ЗАКРЕПИТЬ ⇄ ◆ (холод) ----
     if(bank>0){ UI.ddiamond={x:cx0,y:my,w:cw,h:48}; ctx.fillStyle='rgba(16,32,42,0.85)'; ctx.beginPath();ctx.roundRect(cx0,my,cw,48,12);ctx.fill(); ctx.strokeStyle='rgba(120,200,255,0.7)';ctx.lineWidth=1.6;ctx.stroke(); ctx.textAlign='center'; ctx.fillStyle='#bfe0ff'; ctx.font='800 14px ui-monospace,monospace'; ctx.fillText('💎 ЗАКРЕПИТЬ $'+bank+' → ◆',W/2,my+21); ctx.fillStyle='rgba(150,180,210,0.82)'; ctx.font='600 9px ui-monospace,monospace'; ctx.fillText('навсегда · растит РАНГ · ликвидация не тронет'+(career>0?' · рента +$'+Math.round(career*STAKE_YIELD)+'/заезд':''),W/2,my+37); my+=54; } else UI.ddiamond=null;
     ctx.textAlign='center'; ctx.fillStyle='rgba(140,155,195,0.6)'; ctx.font='600 9px ui-monospace,monospace'; ctx.fillText('$ риск ×плечо    ·    ◆ холод: ранг + рента',W/2,my+10); my+=24;
