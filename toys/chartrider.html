@@ -52,7 +52,7 @@ function lerp(a,b,t){return a+(b-a)*t;} function clamp(v,a,b){return v<a?a:v>b?b
 // false → full game everywhere. Single switch. Systems are GATED, never deleted.
 const CORE_TEST_MODE = false;   // b70: META LIVE — building the progression spine (upgrades/bikes with teeth, career, economy) on the confirmed rigid-body core
 // build stamp — bump on every change so a phone refresh can confirm it loaded fresh code (cache!)
-const BUILD = '2026-07-02 · b150';
+const BUILD = '2026-07-02 · b151';
 
 // ---------- procedural market terrain ----------
 // height map sampled every STEP px; generated forward as we ride. Market character:
@@ -1594,14 +1594,26 @@ function drawMachine(B,wheelv,rShiftv,leanv,roost,boostv){   // b109: спрай
       ctx.strokeStyle=RIM+'0.85)'; ctx.lineWidth=2.4; ctx.beginPath(); ctx.moveTo(18,-16); ctx.lineTo(23,-19); ctx.stroke();
     }
     ctx.lineCap='butt';
-    // ===== RIDER =====
+    // ===== b151 МЕХ-ДЕТАЛИ по типу (выхлоп/вилка/цепь/зеркальце/ветровик) =====
+    if(TY==='dirt'){ ctx.strokeStyle='rgba(205,215,228,0.5)'; ctx.lineWidth=2.4; ctx.lineCap='round'; ctx.beginPath(); ctx.moveTo(-6,1); ctx.quadraticCurveTo(-17,3,-25,9); ctx.stroke(); ctx.lineCap='butt';   // глушитель вверх-назад
+      ctx.strokeStyle=RIM+'0.45)'; ctx.lineWidth=1.6; ctx.beginPath(); ctx.moveTo(24.5,13); ctx.lineTo(16.5,-13); ctx.stroke();   // второе перо вилки
+      ctx.strokeStyle='rgba(180,195,215,0.5)'; ctx.lineWidth=2; ctx.beginPath(); ctx.moveTo(-9,3); ctx.lineTo(-18,12); ctx.stroke(); }   // задний амортизатор
+    else if(TY==='sport'){ ctx.strokeStyle='rgba(215,225,240,0.5)'; ctx.lineWidth=2.6; ctx.lineCap='round'; ctx.beginPath(); ctx.moveTo(-5,10); ctx.lineTo(-23,12); ctx.stroke(); ctx.lineCap='butt';   // низкий выхлоп
+      ctx.strokeStyle='rgba(200,240,255,0.7)'; ctx.lineWidth=1.6; ctx.beginPath(); ctx.moveTo(19,-13); ctx.quadraticCurveTo(24,-16,27,-13); ctx.stroke(); }   // блик ветровика
+    else if(TY==='scooter'||TY==='moped'){ ctx.strokeStyle=RIM+'0.7)'; ctx.lineWidth=1.6; ctx.beginPath(); ctx.moveTo(19,-13); ctx.lineTo(22,-19); ctx.stroke(); ctx.fillStyle=RIM+'0.75)'; ctx.beginPath(); ctx.arc(22.5,-20,1.7,0,7); ctx.fill(); }   // зеркальце
+    else if(TY==='bike'){ ctx.strokeStyle='rgba(165,180,200,0.55)'; ctx.lineWidth=1.2; ctx.beginPath(); ctx.moveTo(3,13.4); ctx.lineTo(-24,15); ctx.stroke(); }   // цепь звезда→втулка
+    // ===== RIDER (b151: ПОЗА per type; b148: жёстко на раме — двигается ТОЛЬКО с байком, микро-сдвиг веса без вращения) =====
+    const PZ = TY==='bike' ? {x:-1,y:-5, arm:[15,-16], leg:[[-3,12],[6,3]]}                       // велосипедист: сидит выше, нога тянется к педали
+             : (TY==='scooter'||TY==='moped') ? {x:0,y:-2, arm:[18,-15], leg:[[-6,9],[-2,1]]}     // прямая посадка, ноги вместе на деке
+             : TY==='sport' ? {x:3,y:2, arm:[20,-12], leg:[[-7,8],[3,0]]}                          // лежит на баке, поджат
+             : {x:0,y:0, arm:[22,-17], leg:[[-4,9],[5,0]]};                                        // дёрт: атакующая стойка
+    ctx.save(); ctx.translate((rShiftv||0)*TUNE.riderShiftPx + PZ.x, PZ.y);
     ctx.strokeStyle='#080a0e'; ctx.lineWidth=5.5; ctx.lineCap='round';
-    ctx.beginPath(); ctx.moveTo(-4,9); ctx.lineTo(5,0); ctx.lineTo(-3,-10); ctx.stroke(); ctx.lineCap='butt';
-    ctx.save(); ctx.translate((rShiftv||0)*TUNE.riderShiftPx, 0);   /* b148 РАЙДЕР=ЕДИНОЕ ТЕЛО (юзер: на вилли торс «отрывался» от байка): убран ОТДЕЛЬНЫЙ ПОВОРОТ торса (rotate(leanv) частично ПРОТИВ угла рамы — рама на вилли уходит назад, торс «оставался стоять» + съезжал на ±6px) — теперь райдер жёстко в системе рамы, двигается ТОЛЬКО с байком; остался лишь микро-сдвиг переноса веса riderShiftPx (без вращения) */
+    ctx.beginPath(); ctx.moveTo(PZ.leg[0][0],PZ.leg[0][1]); ctx.lineTo(PZ.leg[1][0],PZ.leg[1][1]); ctx.lineTo(-3,-10); ctx.stroke(); ctx.lineCap='butt';   // нога: стопа→колено→бедро
     const rg=ctx.createLinearGradient(0,-30,0,-10); rg.addColorStop(0,'#2c3447'); rg.addColorStop(1,'#0a0c12');
     ctx.beginPath(); ctx.moveTo(-3,-10); ctx.quadraticCurveTo(-5,-21,-1,-26); ctx.quadraticCurveTo(2,-28,5,-25); ctx.lineTo(4,-13); ctx.quadraticCurveTo(1,-10,-3,-10); ctx.closePath(); ctx.fillStyle=rg; ctx.fill();
     ctx.strokeStyle='rgba('+B.rider+',0.85)'; ctx.lineWidth=1.6; ctx.stroke();
-    ctx.strokeStyle='rgba('+B.rider+',0.8)'; ctx.lineWidth=3.4; ctx.lineCap='round'; ctx.beginPath(); ctx.moveTo(3,-23); ctx.quadraticCurveTo(13,-22,22,-17); ctx.stroke(); ctx.lineCap='butt';
+    ctx.strokeStyle='rgba('+B.rider+',0.8)'; ctx.lineWidth=3.4; ctx.lineCap='round'; ctx.beginPath(); ctx.moveTo(3,-23); ctx.quadraticCurveTo(PZ.arm[0]*0.55,-23,PZ.arm[0],PZ.arm[1]); ctx.stroke(); ctx.lineCap='butt';   // рука к рулю типа
     const hg=ctx.createRadialGradient(0,-32,1,2,-30,6.4); hg.addColorStop(0,'#3a4358'); hg.addColorStop(1,'#0a0c12');
     ctx.fillStyle=hg; ctx.beginPath(); ctx.arc(2,-30,6.2,0,7); ctx.fill();
     ctx.lineWidth=1.4; ctx.strokeStyle='rgba('+B.rim+',0.7)'; ctx.beginPath(); ctx.arc(2,-30,6.2,Math.PI*1.05,Math.PI*1.95); ctx.stroke();
