@@ -52,7 +52,7 @@ function lerp(a,b,t){return a+(b-a)*t;} function clamp(v,a,b){return v<a?a:v>b?b
 // false → full game everywhere. Single switch. Systems are GATED, never deleted.
 const CORE_TEST_MODE = false;   // b70: META LIVE — building the progression spine (upgrades/bikes with teeth, career, economy) on the confirmed rigid-body core
 // build stamp — bump on every change so a phone refresh can confirm it loaded fresh code (cache!)
-const BUILD = '2026-07-01 · b147';
+const BUILD = '2026-07-02 · b148';
 
 // ---------- procedural market terrain ----------
 // height map sampled every STEP px; generated forward as we ride. Market character:
@@ -331,7 +331,7 @@ const TUNE = {
   leanRampAir:  0.30,    // 39b. b147 В ВОЗДУХЕ рампа БЫСТРАЯ — флипы остаются резвыми (даже чуть резче старого 0.25). РУКИ
   weightAuth:   0.030,   // 40. АВТОРИТЕТ ВЕСА на тангаж (≈старый leanGround 0.028, чуть выше — компенсирует лаг сглаживания). Перенос веса вперёд = нос вниз/перед загружен, назад = нос вверх/вилли
   driveTrade:   0.20,    // 41. ТРЕКШН-ТРЕЙДОФФ: вес НАЗАД грузит заднее → +тяга/сцепление в горку; вес ВПЕРЁД разгружает → −тяга (но держит перед от опрокида). Реальный эндуро-компромисс. 0 = выкл
-  riderShiftPx: 6,       // 42. на сколько px тело райдера ВИДИМО сдвигается вперёд/назад при переносе веса (только рендер — payoff «вес — отдельная единица»)
+  riderShiftPx: 2.5,     // 42. b148: 6→2.5 и БЕЗ вращения торса — райдер жёстко связан с байком (фикс «отрыва» на вилли); микро-сдвиг = намёк на перенос веса. 0 = полностью статичен
   // ---- ФАЗА-2 (b50): глубокий вилли/стоппи = СКИЛЛ-БАЛАНС. (Баланс уже эмерджентно есть: weightAuth>GP → вилли неустойчив, держишь весом. Здесь — заострить глубокую зону + награда за удержание.) ----
   skillZone:    0.55,    // 43. порог |тангаж−склон| (рад), за которым включается доп. неустойчивость скилл-зоны (глубокий вилли/стоппи). НИЖЕ норм-дрейфа вилли (~−0.6). Норм-езда (|dev|<это) НЕ тронута
   skillDestab:  0.025,   // 44. сила инвертир.-маятника в скилл-зоне: глубже за порог = сильнее тянет дальше → держи переносом веса (вес 0.03 пересиливает). БОЛЬШЕ = резче/труднее
@@ -1092,7 +1092,7 @@ function update(){
   multPulse*=0.92; gflash*=0.9;
   for(const f of floats){ f.y+=f.vy; f.vy+=0.02; f.life-=0.018; } floats=floats.filter(f=>f.life>0);
   checkMissions();
-  // rider upper-body lean DRIVEN BY THE REAL WEIGHT SHIFT (b47 two-body): rShift forward → body forward, back → body back (+ a touch of pitch comp). The visible second-mass payoff.
+  // b148: торс больше НЕ вращается отдельно (райдер=единое тело с рамой, фикс «отрыва» на вилли). lean оставлен посчитанным (leanv в drawMachine игнорится) — задел под позы райдера per-type (b151)
   const leanT = bike.rShift*0.5 + (bike.onG ? clamp(-bike.ang,-0.25,0.25)*0.25 : 0);
   lean = lerp(lean, leanT, 0.18);
   // situational MOTION 'rush' — big air / bombing descents / hard acceleration (not just raw speed)
@@ -1568,7 +1568,7 @@ function drawMachine(B,wheelv,rShiftv,leanv,roost,boostv){   // b109: спрай
     // ===== RIDER =====
     ctx.strokeStyle='#080a0e'; ctx.lineWidth=5.5; ctx.lineCap='round';
     ctx.beginPath(); ctx.moveTo(-4,9); ctx.lineTo(5,0); ctx.lineTo(-3,-10); ctx.stroke(); ctx.lineCap='butt';
-    ctx.save(); ctx.translate(-3 + (rShiftv||0)*TUNE.riderShiftPx, -10); ctx.rotate(leanv||0); ctx.translate(3,10);
+    ctx.save(); ctx.translate((rShiftv||0)*TUNE.riderShiftPx, 0);   /* b148 РАЙДЕР=ЕДИНОЕ ТЕЛО (юзер: на вилли торс «отрывался» от байка): убран ОТДЕЛЬНЫЙ ПОВОРОТ торса (rotate(leanv) частично ПРОТИВ угла рамы — рама на вилли уходит назад, торс «оставался стоять» + съезжал на ±6px) — теперь райдер жёстко в системе рамы, двигается ТОЛЬКО с байком; остался лишь микро-сдвиг переноса веса riderShiftPx (без вращения) */
     const rg=ctx.createLinearGradient(0,-30,0,-10); rg.addColorStop(0,'#2c3447'); rg.addColorStop(1,'#0a0c12');
     ctx.beginPath(); ctx.moveTo(-3,-10); ctx.quadraticCurveTo(-5,-21,-1,-26); ctx.quadraticCurveTo(2,-28,5,-25); ctx.lineTo(4,-13); ctx.quadraticCurveTo(1,-10,-3,-10); ctx.closePath(); ctx.fillStyle=rg; ctx.fill();
     ctx.strokeStyle='rgba('+B.rider+',0.85)'; ctx.lineWidth=1.6; ctx.stroke();
