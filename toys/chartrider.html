@@ -52,7 +52,7 @@ function lerp(a,b,t){return a+(b-a)*t;} function clamp(v,a,b){return v<a?a:v>b?b
 // false → full game everywhere. Single switch. Systems are GATED, never deleted.
 const CORE_TEST_MODE = false;   // b70: META LIVE — building the progression spine (upgrades/bikes with teeth, career, economy) on the confirmed rigid-body core
 // build stamp — bump on every change so a phone refresh can confirm it loaded fresh code (cache!)
-const BUILD = '2026-07-02 · b151';
+const BUILD = '2026-07-02 · b152';
 
 // ---------- procedural market terrain ----------
 // height map sampled every STEP px; generated forward as we ride. Market character:
@@ -596,7 +596,7 @@ function rollMissions(){ const pool=MISSION_POOL.slice(); missions=[]; for(let n
 function checkMissions(){ if(CORE_TEST_MODE)return; const s={dist:dist,coins:coins,maxMult:maxMult,flips:flipsTotal,kmh:topKmh}; for(const m of missions){ if(!m.done && m.val(s)>=m.target){ m.done=true; coins+=m.rew; gflash=0.7; multPulse=1; popText('ЦЕЛЬ ✓  +◆'+m.rew); floatPop(bike.x,bike.y-34,'+◆'+m.rew,'#9ff0c8'); sfxLev(); } } }
 
 // ---------- sound (procedural WebAudio) ----------
-let actx,eng,engGain,master,engLP,engOscs;
+let actx,eng,engGain,master,engLP,engOscs,windG;   // b152: windG = свист ветра на большом полёте (gain ∝ camAir)
 function makeDistCurve(k){ const n=256,c=new Float32Array(n); for(let i=0;i<n;i++){ const x=i/(n-1)*2-1; c[i]=(1+k)*x/(1+k*Math.abs(x)); } return c; }
 function initAudio(){ if(actx)return; try{
   actx=new (window.AudioContext||window.webkitAudioContext)(); master=actx.createGain(); master.gain.value=muted?0:0.42; master.connect(actx.destination);
@@ -611,6 +611,7 @@ function initAudio(){ if(actx)return; try{
   const o3=actx.createOscillator(); o3.type='sawtooth'; const g3=actx.createGain(); g3.gain.value=0.6;  o3.connect(g3); g3.connect(emix);
   const nb=actx.createBuffer(1,actx.sampleRate,actx.sampleRate); const nd=nb.getChannelData(0); for(let i=0;i<nd.length;i++)nd[i]=Math.random()*2-1;
   const ns=actx.createBufferSource(); ns.buffer=nb; ns.loop=true; const nbp=actx.createBiquadFilter(); nbp.type='bandpass'; nbp.frequency.value=1500; nbp.Q.value=0.6; const ng=actx.createGain(); ng.gain.value=0.22; ns.connect(nbp); nbp.connect(ng); ng.connect(emix); ns.start();
+  const wn=actx.createBufferSource(); wn.buffer=nb; wn.loop=true; const wbp=actx.createBiquadFilter(); wbp.type='bandpass'; wbp.frequency.value=520; wbp.Q.value=0.45; windG=actx.createGain(); windG.gain.value=0; wn.connect(wbp); wbp.connect(windG); windG.connect(master); wn.start();   // b152 ВЕТЕР: низкий шум-свист, громкость ∝ высоте полёта (camAir) — большой прыжок «слышен»
   o1.start(); o2.start(); o3.start(); eng=o1; engOscs=[o1,o2,o3];
   initMusic();
 }catch(e){actx=null;} }
@@ -620,7 +621,7 @@ function sfxCoin(){ blip(940,0.09,'triangle',0.2); blip(1400,0.07,'triangle',0.1
 function sfxFlip(){ blip(260,0.2,'sawtooth',0.16); }
 function sfxFlipCrescendo(n){ blip(240+Math.min(n,6)*95,0.2,'sawtooth',0.16); if(n>=2)blip(560+n*70,0.13,'square',0.10); }   // b90 КРЕЩЕНДО: тон выше с каждым флипом в цепи
 function sfxNear(){ blip(1250,0.12,'sine',0.16); }
-function sfxLand(){ blip(150,0.09,'square',0.2); }
+function sfxLand(k){ k=k||0; blip(150-45*k,0.09+0.06*k,'square',0.2+0.15*k); }   // b152: удар посадки ∝ высоте полёта (k 0..1) — большой прыжок садится ТЯЖЕЛЕЕ на слух
 function sfxCrash(){ blip(80,0.45,'sawtooth',0.38); blip(120,0.3,'square',0.22); }
 function sfxLev(){ blip(680,0.08,'square',0.16); blip(1020,0.08,'square',0.12); }
 function sfxClick(){ blip(540,0.05,'square',0.16); }
@@ -1010,14 +1011,14 @@ function update(){
       if(trickAir===1 && airT>8 && Math.abs(bike.vy)<1.6 && Math.abs(bike.angV)>0.13){ slowmo=Math.max(slowmo,14); trickAir=2; } }   // слоумо на АПЕКСЕ, только если реально крутишь (|angV|) и только раз за полёт
     const skim=terrainAt(bike.x).y-(bike.y+DY);                        // gap of lower wheel above surface
     if(airT>16 && skim>0 && skim<16 && bike.vx>6 && !nearMissed){ nearMissed=true; mult+=0.5; boost=Math.min(1,(boost||0)+0.15); multPulse=1; const g2=1.5*mult; coins+=g2; floatPop(bike.x,bike.y-22,'NEAR MISS +$'+Math.round(g2),'#9ff0ff'); shake=4; hitstop=2; gflash=0.4; sfxNear(); }
-    flipAcc+=Math.abs(bike.angV); if(flipAcc>6.283){flipAcc-=6.283;flipCount++;}
+    flipAcc+=Math.abs(bike.angV); if(flipAcc>6.283){flipAcc-=6.283;flipCount++; blip(150+flipCount*40,0.18,'sawtooth',0.13); buzz(10);}   // b152: «вжух» на каждом ПОЛНОМ обороте В ВОЗДУХЕ (тон растёт с витками) — флип слышен в момент, не только при посадке
   }
   if(wasG && !grounded){ airT=0; nearMissed=false; }                   // just launched
   else if(!wasG && grounded){                                          // just landed
     jumpGrace=0; trickAir=0;                                           // jump arc over; b150: трик-камера завершена
     let diff=Math.abs(rel); lastLandDiff=diff;
     if(airT>14 && (diff > RB.crashAngle + 0.12*upgLvl('grip') + 0.10*upgLvl('susp') + Math.max(0,(BK().grip-1.40))*0.4 || Math.abs(bike.angV) > RB.spinCrash + 0.03*upgLvl('grip'))){ wipeout('crash'); }   // b88: ПОДВЕСКА расширяет конус прощения посадки (большие полёты приземляются мягче/безопаснее)   // b72 СКИЛЛ-БИТ (Trials): land too far off wheels-down OR still SPINNING fast = CRASH (botched/over-rotated flip costs). СЦЕПЛЕНИЕ upgrade + grippy bike widen tolerance (interconnected). Tune RB.crashAngle/spinCrash by hand
-    else { sfxLand();
+    else { sfxLand(clamp(airT/38,0,1));
       // b131: PLANT THE LANDING — settle the touchdown pitch toward wheels-down vs the slope. This was the b65 intent but got LOST when physics moved to rigidStep (b68 only damped angV, NOT the angle — the stale comment claimed the rigid body settles it, but sim proved it does NOT): a pitched touchdown (nose 0.5–1.3 rad up) rode REARED and bled speed frame-after-frame, never re-accelerating = the user's "залипает при приземлении" / "прилип к трассе". Fires ONLY on a real-air, non-crash landing (airT>10, crash already rejected above) when the rider is NOT holding a lean (|rShift|<0.4 → an intentional wheelie/flip-hold is preserved; a completed flip already scored its air rotation, so settling the residual lands it clean). rel is the normalized pitch-vs-slope → moving ang along it takes the short path even after multi-flips (bike.ang accumulates, never normalized).
       if(airT>10 && Math.abs(bike.rShift)<0.4){ bike.ang -= rel*0.38; bike.angV += -rel*0.10; rel*=0.62; }   // b138: ПЛАВНЕЕ (юзер: посадка резкая) — снап 0.55→0.38 (мягче за кадр) + доводка УГЛОВОЙ СКОРОСТЬЮ (доворачивается за пару кадров, не телепорт) → планирует без залипания, но без рывка. rel re-синк для loop/endo-чеков ниже
       bike.angV*=0.4;   // damp residual spin on touchdown
@@ -1514,6 +1515,7 @@ function draw(){
   // engine audio tracks speed
   if(eng&&engOscs){ const v=bike?bike.vx:0, f=40+v*8+(down?16:0);
     engOscs[0].frequency.value=f; engOscs[1].frequency.value=f*2.01; engOscs[2].frequency.value=f*1.006;
+    if(windG){ const wt=(screen==='play'&&bike&&!bike.onG)?Math.min(0.34,(camAir||0)*0.36):0; windG.gain.value+=(wt-windG.gain.value)*0.12; }   // b152: ветер нарастает с высотой полёта, на земле глохнет
     engLP.frequency.value=360+v*95+(down?520:0)+(boosting>0?700:0);
     const tgt=(screen==='play'&&!muted)?clamp(0.05+v*0.011+(down?0.05:0)+(boosting>0?0.06:0),0,0.32):0;
     engGain.gain.value+=(tgt-engGain.gain.value)*0.1; }
