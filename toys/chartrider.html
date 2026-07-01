@@ -52,7 +52,7 @@ function lerp(a,b,t){return a+(b-a)*t;} function clamp(v,a,b){return v<a?a:v>b?b
 // false → full game everywhere. Single switch. Systems are GATED, never deleted.
 const CORE_TEST_MODE = false;   // b70: META LIVE — building the progression spine (upgrades/bikes with teeth, career, economy) on the confirmed rigid-body core
 // build stamp — bump on every change so a phone refresh can confirm it loaded fresh code (cache!)
-const BUILD = '2026-07-01 · b146';
+const BUILD = '2026-07-01 · b147';
 
 // ---------- procedural market terrain ----------
 // height map sampled every STEP px; generated forward as we ride. Market character:
@@ -255,7 +255,7 @@ function drawSpark(arr,sx,sy,sw,sh,col){ let mn=Infinity,mx=-Infinity; for(const
 
 // ---------- bike ----------
 let bike, cam, t, coins, dist, best, screen, wipe, parts, stars, dust, shake, flash, daycycle, trail, streaks, mult, bestPnl, airT, nearMissed, hitstop, gflash, floats, multPulse, maxMult, lean, rush, prevVx, wave, waveSpd, deathBy, boost, boosting, zone, biomeBanner, biomeBannerT, BSKY, BLINE, BRIDGE, lastMile, newDepth, camAir=0, wheelieT=0;
-let posPulse=0,_posPrev=0,_dangBuzz=0,prMax=0,prMin=0,slowmo=0,menuFx=0,menuFxAmt=0;   // b123: menuFx = вспышка-флёр «ЗАКРЕПЛЕНО» на меню-экране (parts/flash там не рисуются). b84 degen-момент: posPulse=пульс числа при росте позиции; _dangBuzz=вибро на входе дампа. b89: prMax/prMin = коридор ЦЕНЫ (sell-the-top). b90: slowmo = кадры slow-mo на эпик-моменте (пропуск каждого 2-го update)
+let posPulse=0,_posPrev=0,_dangBuzz=0,prMax=0,prMin=0,slowmo=0,menuFx=0,menuFxAmt=0,wheelieAim=0,wheelieI=0;   // b147: wheelieAim = текущий целевой угол вилли-помощника (0 = не активен); wheelieI = интегральная компенсация PID   // b123: menuFx = вспышка-флёр «ЗАКРЕПЛЕНО» на меню-экране (parts/flash там не рисуются). b84 degen-момент: posPulse=пульс числа при росте позиции; _dangBuzz=вибро на входе дампа. b89: prMax/prMin = коридор ЦЕНЫ (sell-the-top). b90: slowmo = кадры slow-mo на эпик-моменте (пропуск каждого 2-го update)
 try{best=+localStorage.getItem('cipher_run_best')||0;}catch(e){}
 try{bestPnl=+localStorage.getItem('cipher_best_earn')||0;}catch(e){}   // b87: bestPnl = лучшая зафиксированная ВЫПЛАТА за забег (◆), не $-очки
 let down=false, brake=false, jumpReq=0, jumpCd=0, coyote=0, jumpGrace=0, activeTouches={}, touchLowY={};   // jumpReq = buffered press; coyote/jumpGrace = jump grace windows; touchLowY = per-touch low point for swipe-up
@@ -276,7 +276,7 @@ const TUNE = {
   pumpDur:      120,     // 4c. PUMP — длительность рывка в кадрах (дольше + плавно, ×апгрейд PUMP). Был резкий ~56-кадровый скачок — теперь плавный разгон
   airControl:   0.014,   // 5. контроль в воздухе — момент вращения/сальто в полёте
   camFollow:    0.08,    // 6. слежение камеры — плавность по вертикали за байком (больше = резче/нервнее)
-  waveSpeed:    0.50,    // 7. b83: вернул 0.34→0.50 под аркадную скорость (b81-замедление снято). крути руками (выше = больше давления). 7-OLD:0.72 скорость дампа
+  waveSpeed:    0.43,    // 7. b147: 0.50→0.43 — СО-МАСШТАБ под сниженный крейсер (rollResist 0.04→0.05, скорость ~−15%): давление волны относительно скорости байка сохранено, не ужесточилось. Крути руками (выше = больше давления)
   waveAccel:    0.4,     // 8. ускорение волны — насколько дамп разгоняется с дистанцией (СНИЖЕНО 0.5→0.4 — спокойнее темп)
   terrainSteep: 0.85,    // 9. b68: 1.5→0.85 — положе под твёрдое тело. 9-OLD: ПОЛНАЯ крутизна рельефа — крутые, но ПРОХОДИМЫЕ холмы (гора, не вертикальная стена). b59: 1.3→1.5 (техничнее глубже). Растёт от steepEarly за steepRamp
   mountain:     0.80,    // 9b. b68: 1.45→0.80 — гоночные холмы под твёрдое тело (катаешь+вылетаешь), не вертикальные стены старой glued-модели. 9b-OLD: РАЗМАХ ГОР — множитель затяжных подъёмов/спусков (Gravity-Defied: БОЛЬШИЕ структурные горы). b52: 1.25→1.45 — больше ДИНАМИКИ вместо обрывов (длиннее/драматичнее спуски-подъёмы = больше вилли/баланса/естественного воздуха). БОЛЬШЕ = выше/длиннее
@@ -326,7 +326,9 @@ const TUNE = {
   kickH:        13,      // 37. b68: 22→13 — ПОЛОГАЯ рампа кикера под твёрдое тело (вылет ∝ скорости, соразмерный). 3 узла × 13 = 39px рампа. Взлёт чисто эмерджентный (поп kickPop ниже больше не пуляет — твёрдое тело само летит с геометрии)
   kickPop:      2.4,     // 38. ПОП кикера: vy = −(vx×это + 4), кап −20 (b49: 0.7→2.4 — теперь поп ПРОПОРЦИОНАЛЕН скорости, не фикс −14. Медленно = мягкий хоп (всегда launch, не «не подпрыгнул»), круиз ~5.6 ≈ −17 (флип-фил тот же), быстро = кап −20 (естественно). БОЛЬШЕ = круче зависимость от скорости
   // ---- РАЙДЕР КАК ВТОРАЯ МАССА (b47): драг = СДВИГ ВЕСА ТЕЛА (не прямой торк). Прототип в изоляции (PASS): райдер 0.65 массы байка, сдвиг двигает общий ЦТ → трекшн + момент тангажа. Два колеса стабильны; вес сам = прощающий shallow-вилли/нос-вниз; глубокий вилли/стоппи (скилл-зона) — позже ----
-  riderSmooth:  0.25,    // 39. инерция переноса веса: rShift лерпится к драгу с этим (масса тела не телепортируется). НИЖЕ = массивнее/ленивее, ВЫШЕ = резче (ближе к старому прямому наклону)
+  riderSmooth:  0.25,    // 39. (b147: НЕ используется — заменён leanRampGnd/Air ниже) инерция переноса веса: rShift лерпится к драгу с этим
+  leanRampGnd:  0.10,    // 39a. b147 ПЛАВНЫЙ ВВОД НА ЗЕМЛЕ (юзер: «управление резкое»): скорость набора наклона (лерп/кадр). 0.10 ≈ 63% за 10 кадров (~0.17с), полный ~0.4с = дозируемо тапами, без рывка. НИЖЕ = мягче/ленивее, ВЫШЕ = резче
+  leanRampAir:  0.30,    // 39b. b147 В ВОЗДУХЕ рампа БЫСТРАЯ — флипы остаются резвыми (даже чуть резче старого 0.25). РУКИ
   weightAuth:   0.030,   // 40. АВТОРИТЕТ ВЕСА на тангаж (≈старый leanGround 0.028, чуть выше — компенсирует лаг сглаживания). Перенос веса вперёд = нос вниз/перед загружен, назад = нос вверх/вилли
   driveTrade:   0.20,    // 41. ТРЕКШН-ТРЕЙДОФФ: вес НАЗАД грузит заднее → +тяга/сцепление в горку; вес ВПЕРЁД разгружает → −тяга (но держит перед от опрокида). Реальный эндуро-компромисс. 0 = выкл
   riderShiftPx: 6,       // 42. на сколько px тело райдера ВИДИМО сдвигается вперёд/назад при переносе веса (только рендер — payoff «вес — отдельная единица»)
@@ -364,7 +366,7 @@ const RB={
   grav:0.26, mass:1.0, inertia:230,          // гравитация на ЦТ / масса / момент инерции (выше = лениво крутится)
   wb:26, oy:15.5, wr:12,                       // полубаза (±колёса) / ЦТ выше оси / радиус колеса — = спрайту
   springK:0.40, springC:0.55,                 // ПОДВЕСКА: жёсткость пружины (мягче) / демпфер БОЛЬШЕ (гасит отскок от угловатой ценовой линии → меньше скачет)
-  rollResist:0.04, mudRoll:0.20,              // сопротивление качению (колесо катится) / на грязи (вязнет)
+  rollResist:0.05, mudRoll:0.20,              // b147 СКОРОСТЬ ↓: качение 0.04→0.05 — ГЛАВНЫЙ лимитер крейсера на ровном (потеря ∝ скорости × 2 колеса; drag почти не влияет). Крейсер ~−15-18% (ВЕЛИК ~6.6→5.5). Тягу/движок НЕ трогаем — климб цел (урок b81). ЕЩЁ медленнее = подними; БЫСТРЕЕ = опусти. РУКИ
   mu:2.6, engine:1.15, brakeF:0.5,            // конус трения/тяги / сила двигателя (×стат байка) / тормоз — высокие т.к. трасса крутая, traction-limited байк иначе вязнет на подъёмах
   thrRamp:0.11, spinGrip:0.97,                // b68: АНАЛОГ.ГАЗ (рампа 0→1 → вилли/тяга ∝ сколько газу) + БУКС ПОЧТИ КОСМЕТИЧЕСКИЙ (spinGrip 0.86→0.97 — почти не режет тягу, чтобы НЕ ощущалось «торможением» на подъёме; видно роост/прокрут, но байк замедляется только от гравитации = логично). Хочешь жёстче букс позже — опусти spinGrip
   jump:9.0,                                    // импульс хопа (свайп вверх)
@@ -374,6 +376,7 @@ const RB={
   crashAngle:1.2, spinCrash:0.34,             // b72 СКИЛЛ-БИТ (Trials): посадка дальше crashAngle (~69°) от колёс-вниз ИЛИ с большим остаточным ВРАЩЕНИЕМ = КРАШ (ботнул/перекрутил флип = цена). Обычные вылеты выравниваются сами = прощает (не подстава). Кусает в основном агрессивные флипы/большой воздух. СЦЕПЛЕНИЕ-апгрейд + цепкий байк расширяют. Жёсткость: ↓ crashAngle = больше скилла
   antiLoop:0.07, loopLimit:0.95,              // ПРОЩЕНИЕ луп-аута: возврат если нос задрался > этого над склоном
   frontLevel:0.18, frontLevelD:0.35,          // b139 СТАБИЛИЗАЦИЯ ПЕРЕДА (PD к склону когда НЕ наклоняешь): frontLevel=жёсткость возврата носа вниз, frontLevelD=демпфер. Гасит лишний вилли от момента движка («встаёт на колесо на газу»). БОЛЬШЕ frontLevel = жёстче держит перед внизу (но меньше «характера»); меньше = легче задирается. РУКИ
+  wheelieTgt:0.55, wheelieRamp:0.05, wheelieK:0.11, wheelieD:0.55, wheelieTqMax:0.18, wheelieIK:0.0028, wheelieImax:0.13, wheelieAvMax:0.065, wheelieMax:1.30,   /* Imax/TqMax с запасом под МАКС-прокачанный движок (bias ~0.11 vs сток ~0.06) — иначе I сатурируется и вилли проседает за точку баланса (сим на прокачанном) */   // b147 ВИЛЛИ-ПОМОЩНИК (Trials-стиль, юзер выбрал «помощник+PRO»): держишь НОС↑ на земле → целевой угол растёт до wheelieTgt (0.55рад≈31°, НИЖЕ реальной точки баланса ~0.76 из геометрии ЦТ) → PID (K/D + интеграл IK, кап TqMax = «микро-коррекции райдера») держит вилли. ИНТЕГРАЛ обязателен: возмущающий момент НЕ константа (на круизе моменты колёс взаимно гасятся ≈0, на разгоне движок даёт нос-вверх ~0.06, склон меняет всё) — чистый PD имел либо унос равновесия за цель (перекрут, сим), либо мёртвый подъём; I-звено «нащупывает» текущий баланс как реальный райдер. Imax = анти-windup. Вес райдера при активном помощнике не дублируется (leanGround ×0.15). wheelieMax=1.30 — страховка совсем-перевёрнутого. Газ/гравитация/склон реальные: в гору держать тяжелее — само из физики. PRO (wheelieAssist=false) = чистая физика. РУКИ: Tgt (глубина), TqMax (сила помощи), Ramp (отзывчивость)
 
   angDamp:0.992, avMax:0.42, subSteps:6 };    // угл.демпфер / КАП скорости вращения (контролируемое сальто, не блюр) / под-шаги
 
@@ -392,6 +395,8 @@ const SCHEME_NAME={gestures:'ЖЕСТЫ',btn2:'АВТО-ГАЗ',btn4:'4 КНОП
 const SCHEME_DESC={gestures:'держишь = газ · драг = наклон · свайп↑ = прыжок',btn2:'газ САМ · тормоз + НОС↑/НОС↓ + прыжок/памп',btn4:'газ/тормоз + кнопки наклона НОС↑ / НОС↓ + прыжок/памп',tilt:'газ/тормоз + наклон ТЕЛЕФОНА (гироскоп)'};
 let ctrlScheme='btn4'; try{ctrlScheme=localStorage.getItem('cipher_ctrlscheme')||'btn4'; if(SCHEMES.indexOf(ctrlScheme)<0)ctrlScheme='btn4';}catch(e){}   // b56: 4 КНОПКИ = ДЕФОЛТ (юзер выбрал — удобнее). btn2 переделан в АВТО-ГАЗ
 function saveScheme(){ try{localStorage.setItem('cipher_ctrlscheme',ctrlScheme);}catch(e){} }
+let wheelieAssist=true; try{wheelieAssist=localStorage.getItem('cipher_wassist')!=='0';}catch(e){}   // b147: вилли-помощник ВКЛ по умолчанию; PRO (выкл) = чистая физика — тумблер в настройках
+function saveWassist(){ try{localStorage.setItem('cipher_wassist',wheelieAssist?'1':'0');}catch(e){} }
 let tiltReady=false;   // device-orientation lean (tilt scheme); needs a user-gesture permission on iOS
 function enableTilt(){ if(tiltReady)return; const add=()=>{ tiltReady=true; addEventListener('deviceorientation',ev=>{ if(ctrlScheme==='tilt'&&screen==='play'){ leanX=clamp((ev.gamma||0)/26,-1,1); } }); };
   try{ if(typeof DeviceOrientationEvent!=='undefined' && typeof DeviceOrientationEvent.requestPermission==='function'){ DeviceOrientationEvent.requestPermission().then(s=>{ if(s==='granted')add(); }).catch(()=>{}); } else add(); }catch(e){} }
@@ -653,7 +658,7 @@ function reset(){
   cam={x:bike.x-W*0.5,y:bike.y-H*0.46}; camAir=0; t=0; coins=0; dist=0; lastMile=0; newDepth=false; wipe=0; screen='play'; shake=0; flash=0; popT=0; daycycle=Math.random()*6.28;
   chalResult=null;   // b118: новый заезд — итог вызова сброшен (activeChal НЕ трогаем: задан в startTicker до reset)
   mult=1; airT=0; nearMissed=false; hitstop=0; gflash=0; multPulse=0; maxMult=1; flipCount=0; flipAcc=0; wheelieT=0; cashedOut=false; runGems=0; cashCelebT=0; pumpAir=0;
-  flipsTotal=0; topKmh=0; lastLandDiff=0; lean=0; rush=0; prevVx=0; down=false; brake=false; jumpReq=0; jumpCd=0; coyote=0; jumpGrace=0; activeTouches={}; leanX=0; ctrlId=null; leanKeyL=false; leanKeyR=false; leanCmd=0; rShiftVel=0; wave=bike.x-W*0.95; waveSpd=0; deathBy=''; boost=0; boosting=0; posPulse=0; _posPrev=0; _dangBuzz=0; prMax=0; prMin=0; slowmo=0;
+  flipsTotal=0; topKmh=0; lastLandDiff=0; lean=0; rush=0; prevVx=0; down=false; brake=false; jumpReq=0; jumpCd=0; coyote=0; jumpGrace=0; activeTouches={}; leanX=0; ctrlId=null; leanKeyL=false; leanKeyR=false; leanCmd=0; rShiftVel=0; wave=bike.x-W*0.95; waveSpd=0; deathBy=''; boost=0; boosting=0; posPulse=0; _posPrev=0; _dangBuzz=0; prMax=0; prMin=0; slowmo=0; wheelieAim=0; wheelieI=0;
   zone=-1; biomeBanner=''; biomeBannerT=0; BSKY=['rgb(20,16,48)','rgb(46,30,78)','rgb(150,80,110)','rgb(230,150,110)']; BLINE='228,250,255'; BRIDGE='60,40,90'; rollMissions();
   parts=[]; dust=[]; trail=[]; streaks=[]; floats=[];
   stars=[]; for(let i=0;i<90;i++)stars.push({x:Math.random()*W,y:Math.random()*H*0.7,z:0.2+Math.random()*0.6,s:Math.random()*1.6+0.4});
@@ -749,6 +754,7 @@ function pointerDown(p){
     if(hit(p,UI.setScheme)){ ctrlScheme=SCHEMES[(SCHEMES.indexOf(ctrlScheme)+1)%SCHEMES.length]; saveScheme(); down=false;brake=false;leanX=0;activeTouches={};ctrlId=null; if(ctrlScheme==='tilt')enableTilt(); sfxClick(); return; }
     if(hit(p,UI.setPump)){ pumpSide=(pumpSide==='left')?'right':'left'; savePumpSide(); sfxClick(); return; }
     if(hit(p,UI.setMute)){ toggleMute(); sfxClick(); return; }
+    if(UI.setWassist && hit(p,UI.setWassist)){ wheelieAssist=!wheelieAssist; saveWassist(); sfxClick(); return; }   // b147: тумблер вилли-помощника
     if(UI.setReset && hit(p,UI.setReset)){ if(resetArm>0){ resetProgress(); } else { resetArm=180; sfxClick(); } return; }   // b95: первый тап «взводит», второй (в течение ~3с) обнуляет
     if(hit(p,UI.setBack)){ resetArm=0; screen=settingsRet||'title'; sfxClick(); return; }
     return;
@@ -829,6 +835,7 @@ function rigidStep(){
   bike.thr = lerp(bike.thr||0, down?1:0, R.thrRamp);        // АНАЛОГОВЫЙ ГАЗ: рампа 0→1 → тяга/вилли ∝ тому, сколько газу даёшь (не бинарно)
   const thr=bike.thr;
   const ci0=Math.floor(bike.x/STEP), onMud=!!(terr[ci0]&&terr[ci0].mud);
+  if(wheelieAssist && bike.onG && bike.rShift<-0.2 && (down||Math.abs(bike.vx)>0.8)) wheelieAim=Math.min(R.wheelieTgt, wheelieAim+R.wheelieRamp); else wheelieAim=Math.max(0, wheelieAim-R.wheelieRamp*1.7);   // b147 ВИЛЛИ-ПОМОЩНИК: держишь НОС↑ (и едешь/газуешь) → целевой угол плавно растёт; отпустил → быстрее спадает → нос мягко опускается (frontLevel подхватывает). Стоя на месте без газа вилли не держится (причинно)
   let onGround=false, spun=false;
   for(let s=0;s<R.subSteps;s++){
     let fx=0, fy=0, tq=0;
@@ -856,23 +863,26 @@ function rigidStep(){
         fx+=Ft*tx; fy+=Ft*ty; tq+=rx*(Ft*ty)-ry*(Ft*tx);
       }
     }
-    if(onGround) tq+=bike.rShift*R.leanGround*R.inertia;    // b83: ВЕРНУЛ АРКАДНЫЙ баланс (вес=тангаж); GD-маятник (BALANCE_TUNE) снят — давал «совершенно другое, не GD»
+    if(onGround) tq+=bike.rShift*R.leanGround*R.inertia*(wheelieAim>0.03?0.15:1);    // b83: ВЕРНУЛ АРКАДНЫЙ баланс (вес=тангаж). b147: при активном вилли-помощнике вес райдера НЕ дублирует PD (×0.15 — райдер «занят балансом», иначе вес+движок передавливали кап помощника → перекрут)
     else { tq+=bike.rShift*leanAirEff*R.inertia;            // = flip torque in the air (b70: ВОЗД.КОНТРОЛЬ upgrade)
       if(Math.abs(bike.rShift)<0.15 && pumpAir<=0){ const la=terrainAt(bike.x+Math.max(20,bike.vx*8)).ang; let d=la-bike.ang; while(d>Math.PI)d-=6.283; while(d<-Math.PI)d+=6.283; const near=clamp(1-(terrainAt(bike.x).y-(bike.y+R.oy+R.wr))/240,0,1); tq+=(d*R.uprightAir-bike.angV*R.uprightDamp)*(0.4+near)*R.inertia; }   // not holding lean → PD auto-level + spin-damp = forgiving normal launches/landings
     }
     if(onGround){ const gs=terrainAt(bike.x).ang; let rp=bike.ang-gs; while(rp>Math.PI)rp-=6.283; while(rp<-Math.PI)rp+=6.283;
       if(Math.abs(bike.rShift)<0.2) tq += (-rp*R.frontLevel - bike.angV*R.frontLevelD)*R.inertia;   // b139 СТАБИЛИЗАЦИЯ ПЕРЕДА: когда райдер НЕ наклоняется — мягкий PD держит байк ВЫРОВНЕННЫМ по склону. Фикс «встаёт на колесо просто на газу»: момент макс-движка постоянно вздёргивал перед (видео: 31% времени на дыбах, ~45°). Реальный мотоцикл держит перед внизу. ВЫКЛ при наклоне (|rShift|≥0.2) → намеренные вилли/флипы целы; ВЫКЛ в воздухе. Тормозило скорость (ехал на 1 колесе) → мешало обгонять волну на боссе
+      if(wheelieAim>0.03 && rp>-R.wheelieMax){ const _we=(-wheelieAim)-rp; wheelieI=clamp(wheelieI+_we*R.wheelieIK, -R.wheelieImax, R.wheelieImax); tq += clamp(_we*R.wheelieK - bike.angV*R.wheelieD + wheelieI, -R.wheelieTqMax, R.wheelieTqMax)*R.inertia; } else wheelieI=0;   // b147 ВИЛЛИ-ПОМОЩНИК: PID к целевому углу (I-звено само находит текущий возмущающий момент — движок/склон/качение; на круизе он ≈0, на разгоне ~0.06 — константный FF не годился, сим). Кап = «микро-коррекции райдера». Физика движка/гравитации/склона живая
       if(rp<-R.loopLimit)tq+=(-R.loopLimit-rp)*R.antiLoop*R.inertia; else if(rp>R.loopLimit)tq+=(R.loopLimit-rp)*R.antiLoop*R.inertia; }   // b83: ВЕРНУЛ прощающий anti-loop (аркада)
     bike.vx+=(fx/R.mass)*sdt; bike.vy+=(fy/R.mass)*sdt;
     bike.x+=bike.vx*sdt; bike.y+=bike.vy*sdt;
     bike.angV+=(tq/R.inertia)*sdt; bike.ang+=bike.angV*sdt;
   }
   bike.vx*=onGround?R.rollDrag:R.airDrag;                  // drag once per frame (speed ceiling)
+  if(onGround && wheelieAim>0.03){ const _fc=Math.cos(bike.ang),_fs=Math.sin(bike.ang); if(((bike.y+R.wb*_fs+R.oy*_fc+R.wr)-terrainAt(bike.x+R.wb*_fc-R.oy*_fs).y)<=0) bike.vx-=bike.vx*R.rollResist; }   // b147: ВИЛЛИ ≠ ТУРБО — с поднятым передним качение падало вдвое → вилли давал ×2.3 скорости (degenerate: ехать на заднем всегда выгодно, сим). Противовес причинный: вертикальная поза/баланс съедают эквивалент качения переднего. Вилли ≈ скорость-нейтрален (бонус трекшена на заднем остаётся)
   bike.angV*=R.angDamp;
   if(!onGround){ const hAir=terrainAt(bike.x).y-(bike.y+R.oy+R.wr); if(hAir>260 && bike.vy<0) bike.vy += (hAir-260)*0.012; }   // b144 МЯГКИЙ ПОТОЛОК ВОЗДУХА: выше ~300px над землёй воздух «густеет» (доп. притяжение ∝ превышению) → байк не улетает В КОСМОС даже над обвалом (юзер), всегда в кадре. Мягко (не режет обычные прыжки <300px). Порог — руки
   if(!onGround && pumpAir>0){ pumpAir--; bike.angV=pumpSpin; }   // b139 АВТО-ФЛИП пампа: раз/кадр — держим стабильное вращение сальто (обходя демпфер) пока pumpAir тикает; кончился → авто-выравнивание (выше) посадит на колёса. onGround→сброс ниже
   else if(onGround) pumpAir=0;
   if(bike.angV>R.avMax)bike.angV=R.avMax; else if(bike.angV<-R.avMax)bike.angV=-R.avMax;   // КАП вращения → сальто УПРАВЛЯЕМОЕ (b83: b82-кап наземного темпа снят — вернулись к аркаде)
+  if(onGround && wheelieAim>0.03){ if(bike.angV>R.wheelieAvMax)bike.angV=R.wheelieAvMax; else if(bike.angV<-R.wheelieAvMax)bike.angV=-R.wheelieAvMax; }   // b147: при АКТИВНОМ вилли-помощнике темп тангажа на земле капнут → перед поднимается МЕДЛЕННО/красиво, нет перелёта цели и нет само-отрыва задка (сим: без капа angV −0.1 на −0.8рад отрывал заднее колесо → воздух → флип → краш). Обычная езда (aim=0) и воздух не тронуты
   if(boosting>0) bike.vx+=TUNE.pumpForce;                  // PUMP boost (kept)
   bike.onG=onGround; bike.wheel+=bike.vx*0.08;
   bike.spin = spun ? Math.min(1,(bike.spin||0)+0.34) : Math.max(0,(bike.spin||0)-0.12);   // wheelspin amount (roost + visual)
@@ -888,7 +898,7 @@ function update(){
   // physics
   const P=PHYS, DX=P.DX, DY=P.DY, wasG=bike.onG;
   // --- RIDER WEIGHT-SHIFT (b47 two-body): the drag input moves the rider's body mass (smoothed = it has inertia), which sets the combined-CG offset → traction split + pitch torque ---
-  bike.rShift = lerp(bike.rShift, leanX, TUNE.riderSmooth);   // b83: вернул аркадный отзывчивый ввод (LEAN_FEEL-аналог снят — был под GD-баланс; блок оставлен мёртвым сверху на случай эмерджентного GD)
+  bike.rShift = lerp(bike.rShift, leanX, bike.onG?TUNE.leanRampGnd:TUNE.leanRampAir);   // b147 ПЛАВНЫЙ ВВОД: на земле медленная рампа (дозируемый наклон, «резкость» ушла), в воздухе быстрая (флипы резвые). b83-лерп 0.25 был почти мгновенным полным наклоном
   const rShift = bike.rShift;
   const frontFrac = clamp(0.48 + rShift*0.12, 0, 1);                 // front load fraction (forward = front planted, back = rear loaded) — matches the isolation traction sweep 0.36..0.60
   const driveMul = clamp(1 - rShift*TUNE.driveTrade, 1-TUNE.driveTrade, 1+TUNE.driveTrade);   // weight back loads the rear → more drive/climb grip; forward unweights it → less drive
@@ -997,9 +1007,9 @@ function update(){
   const loopThresh = lerp(TUNE.loopForgive, P.LOOP, clamp((dist||0)/TUNE.easeInDist,0,1));   // Alto on-ramp: forgiving early, eases to full over easeInDist — mastery ceiling unchanged
   if(grounded && screen==='play' && Math.abs(rel)>2.4 && Math.abs(bike.angV)<0.06) wipeout('loop');   // b83: ВЕРНУЛ аркадно-прощающую смерть (только полностью улёгся вверх ногами) — GD-порог снят
   // ---- ФАЗА-2: УДЕРЖАНИЕ ВИЛЛИ/СТОППИ = осмысленный скилл-баланс (как флипы дают очки — балансируешь весом → копишь буст + фидбэк) ----
-  if(grounded && !rearBal && screen==='play' && Math.abs(rel)>0.55 && bike.vx>1.5 && !(rel>0 && supA<-0.1) && TUNE.wheelieRew>0){   // wheelie (rel<0) counts anywhere; stoppie (rel>0) NOT on a climb (that's just weight-forward climbing, not a trick)
+  if(grounded && !rearBal && screen==='play' && Math.abs(rel)>0.42 && bike.vx>1.5 && !(rel>0 && supA<-0.1) && TUNE.wheelieRew>0){   // b147: порог 0.55→0.42 — вилли-помощник держит 0.55, награда должна срабатывать стабильно. wheelie (rel<0) counts anywhere; stoppie (rel>0) NOT on a climb
     wheelieT++;
-    if(wheelieT===12){ floatPop(bike.x,bike.y-42,(rel<0?'ВИЛЛИ':'СТОППИ')+'!','#9ff0ff'); sfxNear&&sfxNear(); }
+    if(wheelieT===12){ floatPop(bike.x,bike.y-42,(rel<0?'ВИЛЛИ':'СТОППИ')+'!','#9ff0ff'); sfxNear&&sfxNear(); if(rel<0&&wheelieAssist)tut('wassist','⚖ ВИЛЛИ: ДЕРЖИ НОС↑ — ПОМОЩНИК ДЕРЖИТ БАЛАНС. ОТПУСТИЛ = НОС ВНИЗ'); }
     if(wheelieT>12){ boost=Math.min(1,(boost||0)+0.006*TUNE.wheelieRew); if(wheelieT%18===0){ const g=0.5*mult; coins+=g; floatPop(bike.x,bike.y-46,'+$'+Math.round(g),'#aef0ff'); } }
   } else { if(wheelieT>40){ mult+=0.2; multPulse=1; } wheelieT=0; }   // long hold → leverage bump on release
   // coins along terrain
@@ -1816,7 +1826,10 @@ function drawMenus(){
     ctx.fillStyle='#9ff0c8'; ctx.font='800 15px ui-monospace,monospace'; ctx.fillText(pumpSide==='left'?'ПРАВША · PUMP СЛЕВА':'ЛЕВША · PUMP СПРАВА',cx,y+41);
     y+=66; UI.setMute={x:cx-cw/2,y:y,w:cw,h:44}; panel(UI.setMute.x,UI.setMute.y,cw,44,'rgba(150,170,210,0.45)');   // sound
     ctx.fillStyle='#bcd0ee'; ctx.font='14px ui-monospace,monospace'; ctx.fillText(muted?'ЗВУК:   ВЫКЛ':'ЗВУК:   ВКЛ',cx,y+27);
-    ctx.fillStyle='rgba(140,160,195,0.6)'; ctx.font='600 9px ui-monospace,monospace'; ctx.fillText('жесты — для тебя · кнопки/наклон — для новичков',cx,y+62);
+    y+=56; UI.setWassist={x:cx-cw/2,y:y,w:cw,h:54}; panel(UI.setWassist.x,UI.setWassist.y,cw,54,'rgba(150,220,255,0.5)');   // b147: вилли-помощник / PRO
+    ctx.fillStyle='#9fb6dc'; ctx.font='700 10px ui-monospace,monospace'; ctx.fillText('ВИЛЛИ-БАЛАНС  (езда на заднем колесе)',cx,y+19);
+    ctx.fillStyle=wheelieAssist?'#9ff0c8':'#ffb060'; ctx.font='800 15px ui-monospace,monospace'; ctx.fillText(wheelieAssist?'ПОМОЩНИК:  ВКЛ':'PRO:  ЧИСТАЯ ФИЗИКА',cx,y+41);
+    ctx.fillStyle='rgba(140,160,195,0.6)'; ctx.font='600 9px ui-monospace,monospace'; ctx.fillText('жесты — для тебя · кнопки/наклон — для новичков',cx,y+68);
     y+=80; if(resetArm>0)resetArm--; UI.setReset={x:cx-cw/2,y:y,w:cw,h:46}; const armed=resetArm>0;   // b95 СБРОС ПРОГРЕССА (2-тап) — чистый старт для анализа
     panel(UI.setReset.x,UI.setReset.y,cw,46, armed?'rgba(255,110,90,0.95)':'rgba(255,150,120,0.45)', armed?'rgba(60,20,16,0.66)':'rgba(30,18,16,0.4)');
     ctx.fillStyle=armed?'#ff9a7a':'#e0a890'; ctx.font='800 14px ui-monospace,monospace'; ctx.fillText(armed?'⟲ ТОЧНО? ЖМИ ЕЩЁ РАЗ':'⟲ ОБНУЛИТЬ ПРОГРЕСС',cx,y+28);
