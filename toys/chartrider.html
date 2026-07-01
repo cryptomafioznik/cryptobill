@@ -52,7 +52,7 @@ function lerp(a,b,t){return a+(b-a)*t;} function clamp(v,a,b){return v<a?a:v>b?b
 // false → full game everywhere. Single switch. Systems are GATED, never deleted.
 const CORE_TEST_MODE = false;   // b70: META LIVE — building the progression spine (upgrades/bikes with teeth, career, economy) on the confirmed rigid-body core
 // build stamp — bump on every change so a phone refresh can confirm it loaded fresh code (cache!)
-const BUILD = '2026-07-02 · b149';
+const BUILD = '2026-07-02 · b150';
 
 // ---------- procedural market terrain ----------
 // height map sampled every STEP px; generated forward as we ride. Market character:
@@ -277,7 +277,7 @@ function drawSpark(arr,sx,sy,sw,sh,col){ let mn=Infinity,mx=-Infinity; for(const
 
 // ---------- bike ----------
 let bike, cam, t, coins, dist, best, screen, wipe, parts, stars, dust, shake, flash, daycycle, trail, streaks, mult, bestPnl, airT, nearMissed, hitstop, gflash, floats, multPulse, maxMult, lean, rush, prevVx, wave, waveSpd, deathBy, boost, boosting, zone, biomeBanner, biomeBannerT, BSKY, BLINE, BRIDGE, lastMile, newDepth, camAir=0, wheelieT=0;
-let posPulse=0,_posPrev=0,_dangBuzz=0,prMax=0,prMin=0,slowmo=0,menuFx=0,menuFxAmt=0,wheelieAim=0,wheelieI=0;   // b147: wheelieAim = текущий целевой угол вилли-помощника (0 = не активен); wheelieI = интегральная компенсация PID   // b123: menuFx = вспышка-флёр «ЗАКРЕПЛЕНО» на меню-экране (parts/flash там не рисуются). b84 degen-момент: posPulse=пульс числа при росте позиции; _dangBuzz=вибро на входе дампа. b89: prMax/prMin = коридор ЦЕНЫ (sell-the-top). b90: slowmo = кадры slow-mo на эпик-моменте (пропуск каждого 2-го update)
+let posPulse=0,_posPrev=0,_dangBuzz=0,prMax=0,prMin=0,slowmo=0,menuFx=0,menuFxAmt=0,wheelieAim=0,wheelieI=0,trickAir=0,trickZoom=0,trickGnd=0;   // b147: wheelieAim/I = вилли-помощник PID. b150: trickAir = полёт с трамплина (1=летим, 2=апекс-слоумо отработал), trickZoom = 0..1 кинематографический зум К байку, trickGnd = таймаут сброса на земле   // b123: menuFx = вспышка-флёр «ЗАКРЕПЛЕНО» на меню-экране (parts/flash там не рисуются). b84 degen-момент: posPulse=пульс числа при росте позиции; _dangBuzz=вибро на входе дампа. b89: prMax/prMin = коридор ЦЕНЫ (sell-the-top). b90: slowmo = кадры slow-mo на эпик-моменте (пропуск каждого 2-го update)
 try{best=+localStorage.getItem('cipher_run_best')||0;}catch(e){}
 try{bestPnl=+localStorage.getItem('cipher_best_earn')||0;}catch(e){}   // b87: bestPnl = лучшая зафиксированная ВЫПЛАТА за забег (◆), не $-очки
 let down=false, brake=false, jumpReq=0, jumpCd=0, coyote=0, jumpGrace=0, activeTouches={}, touchLowY={};   // jumpReq = buffered press; coyote/jumpGrace = jump grace windows; touchLowY = per-touch low point for swipe-up
@@ -680,7 +680,7 @@ function reset(){
   cam={x:bike.x-W*0.5,y:bike.y-H*0.46}; camAir=0; t=0; coins=0; dist=0; lastMile=0; newDepth=false; wipe=0; screen='play'; shake=0; flash=0; popT=0; daycycle=Math.random()*6.28;
   chalResult=null;   // b118: новый заезд — итог вызова сброшен (activeChal НЕ трогаем: задан в startTicker до reset)
   mult=1; airT=0; nearMissed=false; hitstop=0; gflash=0; multPulse=0; maxMult=1; flipCount=0; flipAcc=0; wheelieT=0; cashedOut=false; runGems=0; cashCelebT=0; pumpAir=0;
-  flipsTotal=0; topKmh=0; lastLandDiff=0; lean=0; rush=0; prevVx=0; down=false; brake=false; jumpReq=0; jumpCd=0; coyote=0; jumpGrace=0; activeTouches={}; leanX=0; ctrlId=null; leanKeyL=false; leanKeyR=false; leanCmd=0; rShiftVel=0; wave=bike.x-W*0.95; waveSpd=0; deathBy=''; boost=0; boosting=0; posPulse=0; _posPrev=0; _dangBuzz=0; prMax=0; prMin=0; slowmo=0; wheelieAim=0; wheelieI=0;
+  flipsTotal=0; topKmh=0; lastLandDiff=0; lean=0; rush=0; prevVx=0; down=false; brake=false; jumpReq=0; jumpCd=0; coyote=0; jumpGrace=0; activeTouches={}; leanX=0; ctrlId=null; leanKeyL=false; leanKeyR=false; leanCmd=0; rShiftVel=0; wave=bike.x-W*0.95; waveSpd=0; deathBy=''; boost=0; boosting=0; posPulse=0; _posPrev=0; _dangBuzz=0; prMax=0; prMin=0; slowmo=0; wheelieAim=0; wheelieI=0; trickAir=0; trickZoom=0;
   zone=-1; biomeBanner=''; biomeBannerT=0; BSKY=['rgb(20,16,48)','rgb(46,30,78)','rgb(150,80,110)','rgb(230,150,110)']; BLINE='228,250,255'; BRIDGE='60,40,90'; rollMissions();
   parts=[]; dust=[]; trail=[]; streaks=[]; floats=[];
   stars=[]; for(let i=0;i<90;i++)stars.push({x:Math.random()*W,y:Math.random()*H*0.7,z:0.2+Math.random()*0.6,s:Math.random()*1.6+0.4});
@@ -993,6 +993,7 @@ function update(){
   // b149: ТРАМПЛИН = ГЕОМЕТРИЯ, НЕ СКРИПТ. vy-импульс b135/b144 УДАЛЁН (юзер: «вылетаешь непонятно откуда = нелогично») — теперь взлёт целиком из формы трассы (закруглённый лип на вершине памп-горы + ступень-вырез, см. buildTickerTrack): rigid body слетает сам, дуга ∝ СКОРОСТЬ × угол липа = движок/прокачка решают полёт. АВТО-САЛЬТО (pumpSpin/pumpAir) тоже удалено — флип как в реальном мотокроссе: лип сам даёт лёгкое вращение (заднее колесо позже переднего покидает рампу), а ДЕРЖИШЬ НОС↑ в полёте = докручиваешь бэкфлип (leanAir, качается ВОЗД.КОНТРОЛЕМ). Этот блок = только FX/читаемость на кромке.
   { const ci0=Math.floor(bike.x/STEP), kn=terr[ci0];
     if(bike.onG && kn && kn.kick && !kn.kicked && bike.vx>1.0){ kn.kicked=true; const _pm=(kn.pumpMag>0)?kn.pumpMag:1;
+      trickAir=1;   // b150: полёт с трамплина → трик-камера (зум к байку + слоумо на апексе, см. airborne-блок)
       gflash=Math.max(gflash,0.4); shake=Math.max(shake,5); sfxAir();
       for(let e=0;e<8;e++)dust.push({x:bike.x-8+Math.random()*16,y:bike.y+22,vx:(Math.random()-0.5)*3.2,vy:-Math.random()*2.8,life:1,r:Math.random()*2.6+1.2});
       if(kn.pump){ const _big=_pm>=1.5; popText(_big?'🚀 ГИГА-ПАМП — НА ЛУНУ!':'🚀 ПАМП — ВЗЛЁТ!'); gflash=Math.max(gflash,_big?0.9:0.6); boost=Math.min(1,(boost||0)+0.25); shake=Math.max(shake,_big?14:9); for(let e=0;e<(_big?24:14);e++)parts.push({x:bike.x-18-Math.random()*12,y:bike.y+8+Math.random()*10,vx:-2-Math.random()*5,vy:0.4+Math.random()*3,life:1,r:Math.random()*3+1.6,gold:true}); } } }
@@ -1004,13 +1005,16 @@ function update(){
     airT++;
     if(airT===14) tut('air','✦ В ВОЗДУХЕ: ↓ НОС ВНИЗ К СКЛОНУ ДЛЯ РОВНОЙ ПОСАДКИ');
     if(airT===10 && terr[ci0-2] && (terr[ci0-2].ramp||terr[ci0-1]&&terr[ci0-1].ramp)) tut('flip2','🔄 ТРАМПЛИН: ДЕРЖИ НОС↑ В ПОЛЁТЕ = БЭКФЛИП · ОТПУСТИ К ЗЕМЛЕ');   // b149: флип теперь решение игрока — учим на первом же трамплине
+    if(trickAir){ const _th=terrainAt(bike.x).y-(bike.y+DY);   // b150 ТРИК-КАМЕРА: взлёт/апекс с трамплина = зум К БАЙКУ (флип читается кинематографично), к земле — плавный отъезд (посадка в кадре)
+      if(airT>6 && (bike.vy<2 || _th>130)) trickZoom=Math.min(1,trickZoom+0.14); else trickZoom=Math.max(0,trickZoom-0.12);
+      if(trickAir===1 && airT>8 && Math.abs(bike.vy)<1.6 && Math.abs(bike.angV)>0.13){ slowmo=Math.max(slowmo,14); trickAir=2; } }   // слоумо на АПЕКСЕ, только если реально крутишь (|angV|) и только раз за полёт
     const skim=terrainAt(bike.x).y-(bike.y+DY);                        // gap of lower wheel above surface
     if(airT>16 && skim>0 && skim<16 && bike.vx>6 && !nearMissed){ nearMissed=true; mult+=0.5; boost=Math.min(1,(boost||0)+0.15); multPulse=1; const g2=1.5*mult; coins+=g2; floatPop(bike.x,bike.y-22,'NEAR MISS +$'+Math.round(g2),'#9ff0ff'); shake=4; hitstop=2; gflash=0.4; sfxNear(); }
     flipAcc+=Math.abs(bike.angV); if(flipAcc>6.283){flipAcc-=6.283;flipCount++;}
   }
   if(wasG && !grounded){ airT=0; nearMissed=false; }                   // just launched
   else if(!wasG && grounded){                                          // just landed
-    jumpGrace=0;                                                       // jump arc over
+    jumpGrace=0; trickAir=0;                                           // jump arc over; b150: трик-камера завершена
     let diff=Math.abs(rel); lastLandDiff=diff;
     if(airT>14 && (diff > RB.crashAngle + 0.12*upgLvl('grip') + 0.10*upgLvl('susp') + Math.max(0,(BK().grip-1.40))*0.4 || Math.abs(bike.angV) > RB.spinCrash + 0.03*upgLvl('grip'))){ wipeout('crash'); }   // b88: ПОДВЕСКА расширяет конус прощения посадки (большие полёты приземляются мягче/безопаснее)   // b72 СКИЛЛ-БИТ (Trials): land too far off wheels-down OR still SPINNING fast = CRASH (botched/over-rotated flip costs). СЦЕПЛЕНИЕ upgrade + grippy bike widen tolerance (interconnected). Tune RB.crashAngle/spinCrash by hand
     else { sfxLand();
@@ -1098,6 +1102,7 @@ function update(){
   // camera — on BIG AIR (trick kicker) frame higher + follow faster + zoom out (draw) so the high launch AND the landing stay on-screen
   const _airH = bike.onG ? 0 : Math.max(0, terrainAt(bike.x).y-(bike.y+DY));
   camAir = lerp(camAir, clamp(_airH/280,0,1), _airH>camAir*280?0.25:0.08);   // rise fast into big air, ease out smoothly
+  if(bike.onG){ trickZoom=Math.max(0,trickZoom-0.15); trickGnd++; if(trickGnd>24)trickAir=0; } else trickGnd=0;   // b150: на земле зум отпускает; trickAir НЕ гасим мгновенно (кик срабатывает на кромке ещё на земле, за 1-2 кадра до отрыва — гасился в тот же кадр, сим), только по таймауту/посадке
   cam.x=bike.x-W*0.32; cam.y=lerp(cam.y, bike.y-H*(0.52-camAir*0.10), lerp(TUNE.camFollow,0.45,camAir));   // fast follow on big air so the camera tracks the launch+fall (bike stays framed); zoom-out (draw) widens the view
   for(const p of parts){p.x+=p.vx;p.y+=p.vy;p.vy+=0.12;p.vx*=0.97;p.life-=0.03;} parts=parts.filter(p=>p.life>0);
   for(const d of dust){d.x+=d.vx;d.y+=d.vy;d.vy+=0.04;d.life-=0.04;} dust=dust.filter(d=>d.life>0);
@@ -1219,7 +1224,7 @@ function draw(){
   ridgeLayer(0.55,60,H*0.66,'rgba('+BRIDGE+',0.7)');
 
   // ---- the track: a real CANDLESTICK chart the bike rides across ----
-  const zoom=1-(rush||0)*0.04-(camAir||0)*0.40;   // zoom OUT proportional to BIG AIR so a high kicker launch + the landing stay framed (was a tiny 3-5%)
+  const zoom=1-(rush||0)*0.04-(camAir||0)*0.40*(1-(trickZoom||0))+(trickZoom||0)*0.22;   // b150 ТРИК-КАМЕРА: на трамплин-полёте зум К БАЙКУ (до ×1.22, camAir-отъезд подавлен) — флип крупно; к посадке trickZoom гаснет → обычный air-отъезд кадрирует приземление
   ctx.save(); ctx.translate(W/2,H/2); ctx.scale(zoom,zoom); ctx.translate(-W/2,-H/2);
   ctx.save(); ctx.translate(-cam.x,-cam.y);
   const x0=cam.x-STEP, x1=cam.x+W+STEP;
