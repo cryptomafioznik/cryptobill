@@ -52,7 +52,7 @@ function lerp(a,b,t){return a+(b-a)*t;} function clamp(v,a,b){return v<a?a:v>b?b
 // false → full game everywhere. Single switch. Systems are GATED, never deleted.
 const CORE_TEST_MODE = false;   // b70: META LIVE — building the progression spine (upgrades/bikes with teeth, career, economy) on the confirmed rigid-body core
 // build stamp — bump on every change so a phone refresh can confirm it loaded fresh code (cache!)
-const BUILD = '2026-07-01 · b144';
+const BUILD = '2026-07-01 · b145';
 
 // ---------- procedural market terrain ----------
 // height map sampled every STEP px; generated forward as we ride. Market character:
@@ -530,13 +530,13 @@ function startCampaignTrack(tr,idx){ selTicker=tr.coin||'btc'; tickerName=tr.nam
   loadCampaignTrack(tr,idx).then(d=>{ tickerData=(d&&d.length?d:MARKET_DATA.btc.data); trackSource='ticker'; gameMode='endless'; reset(); }); }
 // b143 ЛЕСТНИЦА БАЙКОВ (велик→супербайк): генуинно разные ФИЗ-ПРОФИЛИ (accel=тяга/движок, grip=сцепление/посадка), у каждого своя ФИШКА (tag). Прокачка PER-BIKE (allUpg). Правило юзера «не даунгрейд»: база растёт лестницей, новый в стоке ≈ предыдущий + фишка (точный оверлап — руки). Гейт: cost ($) + опц. reqRank. Числа/цвета — стартовые, калибровка руками.
 const BIKES=[
-  {name:'ВЕЛИК',     body:['#3a3f4c','#22262f','#0c0e13'], rim:'170,185,205', accent:'150,200,230', rider:'255,190,130', cost:0,    accel:0.30, grip:1.30, tag:'учебка · медленный, лёгкий'},
-  {name:'МОПЕД',     body:['#2f4436','#1a281e','#0a1210'], rim:'150,230,180', accent:'110,235,160', rider:'255,200,140', cost:150,  accel:0.34, grip:1.38, tag:'дворовый · цепкий, шустрее'},
-  {name:'СКУТЕР',    body:['#3a3826','#26210e','#100c04'], rim:'255,228,150', accent:'255,205,90',  rider:'150,235,255', cost:400,  accel:0.38, grip:1.50, tag:'стабильный · прощает посадки'},
-  {name:'ЭНДУРО 125',body:['#323b50','#1b2030','#0a0c14'], rim:'150,225,255', accent:'60,210,255',  rider:'255,178,120', cost:900,  accel:0.42, grip:1.46, tag:'резвый универсал'},
-  {name:'КРОСС 250', body:['#1f3a30','#0e261c','#04120c'], rim:'130,255,196', accent:'80,255,170',  rider:'255,200,140', cost:1800, accel:0.46, grip:1.54, tag:'сбалансированный зверь'},
-  {name:'МОТАРД 450',body:['#48243f','#2a1230','#120612'], rim:'255,130,180', accent:'255,90,150',  rider:'150,235,255', cost:3400, accel:0.49, grip:1.44, tag:'тяга-монстр · нервный'},
-  {name:'СУПЕРБАЙК 650',body:['#1c3a4a','#0e2230','#04121c'], rim:'150,240,255', accent:'200,255,255', rider:'255,225,160', cost:6500, accel:0.52, grip:1.60, tag:'быстрый + вкопанный', reqRank:3},   // b144: accel-лестница СЖАТА 0.30-0.52 (было до 0.78 = «жутко быстро/в космос», юзер). Натурально; различие больше через grip/фишку. Числа — руки
+  {name:'ВЕЛИК',     type:'bike',   body:['#3a3f4c','#22262f','#0c0e13'], rim:'170,185,205', accent:'150,200,230', rider:'255,190,130', cost:0,    accel:0.30, grip:1.30, tag:'учебка · медленный, лёгкий'},
+  {name:'МОПЕД',     type:'moped',  body:['#2f4436','#1a281e','#0a1210'], rim:'150,230,180', accent:'110,235,160', rider:'255,200,140', cost:150,  accel:0.34, grip:1.38, tag:'дворовый · цепкий, шустрее'},
+  {name:'СКУТЕР',    type:'scooter',body:['#3a3826','#26210e','#100c04'], rim:'255,228,150', accent:'255,205,90',  rider:'150,235,255', cost:400,  accel:0.38, grip:1.50, tag:'стабильный · прощает посадки'},
+  {name:'ЭНДУРО 125',type:'dirt',   body:['#323b50','#1b2030','#0a0c14'], rim:'150,225,255', accent:'60,210,255',  rider:'255,178,120', cost:900,  accel:0.42, grip:1.46, tag:'резвый универсал'},
+  {name:'КРОСС 250', type:'dirt',   body:['#1f3a30','#0e261c','#04120c'], rim:'130,255,196', accent:'80,255,170',  rider:'255,200,140', cost:1800, accel:0.46, grip:1.54, tag:'сбалансированный зверь'},
+  {name:'МОТАРД 450',type:'dirt',   body:['#48243f','#2a1230','#120612'], rim:'255,130,180', accent:'255,90,150',  rider:'150,235,255', cost:3400, accel:0.49, grip:1.44, tag:'тяга-монстр · нервный'},
+  {name:'СУПЕРБАЙК 650',type:'sport',body:['#1c3a4a','#0e2230','#04121c'], rim:'150,240,255', accent:'200,255,255', rider:'255,225,160', cost:6500, accel:0.52, grip:1.60, tag:'быстрый + вкопанный', reqRank:3},   // b144: accel сжат 0.30-0.52; b145: type = силуэт (велосипед/скутер/дёрт/спорт)
 ];
 function BK(){ return BIKES[selBike]||BIKES[0]; }
 // market-era biomes — environment shifts with distance (smooth transitions)
@@ -1505,33 +1505,52 @@ function drawMachine(B,wheelv,rShiftv,leanv,roost,boostv){   // b109: спрай
       ctx.fillStyle=ff; ctx.beginPath(); ctx.moveTo(-26,3); ctx.lineTo(-28-fl,9); ctx.lineTo(-28-fl,18); ctx.lineTo(-26,22); ctx.closePath(); ctx.fill(); ctx.restore(); }
     // dirt roost kicked up when throttling
     if(roost){ const n=bike.vx<3?6:3; for(let e=0;e<n;e++){ ctx.fillStyle='rgba(190,160,120,'+(0.22*Math.random())+')'; ctx.beginPath(); ctx.arc(-30-Math.random()*12,16+Math.random()*7,2+Math.random()*3,0,7); ctx.fill(); } }
-    // ===== WHEELS: big knobby dirt tires =====
+    // ===== b145 СИЛУЭТ ПО ТИПУ: велосипед / скутер / дёрт / спорт — колёса + рама разные =====
+    const TY=B.type||'dirt';
+    const WR = TY==='scooter'?10 : TY==='moped'?11.5 : 13;   // маленькие колёса у скутера/мопеда, крупные у остальных
+    // ---- колёса ----
     for(const wx of [-27,27]){
-      const wg=ctx.createRadialGradient(wx-3,11,1,wx,15.5,13); wg.addColorStop(0,'#1a1e28'); wg.addColorStop(1,'#05060c');
-      ctx.fillStyle=wg; ctx.beginPath(); ctx.arc(wx,15.5,13,0,7); ctx.fill();
-      ctx.strokeStyle='rgba(16,18,26,0.95)'; ctx.lineWidth=3.2; for(let k=0;k<12;k++){ const a=wheelv*0.4+k*0.5236; ctx.beginPath(); ctx.moveTo(wx+Math.cos(a)*11.4,15.5+Math.sin(a)*11.4); ctx.lineTo(wx+Math.cos(a)*13.6,15.5+Math.sin(a)*13.6); ctx.stroke(); }
-      ctx.lineWidth=2; ctx.strokeStyle='rgba('+B.rim+',0.8)'; ctx.beginPath(); ctx.arc(wx,15.5,8.4,0,7); ctx.stroke();
-      ctx.fillStyle='#05060c'; ctx.beginPath(); ctx.arc(wx,15.5,5,0,7); ctx.fill();
-      ctx.strokeStyle='rgba(150,190,220,0.3)'; ctx.lineWidth=1; ctx.beginPath(); for(let s=0;s<5;s++){const a=wheelv+s*1.257; ctx.moveTo(wx,15.5); ctx.lineTo(wx+Math.cos(a)*7.4,15.5+Math.sin(a)*7.4);} ctx.stroke();
-      ctx.fillStyle='rgba(190,240,255,0.9)'; ctx.beginPath(); ctx.arc(wx,15.5,1.8,0,7); ctx.fill(); }
-    // ===== long-travel fork + swingarm =====
-    ctx.lineCap='round'; ctx.strokeStyle='rgba('+B.rim+',0.7)'; ctx.lineWidth=3.4; ctx.beginPath(); ctx.moveTo(27,15.5); ctx.lineTo(18,-16); ctx.stroke();
-    ctx.lineWidth=2.6; ctx.beginPath(); ctx.moveTo(-27,15.5); ctx.lineTo(-6,3); ctx.stroke(); ctx.lineCap='butt';
-    // ===== slim dirtbike frame/bodywork (gradient + rim) =====
-    ctx.lineJoin='round'; const bg=ctx.createLinearGradient(0,-10,0,12); bg.addColorStop(0,B.body[0]); bg.addColorStop(0.55,B.body[1]); bg.addColorStop(1,B.body[2]);
-    ctx.beginPath(); ctx.moveTo(-20,7);
-    ctx.quadraticCurveTo(-23,-1,-11,-3);
-    ctx.lineTo(-3,-4);
-    ctx.quadraticCurveTo(6,-6,9,-11);
-    ctx.quadraticCurveTo(14,-13,19,-10);
-    ctx.lineTo(15,-1);
-    ctx.quadraticCurveTo(5,3,-6,3);
-    ctx.closePath(); ctx.fillStyle=bg; ctx.fill();
-    ctx.lineWidth=1.6; ctx.strokeStyle='rgba('+B.rim+',0.9)'; ctx.shadowColor='rgba('+B.rim+',0.5)'; ctx.shadowBlur=4; ctx.stroke(); ctx.shadowBlur=0;
-    ctx.fillStyle='rgba('+B.accent+',0.5)'; ctx.beginPath(); ctx.moveTo(7,-9); ctx.quadraticCurveTo(13,-12,18,-9); ctx.lineTo(15,-3); ctx.quadraticCurveTo(10,-5,7,-9); ctx.closePath(); ctx.fill();
-    ctx.strokeStyle='rgba('+B.rim+',0.8)'; ctx.lineWidth=2.4; ctx.lineCap='round'; ctx.beginPath(); ctx.moveTo(-11,-3); ctx.quadraticCurveTo(-24,-7,-31,-4); ctx.stroke();
-    ctx.lineWidth=2.2; ctx.beginPath(); ctx.moveTo(20,0); ctx.quadraticCurveTo(29,-2,33,3); ctx.stroke();
-    ctx.strokeStyle='rgba('+B.rim+',0.85)'; ctx.lineWidth=2.4; ctx.beginPath(); ctx.moveTo(18,-16); ctx.lineTo(23,-19); ctx.stroke(); ctx.lineCap='butt';
+      const wg=ctx.createRadialGradient(wx-3,11,1,wx,15.5,WR); wg.addColorStop(0,'#1a1e28'); wg.addColorStop(1,'#05060c');
+      ctx.fillStyle=wg; ctx.beginPath(); ctx.arc(wx,15.5,WR,0,7); ctx.fill();
+      if(TY==='dirt'){ ctx.strokeStyle='rgba(16,18,26,0.95)'; ctx.lineWidth=3.2; for(let k=0;k<12;k++){ const a=wheelv*0.4+k*0.5236; ctx.beginPath(); ctx.moveTo(wx+Math.cos(a)*11.4,15.5+Math.sin(a)*11.4); ctx.lineTo(wx+Math.cos(a)*13.6,15.5+Math.sin(a)*13.6); ctx.stroke(); } }   // knobby только у дёрта
+      if(TY==='bike'){ ctx.fillStyle='#0b0d15'; ctx.beginPath(); ctx.arc(wx,15.5,WR-2.6,0,7); ctx.fill(); }   // тонкая велопокрышка = большой полый обод
+      ctx.lineWidth=2; ctx.strokeStyle='rgba('+B.rim+',0.8)'; ctx.beginPath(); ctx.arc(wx,15.5,WR*0.62,0,7); ctx.stroke();
+      ctx.fillStyle='#05060c'; ctx.beginPath(); ctx.arc(wx,15.5,WR*0.36,0,7); ctx.fill();
+      const nsp=TY==='bike'?9:5; ctx.strokeStyle='rgba(150,190,220,'+(TY==='bike'?0.5:0.3)+')'; ctx.lineWidth=1; ctx.beginPath(); for(let s=0;s<nsp;s++){const a=wheelv+s*(6.283/nsp); ctx.moveTo(wx,15.5); ctx.lineTo(wx+Math.cos(a)*WR*(TY==='bike'?0.78:0.56),15.5+Math.sin(a)*WR*(TY==='bike'?0.78:0.56));} ctx.stroke();
+      ctx.fillStyle='rgba(190,240,255,0.9)'; ctx.beginPath(); ctx.arc(wx,15.5,1.6,0,7); ctx.fill(); }
+    ctx.lineJoin='round'; ctx.lineCap='round';
+    const RIM='rgba('+B.rim+',', bg=ctx.createLinearGradient(0,-12,0,12); bg.addColorStop(0,B.body[0]); bg.addColorStop(0.55,B.body[1]); bg.addColorStop(1,B.body[2]);
+    if(TY==='bike'){   // ВЕЛОСИПЕД: тонкая рама-ромб + педали + руль, без мотор-корпуса
+      ctx.strokeStyle=RIM+'0.9)'; ctx.lineWidth=2.4; ctx.shadowColor=RIM+'0.4)'; ctx.shadowBlur=3;
+      ctx.beginPath(); ctx.moveTo(-27,15.5); ctx.lineTo(0,14); ctx.lineTo(-8,-8); ctx.lineTo(-27,15.5); ctx.moveTo(0,14); ctx.lineTo(14,-6); ctx.lineTo(-8,-8); ctx.moveTo(14,-6); ctx.lineTo(27,15.5); ctx.stroke(); ctx.shadowBlur=0;   // задний треугольник + перо
+      ctx.lineWidth=2.6; ctx.beginPath(); ctx.moveTo(14,-6); ctx.lineTo(18,-15); ctx.stroke();   // руль-стойка
+      ctx.lineWidth=2.4; ctx.beginPath(); ctx.moveTo(13,-15); ctx.lineTo(21,-15); ctx.stroke();   // руль
+      ctx.fillStyle='rgba('+B.accent+',0.8)'; ctx.beginPath(); ctx.moveTo(-11,-9); ctx.quadraticCurveTo(-8,-11,-4,-9); ctx.quadraticCurveTo(-8,-8,-11,-9); ctx.fill();   // седло
+      ctx.strokeStyle=RIM+'0.85)'; ctx.lineWidth=2; ctx.beginPath(); ctx.arc(0,15,3.4,0,7); ctx.stroke();   // каретка/звезда
+      ctx.lineWidth=2.6; ctx.beginPath(); ctx.moveTo(0,15); ctx.lineTo(-3,20); ctx.moveTo(0,15); ctx.lineTo(3,10); ctx.stroke();   // педали
+    } else if(TY==='scooter'||TY==='moped'){   // СКУТЕР/МОПЕД: степ-тру дека + передний щит + округлый корпус
+      const fk='rgba('+B.rim+',0.7)'; ctx.strokeStyle=fk; ctx.lineWidth=2.6; ctx.beginPath(); ctx.moveTo(27,15.5); ctx.lineTo(20,-8); ctx.moveTo(-27,15.5); ctx.lineTo(-10,6); ctx.stroke();
+      ctx.fillStyle=bg; ctx.beginPath(); ctx.moveTo(-22,8); ctx.quadraticCurveTo(-24,0,-16,-2); ctx.lineTo(-6,-2); ctx.quadraticCurveTo(-2,-2,-2,4); ctx.lineTo(14,4); ctx.quadraticCurveTo(19,4,20,-4); ctx.quadraticCurveTo(22,-10,17,-11); ctx.lineTo(13,-2); ctx.quadraticCurveTo(6,7,-6,7); ctx.closePath(); ctx.fill();   // корпус+передний щит
+      ctx.lineWidth=1.6; ctx.strokeStyle=RIM+'0.9)'; ctx.shadowColor=RIM+'0.4)'; ctx.shadowBlur=3; ctx.stroke(); ctx.shadowBlur=0;
+      ctx.fillStyle='rgba(20,22,30,0.9)'; ctx.fillRect(-14,5,18,3);   // дека/пол
+      ctx.strokeStyle=RIM+'0.85)'; ctx.lineWidth=2.4; ctx.beginPath(); ctx.moveTo(17,-11); ctx.lineTo(22,-15); ctx.stroke();   // руль
+    } else if(TY==='sport'){   // СПОРТ: низкий длинный обтекатель + короткий хвост
+      const fk='rgba('+B.rim+',0.7)'; ctx.strokeStyle=fk; ctx.lineWidth=3.2; ctx.beginPath(); ctx.moveTo(27,15.5); ctx.lineTo(20,-9); ctx.moveTo(-27,15.5); ctx.lineTo(-4,2); ctx.stroke();
+      ctx.fillStyle=bg; ctx.beginPath(); ctx.moveTo(-24,3); ctx.quadraticCurveTo(-26,-6,-14,-8); ctx.quadraticCurveTo(2,-9,12,-7); ctx.quadraticCurveTo(24,-6,26,-13); ctx.lineTo(22,-1); ctx.quadraticCurveTo(10,3,-6,4); ctx.closePath(); ctx.fill();   // длинный низкий обтекатель+нос
+      ctx.lineWidth=1.6; ctx.strokeStyle=RIM+'0.9)'; ctx.shadowColor=RIM+'0.5)'; ctx.shadowBlur=5; ctx.stroke(); ctx.shadowBlur=0;
+      ctx.fillStyle='rgba('+B.accent+',0.6)'; ctx.beginPath(); ctx.moveTo(14,-6); ctx.quadraticCurveTo(23,-11,26,-13); ctx.lineTo(22,-3); ctx.quadraticCurveTo(18,-4,14,-6); ctx.closePath(); ctx.fill();   // нос-акцент
+      ctx.strokeStyle=RIM+'0.85)'; ctx.lineWidth=2.4; ctx.beginPath(); ctx.moveTo(20,-9); ctx.lineTo(25,-11); ctx.stroke();
+    } else {   // ДЁРТ (эндуро/кросс/мотард) — текущий силуэт
+      ctx.strokeStyle=RIM+'0.7)'; ctx.lineWidth=3.4; ctx.beginPath(); ctx.moveTo(27,15.5); ctx.lineTo(18,-16); ctx.stroke();
+      ctx.lineWidth=2.6; ctx.beginPath(); ctx.moveTo(-27,15.5); ctx.lineTo(-6,3); ctx.stroke();
+      ctx.beginPath(); ctx.moveTo(-20,7); ctx.quadraticCurveTo(-23,-1,-11,-3); ctx.lineTo(-3,-4); ctx.quadraticCurveTo(6,-6,9,-11); ctx.quadraticCurveTo(14,-13,19,-10); ctx.lineTo(15,-1); ctx.quadraticCurveTo(5,3,-6,3); ctx.closePath(); ctx.fillStyle=bg; ctx.fill();
+      ctx.lineWidth=1.6; ctx.strokeStyle=RIM+'0.9)'; ctx.shadowColor=RIM+'0.5)'; ctx.shadowBlur=4; ctx.stroke(); ctx.shadowBlur=0;
+      ctx.fillStyle='rgba('+B.accent+',0.5)'; ctx.beginPath(); ctx.moveTo(7,-9); ctx.quadraticCurveTo(13,-12,18,-9); ctx.lineTo(15,-3); ctx.quadraticCurveTo(10,-5,7,-9); ctx.closePath(); ctx.fill();
+      ctx.strokeStyle=RIM+'0.8)'; ctx.lineWidth=2.4; ctx.beginPath(); ctx.moveTo(-11,-3); ctx.quadraticCurveTo(-24,-7,-31,-4); ctx.stroke();
+      ctx.lineWidth=2.2; ctx.beginPath(); ctx.moveTo(20,0); ctx.quadraticCurveTo(29,-2,33,3); ctx.stroke();
+      ctx.strokeStyle=RIM+'0.85)'; ctx.lineWidth=2.4; ctx.beginPath(); ctx.moveTo(18,-16); ctx.lineTo(23,-19); ctx.stroke();
+    }
+    ctx.lineCap='butt';
     // ===== RIDER =====
     ctx.strokeStyle='#080a0e'; ctx.lineWidth=5.5; ctx.lineCap='round';
     ctx.beginPath(); ctx.moveTo(-4,9); ctx.lineTo(5,0); ctx.lineTo(-3,-10); ctx.stroke(); ctx.lineCap='butt';
