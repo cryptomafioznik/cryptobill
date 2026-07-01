@@ -52,7 +52,7 @@ function lerp(a,b,t){return a+(b-a)*t;} function clamp(v,a,b){return v<a?a:v>b?b
 // false → full game everywhere. Single switch. Systems are GATED, never deleted.
 const CORE_TEST_MODE = false;   // b70: META LIVE — building the progression spine (upgrades/bikes with teeth, career, economy) on the confirmed rigid-body core
 // build stamp — bump on every change so a phone refresh can confirm it loaded fresh code (cache!)
-const BUILD = '2026-07-01 · b143';
+const BUILD = '2026-07-01 · b144';
 
 // ---------- procedural market terrain ----------
 // height map sampled every STEP px; generated forward as we ride. Market character:
@@ -531,12 +531,12 @@ function startCampaignTrack(tr,idx){ selTicker=tr.coin||'btc'; tickerName=tr.nam
 // b143 ЛЕСТНИЦА БАЙКОВ (велик→супербайк): генуинно разные ФИЗ-ПРОФИЛИ (accel=тяга/движок, grip=сцепление/посадка), у каждого своя ФИШКА (tag). Прокачка PER-BIKE (allUpg). Правило юзера «не даунгрейд»: база растёт лестницей, новый в стоке ≈ предыдущий + фишка (точный оверлап — руки). Гейт: cost ($) + опц. reqRank. Числа/цвета — стартовые, калибровка руками.
 const BIKES=[
   {name:'ВЕЛИК',     body:['#3a3f4c','#22262f','#0c0e13'], rim:'170,185,205', accent:'150,200,230', rider:'255,190,130', cost:0,    accel:0.30, grip:1.30, tag:'учебка · медленный, лёгкий'},
-  {name:'МОПЕД',     body:['#2f4436','#1a281e','#0a1210'], rim:'150,230,180', accent:'110,235,160', rider:'255,200,140', cost:150,  accel:0.36, grip:1.38, tag:'дворовый · цепкий, шустрее'},
-  {name:'СКУТЕР',    body:['#3a3826','#26210e','#100c04'], rim:'255,228,150', accent:'255,205,90',  rider:'150,235,255', cost:400,  accel:0.42, grip:1.50, tag:'стабильный · прощает посадки'},
-  {name:'ЭНДУРО 125',body:['#323b50','#1b2030','#0a0c14'], rim:'150,225,255', accent:'60,210,255',  rider:'255,178,120', cost:900,  accel:0.50, grip:1.46, tag:'резвый универсал'},
-  {name:'КРОСС 250', body:['#1f3a30','#0e261c','#04120c'], rim:'130,255,196', accent:'80,255,170',  rider:'255,200,140', cost:1800, accel:0.58, grip:1.54, tag:'сбалансированный зверь'},
-  {name:'МОТАРД 450',body:['#48243f','#2a1230','#120612'], rim:'255,130,180', accent:'255,90,150',  rider:'150,235,255', cost:3400, accel:0.68, grip:1.44, tag:'тяга-монстр · нервный'},
-  {name:'СУПЕРБАЙК 650',body:['#1c3a4a','#0e2230','#04121c'], rim:'150,240,255', accent:'200,255,255', rider:'255,225,160', cost:6500, accel:0.78, grip:1.60, tag:'быстрый + вкопанный', reqRank:3},   // премиум-вершина: ◆-ранг ДЕЛЬФИН → потом покупка за $
+  {name:'МОПЕД',     body:['#2f4436','#1a281e','#0a1210'], rim:'150,230,180', accent:'110,235,160', rider:'255,200,140', cost:150,  accel:0.34, grip:1.38, tag:'дворовый · цепкий, шустрее'},
+  {name:'СКУТЕР',    body:['#3a3826','#26210e','#100c04'], rim:'255,228,150', accent:'255,205,90',  rider:'150,235,255', cost:400,  accel:0.38, grip:1.50, tag:'стабильный · прощает посадки'},
+  {name:'ЭНДУРО 125',body:['#323b50','#1b2030','#0a0c14'], rim:'150,225,255', accent:'60,210,255',  rider:'255,178,120', cost:900,  accel:0.42, grip:1.46, tag:'резвый универсал'},
+  {name:'КРОСС 250', body:['#1f3a30','#0e261c','#04120c'], rim:'130,255,196', accent:'80,255,170',  rider:'255,200,140', cost:1800, accel:0.46, grip:1.54, tag:'сбалансированный зверь'},
+  {name:'МОТАРД 450',body:['#48243f','#2a1230','#120612'], rim:'255,130,180', accent:'255,90,150',  rider:'150,235,255', cost:3400, accel:0.49, grip:1.44, tag:'тяга-монстр · нервный'},
+  {name:'СУПЕРБАЙК 650',body:['#1c3a4a','#0e2230','#04121c'], rim:'150,240,255', accent:'200,255,255', rider:'255,225,160', cost:6500, accel:0.52, grip:1.60, tag:'быстрый + вкопанный', reqRank:3},   // b144: accel-лестница СЖАТА 0.30-0.52 (было до 0.78 = «жутко быстро/в космос», юзер). Натурально; различие больше через grip/фишку. Числа — руки
 ];
 function BK(){ return BIKES[selBike]||BIKES[0]; }
 // market-era biomes — environment shifts with distance (smooth transitions)
@@ -865,6 +865,7 @@ function rigidStep(){
   }
   bike.vx*=onGround?R.rollDrag:R.airDrag;                  // drag once per frame (speed ceiling)
   bike.angV*=R.angDamp;
+  if(!onGround){ const hAir=terrainAt(bike.x).y-(bike.y+R.oy+R.wr); if(hAir>260 && bike.vy<0) bike.vy += (hAir-260)*0.012; }   // b144 МЯГКИЙ ПОТОЛОК ВОЗДУХА: выше ~300px над землёй воздух «густеет» (доп. притяжение ∝ превышению) → байк не улетает В КОСМОС даже над обвалом (юзер), всегда в кадре. Мягко (не режет обычные прыжки <300px). Порог — руки
   if(!onGround && pumpAir>0){ pumpAir--; bike.angV=pumpSpin; }   // b139 АВТО-ФЛИП пампа: раз/кадр — держим стабильное вращение сальто (обходя демпфер) пока pumpAir тикает; кончился → авто-выравнивание (выше) посадит на колёса. onGround→сброс ниже
   else if(onGround) pumpAir=0;
   if(bike.angV>R.avMax)bike.angV=R.avMax; else if(bike.angV<-R.avMax)bike.angV=-R.avMax;   // КАП вращения → сальто УПРАВЛЯЕМОЕ (b83: b82-кап наземного темпа снят — вернулись к аркаде)
@@ -957,8 +958,8 @@ function update(){
   // b135: КИКЕР / ПАМП-ТРАМПЛИН в ЖИВОЙ физике. БАГ-КОРЕНЬ: с миграции на rigidStep (b68) код кикера остался в МЁРТВОМ if(0)-блоке → пампы (b116) и трик-рампы НЕ запускали байк ВООБЩЕ (юзер: «гига-памп 2, не хватает флипов/трамплинов» — фича была физически мертва). Теперь большая зелёная свеча (.pump) / трик-рампа (.kick) реально пуляет ∝ скорости × силе пампа, с воздухом, которого хватает на флип. Коэф/кап/PUMP_K — руки.
   { const ci0=Math.floor(bike.x/STEP), kn=terr[ci0];
     if(bike.onG && kn && kn.kick && !kn.kicked && bike.vx>1.0){ kn.kicked=true; const _pm=(kn.pumpMag>0)?kn.pumpMag:1;
-      bike.vy=Math.min(bike.vy, Math.max(-19, -(bike.vx*1.1 + 4)*_pm)); bike.onG=false; airT=0; nearMissed=false; gflash=Math.max(gflash,0.4); shake=Math.max(shake,5); sfxAir();   // b138/b139: ПЛАВНЕЕ + НЕ В КОСМОС (юзер: «улетел в космос, и без флипов»). взлёт −26→−19, коэф мягче: большой ДЛИННЫЙ эстетичный полёт, не вертикальный выстрел. Сила/кап — РУКИ
-      if(bike.vy<-15){ pumpSpin=-0.42; bike.angV=pumpSpin; pumpAir=Math.round(11+6*_pm); }   // b139 АВТО-БЭКФЛИП — ТОЛЬКО на БОЛЬШОМ взлёте (vy<−15 = хватает воздуха докрутить, юзер: «где флипы»). Спин 0.42 рад/кадр → ~1 сальто за ~15 кадров; pumpAir кончается ДО земли → авто-выравнивание садит на колёса (мелкие пампы = чистый хоп без насильного сальто = не краш). Гига = дольше = больше сальто
+      const _pmc=Math.min(_pm,1.7); bike.vy=Math.min(bike.vy, Math.max(-16, -(bike.vx*0.6 + 9)*_pmc)); bike.onG=false; airT=0; nearMissed=false; gflash=Math.max(gflash,0.4); shake=Math.max(shake,5); sfxAir();   // b144: КОНТРОЛИРУЕМЫЙ взлёт — МЕНЬШЕ ∝ скорости (0.6 vs 1.1) + база 9 + кап −16 + pm капнут 1.7 → предсказуемая красивая дуга ~120-160px, НЕ в космос даже на быстром байке (юзер). Сила/кап — РУКИ
+      if(bike.vy<-11){ pumpSpin=-0.40; bike.angV=pumpSpin; pumpAir=Math.round(18+6*_pmc); }   // b139/b144 АВТО-САЛЬТО на трамплине (спин 0.40 → полный оборот за ~16 кадров = докручивает надёжнее; pumpAir 18+ держит) (порог −15→−11 = срабатывает на ОБЫЧНЫХ трамплинах, юзер «где флипы»). Спин крутит ~1 оборот пока pumpAir тикает → авто-выравнивание садит на колёса. Контрол. взлёт = флип ВИДЕН и приземляется
       for(let e=0;e<8;e++)dust.push({x:bike.x-8+Math.random()*16,y:bike.y+22,vx:(Math.random()-0.5)*3.2,vy:-Math.random()*2.8,life:1,r:Math.random()*2.6+1.2});
       if(kn.pump){ const _big=_pm>=1.5; popText(_big?'🚀 ГИГА-ПАМП — НА ЛУНУ!':'🚀 ПАМП — ВЗЛЁТ!'); gflash=Math.max(gflash,_big?0.9:0.6); boost=Math.min(1,(boost||0)+0.25); shake=Math.max(shake,_big?14:9); if(_big)slowmo=Math.max(slowmo,14); for(let e=0;e<(_big?24:14);e++)parts.push({x:bike.x-18-Math.random()*12,y:bike.y+8+Math.random()*10,vx:-2-Math.random()*5,vy:0.4+Math.random()*3,life:1,r:Math.random()*3+1.6,gold:true}); } } }
   if(jumpReq>0){ if(bike.onG && jumpCd<=0){ bike.vy-=RB.jump; bike.onG=false; jumpReq=0; jumpCd=16; airT=0; nearMissed=false; jumpGrace=1; shake=Math.max(shake,3); for(let e=0;e<7;e++)dust.push({x:bike.x-10+Math.random()*20,y:bike.y+24,vx:(Math.random()-0.5)*2.4,vy:-Math.random()*2,life:1,r:Math.random()*2.4+1}); sfxAir(); } else jumpReq--; }   // swipe-up hop = vy impulse on the rigid body
@@ -983,7 +984,7 @@ function update(){
       bike.angV*=0.4;   // damp residual spin on touchdown
       if(airT>28){ const ab=airT*0.1*mult; coins+=ab; mult+=0.4; boost=Math.min(1,(boost||0)+0.3); multPulse=1; popText('BIG AIR  +$'+Math.round(ab)); floatPop(bike.x,bike.y-30,'+$'+Math.round(ab),'#9ff0ff'); gflash=0.6; shake=7; sfxAir(); buzz(18); }
       else if(diff<0.16 && airT>10){ coins+=2; floatPop(bike.x,bike.y-34,'CLEAN +$2','#aef0ff'); }
-      if(flipCount){ flipsTotal+=flipCount; mult+=flipCount*0.6; boost=Math.min(1,(boost||0)+0.22*flipCount); multPulse=1; const gain=flipCount*2*mult; coins+=gain; popText('FLIP ×'+flipCount+'   +$'+Math.round(gain)); shake=9; hitstop=4; gflash=0.7; sfxFlipCrescendo(flipCount); }   // b91: ФЛИП = реальный профит ◆ (× комбо) — не мёртвый $
+      if(flipCount){ flipsTotal+=flipCount; mult+=flipCount*0.6; boost=Math.min(1,(boost||0)+0.22*flipCount); multPulse=1; const gain=flipCount*2*mult; coins+=gain; popText('🔄 САЛЬТО ×'+flipCount+'   +$'+Math.round(gain)); shake=9; hitstop=4; gflash=0.7; sfxFlipCrescendo(flipCount); }   // b91: ФЛИП = реальный профит ◆ (× комбо) — не мёртвый $
       if((flipCount>=2 || airT>40) && diff<0.5){ const eb=5+flipCount*2; coins+=eb; slowmo=Math.max(slowmo,16); shake=Math.max(shake,13); gflash=0.95; flash=Math.max(flash,0.3); popText('🔥 EPIC'+(flipCount>=2?' ×'+flipCount:'')+'  +◆'+eb); floatPop(bike.x,bike.y-46,'+◆'+eb,'#ffe66a'); for(let z=0;z<22;z++)parts.push({x:bike.x,y:bike.y-10,vx:(Math.random()-0.5)*9,vy:-Math.random()*7-1,life:1,gold:1,r:Math.random()*3+1.5}); sfxRankUp(); buzz([30,50,30,90]); }   // b90 ЭПИК-ЛЕНДИНГ (slow-mo+взрыв+фанфара). b91: даёт РЕАЛЬНЫЙ профит ◆ (был только визуал)
       nearMissed=false; airT=0; flipCount=0; flipAcc=0; }
   }
