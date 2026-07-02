@@ -52,7 +52,7 @@ function lerp(a,b,t){return a+(b-a)*t;} function clamp(v,a,b){return v<a?a:v>b?b
 // false → full game everywhere. Single switch. Systems are GATED, never deleted.
 const CORE_TEST_MODE = false;   // b70: META LIVE — building the progression spine (upgrades/bikes with teeth, career, economy) on the confirmed rigid-body core
 // build stamp — bump on every change so a phone refresh can confirm it loaded fresh code (cache!)
-const BUILD = '2026-07-02 · b163';
+const BUILD = '2026-07-02 · b164';
 
 // ---------- procedural market terrain ----------
 // height map sampled every STEP px; generated forward as we ride. Market character:
@@ -293,6 +293,16 @@ function dailyResolve(){ if(!dailyMode||_dailyRes)return; _dailyRes=true; const 
   try{localStorage.setItem('cipher_daily3',JSON.stringify(dailySt));}catch(e){} }
 // ---- b163 КЛИПЫ: кольцевой буфер поз последних ~7с → перепроигрывание сцены + запись canvas в видео (MediaRecorder) → шер файлом (тикток) / скачивание. БЕЗ пересимуляции физики: реплей = рендер записанных поз на живом terr того же заезда = точный ----
 let clipBuf=[], clipRec=null, clipChunks=[], clipI=0, clipSaved=null, clipMime='';
+// ---- b164 LIVE-ХВОСТ: каждый тикер-Забег «живой» — реальная цена подтягивается раз в ~4с и ДЫШИТ последними узлами трассы; финиш = НАСТОЯЩЕЕ («СЕЙЧАС $X»). Наш козырь: едешь по рынку, который движется прямо сейчас ----
+let livePrice=0, liveT=0, liveBusy=false;
+function liveTick(){ if(screen!=='play'||trackSource!=='ticker'||dailyMode||liveBusy||!terr.length)return;
+  if(++liveT<240)return; liveT=0; liveBusy=true;
+  const tk=TICKERS.find(x=>x.k===selTicker)||TICKERS[0];
+  fetch('https://api.binance.com/api/v3/ticker/price?symbol='+tk.sym).then(r=>r.ok?r.json():null).then(j=>{ liveBusy=false;
+    if(!j||!j.price)return; const pr=+j.price; if(!(pr>0)||!isFinite(pr))return; livePrice=pr;
+    const yv=clamp(baseY+(tkMid-pr)*tkK,56,H*0.94);   // тот же нормализатор, что у трассы
+    for(let k=1;k<=3;k++){ const n=terr[terr.length-k]; if(!n)break; const w=1-(k-1)*0.3; n.y=lerp(n.y,yv,0.5*w); n.close=n.y; }   // последние узлы дышат к реальной цене СЕЙЧАС
+  }).catch(()=>{ liveBusy=false; }); }
 function clipSnap(){ if(screen!=='play'||!bike)return; clipBuf.push({x:bike.x,y:bike.y,a:bike.ang,w:bike.wheel,rs:bike.rShift,ln:lean,tk:trick,tm:trickMix,ab:riderAirB,sq:riderSquat,cx:cam.x,cy:cam.y,ca:camAir,tz:trickZoom,wv:wave,cf:bike._cmpF||0,cr:bike._cmpR||0,dn:down,bs:boosting,og:bike.onG}); if(clipBuf.length>430)clipBuf.shift(); }
 function clipSupported(){ try{ return !!(window.MediaRecorder && cv.captureStream && ['video/mp4;codecs=avc1','video/mp4','video/webm;codecs=vp9','video/webm'].some(m=>MediaRecorder.isTypeSupported(m))); }catch(e){ return false; } }
 function startClip(){ if(screen!=='dead'||clipBuf.length<90||clipRec)return;
@@ -655,7 +665,8 @@ function checkMissions(){ if(CORE_TEST_MODE)return; const s={dist:dist,coins:coi
 let actx,eng,engGain,master,engLP,engOscs,windG;   // b152: windG = свист ветра на большом полёте (gain ∝ camAir)
 function makeDistCurve(k){ const n=256,c=new Float32Array(n); for(let i=0;i<n;i++){ const x=i/(n-1)*2-1; c[i]=(1+k)*x/(1+k*Math.abs(x)); } return c; }
 function initAudio(){ if(actx)return; try{
-  actx=new (window.AudioContext||window.webkitAudioContext)(); master=actx.createGain(); master.gain.value=muted?0:0.42; master.connect(actx.destination);
+  actx=new (window.AudioContext||window.webkitAudioContext)(); master=actx.createGain(); master.gain.value=muted?0:0.42;
+  const comp=actx.createDynamicsCompressor(); comp.threshold.value=-18; comp.knee.value=22; comp.ratio.value=8; comp.attack.value=0.004; comp.release.value=0.24; master.connect(comp); comp.connect(actx.destination);   // b164: компрессор-лимитер на мастере — блипы/движок/музыка не каша и без клиппинга (сведение)
   // ---- enduro engine: detuned osc bank + harmonic + exhaust noise → overdrive → lowpass (opens with throttle) ----
   const emix=actx.createGain(); emix.gain.value=0.5;
   const shaper=actx.createWaveShaper(); shaper.curve=makeDistCurve(8); shaper.oversample='2x';
@@ -737,7 +748,7 @@ function reset(){
   cam={x:bike.x-W*0.5,y:bike.y-H*0.46}; camAir=0; t=0; coins=0; dist=0; lastMile=0; newDepth=false; wipe=0; screen='play'; shake=0; flash=0; popT=0; daycycle=Math.random()*6.28;
   chalResult=null;   // b118: новый заезд — итог вызова сброшен (activeChal НЕ трогаем: задан в startTicker до reset)
   mult=1; airT=0; nearMissed=false; hitstop=0; gflash=0; multPulse=0; maxMult=1; flipCount=0; flipAcc=0; wheelieT=0; cashedOut=false; runGems=0; cashCelebT=0; pumpAir=0;
-  flipsTotal=0; topKmh=0; lastLandDiff=0; lean=0; rush=0; prevVx=0; down=false; brake=false; jumpReq=0; jumpCd=0; coyote=0; jumpGrace=0; activeTouches={}; leanX=0; ctrlId=null; leanKeyL=false; leanKeyR=false; leanCmd=0; rShiftVel=0; wave=bike.x-W*0.95; waveSpd=0; deathBy=''; boost=0; boosting=0; posPulse=0; _posPrev=0; _dangBuzz=0; prMax=0; prMin=0; slowmo=0; wheelieAim=0; wheelieI=0; trickAir=0; trickZoom=0; trick=0; trickMix=0; trickHeld=false; trickT=0; trickTouch=-1; trickKey=''; touchSX={}; touchSY={}; skids=[]; dailyMode=false; _dailyRes=false; inpLog=[]; _inpPrev=-1; inpMeta={c:selTicker||'',m:gameMode,s:trackSource,b:selBike,bd:BUILD};
+  flipsTotal=0; topKmh=0; lastLandDiff=0; lean=0; rush=0; prevVx=0; down=false; brake=false; jumpReq=0; jumpCd=0; coyote=0; jumpGrace=0; activeTouches={}; leanX=0; ctrlId=null; leanKeyL=false; leanKeyR=false; leanCmd=0; rShiftVel=0; wave=bike.x-W*0.95; waveSpd=0; deathBy=''; boost=0; boosting=0; posPulse=0; _posPrev=0; _dangBuzz=0; prMax=0; prMin=0; slowmo=0; wheelieAim=0; wheelieI=0; trickAir=0; trickZoom=0; trick=0; trickMix=0; trickHeld=false; trickT=0; trickTouch=-1; trickKey=''; touchSX={}; touchSY={}; skids=[]; dailyMode=false; _dailyRes=false; livePrice=0; liveT=0; inpLog=[]; _inpPrev=-1; inpMeta={c:selTicker||'',m:gameMode,s:trackSource,b:selBike,bd:BUILD};
   zone=-1; biomeBanner=''; biomeBannerT=0; BSKY=['rgb(20,16,48)','rgb(46,30,78)','rgb(150,80,110)','rgb(230,150,110)']; BLINE='228,250,255'; BRIDGE='60,40,90'; rollMissions();
   parts=[]; dust=[]; trail=[]; streaks=[]; floats=[];
   stars=[]; for(let i=0;i<90;i++)stars.push({x:Math.random()*W,y:Math.random()*H*0.7,z:0.2+Math.random()*0.6,s:Math.random()*1.6+0.4});
@@ -1199,6 +1210,7 @@ function update(){
     if(trickMix>0.6 && !bike.onG) trickT++;
     if(!trickHeld && trickMix<=0.01 && bike.onG) { trick=0; trickT=0; } }   // полностью вернулся на земле без посадки-резолва (страховка)
   clipSnap();   // b163: буфер клипа (последние ~7с поз)
+  liveTick();   // b164: живой хвост трассы (реальная цена сейчас)
   if(t%12===0){ nearKickX=-1; const _ck=Math.floor(bike.x/STEP); for(let k=_ck+6;k<_ck+42;k++){ const n=terr[k]; if(n&&n.kick){ nearKickX=n.x; break; } } }   // b156: ближайший трамплин впереди (для HUD-указателя)
   if(bike.onG && brake && bike.vx>2.5 && t%2===0){ const _st=terrainAt(bike.x-8); skids.push({x:bike.x-8,y:_st.y,a:_st.ang,life:1}); if(skids.length>90)skids.shift(); }   // b160: скид-марки при торможении
   if(skids.length){ for(const s of skids)s.life-=0.004; if(skids[0].life<=0)skids.shift(); }
@@ -1469,7 +1481,8 @@ function draw(){
     if(dang>0.02){ const rv=ctx.createLinearGradient(0,0,W*0.6,0); rv.addColorStop(0,'rgba(225,28,52,'+(0.46*dang*hb)+')'); rv.addColorStop(1,'rgba(225,28,52,0)'); ctx.fillStyle=rv; ctx.fillRect(0,0,W*0.6,H); }
     if(dang>0.5 && !_dangBuzz){ _dangBuzz=1; buzz(28); } else if(dang<0.38 && _dangBuzz){ _dangBuzz=0; }   // b84: одноразовый вибро-«тук» когда дамп входит в зону удара (без дёрготни — гистерезис 0.5/0.38)
     if(dang>0.45){ ctx.fillStyle='rgba(255,80,100,'+(0.55+0.45*Math.sin(t*0.45))+')'; ctx.font='800 15px ui-monospace,monospace'; ctx.textAlign='center'; ctx.fillText('⚠ ДАМП НАСТИГАЕТ',W/2,178); ctx.textAlign='left'; }
-    if(nearKickX>0){ const dK=nearKickX-bike.x; if(dK>430){ ctx.fillStyle='rgba(255,205,110,'+(0.5+0.4*Math.sin(t*0.3))+')'; ctx.font='800 13px ui-monospace,monospace'; ctx.textAlign='right'; ctx.fillText('🚀 ТРАМПЛИН '+Math.round(dK/10)+'м ▶', W-14, H*0.34); ctx.textAlign='left'; } } }   // b156: заблаговременный указатель — сооружение не проскочишь неожиданно   // b85: увёл текст под кнопку (было H*0.18 — лез в поднятую рамку); угроза и так читается сердцебиением-виньеткой+вибро (b84)
+    if(nearKickX>0){ const dK=nearKickX-bike.x; if(dK>430){ ctx.fillStyle='rgba(255,205,110,'+(0.5+0.4*Math.sin(t*0.3))+')'; ctx.font='800 13px ui-monospace,monospace'; ctx.textAlign='right'; ctx.fillText('🚀 ТРАМПЛИН '+Math.round(dK/10)+'м ▶', W-14, H*0.34); ctx.textAlign='left'; } }
+    if(livePrice>0 && trackSource==='ticker' && !dailyMode){ ctx.fillStyle='rgba(120,255,180,'+(0.55+0.35*Math.sin(t*0.25))+')'; ctx.font='800 11px ui-monospace,monospace'; ctx.textAlign='right'; ctx.fillText('⚡ LIVE · финиш = СЕЙЧАС', W-14, H*0.34+20); ctx.textAlign='left'; } }   // b164   // b156: заблаговременный указатель — сооружение не проскочишь неожиданно   // b85: увёл текст под кнопку (было H*0.18 — лез в поднятую рамку); угроза и так читается сердцебиением-виньеткой+вибро (b84)
   // BOOST (PUMP) gauge — on touch the PUMP button carries charge+control; keep this slim gauge only on desktop (Shift to fire)
   if(screen==='play' && !(TOUCH||window.__forceTouchUI)){ const bw=150,bx=W/2-bw/2,by=H-58,bf=clamp(boost||0,0,1);
     ctx.fillStyle='rgba(20,24,40,0.55)'; ctx.fillRect(bx,by,bw,9);
