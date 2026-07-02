@@ -52,7 +52,7 @@ function lerp(a,b,t){return a+(b-a)*t;} function clamp(v,a,b){return v<a?a:v>b?b
 // false → full game everywhere. Single switch. Systems are GATED, never deleted.
 const CORE_TEST_MODE = false;   // b70: META LIVE — building the progression spine (upgrades/bikes with teeth, career, economy) on the confirmed rigid-body core
 // build stamp — bump on every change so a phone refresh can confirm it loaded fresh code (cache!)
-const BUILD = '2026-07-02 · b167';
+const BUILD = '2026-07-02 · b168';
 
 // ---------- procedural market terrain ----------
 // height map sampled every STEP px; generated forward as we ride. Market character:
@@ -1460,6 +1460,16 @@ function draw(){
     ctx.beginPath(); ctx.moveTo(s.x-Math.cos(s.a)*5,s.y+1.6-Math.sin(s.a)*5); ctx.lineTo(s.x+Math.cos(s.a)*5,s.y+1.6+Math.sin(s.a)*5); ctx.stroke(); } ctx.lineCap='butt'; }
   // ---- neon speed-ribbon trail behind the bike ----
   if(trail.length>1){ for(let i=1;i<trail.length;i++){ const a=i/trail.length; ctx.strokeStyle='rgba(47,230,255,'+(a*0.5)+')'; ctx.lineWidth=a*5; ctx.shadowColor='#2fe6ff'; ctx.shadowBlur=a*10; ctx.beginPath(); ctx.moveTo(trail[i-1].x,trail[i-1].y); ctx.lineTo(trail[i].x,trail[i].y); ctx.stroke(); } ctx.shadowBlur=0; }
+  // ---- b168 СВЕТ МИРА ОТ ЦЕНЫ: локальный наклон графика (±4 узла) → зелёный/красный отсвет вокруг байка (памп/дамп «чувствуется» средой) ----
+  if(bike&&terr.length>10){ const bi2=clamp(Math.round(bike.x/STEP),4,terr.length-5);
+    _mktDy=(terr[bi2+4].y-terr[bi2-4].y)/(8*STEP);   // + = линия вниз = дамп
+    const strong=Math.abs(_mktDy)>0.06;
+    if(strong) mktCol=_mktDy>0?'255,80,96':'46,230,166';
+    mktA+=((strong?clamp(Math.abs(_mktDy)*2,0,1):0)-mktA)*0.06;
+    if(mktA>0.03){ ctx.save(); ctx.globalCompositeOperation='lighter';
+      const wl=ctx.createRadialGradient(bike.x,bike.y-8,6,bike.x,bike.y-8,150);
+      wl.addColorStop(0,'rgba('+mktCol+','+(0.10*mktA).toFixed(3)+')'); wl.addColorStop(1,'rgba('+mktCol+',0)');
+      ctx.fillStyle=wl; ctx.fillRect(bike.x-160,bike.y-168,320,320); ctx.restore(); } }
   // ---- the rider + machine (readable silhouette, neon-rimmed) ----
   if(screen!=='dead'){
     const _rx=lerp(bike._px===undefined?bike.x:bike._px,bike.x,slowLerp), _ry=lerp(bike._py===undefined?bike.y:bike._py,bike.y,slowLerp), _ra=lerp(bike._pa===undefined?bike.ang:bike._pa,bike.ang,slowLerp);   // b154: интерполяция позы в слоумо (slowLerp<1 только в пропущенном кадре)
@@ -1468,6 +1478,17 @@ function draw(){
     ctx.restore();
   }
   ctx.restore(); ctx.restore();   // world translate + camera zoom   // b104: убрал красную ликв-линию (заменено плечо→скорость волны)
+  // ---- b168 ЛИКВИДАЦИИ НА ГОРИЗОНТЕ: вспышки в верхнем небе, частота ∝ реальной крутизне свечей × волатильность монеты; дамп = лонги (красные), памп = шорты (зелёные). Суммы синтетические (реальный фид ликвидаций = платные API) ----
+  if(screen==='play' && liqFx.length<2){ const lp=(0.003+Math.abs(_mktDy)*0.05)*(trackSource==='ticker'?tickerVolMul:1);
+    if(Math.random()<lp) liqFx.push({x:W*(0.15+Math.random()*0.7), y:H*(0.135+Math.random()*0.075), t:0, amt:0.2+Math.pow(Math.random(),2)*7, long:_mktDy>0}); }   // узкая верхняя полоса — не пересекается с баннерами эпох (~H*0.24+)
+  for(let i=liqFx.length-1;i>=0;i--){ const f=liqFx[i]; f.t++; const k=1-f.t/56; if(k<=0){ liqFx.splice(i,1); continue; }
+    const lc=f.long?'255,90,80':'80,255,170';
+    ctx.save(); ctx.globalCompositeOperation='lighter';
+    const rg2=ctx.createRadialGradient(f.x,f.y,0,f.x,f.y,6+f.t*1.1);
+    rg2.addColorStop(0,'rgba('+lc+','+(0.34*k).toFixed(3)+')'); rg2.addColorStop(1,'rgba('+lc+',0)');
+    ctx.fillStyle=rg2; ctx.fillRect(f.x-70,f.y-70,140,140); ctx.restore();
+    ctx.fillStyle='rgba('+lc+','+(0.8*k).toFixed(3)+')'; ctx.font='700 9px ui-monospace,monospace'; ctx.textAlign='center';
+    ctx.fillText((f.long?'ЛИКВ. ЛОНГ −$':'ЛИКВ. ШОРТ −$')+f.amt.toFixed(1)+'M', f.x, f.y-8-f.t*0.3); ctx.textAlign='left'; }
   // speed streaks (motion) — intensify with velocity
   const spF=rush||0;
   if(spF>0.01&&screen==='play'){ ctx.lineCap='round'; for(const s of streaks){ const al=Math.min(0.55,s.life*0.6)*s.depth*spF; if(al<0.01)continue; ctx.strokeStyle='rgba(205,242,255,'+al+')'; ctx.lineWidth=s.depth*1.7; ctx.beginPath(); ctx.moveTo(s.x,s.y); ctx.lineTo(s.x+s.len,s.y); ctx.stroke(); } ctx.lineCap='butt'; }
@@ -1478,6 +1499,22 @@ function draw(){
     const vt=ctx.createRadialGradient(W/2,H*0.52,vr,W/2,H*0.52,H*0.92); vt.addColorStop(0,'rgba(0,0,0,0)'); vt.addColorStop(1,'rgba('+cr+','+cg+','+cb+','+ca+')'); ctx.fillStyle=vt; ctx.fillRect(0,0,W,H); }
   { ctx.save(); ctx.globalCompositeOperation='overlay'; ctx.globalAlpha=0.05;   // b167: кино-зерно — склеивает слои в «кадр» (курс C), живёт лёгким джиттером
     const jx=(t*7)%128, jy=(t*13)%128; ctx.translate(-jx,-jy); ctx.fillStyle=noisePat(); ctx.fillRect(0,0,W+128,H+128); ctx.restore(); }
+  // ---- b168 ТИКЕР-ЛЕНТА (верхняя кромка): реальные цены+24ч% 12 монет, фетч раз в ~45с, офлайн = ленты просто нет ----
+  if(screen==='play'||screen==='paused'||screen==='dead'||screen==='clip'){ tapeAge++;
+    if(!tapeBusy && ((!tapeRows&&tapeAge>120)||tapeAge>2700)){ tapeAge=0; tapeFetch(); }
+    if(tapeRows){ ctx.fillStyle='rgba(2,5,11,0.60)'; ctx.fillRect(0,0,W,12);
+      ctx.strokeStyle='rgba(150,180,230,0.10)'; ctx.lineWidth=1; ctx.beginPath(); ctx.moveTo(0,12.5); ctx.lineTo(W,12.5); ctx.stroke();
+      ctx.font='700 8px ui-monospace,monospace'; ctx.textBaseline='middle';
+      if(!tapeSegs){ tapeSegs=[]; tapeTW=0; for(const r of tapeRows){ const s1=r.n+' '+fmtP(r.p)+' ', s2=(r.c>=0?'▲':'▼')+Math.abs(r.c).toFixed(1)+'%', s3='   ·   ';
+        const w1=ctx.measureText(s1).width, w2=ctx.measureText(s2).width, w3=ctx.measureText(s3).width;
+        tapeSegs.push([s1,w1,s2,w2,s3,w3,r.c>=0]); tapeTW+=w1+w2+w3; } }
+      let tx=-((tapeAge*0.5)%tapeTW), tg=0;
+      while(tx<W&&tg<8){ for(const sg of tapeSegs){ const sw=sg[1]+sg[3]+sg[5];
+        if(tx+sw>0&&tx<W){ ctx.fillStyle='#9fb2d0'; ctx.fillText(sg[0],tx,6);
+          ctx.fillStyle=sg[6]?'rgba(46,230,166,0.9)':'rgba(255,90,110,0.9)'; ctx.fillText(sg[2],tx+sg[1],6);
+          ctx.fillStyle='rgba(102,116,142,0.8)'; ctx.fillText(sg[4],tx+sg[1]+sg[3],6); }
+        tx+=sw; } tg++; }
+      ctx.textBaseline='alphabetic'; } }
   if(flash>0.01){ctx.fillStyle='rgba(255,90,110,'+(flash*0.4)+')';ctx.fillRect(0,0,W,H);}
   if(gflash>0.01){ctx.fillStyle='rgba(120,255,200,'+(gflash*0.16)+')';ctx.fillRect(0,0,W,H);}
   // danger glow + warning as the dump closes in
@@ -1705,6 +1742,16 @@ var _noisePat=null;   // b167: кино-зерно (курс C) — тайл 128
 function noisePat(){ if(_noisePat)return _noisePat; const c=document.createElement('canvas'); c.width=c.height=128; const g=c.getContext('2d');
   const id=g.createImageData(128,128); for(let i=0;i<id.data.length;i+=4){ const v=100+Math.random()*90|0; id.data[i]=id.data[i+1]=id.data[i+2]=v; id.data[i+3]=255; }
   g.putImageData(id,0,0); _noisePat=ctx.createPattern(c,'repeat'); return _noisePat; }
+// ---- b168 КРИПТО-ДНК: тикер-лента (реальные цены 12 монет одним фетчем), ликвидации-вспышки ∝ крутизне свечей, свет мира от цены ----
+var tapeRows=null, tapeBusy=false, tapeAge=99999, tapeSegs=null, tapeTW=0;   // лента: данные/кэш ширин
+var liqFx=[], mktCol='70,200,255', mktA=0, _mktDy=0;                          // вспышки; цвет/сила рыночного света у байка
+function fmtP(p){ return p>=1000?Math.round(p).toLocaleString('en-US'):p>=100?p.toFixed(1):p>=1?p.toFixed(2):p>=0.01?p.toFixed(3):p.toPrecision(2); }
+function tapeFetch(){ if(tapeBusy)return; tapeBusy=true;   // офлайн-safe: catch глотает, лента просто не появляется
+  const syms=TICKERS.map(function(t){return t.sym;});
+  fetch('https://api.binance.com/api/v3/ticker/24hr?symbols='+encodeURIComponent(JSON.stringify(syms)))
+    .then(function(r){return r.ok?r.json():null;}).then(function(j){ tapeBusy=false; if(!j||!j.length)return;
+      tapeRows=j.map(function(o){ const tk=TICKERS.find(function(t){return t.sym===o.symbol;}); return {n:tk?tk.name:o.symbol, p:+o.lastPrice, c:+o.priceChangePercent}; });
+      tapeSegs=null; }).catch(function(){ tapeBusy=false; }); }
 const SPR_S=3, SPR_W=72, SPR_H=48, SPR_OX=34, SPR_OY=26;   // мир-пиксели → спрайт; бокс корпуса, origin в центре байка
 function spHx(h){ const n=parseInt(h.slice(1),16); return [n>>16&255,n>>8&255,n&255]; }
 function spSh(h,k){ const c=spHx(h).map(function(x){ return Math.round(k<0?x*(1+k):x+(255-x)*k); }); return 'rgb('+c[0]+','+c[1]+','+c[2]+')'; }
@@ -1921,7 +1968,7 @@ function drawMachine(B,wheelv,rShiftv,leanv,roost,boostv,dynAir,dynSquat,tkId,tk
     ctx.fillStyle='rgba(0,0,0,0.4)'; ctx.beginPath(); ctx.ellipse(0,29,30,4.5,0,0,7); ctx.fill();
     // subtle ground underglow
     ctx.save(); ctx.globalCompositeOperation='lighter';
-    const ug=ctx.createRadialGradient(0,26,2,0,26,44); ug.addColorStop(0,'rgba(70,200,255,0.12)'); ug.addColorStop(1,'rgba(70,200,255,0)'); ctx.fillStyle=ug; ctx.fillRect(-52,8,104,38); ctx.restore();
+    const ug=ctx.createRadialGradient(0,26,2,0,26,44); ug.addColorStop(0,'rgba('+mktCol+','+(0.10+0.10*mktA).toFixed(3)+')'); ug.addColorStop(1,'rgba('+mktCol+',0)'); ctx.fillStyle=ug; ctx.fillRect(-52,8,104,38); ctx.restore();   // b168: мир подсвечивает байк цветом рынка (памп-зелёный/дамп-красный)
     if(boostv>0){ ctx.save(); ctx.globalCompositeOperation='lighter'; const fl=26+Math.random()*18;
       const ff=ctx.createLinearGradient(-28,0,-28-fl,0); ff.addColorStop(0,'rgba(255,210,130,0.85)'); ff.addColorStop(0.5,'rgba(255,120,80,0.45)'); ff.addColorStop(1,'rgba(255,120,80,0)');
       ctx.fillStyle=ff; ctx.beginPath(); ctx.moveTo(-26,3); ctx.lineTo(-28-fl,9); ctx.lineTo(-28-fl,18); ctx.lineTo(-26,22); ctx.closePath(); ctx.fill(); ctx.restore(); }
