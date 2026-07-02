@@ -52,7 +52,7 @@ function lerp(a,b,t){return a+(b-a)*t;} function clamp(v,a,b){return v<a?a:v>b?b
 // false → full game everywhere. Single switch. Systems are GATED, never deleted.
 const CORE_TEST_MODE = false;   // b70: META LIVE — building the progression spine (upgrades/bikes with teeth, career, economy) on the confirmed rigid-body core
 // build stamp — bump on every change so a phone refresh can confirm it loaded fresh code (cache!)
-const BUILD = '2026-07-02 · b153';
+const BUILD = '2026-07-02 · b154';
 
 // ---------- procedural market terrain ----------
 // height map sampled every STEP px; generated forward as we ride. Market character:
@@ -277,7 +277,7 @@ function drawSpark(arr,sx,sy,sw,sh,col){ let mn=Infinity,mx=-Infinity; for(const
 
 // ---------- bike ----------
 let bike, cam, t, coins, dist, best, screen, wipe, parts, stars, dust, shake, flash, daycycle, trail, streaks, mult, bestPnl, airT, nearMissed, hitstop, gflash, floats, multPulse, maxMult, lean, rush, prevVx, wave, waveSpd, deathBy, boost, boosting, zone, biomeBanner, biomeBannerT, BSKY, BLINE, BRIDGE, lastMile, newDepth, camAir=0, wheelieT=0;
-let posPulse=0,_posPrev=0,_dangBuzz=0,prMax=0,prMin=0,slowmo=0,menuFx=0,menuFxAmt=0,wheelieAim=0,wheelieI=0,trickAir=0,trickZoom=0,trickGnd=0;   // b147: wheelieAim/I = вилли-помощник PID. b150: trickAir = полёт с трамплина (1=летим, 2=апекс-слоумо отработал), trickZoom = 0..1 кинематографический зум К байку, trickGnd = таймаут сброса на земле   // b123: menuFx = вспышка-флёр «ЗАКРЕПЛЕНО» на меню-экране (parts/flash там не рисуются). b84 degen-момент: posPulse=пульс числа при росте позиции; _dangBuzz=вибро на входе дампа. b89: prMax/prMin = коридор ЦЕНЫ (sell-the-top). b90: slowmo = кадры slow-mo на эпик-моменте (пропуск каждого 2-го update)
+let posPulse=0,_posPrev=0,_dangBuzz=0,prMax=0,prMin=0,slowmo=0,menuFx=0,menuFxAmt=0,wheelieAim=0,wheelieI=0,trickAir=0,trickZoom=0,trickGnd=0,slowLerp=1;   // b147: wheelieAim/I = вилли-помощник PID. b150: trickAir = полёт с трамплина (1=летим, 2=апекс-слоумо отработал), trickZoom = 0..1 кинематографический зум К байку, trickGnd = таймаут сброса на земле   // b123: menuFx = вспышка-флёр «ЗАКРЕПЛЕНО» на меню-экране (parts/flash там не рисуются). b84 degen-момент: posPulse=пульс числа при росте позиции; _dangBuzz=вибро на входе дампа. b89: prMax/prMin = коридор ЦЕНЫ (sell-the-top). b90: slowmo = кадры slow-mo на эпик-моменте (пропуск каждого 2-го update)
 try{best=+localStorage.getItem('cipher_run_best')||0;}catch(e){}
 try{bestPnl=+localStorage.getItem('cipher_best_earn')||0;}catch(e){}   // b87: bestPnl = лучшая зафиксированная ВЫПЛАТА за забег (◆), не $-очки
 let down=false, brake=false, jumpReq=0, jumpCd=0, coyote=0, jumpGrace=0, activeTouches={}, touchLowY={};   // jumpReq = buffered press; coyote/jumpGrace = jump grace windows; touchLowY = per-touch low point for swipe-up
@@ -922,6 +922,7 @@ function update(){
   if(boosting>0)boosting--;
   if(ctrlScheme==='btn2'){ down=!brake; }   // b56: AUTO-GAS — always driving unless you press brake (lean comes from the НОС↑/НОС↓ buttons, like btn4)
   t++; daycycle+=0.0009;
+  bike._px=bike.x; bike._py=bike.y; bike._pa=bike.ang; bike._pw=bike.wheel;   // b154: поза ПРОШЛОГО кадра — для интерполяции рендера в слоумо (пропущенный кадр физики рисуется на полпути → плавное кино-замедление вместо статтера)
   // physics
   const P=PHYS, DX=P.DX, DY=P.DY, wasG=bike.onG;
   // --- RIDER WEIGHT-SHIFT (b47 two-body): the drag input moves the rider's body mass (smoothed = it has inertia), which sets the combined-CG offset → traction split + pitch torque ---
@@ -1013,7 +1014,7 @@ function update(){
     if(airT===10 && terr[ci0-2] && (terr[ci0-2].ramp||terr[ci0-1]&&terr[ci0-1].ramp)) tut('flip3','🔄 В ПОЛЁТЕ: НАЖМИ НОС↑ = бросок в БЭКФЛИП · ОТПУСТИ = стоп-вращение');   // b153: импульсная модель — бросок в полёте задаёт вращение, отпускание гасит
     if(trickAir){ const _th=terrainAt(bike.x).y-(bike.y+DY);   // b150 ТРИК-КАМЕРА: взлёт/апекс с трамплина = зум К БАЙКУ (флип читается кинематографично), к земле — плавный отъезд (посадка в кадре)
       if(airT>6 && (bike.vy<2 || _th>130)) trickZoom=Math.min(1,trickZoom+0.14); else trickZoom=Math.max(0,trickZoom-0.12);
-      if(trickAir===1 && airT>8 && Math.abs(bike.vy)<1.6 && Math.abs(bike.angV)>0.13){ slowmo=Math.max(slowmo,14); trickAir=2; } }   // слоумо на АПЕКСЕ, только если реально крутишь (|angV|) и только раз за полёт
+      if(trickAir===1 && airT>12 && Math.abs(bike.vy)<1.6 && Math.abs(bike.angV)>0.13){ slowmo=Math.max(slowmo,14); trickAir=2; } }   // слоумо на АПЕКСЕ: только реальный полёт (airT>12 — b154: короткий подскок давал «блип»-замедление, читалось лагом) + только если реально крутишь, раз за полёт
     const skim=terrainAt(bike.x).y-(bike.y+DY);                        // gap of lower wheel above surface
     if(airT>16 && skim>0 && skim<16 && bike.vx>6 && !nearMissed){ nearMissed=true; mult+=0.5; boost=Math.min(1,(boost||0)+0.15); multPulse=1; const g2=1.5*mult; coins+=g2; floatPop(bike.x,bike.y-22,'NEAR MISS +$'+Math.round(g2),'#9ff0ff'); shake=4; hitstop=2; gflash=0.4; sfxNear(); }
     flipAcc+=Math.abs(bike.angV); if(flipAcc>6.283){flipAcc-=6.283;flipCount++; blip(150+flipCount*40,0.18,'sawtooth',0.13); buzz(10);}   // b152: «вжух» на каждом ПОЛНОМ обороте В ВОЗДУХЕ (тон растёт с витками) — флип слышен в момент, не только при посадке
@@ -1326,7 +1327,8 @@ function draw(){
   if(trail.length>1){ for(let i=1;i<trail.length;i++){ const a=i/trail.length; ctx.strokeStyle='rgba(47,230,255,'+(a*0.5)+')'; ctx.lineWidth=a*5; ctx.shadowColor='#2fe6ff'; ctx.shadowBlur=a*10; ctx.beginPath(); ctx.moveTo(trail[i-1].x,trail[i-1].y); ctx.lineTo(trail[i].x,trail[i].y); ctx.stroke(); } ctx.shadowBlur=0; }
   // ---- the rider + machine (readable silhouette, neon-rimmed) ----
   if(screen!=='dead'){
-    ctx.save(); ctx.translate(bike.x,bike.y); ctx.rotate(bike.ang); ctx.translate(0,-1);   // seat the TIRE CONTACT on the price line (was +12 → wheels buried ~13px "in the track"); -1 aligns wheel-bottom with the CG-implied ground (bike.y = lineY-DY)
+    const _rx=lerp(bike._px===undefined?bike.x:bike._px,bike.x,slowLerp), _ry=lerp(bike._py===undefined?bike.y:bike._py,bike.y,slowLerp), _ra=lerp(bike._pa===undefined?bike.ang:bike._pa,bike.ang,slowLerp);   // b154: интерполяция позы в слоумо (slowLerp<1 только в пропущенном кадре)
+    ctx.save(); ctx.translate(_rx,_ry); ctx.rotate(_ra); ctx.translate(0,-1);   // seat the TIRE CONTACT on the price line (was +12 → wheels buried ~13px "in the track"); -1 aligns wheel-bottom with the CG-implied ground (bike.y = lineY-DY)
     drawMachine(BK(), bike.wheel, bike.rShift, lean, down&&bike.onG, boosting);   // b109: спрайт вынесен в drawMachine (реюз на экране БАЙКИ)
     ctx.restore();
   }
@@ -1910,7 +1912,7 @@ function dbgTick(){
     +'<b>'+(dist||0)+'</b>m · дамп <span class="'+wc+'">'+gapM+'m</span><br>'
     +'<span class="lab">'+state+' · CORE '+(CORE_TEST_MODE?'ON':'OFF')+' · '+BUILD+'</span>';
 }
-function loop(){ requestAnimationFrame(loop); try{ if(screen==='play'){ if(slowmo>0){ slowmo--; if(!(slowmo&1))update(); } else update(); } draw(); musicTick(); dbgTick(); }catch(e){ if(!loop._e){loop._e=1; console.error('CHART loop error (self-healed, screen='+screen+'):',e&&e.stack||e); } } }   // b65: rAF re-requested FIRST + try/catch → one bad frame can no longer permanently FREEZE the game (was: any throw skipped the re-request → stuck until a page refresh, matching the "магазин дёргается/не работает до обновления" report). The first error is logged so the real cause surfaces.
+function loop(){ requestAnimationFrame(loop); try{ if(screen==='play'){ if(slowmo>0){ slowmo--; if(!(slowmo&1)){ update(); slowLerp=1; } else slowLerp=0.5; } else { update(); slowLerp=1; } } draw(); musicTick(); dbgTick(); }catch(e){ if(!loop._e){loop._e=1; console.error('CHART loop error (self-healed, screen='+screen+'):',e&&e.stack||e); } } }   // b154: slowLerp=0.5 в пропущенном слоумо-кадре → байк рисуется на полпути между кадрами физики = ПЛАВНОЕ замедление (юзер: «подлагивает» — статтер пропуска кадров)   // b65: rAF re-requested FIRST + try/catch → one bad frame can no longer permanently FREEZE the game (was: any throw skipped the re-request → stuck until a page refresh, matching the "магазин дёргается/не работает до обновления" report). The first error is logged so the real cause surfaces.
 function shakeApply(){} // (shake folded into camera draw via translate jitter)
 toTitle();
 // apply shake in draw by jittering before skyGrad
