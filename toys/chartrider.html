@@ -52,7 +52,7 @@ function lerp(a,b,t){return a+(b-a)*t;} function clamp(v,a,b){return v<a?a:v>b?b
 // false → full game everywhere. Single switch. Systems are GATED, never deleted.
 const CORE_TEST_MODE = false;   // b70: META LIVE — building the progression spine (upgrades/bikes with teeth, career, economy) on the confirmed rigid-body core
 // build stamp — bump on every change so a phone refresh can confirm it loaded fresh code (cache!)
-const BUILD = '2026-07-02 · b159';
+const BUILD = '2026-07-02 · b160';
 
 // ---------- procedural market terrain ----------
 // height map sampled every STEP px; generated forward as we ride. Market character:
@@ -284,7 +284,7 @@ function drawSpark(arr,sx,sy,sw,sh,col){ let mn=Infinity,mx=-Infinity; for(const
 // ---------- bike ----------
 let bike, cam, t, coins, dist, best, screen, wipe, parts, stars, dust, shake, flash, daycycle, trail, streaks, mult, bestPnl, airT, nearMissed, hitstop, gflash, floats, multPulse, maxMult, lean, rush, prevVx, wave, waveSpd, deathBy, boost, boosting, zone, biomeBanner, biomeBannerT, BSKY, BLINE, BRIDGE, lastMile, newDepth, camAir=0, wheelieT=0;
 let posPulse=0,_posPrev=0,_dangBuzz=0,prMax=0,prMin=0,slowmo=0,menuFx=0,menuFxAmt=0,wheelieAim=0,wheelieI=0,trickAir=0,trickZoom=0,trickGnd=0,slowLerp=1,riderAirB=0,riderSquat=0,nearKickX=-1;   // b155: riderAirB 0..1 = стойка райдера в полёте, riderSquat 0..1 = присед-амортизация посадки (∝ высоте). b156: nearKickX = ближайший трамплин впереди (HUD-указатель)
-let trick=0,trickMix=0,trickHeld=false,trickT=0,trickTouch=-1,trickKey='',touchSX={},touchSY={};   // b158 FMX-ТРЮКИ: trick 1=СУПЕРМЕН 2=ЦУНАМИ 3=COFFIN 4=NO HANDER; trickMix 0..1 = твин позы; trickT = кадры удержания (очки); trickTouch/Key = чей палец/клавиша держит
+let trick=0,trickMix=0,trickHeld=false,trickT=0,trickTouch=-1,trickKey='',touchSX={},touchSY={},skids=[];   // b160: skids = следы торможения на трассе   // b158 FMX-ТРЮКИ: trick 1=СУПЕРМЕН 2=ЦУНАМИ 3=COFFIN 4=NO HANDER; trickMix 0..1 = твин позы; trickT = кадры удержания (очки); trickTouch/Key = чей палец/клавиша держит
 const TRICK_NAMES={1:'СУПЕРМЕН',2:'ЦУНАМИ',3:'COFFIN',4:'NO HANDER',5:'SEAT GRAB',6:'HEART ATTACK',7:'HEEL CLICKER'};   // b159: 4→7 трюков — ДЛИННЫЙ свайп (>78px) апгрейдит направление в жёсткую вариацию
 const TRICK_UP={1:5,2:6,4:7};   // СУПЕРМЕН→SEAT GRAB · ЦУНАМИ→HEART ATTACK · NO HANDER→HEEL CLICKER
 function sfxTrick(id){ blip(300+id*55,0.16,'sawtooth',0.13); blip(520+id*55,0.10,'sine',0.08); }   // b159: вжух позы, тон по трюку
@@ -693,7 +693,7 @@ function reset(){
   cam={x:bike.x-W*0.5,y:bike.y-H*0.46}; camAir=0; t=0; coins=0; dist=0; lastMile=0; newDepth=false; wipe=0; screen='play'; shake=0; flash=0; popT=0; daycycle=Math.random()*6.28;
   chalResult=null;   // b118: новый заезд — итог вызова сброшен (activeChal НЕ трогаем: задан в startTicker до reset)
   mult=1; airT=0; nearMissed=false; hitstop=0; gflash=0; multPulse=0; maxMult=1; flipCount=0; flipAcc=0; wheelieT=0; cashedOut=false; runGems=0; cashCelebT=0; pumpAir=0;
-  flipsTotal=0; topKmh=0; lastLandDiff=0; lean=0; rush=0; prevVx=0; down=false; brake=false; jumpReq=0; jumpCd=0; coyote=0; jumpGrace=0; activeTouches={}; leanX=0; ctrlId=null; leanKeyL=false; leanKeyR=false; leanCmd=0; rShiftVel=0; wave=bike.x-W*0.95; waveSpd=0; deathBy=''; boost=0; boosting=0; posPulse=0; _posPrev=0; _dangBuzz=0; prMax=0; prMin=0; slowmo=0; wheelieAim=0; wheelieI=0; trickAir=0; trickZoom=0; trick=0; trickMix=0; trickHeld=false; trickT=0; trickTouch=-1; trickKey=''; touchSX={}; touchSY={};
+  flipsTotal=0; topKmh=0; lastLandDiff=0; lean=0; rush=0; prevVx=0; down=false; brake=false; jumpReq=0; jumpCd=0; coyote=0; jumpGrace=0; activeTouches={}; leanX=0; ctrlId=null; leanKeyL=false; leanKeyR=false; leanCmd=0; rShiftVel=0; wave=bike.x-W*0.95; waveSpd=0; deathBy=''; boost=0; boosting=0; posPulse=0; _posPrev=0; _dangBuzz=0; prMax=0; prMin=0; slowmo=0; wheelieAim=0; wheelieI=0; trickAir=0; trickZoom=0; trick=0; trickMix=0; trickHeld=false; trickT=0; trickTouch=-1; trickKey=''; touchSX={}; touchSY={}; skids=[];
   zone=-1; biomeBanner=''; biomeBannerT=0; BSKY=['rgb(20,16,48)','rgb(46,30,78)','rgb(150,80,110)','rgb(230,150,110)']; BLINE='228,250,255'; BRIDGE='60,40,90'; rollMissions();
   parts=[]; dust=[]; trail=[]; streaks=[]; floats=[];
   stars=[]; for(let i=0;i<90;i++)stars.push({x:Math.random()*W,y:Math.random()*H*0.7,z:0.2+Math.random()*0.6,s:Math.random()*1.6+0.4});
@@ -886,6 +886,7 @@ function rigidStep(){
   { const _wT=(bike.onG && bike.rShift<-0.05 && (down||Math.abs(bike.vx)>0.8)) ? clamp(-bike.rShift,0,1) : 0;
     wheelieAim += clamp(_wT-wheelieAim, -R.wheelieRamp*1.7, R.wheelieRamp); }   // b153 v2: wheelieAim = ИНДИКАТОР вилли-намерения 0..1 (для капа темпа/награды/вилли≠турбо) — целевого угла НЕТ, угол живёт от газа/тормоза/веса
   let onGround=false, spun=false;
+  bike._cmpF=(bike._cmpF||0)*0.72; bike._cmpR=(bike._cmpR||0)*0.72;   // b160: подвеска визуально отпружинивает, контакт ниже перезапишет
   for(let s=0;s<R.subSteps;s++){
     let fx=0, fy=0, tq=0;
     fy += R.mass*R.grav;                                   // gravity on the CG
@@ -896,6 +897,7 @@ function rigidStep(){
       const ta=terrainAt(wx), pen=(wy+R.wr)-ta.y;          // bottom of wheel below the line = penetration
       if(pen>0){
         onGround=true;
+        { const cv=clamp(pen*0.55,0,6); if(drive){ if(cv>bike._cmpR)bike._cmpR=cv; } else if(cv>bike._cmpF)bike._cmpF=cv; }   // b160: компрессия per колесо — визуальный ХОД подвески в drawMachine
         const ga=ta.ang, nx=Math.sin(ga), ny=-Math.cos(ga), tx=Math.cos(ga), ty=Math.sin(ga);
         const rx=wx-bike.x, ry=wy-bike.y;
         const vpx=bike.vx-bike.angV*ry, vpy=bike.vy+bike.angV*rx;   // velocity of the chassis point at the hub
@@ -1048,6 +1050,7 @@ function update(){
     if(terr[ci0]&&(terr[ci0].kick||(terr[ci0-1]&&terr[ci0-1].kick)||(terr[ci0+1]&&terr[ci0+1].kick))) bike.angV -= clamp(bike.vx*RB.lipKick, 0.14, RB.lipKickMax); }   // b153 КИК КРОМКИ (физика закруглённой деки, реф «рампа съедает полвитка»): нос-ВВЕРХ ∝ скорости с ПОЛОМ 0.14 (резкий кончик даёт нос-вниз ~+0.21, съедавший кик на медленном заходе — пол компенсирует)
   else if(!wasG && grounded){                                          // just landed
     jumpGrace=0; trickAir=0; riderSquat=Math.min(1, airT/26);          // jump arc over; b150: трик-камера завершена; b155: присед-амортизация ∝ высоте полёта
+    if(airT>10){ const nB=Math.min(16,3+airT*0.3)|0; for(let e=0;e<nB;e++)dust.push({x:bike.x-16+Math.random()*32,y:bike.y+22,vx:(Math.random()-0.5)*(2+airT*0.06),vy:-Math.random()*(1.2+airT*0.05),life:1,r:Math.random()*2.8+1.2}); }   // b160: бурст пыли на посадке ∝ высоте (вес удара виден)
     let diff=Math.abs(rel); lastLandDiff=diff;
     if(airT>14 && (diff > RB.crashAngle + 0.12*upgLvl('grip') + 0.10*upgLvl('susp') + Math.max(0,(BK().grip-1.40))*0.4 || Math.abs(bike.angV) > RB.spinCrash + 0.03*upgLvl('grip') || (trick&&trickMix>0.5))){ wipeout('crash'); if(trick&&trickMix>0.5)popText('💥 В ПОЗЕ ОБ ЗЕМЛЮ'); }   // b158: посадка НЕ в седле (trickMix>0.5) = краш — отпускай трюк заранее (real-but-forgiving: частичный возврат ниже = лишь «коряво»)   // b88: ПОДВЕСКА расширяет конус прощения посадки (большие полёты приземляются мягче/безопаснее)   // b72 СКИЛЛ-БИТ (Trials): land too far off wheels-down OR still SPINNING fast = CRASH (botched/over-rotated flip costs). СЦЕПЛЕНИЕ upgrade + grippy bike widen tolerance (interconnected). Tune RB.crashAngle/spinCrash by hand
     else { sfxLand(clamp(airT/38,0,1));
@@ -1147,6 +1150,8 @@ function update(){
     if(trickMix>0.6 && !bike.onG) trickT++;
     if(!trickHeld && trickMix<=0.01 && bike.onG) { trick=0; trickT=0; } }   // полностью вернулся на земле без посадки-резолва (страховка)
   if(t%12===0){ nearKickX=-1; const _ck=Math.floor(bike.x/STEP); for(let k=_ck+6;k<_ck+42;k++){ const n=terr[k]; if(n&&n.kick){ nearKickX=n.x; break; } } }   // b156: ближайший трамплин впереди (для HUD-указателя)
+  if(bike.onG && brake && bike.vx>2.5 && t%2===0){ const _st=terrainAt(bike.x-8); skids.push({x:bike.x-8,y:_st.y,a:_st.ang,life:1}); if(skids.length>90)skids.shift(); }   // b160: скид-марки при торможении
+  if(skids.length){ for(const s of skids)s.life-=0.004; if(skids[0].life<=0)skids.shift(); }
   cam.x=bike.x-W*0.32; cam.y=lerp(cam.y, bike.y-H*(0.52-camAir*0.10), lerp(TUNE.camFollow,0.45,camAir));   // fast follow on big air so the camera tracks the launch+fall (bike stays framed); zoom-out (draw) widens the view
   for(const p of parts){p.x+=p.vx;p.y+=p.vy;p.vy+=0.12;p.vx*=0.97;p.life-=0.03;} parts=parts.filter(p=>p.life>0);
   for(const d of dust){d.x+=d.vx;d.y+=d.vy;d.vy+=0.04;d.life-=0.04;} dust=dust.filter(d=>d.life>0);
@@ -1385,6 +1390,9 @@ function draw(){
       ctx.fillStyle='#ff4055'; ctx.shadowColor='#ff3050'; ctx.shadowBlur=10; ctx.beginPath(); ctx.arc(13,-30,2.1,0,7); ctx.fill(); ctx.shadowBlur=0;   // глаз
       ctx.restore(); }
   }
+  // ---- b160: скид-марки торможения (тёмные штрихи по склону, медленно тают) ----
+  if(skids.length){ ctx.lineCap='round'; for(const s of skids){ ctx.strokeStyle='rgba(8,6,12,'+(s.life*0.5)+')'; ctx.lineWidth=3.4;
+    ctx.beginPath(); ctx.moveTo(s.x-Math.cos(s.a)*5,s.y+1.6-Math.sin(s.a)*5); ctx.lineTo(s.x+Math.cos(s.a)*5,s.y+1.6+Math.sin(s.a)*5); ctx.stroke(); } ctx.lineCap='butt'; }
   // ---- neon speed-ribbon trail behind the bike ----
   if(trail.length>1){ for(let i=1;i<trail.length;i++){ const a=i/trail.length; ctx.strokeStyle='rgba(47,230,255,'+(a*0.5)+')'; ctx.lineWidth=a*5; ctx.shadowColor='#2fe6ff'; ctx.shadowBlur=a*10; ctx.beginPath(); ctx.moveTo(trail[i-1].x,trail[i-1].y); ctx.lineTo(trail[i].x,trail[i].y); ctx.stroke(); } ctx.shadowBlur=0; }
   // ---- the rider + machine (readable silhouette, neon-rimmed) ----
@@ -1630,16 +1638,17 @@ function drawMachine(B,wheelv,rShiftv,leanv,roost,boostv,dynAir,dynSquat,tkId,tk
     // ===== b145 СИЛУЭТ ПО ТИПУ: велосипед / скутер / дёрт / спорт — колёса + рама разные =====
     const TY=B.type||'dirt';
     const WR = TY==='scooter'?10 : TY==='moped'?11.5 : 13;   // маленькие колёса у скутера/мопеда, крупные у остальных
-    // ---- колёса ----
-    for(const wx of [-27,27]){
-      const wg=ctx.createRadialGradient(wx-3,11,1,wx,15.5,WR); wg.addColorStop(0,'#1a1e28'); wg.addColorStop(1,'#05060c');
-      ctx.fillStyle=wg; ctx.beginPath(); ctx.arc(wx,15.5,WR,0,7); ctx.fill();
-      if(TY==='dirt'){ ctx.strokeStyle='rgba(16,18,26,0.95)'; ctx.lineWidth=3.2; for(let k=0;k<12;k++){ const a=wheelv*0.4+k*0.5236; ctx.beginPath(); ctx.moveTo(wx+Math.cos(a)*11.4,15.5+Math.sin(a)*11.4); ctx.lineTo(wx+Math.cos(a)*13.6,15.5+Math.sin(a)*13.6); ctx.stroke(); } }   // knobby только у дёрта
-      if(TY==='bike'){ ctx.fillStyle='#0b0d15'; ctx.beginPath(); ctx.arc(wx,15.5,WR-2.6,0,7); ctx.fill(); }   // тонкая велопокрышка = большой полый обод
-      ctx.lineWidth=2; ctx.strokeStyle='rgba('+B.rim+',0.8)'; ctx.beginPath(); ctx.arc(wx,15.5,WR*0.62,0,7); ctx.stroke();
-      ctx.fillStyle='#05060c'; ctx.beginPath(); ctx.arc(wx,15.5,WR*0.36,0,7); ctx.fill();
-      const nsp=TY==='bike'?9:5; ctx.strokeStyle='rgba(150,190,220,'+(TY==='bike'?0.5:0.3)+')'; ctx.lineWidth=1; ctx.beginPath(); for(let s=0;s<nsp;s++){const a=wheelv+s*(6.283/nsp); ctx.moveTo(wx,15.5); ctx.lineTo(wx+Math.cos(a)*WR*(TY==='bike'?0.78:0.56),15.5+Math.sin(a)*WR*(TY==='bike'?0.78:0.56));} ctx.stroke();
-      ctx.fillStyle='rgba(190,240,255,0.9)'; ctx.beginPath(); ctx.arc(wx,15.5,1.6,0,7); ctx.fill(); }
+    // ---- колёса (b160: реальный ХОД ПОДВЕСКИ — колесо поднимается к раме на компрессию из физики) ----
+    const cmpF=(screen==='play'&&bike&&bike._cmpF)||0, cmpR=(screen==='play'&&bike&&bike._cmpR)||0;
+    for(const wx of [-27,27]){ const wwy=15.5-(wx<0?cmpR:cmpF);
+      const wg=ctx.createRadialGradient(wx-3,wwy-4.5,1,wx,wwy,WR); wg.addColorStop(0,'#1a1e28'); wg.addColorStop(1,'#05060c');
+      ctx.fillStyle=wg; ctx.beginPath(); ctx.arc(wx,wwy,WR,0,7); ctx.fill();
+      if(TY==='dirt'){ ctx.strokeStyle='rgba(16,18,26,0.95)'; ctx.lineWidth=3.2; for(let k=0;k<12;k++){ const a=wheelv*0.4+k*0.5236; ctx.beginPath(); ctx.moveTo(wx+Math.cos(a)*11.4,wwy+Math.sin(a)*11.4); ctx.lineTo(wx+Math.cos(a)*13.6,wwy+Math.sin(a)*13.6); ctx.stroke(); } }   // knobby только у дёрта
+      if(TY==='bike'){ ctx.fillStyle='#0b0d15'; ctx.beginPath(); ctx.arc(wx,wwy,WR-2.6,0,7); ctx.fill(); }   // тонкая велопокрышка = большой полый обод
+      ctx.lineWidth=2; ctx.strokeStyle='rgba('+B.rim+',0.8)'; ctx.beginPath(); ctx.arc(wx,wwy,WR*0.62,0,7); ctx.stroke();
+      ctx.fillStyle='#05060c'; ctx.beginPath(); ctx.arc(wx,wwy,WR*0.36,0,7); ctx.fill();
+      const nsp=TY==='bike'?9:5; ctx.strokeStyle='rgba(150,190,220,'+(TY==='bike'?0.5:0.3)+')'; ctx.lineWidth=1; ctx.beginPath(); for(let s=0;s<nsp;s++){const a=wheelv+s*(6.283/nsp); ctx.moveTo(wx,wwy); ctx.lineTo(wx+Math.cos(a)*WR*(TY==='bike'?0.78:0.56),wwy+Math.sin(a)*WR*(TY==='bike'?0.78:0.56));} ctx.stroke();
+      ctx.fillStyle='rgba(190,240,255,0.9)'; ctx.beginPath(); ctx.arc(wx,wwy,1.6,0,7); ctx.fill(); }
     ctx.lineJoin='round'; ctx.lineCap='round';
     const RIM='rgba('+B.rim+',', bg=ctx.createLinearGradient(0,-12,0,12); bg.addColorStop(0,B.body[0]); bg.addColorStop(0.55,B.body[1]); bg.addColorStop(1,B.body[2]);
     if(TY==='bike'){   // ВЕЛОСИПЕД b157: MTB с МАССОЙ (юзер «очень смешной, линии») — толстые трубы цветом ТЕЛА, неон только акцент верхней трубы
