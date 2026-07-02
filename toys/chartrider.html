@@ -52,7 +52,7 @@ function lerp(a,b,t){return a+(b-a)*t;} function clamp(v,a,b){return v<a?a:v>b?b
 // false → full game everywhere. Single switch. Systems are GATED, never deleted.
 const CORE_TEST_MODE = false;   // b70: META LIVE — building the progression spine (upgrades/bikes with teeth, career, economy) on the confirmed rigid-body core
 // build stamp — bump on every change so a phone refresh can confirm it loaded fresh code (cache!)
-const BUILD = '2026-07-02 · b157';
+const BUILD = '2026-07-02 · b158';
 
 // ---------- procedural market terrain ----------
 // height map sampled every STEP px; generated forward as we ride. Market character:
@@ -283,7 +283,10 @@ function drawSpark(arr,sx,sy,sw,sh,col){ let mn=Infinity,mx=-Infinity; for(const
 
 // ---------- bike ----------
 let bike, cam, t, coins, dist, best, screen, wipe, parts, stars, dust, shake, flash, daycycle, trail, streaks, mult, bestPnl, airT, nearMissed, hitstop, gflash, floats, multPulse, maxMult, lean, rush, prevVx, wave, waveSpd, deathBy, boost, boosting, zone, biomeBanner, biomeBannerT, BSKY, BLINE, BRIDGE, lastMile, newDepth, camAir=0, wheelieT=0;
-let posPulse=0,_posPrev=0,_dangBuzz=0,prMax=0,prMin=0,slowmo=0,menuFx=0,menuFxAmt=0,wheelieAim=0,wheelieI=0,trickAir=0,trickZoom=0,trickGnd=0,slowLerp=1,riderAirB=0,riderSquat=0,nearKickX=-1;   // b155: riderAirB 0..1 = стойка райдера в полёте, riderSquat 0..1 = присед-амортизация посадки (∝ высоте). b156: nearKickX = ближайший трамплин впереди (HUD-указатель)   // b147: wheelieAim/I = вилли-помощник PID. b150: trickAir = полёт с трамплина (1=летим, 2=апекс-слоумо отработал), trickZoom = 0..1 кинематографический зум К байку, trickGnd = таймаут сброса на земле   // b123: menuFx = вспышка-флёр «ЗАКРЕПЛЕНО» на меню-экране (parts/flash там не рисуются). b84 degen-момент: posPulse=пульс числа при росте позиции; _dangBuzz=вибро на входе дампа. b89: prMax/prMin = коридор ЦЕНЫ (sell-the-top). b90: slowmo = кадры slow-mo на эпик-моменте (пропуск каждого 2-го update)
+let posPulse=0,_posPrev=0,_dangBuzz=0,prMax=0,prMin=0,slowmo=0,menuFx=0,menuFxAmt=0,wheelieAim=0,wheelieI=0,trickAir=0,trickZoom=0,trickGnd=0,slowLerp=1,riderAirB=0,riderSquat=0,nearKickX=-1;   // b155: riderAirB 0..1 = стойка райдера в полёте, riderSquat 0..1 = присед-амортизация посадки (∝ высоте). b156: nearKickX = ближайший трамплин впереди (HUD-указатель)
+let trick=0,trickMix=0,trickHeld=false,trickT=0,trickTouch=-1,trickKey='',touchSX={},touchSY={};   // b158 FMX-ТРЮКИ: trick 1=СУПЕРМЕН 2=ЦУНАМИ 3=COFFIN 4=NO HANDER; trickMix 0..1 = твин позы; trickT = кадры удержания (очки); trickTouch/Key = чей палец/клавиша держит
+const TRICK_NAMES={1:'СУПЕРМЕН',2:'ЦУНАМИ',3:'COFFIN',4:'NO HANDER'};
+function startTrick(id){ if(trick||!bike||bike.onG||screen!=='play')return false; trick=id; trickHeld=true; trickT=0; popText('🤸 '+TRICK_NAMES[id]); sfxAir(); buzz(12); return true; }   // b158: трюк = решение в полёте; поза = момент инерции (см. rigidStep)   // b147: wheelieAim/I = вилли-помощник PID. b150: trickAir = полёт с трамплина (1=летим, 2=апекс-слоумо отработал), trickZoom = 0..1 кинематографический зум К байку, trickGnd = таймаут сброса на земле   // b123: menuFx = вспышка-флёр «ЗАКРЕПЛЕНО» на меню-экране (parts/flash там не рисуются). b84 degen-момент: posPulse=пульс числа при росте позиции; _dangBuzz=вибро на входе дампа. b89: prMax/prMin = коридор ЦЕНЫ (sell-the-top). b90: slowmo = кадры slow-mo на эпик-моменте (пропуск каждого 2-го update)
 try{best=+localStorage.getItem('cipher_run_best')||0;}catch(e){}
 try{bestPnl=+localStorage.getItem('cipher_best_earn')||0;}catch(e){}   // b87: bestPnl = лучшая зафиксированная ВЫПЛАТА за забег (◆), не $-очки
 let down=false, brake=false, jumpReq=0, jumpCd=0, coyote=0, jumpGrace=0, activeTouches={}, touchLowY={};   // jumpReq = buffered press; coyote/jumpGrace = jump grace windows; touchLowY = per-touch low point for swipe-up
@@ -688,7 +691,7 @@ function reset(){
   cam={x:bike.x-W*0.5,y:bike.y-H*0.46}; camAir=0; t=0; coins=0; dist=0; lastMile=0; newDepth=false; wipe=0; screen='play'; shake=0; flash=0; popT=0; daycycle=Math.random()*6.28;
   chalResult=null;   // b118: новый заезд — итог вызова сброшен (activeChal НЕ трогаем: задан в startTicker до reset)
   mult=1; airT=0; nearMissed=false; hitstop=0; gflash=0; multPulse=0; maxMult=1; flipCount=0; flipAcc=0; wheelieT=0; cashedOut=false; runGems=0; cashCelebT=0; pumpAir=0;
-  flipsTotal=0; topKmh=0; lastLandDiff=0; lean=0; rush=0; prevVx=0; down=false; brake=false; jumpReq=0; jumpCd=0; coyote=0; jumpGrace=0; activeTouches={}; leanX=0; ctrlId=null; leanKeyL=false; leanKeyR=false; leanCmd=0; rShiftVel=0; wave=bike.x-W*0.95; waveSpd=0; deathBy=''; boost=0; boosting=0; posPulse=0; _posPrev=0; _dangBuzz=0; prMax=0; prMin=0; slowmo=0; wheelieAim=0; wheelieI=0; trickAir=0; trickZoom=0;
+  flipsTotal=0; topKmh=0; lastLandDiff=0; lean=0; rush=0; prevVx=0; down=false; brake=false; jumpReq=0; jumpCd=0; coyote=0; jumpGrace=0; activeTouches={}; leanX=0; ctrlId=null; leanKeyL=false; leanKeyR=false; leanCmd=0; rShiftVel=0; wave=bike.x-W*0.95; waveSpd=0; deathBy=''; boost=0; boosting=0; posPulse=0; _posPrev=0; _dangBuzz=0; prMax=0; prMin=0; slowmo=0; wheelieAim=0; wheelieI=0; trickAir=0; trickZoom=0; trick=0; trickMix=0; trickHeld=false; trickT=0; trickTouch=-1; trickKey=''; touchSX={}; touchSY={};
   zone=-1; biomeBanner=''; biomeBannerT=0; BSKY=['rgb(20,16,48)','rgb(46,30,78)','rgb(150,80,110)','rgb(230,150,110)']; BLINE='228,250,255'; BRIDGE='60,40,90'; rollMissions();
   parts=[]; dust=[]; trail=[]; streaks=[]; floats=[];
   stars=[]; for(let i=0;i<90;i++)stars.push({x:Math.random()*W,y:Math.random()*H*0.7,z:0.2+Math.random()*0.6,s:Math.random()*1.6+0.4});
@@ -829,26 +832,33 @@ addEventListener('keydown',e=>{
   else if((k==='r'||k==='R')&&screen==='dead')reset();
   else if(k==='m'||k==='M')toggleMute();
   else if(k==='f'||k==='F')dbgToggle();   // toggle debug overlay
+  else if(k>='1'&&k<='4'){ if(screen==='play'&&!trick){ if(startTrick(+k)) trickKey=k; } e.preventDefault(); }   // b158: десктоп-трюки — 1 СУПЕРМЕН · 2 ЦУНАМИ · 3 COFFIN · 4 NO HANDER (держать)
 });
-addEventListener('keyup',e=>{ const k=e.key; if(GAS_KEYS[k])down=false; else if(BRK_KEYS[k])brake=false; else if(LEANL_KEYS[k]){leanKeyL=false;updLeanKeys();} else if(LEANR_KEYS[k]){leanKeyR=false;updLeanKeys();} });
+addEventListener('keyup',e=>{ const k=e.key; if(GAS_KEYS[k])down=false; else if(BRK_KEYS[k])brake=false; else if(LEANL_KEYS[k]){leanKeyL=false;updLeanKeys();} else if(LEANR_KEYS[k]){leanKeyR=false;updLeanKeys();} else if(k===trickKey){ trickHeld=false; trickKey=''; } });
 addEventListener('mousedown',e=>{ const p=ptFromEvent(e),z=pointerDown(p);
   if(ctrlScheme==='gestures'){ if(z==='ctrl'){ down=true; ctrlId='mouse'; ctrlOX=p.x; leanX=0; } }
   else if(z==='gas'||z==='brake'||z==='leanL'||z==='leanR'){ activeTouches['mouse']=z; recompute(); } });
 addEventListener('mousemove',e=>{ if(ctrlScheme==='gestures'&&ctrlId==='mouse'){ const p=ptFromEvent(e); leanX=clamp((p.x-ctrlOX)/LEANRANGE,-1,1); } });
 addEventListener('mouseup',()=>{ if(ctrlScheme==='gestures'){ if(ctrlId==='mouse')ctrlId=null; down=false; leanX=0; brake=false; } else { delete activeTouches['mouse']; recompute(); } });
-addEventListener('touchstart',e=>{ for(const tch of e.changedTouches){ const r=cv.getBoundingClientRect(),p={x:tch.clientX-r.left,y:tch.clientY-r.top},z=pointerDown(p); touchLowY[tch.identifier]=p.y;
+addEventListener('touchstart',e=>{ for(const tch of e.changedTouches){ const r=cv.getBoundingClientRect(),p={x:tch.clientX-r.left,y:tch.clientY-r.top},z=pointerDown(p); touchLowY[tch.identifier]=p.y; touchSX[tch.identifier]=p.x; touchSY[tch.identifier]=p.y;   /* b158: старт-точка для трюк-свайпа */
     if(ctrlScheme==='gestures'){ if(z==='ctrl'){ if(ctrlId===null){ ctrlId=tch.identifier; ctrlOX=p.x; leanX=0; } down=true; } }   // hold anywhere = gas; first finger = the lean stick
     else if(z==='gas'||z==='brake'||z==='leanL'||z==='leanR'){ activeTouches[tch.identifier]=z; recompute(); } }   // button schemes: a finger holds a control button
   e.preventDefault(); },{passive:false});
-addEventListener('touchmove',e=>{ if(ctrlScheme==='gestures'){ for(const tch of e.changedTouches){ const r=cv.getBoundingClientRect(), cx=tch.clientX-r.left, cy=tch.clientY-r.top;
-    if(touchLowY[tch.identifier]!==undefined){ if(cy>touchLowY[tch.identifier]) touchLowY[tch.identifier]=cy; else if(touchLowY[tch.identifier]-cy>TUNE.swipeJump){ requestJump(); touchLowY[tch.identifier]=cy; } }   // swipe up = jump (TUNE.swipeJump px — lower = registers faster)
-    if(tch.identifier===ctrlId){ leanX=clamp((cx-ctrlOX)/LEANRANGE,-1,1); } } }   // drag L/R = analog lean (gestures only; buttons are held)
+addEventListener('touchmove',e=>{ for(const tch of e.changedTouches){ const r=cv.getBoundingClientRect(), cx=tch.clientX-r.left, cy=tch.clientY-r.top, id=tch.identifier;
+    if(ctrlScheme==='gestures'){
+      if(touchLowY[id]!==undefined){ if(cy>touchLowY[id]) touchLowY[id]=cy; else if(touchLowY[id]-cy>TUNE.swipeJump && bike && bike.onG){ requestJump(); touchLowY[id]=cy; } }   // swipe up = jump ТОЛЬКО с земли (b158: в воздухе свайп-вверх = ЦУНАМИ, не буфер прыжка)
+      if(id===ctrlId){ leanX=clamp((cx-ctrlOX)/LEANRANGE,-1,1); } }
+    if(!trick && screen==='play' && bike && !bike.onG && airT>3 && activeTouches[id]===undefined && id!==ctrlId && touchSX[id]!==undefined){   // b158 ТРЮК-СВАЙП (любая схема): свободный палец, свайп в полёте = трюк; ДЕРЖИШЬ палец = держишь позу
+      const dx=cx-touchSX[id], dy=cy-touchSY[id];
+      if(Math.hypot(dx,dy)>26){ const idT=Math.abs(dy)>Math.abs(dx) ? (dy<0?2:3) : (dx<0?1:4); if(startTrick(idT)) trickTouch=id; } } }
   e.preventDefault(); },{passive:false});
-addEventListener('touchend',e=>{ for(const tch of e.changedTouches){ delete touchLowY[tch.identifier];
+addEventListener('touchend',e=>{ for(const tch of e.changedTouches){ delete touchLowY[tch.identifier]; delete touchSX[tch.identifier]; delete touchSY[tch.identifier];
+    if(tch.identifier===trickTouch){ trickHeld=false; trickTouch=-1; }   // b158: отпустил трюк-палец → райдер возвращается в седло
     if(ctrlScheme==='gestures'){ if(tch.identifier===ctrlId){ ctrlId=null; leanX=0; } }
     else if(activeTouches[tch.identifier]){ delete activeTouches[tch.identifier]; recompute(); } }
   if(ctrlScheme==='gestures') down=(ctrlId!==null); e.preventDefault(); },{passive:false});
-addEventListener('touchcancel',e=>{ for(const tch of e.changedTouches){ delete touchLowY[tch.identifier];
+addEventListener('touchcancel',e=>{ for(const tch of e.changedTouches){ delete touchLowY[tch.identifier]; delete touchSX[tch.identifier]; delete touchSY[tch.identifier];
+    if(tch.identifier===trickTouch){ trickHeld=false; trickTouch=-1; }
     if(ctrlScheme==='gestures'){ if(tch.identifier===ctrlId){ ctrlId=null; leanX=0; } }
     else if(activeTouches[tch.identifier]){ delete activeTouches[tch.identifier]; recompute(); } }
   if(ctrlScheme==='gestures') down=(ctrlId!==null); },{passive:false});
@@ -866,6 +876,8 @@ function rigidStep(){
   const thr=bike.thr;
   const ci0=Math.floor(bike.x/STEP), onMud=!!(terr[ci0]&&terr[ci0].mud);
   const dRS=bike.rShift-(bike._pRS===undefined?bike.rShift:bike._pRS); bike._pRS=bike.rShift;   // b153: скорость переноса веса за кадр (для рывка телом)
+  const poseI=1+(trick===1||trick===2? 0.45 : trick===3? -0.14 : 0)*trickMix;   // b158 ФИЗИКА ФИГУРИСТКИ: вытянутая поза (СУПЕРМЕН/ЦУНАМИ) = +45% момента инерции, группировка (COFFIN) = −14%
+  { const _pp=bike._poseI||1; if(Math.abs(_pp-poseI)>1e-4){ bike.angV*=_pp/poseI; } bike._poseI=poseI; }   // сохранение углового момента L=I·ω: вытянулся В флипе → вращение ЗАМЕДЛИЛОСЬ (спасение от перекрута), сгруппировался → ускорилось. Трюки = ИНСТРУМЕНТ управления флипом, не только зрелище
   { const _wT=(bike.onG && bike.rShift<-0.05 && (down||Math.abs(bike.vx)>0.8)) ? clamp(-bike.rShift,0,1) : 0;
     wheelieAim += clamp(_wT-wheelieAim, -R.wheelieRamp*1.7, R.wheelieRamp); }   // b153 v2: wheelieAim = ИНДИКАТОР вилли-намерения 0..1 (для капа темпа/награды/вилли≠турбо) — целевого угла НЕТ, угол живёт от газа/тормоза/веса
   let onGround=false, spun=false;
@@ -907,7 +919,7 @@ function rigidStep(){
       if(rp<-R.loopLimit)tq+=(-R.loopLimit-rp)*R.antiLoop*R.inertia; else if(rp>R.loopLimit)tq+=(R.loopLimit-rp)*R.antiLoop*R.inertia; }   // b83: ВЕРНУЛ прощающий anti-loop (аркада)
     bike.vx+=(fx/R.mass)*sdt; bike.vy+=(fy/R.mass)*sdt;
     bike.x+=bike.vx*sdt; bike.y+=bike.vy*sdt;
-    bike.angV+=(tq/R.inertia)*sdt; bike.ang+=bike.angV*sdt;
+    bike.angV+=(tq/(R.inertia*poseI))*sdt; bike.ang+=bike.angV*sdt;   // b158: инерция позы — вытянутый райдер медленнее реагирует на моменты
   }
   bike.vx*=onGround?R.rollDrag:R.airDrag;                  // drag once per frame (speed ceiling)
   if(onGround && wheelieAim>0.03){ const _fc=Math.cos(bike.ang),_fs=Math.sin(bike.ang); if(((bike.y+R.wb*_fs+R.oy*_fc+R.wr)-terrainAt(bike.x+R.wb*_fc-R.oy*_fs).y)<=0) bike.vx-=bike.vx*R.rollResist; }   // b147: ВИЛЛИ ≠ ТУРБО — с поднятым передним качение падало вдвое → вилли давал ×2.3 скорости (degenerate: ехать на заднем всегда выгодно, сим). Противовес причинный: вертикальная поза/баланс съедают эквивалент качения переднего. Вилли ≈ скорость-нейтрален (бонус трекшена на заднем остаётся)
@@ -1018,6 +1030,7 @@ function update(){
     airT++;
     if(airT===14) tut('air','✦ В ВОЗДУХЕ: ↓ НОС ВНИЗ К СКЛОНУ ДЛЯ РОВНОЙ ПОСАДКИ');
     if(airT===10 && terr[ci0-2] && (terr[ci0-2].ramp||terr[ci0-1]&&terr[ci0-1].ramp)) tut('flip3','🔄 В ПОЛЁТЕ: НАЖМИ НОС↑ = бросок в БЭКФЛИП · ОТПУСТИ = стоп-вращение');   // b153: импульсная модель — бросок в полёте задаёт вращение, отпускание гасит
+    if(airT===20 && trickAir && !trick) tut('trick1','🤸 СВАЙП свободным пальцем В ПОЛЁТЕ = ТРЮК · ДЕРЖИ! отпусти до земли');   // b158: учим трюкам на большом полёте
     if(trickAir){ const _th=terrainAt(bike.x).y-(bike.y+DY);   // b150 ТРИК-КАМЕРА: взлёт/апекс с трамплина = зум К БАЙКУ (флип читается кинематографично), к земле — плавный отъезд (посадка в кадре)
       if(airT>6 && (bike.vy<2 || _th>130)) trickZoom=Math.min(1,trickZoom+0.14); else trickZoom=Math.max(0,trickZoom-0.12);
       if(trickAir===1 && airT>12 && Math.abs(bike.vy)<1.6 && Math.abs(bike.angV)>0.13){ slowmo=Math.max(slowmo,14); trickAir=2; } }   // слоумо на АПЕКСЕ: только реальный полёт (airT>12 — b154: короткий подскок давал «блип»-замедление, читалось лагом) + только если реально крутишь, раз за полёт
@@ -1031,7 +1044,7 @@ function update(){
   else if(!wasG && grounded){                                          // just landed
     jumpGrace=0; trickAir=0; riderSquat=Math.min(1, airT/26);          // jump arc over; b150: трик-камера завершена; b155: присед-амортизация ∝ высоте полёта
     let diff=Math.abs(rel); lastLandDiff=diff;
-    if(airT>14 && (diff > RB.crashAngle + 0.12*upgLvl('grip') + 0.10*upgLvl('susp') + Math.max(0,(BK().grip-1.40))*0.4 || Math.abs(bike.angV) > RB.spinCrash + 0.03*upgLvl('grip'))){ wipeout('crash'); }   // b88: ПОДВЕСКА расширяет конус прощения посадки (большие полёты приземляются мягче/безопаснее)   // b72 СКИЛЛ-БИТ (Trials): land too far off wheels-down OR still SPINNING fast = CRASH (botched/over-rotated flip costs). СЦЕПЛЕНИЕ upgrade + grippy bike widen tolerance (interconnected). Tune RB.crashAngle/spinCrash by hand
+    if(airT>14 && (diff > RB.crashAngle + 0.12*upgLvl('grip') + 0.10*upgLvl('susp') + Math.max(0,(BK().grip-1.40))*0.4 || Math.abs(bike.angV) > RB.spinCrash + 0.03*upgLvl('grip') || (trick&&trickMix>0.5))){ wipeout('crash'); if(trick&&trickMix>0.5)popText('💥 В ПОЗЕ ОБ ЗЕМЛЮ'); }   // b158: посадка НЕ в седле (trickMix>0.5) = краш — отпускай трюк заранее (real-but-forgiving: частичный возврат ниже = лишь «коряво»)   // b88: ПОДВЕСКА расширяет конус прощения посадки (большие полёты приземляются мягче/безопаснее)   // b72 СКИЛЛ-БИТ (Trials): land too far off wheels-down OR still SPINNING fast = CRASH (botched/over-rotated flip costs). СЦЕПЛЕНИЕ upgrade + grippy bike widen tolerance (interconnected). Tune RB.crashAngle/spinCrash by hand
     else { sfxLand(clamp(airT/38,0,1));
       // b131: PLANT THE LANDING — settle the touchdown pitch toward wheels-down vs the slope. This was the b65 intent but got LOST when physics moved to rigidStep (b68 only damped angV, NOT the angle — the stale comment claimed the rigid body settles it, but sim proved it does NOT): a pitched touchdown (nose 0.5–1.3 rad up) rode REARED and bled speed frame-after-frame, never re-accelerating = the user's "залипает при приземлении" / "прилип к трассе". Fires ONLY on a real-air, non-crash landing (airT>10, crash already rejected above) when the rider is NOT holding a lean (|rShift|<0.4 → an intentional wheelie/flip-hold is preserved; a completed flip already scored its air rotation, so settling the residual lands it clean). rel is the normalized pitch-vs-slope → moving ang along it takes the short path even after multi-flips (bike.ang accumulates, never normalized).
       if(airT>10 && Math.abs(bike.rShift)<0.4){ bike.ang -= rel*0.38; bike.angV += -rel*0.10; rel*=0.62; }   // b138: ПЛАВНЕЕ (юзер: посадка резкая) — снап 0.55→0.38 (мягче за кадр) + доводка УГЛОВОЙ СКОРОСТЬЮ (доворачивается за пару кадров, не телепорт) → планирует без залипания, но без рывка. rel re-синк для loop/endo-чеков ниже
@@ -1041,8 +1054,12 @@ function update(){
       else if(diff<0.16 && airT>10){ coins+=2; floatPop(bike.x,bike.y-34,'CLEAN +$2','#aef0ff'); }
       if(flipCount){ flipsTotal+=flipCount; mult+=flipCount*0.6; boost=Math.min(1,(boost||0)+0.22*flipCount); multPulse=1; const gain=flipCount*2*mult; coins+=gain; popText('🔄 САЛЬТО ×'+flipCount+'   +$'+Math.round(gain)); shake=9; hitstop=4; gflash=0.7; sfxFlipCrescendo(flipCount); }   // b91: ФЛИП = реальный профит ◆ (× комбо) — не мёртвый $
       if(terr[ci0]&&terr[ci0].fzone&&airT>14){ const fb=6+Math.round(airT*0.25); coins+=fb; mult+=0.5; multPulse=1; popText('✨ FLOW  +$'+fb); floatPop(bike.x,bike.y-40,'+$'+fb,'#7dffc8'); gflash=Math.max(gflash,0.5); sfxNear(); }   // b156 FLOW: сел в светящуюся зону на посадочном спуске = идеальная линия (бонус ∝ высоте полёта, комбо растёт) — учит долетать до спуска, как в мотокроссе
+      if(trick && trickT>8){ const tp=Math.round(trickT*0.20*(1+0.6*flipCount)*mult*0.5+3);   // b158: очки трюка = удержание × (комбо с флипом) × полкомбо
+        if(trickMix>0.16){ coins+=tp*0.5; popText('😬 КОРЯВО... '+TRICK_NAMES[trick]+'  +$'+Math.round(tp*0.5)); shake=6; }   // не успел толком вернуться — полштрафа
+        else { coins+=tp; mult+=0.4; multPulse=1; popText('🤸 '+(flipCount?'БЭКФЛИП ':'')+TRICK_NAMES[trick]+'!  +$'+tp); floatPop(bike.x,bike.y-52,'+$'+tp,'#ffd678'); gflash=Math.max(gflash,0.7); shake=Math.max(shake,8); sfxRankUp(); buzz([20,40,20]); } }
       if((flipCount>=2 || airT>40) && diff<0.5){ const eb=5+flipCount*2; coins+=eb; slowmo=Math.max(slowmo,16); shake=Math.max(shake,13); gflash=0.95; flash=Math.max(flash,0.3); popText('🔥 EPIC'+(flipCount>=2?' ×'+flipCount:'')+'  +◆'+eb); floatPop(bike.x,bike.y-46,'+◆'+eb,'#ffe66a'); for(let z=0;z<22;z++)parts.push({x:bike.x,y:bike.y-10,vx:(Math.random()-0.5)*9,vy:-Math.random()*7-1,life:1,gold:1,r:Math.random()*3+1.5}); sfxRankUp(); buzz([30,50,30,90]); }   // b90 ЭПИК-ЛЕНДИНГ (slow-mo+взрыв+фанфара). b91: даёт РЕАЛЬНЫЙ профит ◆ (был только визуал)
       nearMissed=false; airT=0; flipCount=0; flipAcc=0; }
+    if(trick){ trick=0; trickMix=0; trickHeld=false; trickT=0; trickTouch=-1; trickKey=''; }   // b158: посадка закрывает трюк в любом исходе
   }
   // loop-out / endo: over-rotate while grounded = crash (the GD skill — too much gas on a climb loops you backward)
   if(grounded && rel<-0.45 && dist>25) tut('climb','▲ КРУТО? ОТПУСТИ ГАЗ — НЕ ОПРОКИНЕШЬСЯ');   // teach feathering before the first loop-out
@@ -1121,6 +1138,9 @@ function update(){
   camAir = lerp(camAir, clamp(_airH/280,0,1), _airH>camAir*280?0.25:0.08);   // rise fast into big air, ease out smoothly
   if(bike.onG){ trickZoom=Math.max(0,trickZoom-0.15); trickGnd++; if(trickGnd>24)trickAir=0; } else trickGnd=0;   // b150: на земле зум отпускает; trickAir НЕ гасим мгновенно (кик срабатывает на кромке ещё на земле, за 1-2 кадра до отрыва — гасился в тот же кадр, сим), только по таймауту/посадке
   riderAirB=lerp(riderAirB, bike.onG?0:1, 0.14); riderSquat=Math.max(0,riderSquat-0.09);   // b155: поза — в полёте привстаёт, присед посадки затухает (ставится в just-landed)
+  if(trick){ trickMix=clamp(trickMix + (trickHeld&&!bike.onG? 0.12 : -0.15), 0, 1);   // b158: поза перетекает (вход ~8к, возврат ~7к); держишь = держишь
+    if(trickMix>0.6 && !bike.onG) trickT++;
+    if(!trickHeld && trickMix<=0.01 && bike.onG) { trick=0; trickT=0; } }   // полностью вернулся на земле без посадки-резолва (страховка)
   if(t%12===0){ nearKickX=-1; const _ck=Math.floor(bike.x/STEP); for(let k=_ck+6;k<_ck+42;k++){ const n=terr[k]; if(n&&n.kick){ nearKickX=n.x; break; } } }   // b156: ближайший трамплин впереди (для HUD-указателя)
   cam.x=bike.x-W*0.32; cam.y=lerp(cam.y, bike.y-H*(0.52-camAir*0.10), lerp(TUNE.camFollow,0.45,camAir));   // fast follow on big air so the camera tracks the launch+fall (bike stays framed); zoom-out (draw) widens the view
   for(const p of parts){p.x+=p.vx;p.y+=p.vy;p.vy+=0.12;p.vx*=0.97;p.life-=0.03;} parts=parts.filter(p=>p.life>0);
@@ -1366,7 +1386,7 @@ function draw(){
   if(screen!=='dead'){
     const _rx=lerp(bike._px===undefined?bike.x:bike._px,bike.x,slowLerp), _ry=lerp(bike._py===undefined?bike.y:bike._py,bike.y,slowLerp), _ra=lerp(bike._pa===undefined?bike.ang:bike._pa,bike.ang,slowLerp);   // b154: интерполяция позы в слоумо (slowLerp<1 только в пропущенном кадре)
     ctx.save(); ctx.translate(_rx,_ry); ctx.rotate(_ra); ctx.translate(0,-1);   // seat the TIRE CONTACT on the price line (was +12 → wheels buried ~13px "in the track"); -1 aligns wheel-bottom with the CG-implied ground (bike.y = lineY-DY)
-    drawMachine(BK(), bike.wheel, bike.rShift, lean, down&&bike.onG, boosting, riderAirB, riderSquat);   // b109: спрайт вынесен в drawMachine (реюз на экране БАЙКИ); b155: + динамика позы (полёт/присед)
+    drawMachine(BK(), bike.wheel, bike.rShift, lean, down&&bike.onG, boosting, riderAirB, riderSquat, trick, trickMix);   // b109: спрайт вынесен в drawMachine (реюз на экране БАЙКИ); b155: + динамика позы; b158: + FMX-трюк
     ctx.restore();
   }
   ctx.restore(); ctx.restore();   // world translate + camera zoom   // b104: убрал красную ликв-линию (заменено плечо→скорость волны)
@@ -1591,7 +1611,7 @@ function panel(x,y,w,h,line,fill){ ctx.fillStyle=fill||'rgba(16,18,34,0.5)'; ctx
 function ik2(ax,ay,tx,ty,l1,l2,dir){ let dx=tx-ax,dy=ty-ay,d=Math.hypot(dx,dy); const m=l1+l2-0.4; if(d>m){ dx*=m/d; dy*=m/d; tx=ax+dx; ty=ay+dy; d=m; } if(d<1e-4)d=1e-4;
   const a=(l1*l1-l2*l2+d*d)/(2*d), h=Math.sqrt(Math.max(0,l1*l1-a*a)), ux=dx/d, uy=dy/d;
   return [ax+ux*a-uy*h*dir, ay+uy*a+ux*h*dir, tx, ty]; }   // b155: 2-сегментный IK (плечо→локоть→кисть / бедро→колено→стопа): dir = сторона сгиба. Фундамент поз и FMX-трюков
-function drawMachine(B,wheelv,rShiftv,leanv,roost,boostv,dynAir,dynSquat){   // b109: спрайт байка (реюз: живой рендер + превью БАЙКИ). b155: dynAir 0..1 = стойка в воздухе, dynSquat 0..1 = присед-амортизация посадки (превью не передаёт = 0). ctx уже сдвинут/повёрнут в точку байка
+function drawMachine(B,wheelv,rShiftv,leanv,roost,boostv,dynAir,dynSquat,tkId,tkMix){   // b109: спрайт байка (реюз: живой рендер + превью БАЙКИ). b155: dynAir/dynSquat = стойка в воздухе/присед посадки. b158: tkId/tkMix = FMX-трюк-поза (превью не передаёт = 0). ctx уже сдвинут/повёрнут в точку байка
     // contact shadow on the ground
     ctx.fillStyle='rgba(0,0,0,0.4)'; ctx.beginPath(); ctx.ellipse(0,29,30,4.5,0,0,7); ctx.fill();
     // subtle ground underglow
@@ -1673,11 +1693,19 @@ function drawMachine(B,wheelv,rShiftv,leanv,roost,boostv,dynAir,dynSquat){   // 
       : (TY==='scooter'||TY==='moped') ? {px:-9,py:-9,ta:0.06,bx:19,by:-15,f1:[-7,7],f2:[-3.5,7],l1:8.6,l2:9.2}
       : TY==='sport' ? {px:-6,py:-6.5,ta:0.78,bx:22,by:-11,f1:[-7,8],f2:[-3.5,8],l1:8.6,l2:9.2}
       : {px:-6,py:-8.5,ta:0.34,bx:21,by:-18,f1:[-2,8],f2:[1.5,8],l1:9,l2:9.6};   // dirt: MX-стойка, колено гнётся (таз↓/подножка↑ — расстояние < длины ног, иначе IK тянет струну)
-    const px=PS.px+(rShiftv||0)*TUNE.riderShiftPx-2*dA, py=PS.py-4*dA+4.2*dS, ta=PS.ta-0.10*dA+0.07*dS;
-    const shx=px+Math.sin(ta)*13, shy=py-Math.cos(ta)*13;
+    let px=PS.px+(rShiftv||0)*TUNE.riderShiftPx-2*dA, py=PS.py-4*dA+4.2*dS, ta=PS.ta-0.10*dA+0.07*dS, hbx=PS.bx, hby=PS.by;
     let f1,f2; if(PS.pedal){ f1=[Math.cos(wheelv)*4.6, 15+Math.sin(wheelv)*4.6]; f2=[Math.cos(wheelv+3.14)*4.6, 15+Math.sin(wheelv+3.14)*4.6]; } else { f1=PS.f1; f2=PS.f2; }
+    if(tkId&&tkMix>0.01){ const m=tkMix;   // b158 FMX-ПОЗЫ: цели скелета per трюк, бленд по trickMix (перетекание, не телепорт)
+      const TP = tkId===1? {px:-15,py:-15,ta:1.32,f1:[-27,-14],f2:[-24,-11],hx:PS.bx,hy:PS.by}      // СУПЕРМЕН: тело горизонтально назад, ноги вытянуты (IK сам выпрямит — цели дальше длины)
+        : tkId===2? {px:3,py:-24,ta:2.35,f1:[-5,-32],f2:[-1,-30],hx:PS.bx,hy:PS.by}                  // ЦУНАМИ: стойка на руле, корпус вертикально, ноги вверх
+        : tkId===3? {px:-8,py:-6,ta:-1.42,f1:[16,-14],f2:[18.5,-12],hx:-20,hy:-9}                    // COFFIN: лёг на спину вдоль байка, ноги на руль, руки за голову
+        : {px:PS.px,py:PS.py-1,ta:PS.ta-0.22,f1:f1,f2:f2,hx:8,hy:-31};                               // NO HANDER: руки вверх, корпус чуть назад
+      px=lerp(px,TP.px,m); py=lerp(py,TP.py,m); ta=lerp(ta,TP.ta,m);
+      f1=[lerp(f1[0],TP.f1[0],m),lerp(f1[1],TP.f1[1],m)]; f2=[lerp(f2[0],TP.f2[0],m),lerp(f2[1],TP.f2[1],m)];
+      hbx=lerp(hbx,TP.hx,m); hby=lerp(hby,TP.hy,m); }
+    const shx=px+Math.sin(ta)*13, shy=py-Math.cos(ta)*13;
     const L1=ik2(px,py,f1[0],f1[1],PS.l1,PS.l2,-1), L2=ik2(px-1.5,py,f2[0]-1.5,f2[1],PS.l1,PS.l2,-1);
-    const A1=ik2(shx,shy,PS.bx,PS.by,7.6,8.2,1), A2=ik2(shx-1.5,shy,PS.bx-2.5,PS.by,7.6,8.2,1);
+    const A1=ik2(shx,shy,hbx,hby,7.6,8.2,1), A2=ik2(shx-1.5,shy,hbx-2.5,hby,7.6,8.2,1);
     ctx.lineCap='round';
     ctx.strokeStyle='rgba(6,7,12,0.85)'; ctx.lineWidth=4.6; ctx.beginPath(); ctx.moveTo(px-1.5,py); ctx.lineTo(L2[0],L2[1]); ctx.lineTo(L2[2],L2[3]); ctx.stroke();   // дальняя нога (глубина)
     ctx.strokeStyle='rgba('+B.rider+',0.4)'; ctx.lineWidth=3.2; ctx.beginPath(); ctx.moveTo(shx-1.5,shy); ctx.lineTo(A2[0],A2[1]); ctx.lineTo(A2[2],A2[3]); ctx.stroke();   // дальняя рука
