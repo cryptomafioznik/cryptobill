@@ -11,12 +11,16 @@
   html,body{margin:0;height:100%;background:#0a0a1a;overflow:hidden;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;
     cursor:pointer;touch-action:none;-webkit-user-select:none;user-select:none;-webkit-tap-highlight-color:transparent;}
   canvas{display:block;}
-  #hud{position:fixed;top:14px;left:16px;color:#cdbef0;font-size:12px;letter-spacing:.14em;line-height:1.5;pointer-events:none;text-shadow:0 1px 6px rgba(0,0,0,.5);}
+  #hud{position:fixed;top:18px;left:12px;color:#cdbef0;font-size:12px;letter-spacing:.14em;line-height:1.5;pointer-events:none;text-shadow:0 1px 6px rgba(0,0,0,.5);
+    background:rgba(9,14,28,.48);border:1px solid rgba(150,180,230,.16);border-radius:12px;padding:7px 12px 8px;
+    -webkit-backdrop-filter:blur(9px);backdrop-filter:blur(9px);box-shadow:inset 0 1px 0 rgba(255,255,255,.06);}   /* b169: стекло (курс C) */
   #hud .tk{color:#ffe6a8;font-size:11px;letter-spacing:.22em;opacity:.85;}
   #hud .pnl{font-size:27px;font-weight:700;letter-spacing:.04em;line-height:1.15;color:#6effc0;text-shadow:0 2px 12px rgba(0,0,0,.55);transition:transform .13s cubic-bezier(.34,1.7,.5,1);transform-origin:left center;will-change:transform;}
   #hud .sub{font-size:12px;letter-spacing:.14em;margin-top:1px;} #hud b{color:#fff;}
   #hud .up{color:#6effc0;} #hud .dn{color:#ff7a8a;}
-  #spd{position:fixed;top:48px;right:16px;color:#bfe8ff;font-size:12px;letter-spacing:.14em;text-align:right;pointer-events:none;text-shadow:0 1px 6px rgba(0,0,0,.5);transition:opacity .2s;}
+  #spd{position:fixed;top:64px;right:12px;color:#bfe8ff;font-size:12px;letter-spacing:.14em;text-align:right;pointer-events:none;text-shadow:0 1px 6px rgba(0,0,0,.5);transition:opacity .2s;
+    background:rgba(9,14,28,.48);border:1px solid rgba(150,180,230,.16);border-radius:10px;padding:5px 10px 6px;
+    -webkit-backdrop-filter:blur(9px);backdrop-filter:blur(9px);box-shadow:inset 0 1px 0 rgba(255,255,255,.06);}   /* b169: стекло */
   #hud,#hint{transition:opacity .2s;}
   #hud,#spd,#hint{opacity:0;}
   #hint{position:fixed;bottom:14px;left:0;width:100%;text-align:center;color:#7a6f9a;font-size:11px;letter-spacing:.16em;pointer-events:none;}
@@ -52,7 +56,7 @@ function lerp(a,b,t){return a+(b-a)*t;} function clamp(v,a,b){return v<a?a:v>b?b
 // false → full game everywhere. Single switch. Systems are GATED, never deleted.
 const CORE_TEST_MODE = false;   // b70: META LIVE — building the progression spine (upgrades/bikes with teeth, career, economy) on the confirmed rigid-body core
 // build stamp — bump on every change so a phone refresh can confirm it loaded fresh code (cache!)
-const BUILD = '2026-07-02 · b168';
+const BUILD = '2026-07-02 · b169';
 
 // ---------- procedural market terrain ----------
 // height map sampled every STEP px; generated forward as we ride. Market character:
@@ -648,6 +652,9 @@ const BIOMES=[
   {name:'ОТСКОК',        sky:[[12,28,40],[20,70,90],[64,172,168],[150,232,200]],  line:[192,255,236], ridge:[30,76,74],  wave:1.0},
 ];   // b130: 5→8 биомов (рыночные эпохи) — длиннее визуальное разнообразие в эндлессе
 function lerp3(a,b,t){ return [Math.round(lerp(a[0],b[0],t)),Math.round(lerp(a[1],b[1],t)),Math.round(lerp(a[2],b[2],t))]; }
+// b169 ЕДИНЫЙ ФИЛЬТР БИОМОВ (курс C «дорогой график»): все 8 эпох приводятся к сине-чёрной базе — верхние стопы сильнее (общая глубокая тьма), горизонт слабее (идентичность эпохи остаётся). Один knob = откат/сила.
+{ const SKY_BASE=[[3,6,14],[8,13,26],[16,24,44],[26,34,56]], SKY_UNIFY=[0.62,0.45,0.30,0.26];
+  for(const B of BIOMES) B.sky=B.sky.map(function(c,i){ return lerp3(c,SKY_BASE[i],SKY_UNIFY[i]); }); }
 function saveMeta(){ try{localStorage.setItem('cipher_bank',bank);localStorage.setItem('cipher_owned',JSON.stringify(owned));localStorage.setItem('cipher_bike',selBike);localStorage.setItem('cipher_muted',muted?'1':'0');}catch(e){} }
 const MISSION_POOL=[
   {id:'dist', txt:v=>'Проехать '+v+'m',                   gen:()=>300+((Math.random()*6)|0)*100,   val:s=>s.dist,    rew:40},
@@ -1729,7 +1736,11 @@ function draw(){
   drawMenus();
   if(cam){ cam.x=_camRX; cam.y=_camRY; }   // b157: вернуть реальную камеру после слоумо-интерполяции (физика её не видела)
 }
-function panel(x,y,w,h,line,fill){ ctx.fillStyle=fill||'rgba(16,18,34,0.5)'; ctx.fillRect(x,y,w,h); ctx.strokeStyle=line; ctx.lineWidth=1.5; ctx.strokeRect(x,y,w,h); }
+function panel(x,y,w,h,line,fill){ const r=Math.min(12,h*0.3);   // b169 СТЕКЛО: скругление + hairline-кант + внутренний верхний блик (одна функция = все панели меню в языке C)
+  ctx.beginPath(); if(ctx.roundRect)ctx.roundRect(x,y,w,h,r); else ctx.rect(x,y,w,h);
+  ctx.fillStyle=fill||'rgba(13,19,36,0.62)'; ctx.fill();
+  ctx.strokeStyle=line; ctx.lineWidth=1.2; ctx.stroke();
+  ctx.strokeStyle='rgba(255,255,255,0.07)'; ctx.lineWidth=1; ctx.beginPath(); ctx.moveTo(x+r,y+1.5); ctx.lineTo(x+w-r,y+1.5); ctx.stroke(); }
 function ik2(ax,ay,tx,ty,l1,l2,dir){ let dx=tx-ax,dy=ty-ay,d=Math.hypot(dx,dy); const m=l1+l2-0.4; if(d>m){ dx*=m/d; dy*=m/d; tx=ax+dx; ty=ay+dy; d=m; } if(d<1e-4)d=1e-4;
   const a=(l1*l1-l2*l2+d*d)/(2*d), h=Math.sqrt(Math.max(0,l1*l1-a*a)), ux=dx/d, uy=dy/d;
   return [ax+ux*a-uy*h*dir, ay+uy*a+ux*h*dir, tx, ty]; }   // b155: 2-сегментный IK (плечо→локоть→кисть / бедро→колено→стопа): dir = сторона сгиба. Фундамент поз и FMX-трюков
