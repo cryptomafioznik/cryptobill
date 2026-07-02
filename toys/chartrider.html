@@ -52,7 +52,7 @@ function lerp(a,b,t){return a+(b-a)*t;} function clamp(v,a,b){return v<a?a:v>b?b
 // false → full game everywhere. Single switch. Systems are GATED, never deleted.
 const CORE_TEST_MODE = false;   // b70: META LIVE — building the progression spine (upgrades/bikes with teeth, career, economy) on the confirmed rigid-body core
 // build stamp — bump on every change so a phone refresh can confirm it loaded fresh code (cache!)
-const BUILD = '2026-07-02 · b164';
+const BUILD = '2026-07-02 · b165';
 
 // ---------- procedural market terrain ----------
 // height map sampled every STEP px; generated forward as we ride. Market character:
@@ -1559,15 +1559,14 @@ function draw(){
     ctx.save(); const bigW=cashedOut&&gain>=400; if(bigW){ctx.shadowColor='#ffd678';ctx.shadowBlur=20;} ctx.fillStyle=cashedOut?(isBest?'#ffd678':'#6effc0'):'#ff7a8a'; const gf=cashedOut?Math.min(58,42+Math.sqrt(Math.max(0,gain))*0.6):42; ctx.font='800 '+Math.round(gf)+'px ui-monospace,monospace'; ctx.fillText((cashedOut?'$ +':'$ ')+gain.toLocaleString('en-US'),W/2,H*0.34+54); ctx.shadowBlur=0; ctx.restore();   // b122: число профита растёт+светится ∝ размеру (вау-кадр)
     // b132: ДЕКЛАТТЕР экрана смерти (юзер: «много мелкого непонятного текста / текст вылазит»). Старая ОДНА строка статов вылазила за края → разбита надвое: A = дистанция·рекорд (крупно), B = плечо·комбо (тускло). «BEST $0» убран (сбивал с толку при 0). Нижняя строка: убран дубль «ЛИКВИДИРОВАН» (он уже в заголовке) → просто «осталось $X».
     ctx.fillStyle=newDepth?'#9ff0c8':'#cdbef0';ctx.font='800 15px ui-monospace,monospace';ctx.fillText(dist+'м  ·  рекорд '+(best||0)+'м'+(newDepth?'  ★ ГЛУБЖЕ':''),W/2,H*0.34+84);
-    ctx.fillStyle='#8a86a8';ctx.font='600 11px ui-monospace,monospace';ctx.fillText('ПЛЕЧО ×'+leverage+'    ·    макс. комбо ×'+maxMult.toFixed(1),W/2,H*0.34+104);
     ctx.fillStyle=cashedOut?'#9ff0c8':'#ffb0a0';ctx.font='800 15px ui-monospace,monospace';ctx.fillText((cashedOut?'$ '+bank+'  ·  ◆ '+career:'осталось  $ '+bank)+(stakeIncome>0?'  💎+$'+stakeIncome:''),W/2,H*0.34+128);   // b101: убрал дубль «ПРОФИТ ЗАФИКСИРОВАН» (он уже крупно в заголовке)
     if(chalResult){ const md=chalResult.medal; ctx.fillStyle=md>=0?'#ffd678':'#ff9a8a'; ctx.font='800 12px ui-monospace,monospace'; ctx.fillText(md>=0?('🏁 ВЫЗОВ ПРОЙДЕН '+(['🥉','🥈','🥇'][md]||'')+(chalResult.rew>0?'  +◆'+chalResult.rew:'')):'🏁 ВЫЗОВ НЕ ПРОЙДЕН — ещё разок',W/2,H*0.34+150); }   // b118: итог вызова Пути (вместо гир-подсказки)
     else { const tip=deathBy==='wave'?'🛡 качай ЩИТ ОТ ВОЛНЫ — оторвёшься от дампа':(deathBy==='loop'||deathBy==='endo')?'◎ качай СЦЕПЛЕНИЕ — прощает кувырки':deathBy==='crash'?'◎ качай СЦЕПЛЕНИЕ — мягче посадки':'⚙ качай ДВИЖОК — быстрее уедешь'; ctx.fillStyle='#9fd0ea';ctx.font='11px ui-monospace,monospace';ctx.fillText(tip,W/2,H*0.34+150); } }
-    if(gameMode!=='career'){ UI.dshare={x:W/2-94,y:H*0.34+162,w:188,h:36}; const sp=0.55+0.45*Math.sin(t*0.18);   // b93 ВИРАЛЬНОСТЬ: кнопка похвастаться (для тиктоков/чатов)
+    if(gameMode!=='career'){ const _hasClip=clipSupported()&&clipBuf.length>=90; UI.dshare={x:_hasClip?W/2-97:W/2-94,y:H*0.34+156,w:_hasClip?94:188,h:36}; const sp=0.55+0.45*Math.sin(t*0.18);   // b165: ШЕР+КЛИП в ОДНУ строку — клип налезал на МЕНЮ/ГАРАЖ (скрин юзера) + деклаттер
       ctx.fillStyle='rgba(40,30,62,0.88)'; if(ctx.roundRect){ctx.beginPath();ctx.roundRect(UI.dshare.x,UI.dshare.y,188,36,10);ctx.fill();ctx.strokeStyle='rgba(160,140,255,'+sp+')';ctx.lineWidth=2;ctx.stroke();}else ctx.fillRect(UI.dshare.x,UI.dshare.y,188,36);
-      ctx.fillStyle='#d2c2ff';ctx.font='800 14px ui-monospace,monospace';ctx.textAlign='center';ctx.fillText('📤 ПОХВАСТАТЬСЯ',W/2,UI.dshare.y+24);
-      if(clipSupported()&&clipBuf.length>=90){ UI.dclip={x:W/2-94,y:UI.dshare.y+42,w:188,h:34}; ctx.fillStyle='rgba(24,42,58,0.88)'; ctx.beginPath();ctx.roundRect(UI.dclip.x,UI.dclip.y,188,34,10);ctx.fill(); ctx.strokeStyle='rgba(120,210,255,'+sp+')'; ctx.lineWidth=2; ctx.stroke();
-        ctx.fillStyle='#bfe6ff'; ctx.font='800 13px ui-monospace,monospace'; ctx.fillText('📹 КЛИП ПОСЛЕДНИХ СЕКУНД',W/2,UI.dclip.y+22); } else UI.dclip=null;   // b163: реплей-клип для тиктока
+      ctx.fillStyle='#d2c2ff';ctx.font='800 13px ui-monospace,monospace';ctx.textAlign='center';ctx.fillText(_hasClip?'📤 ШЕР':'📤 ПОХВАСТАТЬСЯ',UI.dshare.x+UI.dshare.w/2,UI.dshare.y+24);
+      if(_hasClip){ UI.dclip={x:W/2+3,y:UI.dshare.y,w:94,h:36}; ctx.fillStyle='rgba(24,42,58,0.88)'; ctx.beginPath();ctx.roundRect(UI.dclip.x,UI.dclip.y,94,36,10);ctx.fill(); ctx.strokeStyle='rgba(120,210,255,'+sp+')'; ctx.lineWidth=2; ctx.stroke();
+        ctx.fillStyle='#bfe6ff'; ctx.font='800 13px ui-monospace,monospace'; ctx.fillText('📹 КЛИП',UI.dclip.x+47,UI.dclip.y+24); } else UI.dclip=null;   // b163/165: реплей-клип, компактно рядом с шером
     } else { UI.dshare=null; UI.dclip=null; } }   // b101: убрал «коснись мимо — снова» — налезало на кнопки МЕНЮ/ГАРАЖ; есть явные кнопки
   if(screen==='clip'){ ctx.textAlign='left'; ctx.fillStyle='rgba(255,255,255,0.55)'; ctx.font='800 13px ui-monospace,monospace'; ctx.shadowColor='#2fe6ff'; ctx.shadowBlur=8; ctx.fillText('CHART RUNNER 📈',14,H-16); ctx.shadowBlur=0;
     ctx.fillStyle='rgba(255,80,90,'+(0.5+0.5*Math.sin(t*0.4))+')'; ctx.beginPath(); ctx.arc(W-20,22,5,0,7); ctx.fill(); }   // b163: бренд-водяной знак в клипе + REC-точка
