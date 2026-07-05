@@ -56,7 +56,7 @@ function lerp(a,b,t){return a+(b-a)*t;} function clamp(v,a,b){return v<a?a:v>b?b
 // false → full game everywhere. Single switch. Systems are GATED, never deleted.
 const CORE_TEST_MODE = false;   // b70: META LIVE — building the progression spine (upgrades/bikes with teeth, career, economy) on the confirmed rigid-body core
 // build stamp — bump on every change so a phone refresh can confirm it loaded fresh code (cache!)
-const BUILD = '2026-07-05 · b180';
+const BUILD = '2026-07-05 · b181';
 
 // ---------- procedural market terrain ----------
 // height map sampled every STEP px; generated forward as we ride. Market character:
@@ -324,6 +324,18 @@ function startDaily(){ if(dailyTries()>=3){ menuFx=0.9; menuFxAmt=0; popText('�
   _shortRun=false;   // b177: дейли всегда лонг (одна трасса у всех)
   const t=dailyCoin(); selTicker=t.k; tickerName=t.name+'·ДЕНЬ'; screen='tickerload'; tickerLoadT=0;
   loadDailyCandles().then(d=>{ if(!d){ screen='title'; return; } tickerData=d; trackSource='ticker'; gameMode='endless'; activeChal=null; reset(); dailyMode=true; ghostLoad(); ghostRec=[]; if(ghost)popText('👻 ПРИЗРАК твоей лучшей ($'+ghost.res+') на трассе'); }); }   // b174
+// ---- b181 АЧИВКИ-ТОСТЫ: разовые достижения → стеклянный тост сверху (очередь). Хранение cipher_ach; чекер дешёвый (t%15) ----
+let ach={}, achQ=[], achCur=null, achT=0;
+try{ ach=JSON.parse(localStorage.getItem('cipher_ach')||'{}')||{}; }catch(e){}
+function achv(id,txt){ if(ach[id])return; ach[id]=1; try{localStorage.setItem('cipher_ach',JSON.stringify(ach));}catch(e){} achQ.push(txt); }
+function achFrame(){ if(t%15!==0||screen!=='play')return;   // пассивные триггеры (событийные зовут achv напрямую)
+  if((flipsTotal||0)>=1) achv('flip1','ПЕРВЫЙ ФЛИП');
+  if((flipsTotal||0)>=3) achv('flip3','3 ФЛИПА ЗА ЗАБЕГ');
+  if((dist||0)>=1000)    achv('km1','1000м ЗА ЗАБЕГ');
+  if((maxMult||1)>=5)    achv('combo5','КОМБО ×5');
+  if((trickT||0)>=60)    achv('poser','ПОЗА 1с+ В ВОЗДУХЕ');
+  if((camAir||0)>=0.9)   achv('bigair','ОГРОМНЫЙ ПОЛЁТ');
+  if((bank||0)>=10000)   achv('rich','БАНК $10K'); }
 // ---- b180 ОНБОРДИНГ-МИССИИ: направленная лестница первых заездов (учит петле: едь → фиксируй → флип → доливка → трюк → шорт). Проверка в КОНЦЕ забега, награда = якорь. Пройдены все → система молчит навсегда ----
 const ONB=[
   {txt:'проедь 300м',                              chk:s=>s.dist>=300,  rew:60},
@@ -346,7 +358,8 @@ function dailyResolve(){ if(!dailyMode||_dailyRes)return; _dailyRes=true; const 
   if(dailySt.d!==ds){ const keep=(dailySt.d===dayStrShift(1));   // b178 СТРИК: вчера играл → цепочка растёт, пропустил день → заново
     dailySt={d:ds,tries:0,best:0,streak:keep?(dailySt.streak||0)+1:1};
     const sb=Math.round(25*Math.min(dailySt.streak,14));   // стрик-бонус за ПЕРВУЮ попытку дня ∝ цепочке (кап 14 дн.) — КАЛИБРОВКА РУКАМИ
-    if(sb>0){ bank+=sb; saveMeta(); popText('🔥 СТРИК '+dailySt.streak+' дн. — бонус $'+sb); } }
+    if(sb>0){ bank+=sb; saveMeta(); popText('🔥 СТРИК '+dailySt.streak+' дн. — бонус $'+sb); }
+    if(dailySt.streak>=3)achv('streak3','СТРИК 3 ДНЯ'); }   // b181
   dailySt.tries=(dailySt.tries||0)+1; if(res>(dailySt.best||0))dailySt.best=res;
   try{localStorage.setItem('cipher_daily3',JSON.stringify(dailySt));}catch(e){}
   ghostSave(res); }
@@ -998,7 +1011,7 @@ function pointerDown(p){
       if(!s.id){ delete skinSel[selBike]; saveSkins(); sfxClick(); }
       else if(skinOwned(selBike,s.id)){ skinSel[selBike]=s.id; saveSkins(); sfxClick(); }
       else { const sk=SKINS.find(k=>k.id===s.id);
-        if(owned.indexOf(selBike)>=0 && bank>=sk.cost){ bank-=sk.cost; (skinOwn[selBike]=skinOwn[selBike]||[]).push(s.id); skinSel[selBike]=s.id; saveSkins(); saveMeta(); sfxLev(); }
+        if(owned.indexOf(selBike)>=0 && bank>=sk.cost){ bank-=sk.cost; (skinOwn[selBike]=skinOwn[selBike]||[]).push(s.id); skinSel[selBike]=s.id; saveSkins(); saveMeta(); sfxLev(); achv('drip','ПЕРВЫЙ СКИН'); }
         else { popText(owned.indexOf(selBike)<0?'сначала разблокируй байк':'мало $'); sfxClick(); } }
       return; } }
     return;
@@ -1433,6 +1446,7 @@ function update(){
   dcaTick();    // b173: ДОЛИВКА — каждый метр/монетка докупает позицию по текущей цене
   ghostSnap();  // b174: лог поз для призрака дейли
   if(onbActive()){ if(trick&&trickT>25)_onbTricked=true; if(t%30===0){ const pv=posValue(); if(pv>_onbMaxPos)_onbMaxPos=pv; } }   // b180: стата миссий
+  achFrame();   // b181: пассивные ачивки
   if(t%12===0){ nearKickX=-1; const _ck=Math.floor(bike.x/STEP); for(let k=_ck+6;k<_ck+42;k++){ const n=terr[k]; if(n&&n.kick){ nearKickX=n.x; break; } } }   // b156: ближайший трамплин впереди (для HUD-указателя)
   if(bike.onG && brake && bike.vx>2.5 && t%2===0){ const _st=terrainAt(bike.x-8); skids.push({x:bike.x-8,y:_st.y,a:_st.ang,life:1}); if(skids.length>90)skids.shift();
     if(t-_scrubT>7){ _scrubT=t; sfxScrub(bike.vx); } }   // b160: скид-марки при торможении; b179: + шорох резины
@@ -1484,6 +1498,7 @@ function wipeout(reason){ deathBy=reason||'crash'; screen='dead'; dailyResolve()
     payStaking(); saveProg(); saveMeta(); } }   // b112: ликвидация ест $; ◆-холод не трогает. b114: +стейкинг ◆→$ (камбэк после взрыва)
 function cashOut(){ if(screen!=='play'||gameMode!=='endless'||posValue()<=0||cashedOut||cashCelebT>0)return;   // b91/b173: фиксить если ПОЗИЦИЯ чего-то стоит (тикер = доливка, proc = coins). b71: TAKE PROFIT — the greed↔safety decision. b134: guard от повторного фикса во время праздника
   cashedOut=true; runGems=posValue(); bank+=runGems; payStaking(); deathBy='cashout';   // b89: выплата по ТЕКУЩЕЙ цене; b114: +стейкинг ◆→$; b173: тикер = ДОЛИВКА (маржа+плечо×PnL по средней), proc = старая формула внутри posValue
+  if(leverage>=50)achv('lev50','ФИКС НА ПЛЕЧЕ ×50+'); if(_shortRun&&runGems>0)achv('bear','ЗАРАБОТАЛ НА ПАДЕНИИ');   // b181
   if(runGems>bestPnl){bestPnl=runGems;try{localStorage.setItem('cipher_best_earn',bestPnl);}catch(e){}}   // b87: BEST = лучшая зафиксированная ВЫПЛАТА (◆)
   if(dist>best){best=dist;try{localStorage.setItem('cipher_run_best',best);}catch(e){}}
   // b112: фикс платит в $ (банк); РАНГ растёт через «ВЫВЕСТИ В ХОЛОД» ($→◆), не авто
@@ -1747,6 +1762,15 @@ function draw(){
           ctx.fillStyle='rgba(102,116,142,0.8)'; ctx.fillText(sg[4],tx+sg[1]+sg[3],6); }
         tx+=sw; } tg++; }
       ctx.textBaseline='alphabetic'; } }
+  // ---- b181 ТОСТ АЧИВКИ: стеклянная плашка сверху, слайд+фейд, очередь ----
+  if(!achCur&&achQ.length&&(screen==='play'||screen==='dead')){ achCur=achQ.shift(); achT=170; sfxRankUp(); buzz(20); }
+  if(achCur){ achT--; const k=achT>140?(170-achT)/30:achT<30?achT/30:1;
+    ctx.font='800 13px ui-monospace,monospace'; const tw=Math.min(W-40,ctx.measureText('🏆 '+achCur).width+44);
+    const tx=W/2-tw/2, ty=118-14*(1-k);
+    ctx.save(); ctx.globalAlpha=clamp(k,0,1);
+    panel(tx,ty,tw,40,'rgba(255,214,120,0.75)','rgba(32,27,13,0.82)');
+    ctx.textAlign='center'; ctx.fillStyle='#ffd678'; ctx.fillText('🏆 '+achCur,W/2,ty+25); ctx.textAlign='left';
+    ctx.restore(); if(achT<=0)achCur=null; }
   if(flash>0.01){ctx.fillStyle='rgba(255,90,110,'+(flash*0.4)+')';ctx.fillRect(0,0,W,H);}
   if(gflash>0.01){ctx.fillStyle='rgba(120,255,200,'+(gflash*0.16)+')';ctx.fillRect(0,0,W,H);}
   // danger glow + warning as the dump closes in
