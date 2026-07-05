@@ -56,7 +56,7 @@ function lerp(a,b,t){return a+(b-a)*t;} function clamp(v,a,b){return v<a?a:v>b?b
 // false → full game everywhere. Single switch. Systems are GATED, never deleted.
 const CORE_TEST_MODE = false;   // b70: META LIVE — building the progression spine (upgrades/bikes with teeth, career, economy) on the confirmed rigid-body core
 // build stamp — bump on every change so a phone refresh can confirm it loaded fresh code (cache!)
-const BUILD = '2026-07-05 · b174';
+const BUILD = '2026-07-05 · b175';
 
 // ---------- procedural market terrain ----------
 // height map sampled every STEP px; generated forward as we ride. Market character:
@@ -839,12 +839,55 @@ function reset(){
   document.getElementById('hint').innerHTML=(TOUCH?'<b>удерживай</b> = газ · <b>влево-вправо</b> = наклон · <b>свайп вверх</b> = прыжок':'<b>ПРОБЕЛ</b> газ · <b>←/→</b> наклон · <b>↑</b> прыжок')+' · отпустил — катишься';
 }
 function toTitle(){ reset(); screen='title'; if(!CORE_TEST_MODE){ checkDaily(); loadAllPreviews(); if(!seenHowto) screen='howto'; } }   // b108: превью монет для hero · первый запуск → онбординг learn-by-doing
-function shareRun(){   // b93 ВИРАЛЬНОСТЬ: похвастаться забегом (тикток/чат) — navigator.share, fallback = буфер
+function shareRun(){   // b93 ВИРАЛЬНОСТЬ: похвастаться забегом (тикток/чат) — navigator.share, fallback = буфер; b175: дейли шерится КАРТОЧКОЙ-картинкой (Wordle-петля)
   const url=(location.href.split('?')[0]); const r=RANKS[rankIdx(career)];
   const txt=(dailyMode?('📅 РЫНОК СЕГОДНЯ ('+dailyCoin().name+'): взял $'+dailyBestOf()+' за '+dailyTries()+' попыт. — одна трасса у всех, побей!'):cashedOut?('💎 Зафиксил $'+(runGems||0)+' профита на плече ×'+leverage+' ('+r.e+r.n+')'):('☠ Ликвиднулся на ×'+leverage+', но дошёл '+dist+'м'))+' в CHART RUNNER 📈🏍 Побей мой результат: ';
+  if(dailyMode){ shareDailyCard(txt+url); return; }
   try{ if(navigator.share){ navigator.share({title:'CHART RUNNER',text:txt,url:url}).catch(()=>{}); }
     else if(navigator.clipboard){ navigator.clipboard.writeText(txt+url).then(()=>popText('СКОПИРОВАНО — кидай в чат')).catch(()=>{}); }
     else popText(url); }catch(e){} }
+// ---- b175 ШЕР-КАРТОЧКА ДЕЙЛИ: canvas 1080² в языке C (график дня + результат + попытки + байк) → share картинкой / скачивание ----
+function dailyCardBlob(cb){ try{
+  const S=1080, c=document.createElement('canvas'); c.width=S; c.height=S; const g=c.getContext('2d');
+  const bg=g.createLinearGradient(0,0,0,S); bg.addColorStop(0,'#071021'); bg.addColorStop(0.55,'#040a16'); bg.addColorStop(1,'#02040a');
+  g.fillStyle=bg; g.fillRect(0,0,S,S);
+  g.strokeStyle='rgba(127,212,255,0.06)'; g.lineWidth=2; for(let yy=200;yy<S;yy+=90){ g.beginPath(); g.moveTo(0,yy); g.lineTo(S,yy); g.stroke(); }
+  g.textAlign='left'; g.fillStyle='#e8f0ff'; g.font='800 46px ui-monospace,Menlo,monospace'; g.fillText('CHART RUNNER 📈',64,100);
+  g.fillStyle='#8fa3c8'; g.font='700 30px ui-monospace,Menlo,monospace'; g.fillText('РЫНОК СЕГОДНЯ  ·  '+dailyCoin().name+'  ·  '+dayStrUTC(),64,152);
+  let cs=null; try{ cs=JSON.parse(localStorage.getItem('cipher_dkl_'+dayStrUTC())||'null'); }catch(e){}
+  const gx0=64,gx1=S-64,gy0=230,gy1=630;
+  if(cs&&cs.length>10){ let mn=1e18,mx=-1e18; for(const k of cs){ if(k[2]<mn)mn=k[2]; if(k[1]>mx)mx=k[1]; }
+    const X=i=>gx0+(gx1-gx0)*i/(cs.length-1), Y=p=>gy1-(gy1-gy0)*(p-mn)/Math.max(1e-9,mx-mn);
+    for(let i=0;i<cs.length;i+=4){ const k=cs[i], up=k[3]>=k[0], col=up?'46,230,166':'255,59,92';
+      g.strokeStyle='rgba('+col+',0.30)'; g.lineWidth=3; g.beginPath(); g.moveTo(X(i),Y(k[1])); g.lineTo(X(i),Y(k[2])); g.stroke();
+      const yO=Y(k[0]), yC=Y(k[3]); g.fillStyle='rgba('+col+',0.32)'; g.fillRect(X(i)-6,Math.min(yO,yC),12,Math.max(5,Math.abs(yO-yC))); }
+    g.lineJoin='round'; g.lineCap='round';
+    g.beginPath(); for(let i=0;i<cs.length;i++){ const x=X(i),y=Y(cs[i][3]); if(i)g.lineTo(x,y); else g.moveTo(x,y); }
+    g.strokeStyle='rgba(127,212,255,0.16)'; g.lineWidth=16; g.stroke();
+    g.strokeStyle='rgba(232,244,255,0.95)'; g.lineWidth=4.5; g.stroke(); }
+  const best=dailyBestOf(), tries=dailyTries();
+  g.textAlign='center'; g.fillStyle='#8fa3c8'; g.font='700 32px ui-monospace,Menlo,monospace'; g.fillText('ЗАБАНКОВАНО ЗА ДЕНЬ',S/2,730);
+  g.fillStyle=best>0?'#ffd166':'#ff6b84'; g.font='800 128px ui-monospace,Menlo,monospace';
+  if(best>0){ g.shadowColor='rgba(255,209,102,0.45)'; g.shadowBlur=40; }
+  g.fillText('$'+best.toLocaleString('en-US'),S/2,868); g.shadowBlur=0;
+  for(let i=0;i<3;i++){ g.beginPath(); g.arc(S/2-64+i*64,922,15,0,7); g.fillStyle=i<tries?'rgba(46,230,166,0.95)':'rgba(120,140,180,0.22)'; g.fill(); }
+  try{ const SPR=bikeSprites(BK());
+    g.save(); g.translate(S-196,S-118); g.scale(3.1,3.1);
+    g.save(); g.translate(-27,15.5); g.drawImage(SPR.wr,-SPR.wb,-SPR.wb,SPR.wb*2,SPR.wb*2); g.restore();
+    g.save(); g.translate(27,15.5); g.drawImage(SPR.wf,-SPR.wb,-SPR.wb,SPR.wb*2,SPR.wb*2); g.restore();
+    g.drawImage(SPR.body,-SPR_OX,-SPR_OY,SPR_W,SPR_H); g.restore(); }catch(e){}
+  g.textAlign='left'; g.fillStyle='#e8f0ff'; g.font='800 30px ui-monospace,Menlo,monospace'; g.fillText('одна трасса у всех — ПОБЕЙ',64,S-96);
+  g.fillStyle='rgba(127,212,255,0.85)'; g.font='700 25px ui-monospace,Menlo,monospace'; g.fillText(location.host+location.pathname.replace(/[^/]*$/,''),64,S-52);
+  const vg=g.createRadialGradient(S/2,S/2,S*0.34,S/2,S/2,S*0.76); vg.addColorStop(0,'rgba(0,0,5,0)'); vg.addColorStop(1,'rgba(0,0,5,0.42)');
+  g.fillStyle=vg; g.fillRect(0,0,S,S);
+  c.toBlob(function(b){ cb(b); },'image/png');
+}catch(e){ cb(null); } }
+function shareDailyCard(txt){ dailyCardBlob(function(b){
+  if(b){ try{ const f=new File([b],'chart-runner-daily.png',{type:'image/png'});
+      if(navigator.canShare&&navigator.canShare({files:[f]})){ navigator.share({files:[f],title:'CHART RUNNER',text:txt}).catch(function(){}); return; } }catch(e){}
+    try{ const a=document.createElement('a'); a.href=URL.createObjectURL(b); a.download='chart-runner-daily.png'; document.body.appendChild(a); a.click();
+      setTimeout(function(){ try{URL.revokeObjectURL(a.href);a.remove();}catch(e){} },4000); popText('🖼 КАРТОЧКА СКАЧАНА — кидай в чат'); return; }catch(e){} }
+  try{ if(navigator.share){ navigator.share({title:'CHART RUNNER',text:txt}).catch(function(){}); } else if(navigator.clipboard){ navigator.clipboard.writeText(txt).then(function(){popText('СКОПИРОВАНО');}).catch(function(){}); } }catch(e){} }); }
 let resetArm=0;   // b95: 2-тап подтверждение сброса прогресса (кадры)
 function resetProgress(){   // b95: чистый старт для анализа — стирает ПРОГРЕСС (банк/апгрейды/ранг/байки/рекорды/онбординг), сохраняет НАСТРОЙКИ (звук/управление)
   try{ const keep={cipher_muted:1,cipher_ctrlscheme:1,cipher_pumpside:1,cipher_dbg:1}; for(let i=localStorage.length-1;i>=0;i--){ const k=localStorage.key(i); if(k&&k.indexOf('cipher_')===0&&!keep[k])localStorage.removeItem(k); } }catch(e){}
