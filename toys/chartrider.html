@@ -56,7 +56,7 @@ function lerp(a,b,t){return a+(b-a)*t;} function clamp(v,a,b){return v<a?a:v>b?b
 // false → full game everywhere. Single switch. Systems are GATED, never deleted.
 const CORE_TEST_MODE = false;   // b70: META LIVE — building the progression spine (upgrades/bikes with teeth, career, economy) on the confirmed rigid-body core
 // build stamp — bump on every change so a phone refresh can confirm it loaded fresh code (cache!)
-const BUILD = '2026-07-05 · b175';
+const BUILD = '2026-07-05 · b176';
 
 // ---------- procedural market terrain ----------
 // height map sampled every STEP px; generated forward as we ride. Market character:
@@ -712,7 +712,22 @@ const BIKES=[
   {name:'МОТАРД 450',type:'dirt',   body:['#48243f','#2a1230','#120612'], rim:'255,130,180', accent:'255,90,150',  rider:'150,235,255', cost:3400, accel:0.49, grip:1.44, tag:'тяга-монстр · нервный'},
   {name:'СУПЕРБАЙК 650',type:'sport',body:['#1c3a4a','#0e2230','#04121c'], rim:'150,240,255', accent:'200,255,255', rider:'255,225,160', cost:6500, accel:0.52, grip:1.60, tag:'быстрый + вкопанный', reqRank:3},   // b144: accel сжат 0.30-0.52; b145: type = силуэт (велосипед/скутер/дёрт/спорт)
 ];
-function BK(){ return BIKES[selBike]||BIKES[0]; }
+// ---- b176 СКИНЫ: палитры за $ (пререндер b166 делает их дёшево — кэш спрайтов ключуется по скину). Физика НЕ меняется — только материал ----
+const SKINS=[
+  {id:'gold',   n:'ЗОЛОТО', cost:1500, pal:{body:['#8a6d2c','#57431a','#221a08'], rim:'255,214,120', accent:'255,228,150', rider:'255,236,190'}},
+  {id:'carbon', n:'КАРБОН', cost:1100, pal:{body:['#31343c','#191b21','#0a0b0e'], rim:'225,235,248', accent:'255,82,92',   rider:'205,215,232'}},
+  {id:'neon',   n:'НЕОН',   cost:1100, pal:{body:['#3c1152','#240a31','#0e0416'], rim:'255,84,224',  accent:'150,255,238', rider:'255,160,255'}},
+  {id:'stealth',n:'СТЕЛС',  cost:800,  pal:{body:['#121519','#0a0c10','#040507'], rim:'255,74,74',   accent:'255,64,64',   rider:'158,168,184'}},
+];
+let skinSel={}, skinOwn={};
+try{ skinSel=JSON.parse(localStorage.getItem('cipher_skinsel')||'{}')||{}; skinOwn=JSON.parse(localStorage.getItem('cipher_skinown')||'{}')||{}; }catch(e){}
+function saveSkins(){ try{ localStorage.setItem('cipher_skinsel',JSON.stringify(skinSel)); localStorage.setItem('cipher_skinown',JSON.stringify(skinOwn)); }catch(e){} }
+function skinOwned(bi,id){ return (skinOwn[bi]||[]).indexOf(id)>=0; }
+let _bkCache=null,_bkKey='';
+function BK(){ const key=selBike+'|'+(skinSel[selBike]||'');
+  if(_bkKey!==key){ const b=BIKES[selBike]||BIKES[0], sk=SKINS.find(s=>s.id===skinSel[selBike]);
+    _bkCache = sk ? Object.assign({},b,sk.pal,{_skin:sk.id}) : b; _bkKey=key; }
+  return _bkCache; }
 // market-era biomes — environment shifts with distance (smooth transitions)
 const BIOMES=[
   {name:'НАКОПЛЕНИЕ',    sky:[[20,16,48],[46,30,78],[150,80,110],[230,150,110]], line:[228,250,255], ridge:[60,40,90],  wave:1.0},
@@ -925,6 +940,13 @@ function pointerDown(p){
     if(hit(p,UI.bkL)){ selBike=(selBike+BIKES.length-1)%BIKES.length; useBikeUpg(); saveMeta(); sfxClick(); return; }   // b143: смена байка → указатель прокачки на его allUpg
     if(hit(p,UI.bkR)){ selBike=(selBike+1)%BIKES.length; useBikeUpg(); saveMeta(); sfxClick(); return; }
     if(UI.bkAction && hit(p,UI.bkAction)){ const b=BIKES[selBike], locked=b.reqRank && rankIdx(career)<b.reqRank; if(owned.indexOf(selBike)<0 && !locked && bank>=b.cost){ bank-=b.cost; owned.push(selBike); useBikeUpg(); saveMeta(); sfxLev(); } else sfxClick(); return; }   // b115: нельзя купить запертый рангом
+    if(UI.skinRow) for(const s of UI.skinRow){ if(hit(p,s)){   // b176: свотч — надеть / купить
+      if(!s.id){ delete skinSel[selBike]; saveSkins(); sfxClick(); }
+      else if(skinOwned(selBike,s.id)){ skinSel[selBike]=s.id; saveSkins(); sfxClick(); }
+      else { const sk=SKINS.find(k=>k.id===s.id);
+        if(owned.indexOf(selBike)>=0 && bank>=sk.cost){ bank-=sk.cost; (skinOwn[selBike]=skinOwn[selBike]||[]).push(s.id); skinSel[selBike]=s.id; saveSkins(); saveMeta(); sfxLev(); }
+        else { popText(owned.indexOf(selBike)<0?'сначала разблокируй байк':'мало $'); sfxClick(); } }
+      return; } }
     return;
   }
   if(screen==='howto'){   // b108
@@ -2124,7 +2146,7 @@ function spScoot(g,B,plate,moped){ const bod=B.body, RIM='rgba('+B.rim+',', ACC=
   spLine(g,19,-11,27.5,13.6,'#141926',3.6); spLine(g,18.8,-11.3,27.2,13.2,'#2b3242',2.6);   // вилка
   spLine(g,18.2,-11.8,20.6,-4.6,'#c9a54a',1.8); spLine(g,18,-12,20.2,-5.8,'rgba(255,241,190,0.5)',0.6); }
 function bikePlate(){ const p=(tickerName||'').split('·')[0].trim(); return (trackSource==='ticker'&&(screen==='play'||screen==='clip')&&/^[A-Z0-9]{2,5}$/.test(p))?p:'CB'; }   // тикер монеты — только В ЗАЕЗДЕ/клипе; меню/гараж/proc = бренд CB
-function bikeSprites(B){ const plate=bikePlate(), key=B.name+'|'+plate+'|'+DPR;
+function bikeSprites(B){ const plate=bikePlate(), key=B.name+'|'+(B._skin||'')+'|'+plate+'|'+DPR;   // b176: скин в ключе кэша
   let s=sprCache[key]; if(s)return s;
   const TY=B.type||'dirt';
   const R = TY==='scooter'?10 : TY==='moped'?11.5 : 13;
@@ -2297,7 +2319,7 @@ function drawMenus(){
     ctx.fillStyle='#eafaff'; ctx.font='800 24px ui-monospace,monospace'; ctx.fillText('🏍 БАЙКИ',W/2,46);
     ctx.fillStyle='#ffd678'; ctx.font='800 16px ui-monospace,monospace'; ctx.fillText('$ '+bank,W/2,76);
     UI.bkBack={x:14,y:18,w:78,h:34}; panel(UI.bkBack.x,UI.bkBack.y,78,34,'rgba(150,180,220,0.6)','rgba(30,40,62,0.5)'); ctx.fillStyle='#cfe0ff'; ctx.font='700 13px ui-monospace,monospace'; ctx.fillText('‹ НАЗАД',UI.bkBack.x+39,UI.bkBack.y+22);
-    ctx.save(); ctx.translate(W/2,H*0.27); ctx.scale(1.8,1.8); drawMachine(BIKES[selBike],0,0,0,false,0); ctx.restore();   // b109: живой спрайт байка (раньше не показывался)
+    ctx.save(); ctx.translate(W/2,H*0.27); ctx.scale(1.8,1.8); drawMachine(BK(),0,0,0,false,0); ctx.restore();   // b109: живой спрайт байка; b176: со скином
     const b=BIKES[selBike], own=owned.indexOf(selBike)>=0, ay=H*0.40;
     UI.bkL={x:W/2-150,y:ay-30,w:50,h:64}; UI.bkR={x:W/2+100,y:ay-30,w:50,h:64};
     ctx.fillStyle='rgba(190,215,245,0.85)'; ctx.font='800 34px ui-monospace,monospace'; ctx.fillText('‹',UI.bkL.x+25,ay+12); ctx.fillText('›',UI.bkR.x+25,ay+12);
@@ -2312,7 +2334,17 @@ function drawMenus(){
     panel(UI.bkAction.x,UI.bkAction.y,220,50, own?'rgba(120,255,180,0.85)':locked?'rgba(120,140,200,0.5)':(bank>=b.cost?'rgba(255,214,120,0.85)':'rgba(150,150,170,0.45)'), own?'rgba(36,120,84,0.3)':(bank>=b.cost&&!locked?'rgba(150,110,30,0.28)':'rgba(80,80,96,0.22)'));
     ctx.fillStyle=own?'#9ff0c8':locked?'#b9c8ee':(bank>=b.cost?'#ffd678':'#9092a6'); ctx.font='800 15px ui-monospace,monospace'; ctx.fillText(own?'✓ ВЫБРАН':locked?('🔒 РАНГ '+RANKS[b.reqRank].e+RANKS[b.reqRank].n):('РАЗБЛОКИРОВАТЬ  $'+b.cost),W/2,UI.bkAction.y+31);
     if(locked){ ctx.fillStyle='rgba(150,180,230,0.7)'; ctx.font='600 9px ui-monospace,monospace'; ctx.fillText('закрепляй $→◆ до ранга '+RANKS[b.reqRank].n+' (◆'+RANKS[b.reqRank].at+')',W/2,UI.bkAction.y+44); }
-    ctx.fillStyle='rgba(150,170,200,0.6)'; ctx.font='600 10px ui-monospace,monospace'; ctx.fillText('‹ › листай · байк влияет на физику и потолок плеча',W/2,ay+172);
+    { UI.skinRow=[]; const sy=ay+172, n=SKINS.length+1, sp=52, x00=W/2-(n-1)*sp/2;   // b176 СКИНЫ: сток + 4 палитры; спрайт пересобирается кэшем по скину
+      for(let i=0;i<n;i++){ const x=x00+i*sp, sk=i>0?SKINS[i-1]:null, id=sk?sk.id:'', cur=(skinSel[selBike]||'')===id;
+        UI.skinRow.push({x:x-22,y:sy-22,w:44,h:56,id:id});
+        const pal=sk?sk.pal:b;
+        const g1=ctx.createLinearGradient(x,sy-15,x,sy+15); g1.addColorStop(0,pal.body[0]); g1.addColorStop(1,pal.body[2]);
+        ctx.beginPath(); ctx.arc(x,sy,15,0,7); ctx.fillStyle=g1; ctx.fill();
+        ctx.lineWidth=cur?2.6:1.2; ctx.strokeStyle=cur?'rgba(255,214,120,0.95)':'rgba('+pal.rim+',0.55)'; ctx.stroke();
+        if(sk&&!skinOwned(selBike,id)){ ctx.fillStyle='rgba(6,8,14,0.5)'; ctx.beginPath(); ctx.arc(x,sy,14,0,7); ctx.fill();
+          ctx.fillStyle='#ffd678'; ctx.font='700 9px ui-monospace,monospace'; ctx.fillText('$'+sk.cost,x,sy+32); }
+        else { ctx.fillStyle='rgba(190,205,230,0.6)'; ctx.font='600 8px ui-monospace,monospace'; ctx.fillText(sk?sk.n:'СТОК',x,sy+32); } } }
+    ctx.fillStyle='rgba(150,170,200,0.6)'; ctx.font='600 10px ui-monospace,monospace'; ctx.fillText('‹ › листай · байк влияет на физику и потолок плеча',W/2,ay+220);
     ctx.textAlign='left'; return;
   }
   if(screen==='howto'){   // b108: онбординг degen-петли (learn-by-doing — дальше учат подсказки в забеге)
