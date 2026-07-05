@@ -56,7 +56,7 @@ function lerp(a,b,t){return a+(b-a)*t;} function clamp(v,a,b){return v<a?a:v>b?b
 // false → full game everywhere. Single switch. Systems are GATED, never deleted.
 const CORE_TEST_MODE = false;   // b70: META LIVE — building the progression spine (upgrades/bikes with teeth, career, economy) on the confirmed rigid-body core
 // build stamp — bump on every change so a phone refresh can confirm it loaded fresh code (cache!)
-const BUILD = '2026-07-02 · b169';
+const BUILD = '2026-07-02 · b170';
 
 // ---------- procedural market terrain ----------
 // height map sampled every STEP px; generated forward as we ride. Market character:
@@ -297,6 +297,12 @@ function dailyResolve(){ if(!dailyMode||_dailyRes)return; _dailyRes=true; const 
   try{localStorage.setItem('cipher_daily3',JSON.stringify(dailySt));}catch(e){} }
 // ---- b163 КЛИПЫ: кольцевой буфер поз последних ~7с → перепроигрывание сцены + запись canvas в видео (MediaRecorder) → шер файлом (тикток) / скачивание. БЕЗ пересимуляции физики: реплей = рендер записанных поз на живом terr того же заезда = точный ----
 let clipBuf=[], clipRec=null, clipChunks=[], clipI=0, clipSaved=null, clipMime='';
+// b170 ЛУЧШИЙ МОМЕНТ + СОХРАНЕНИЕ: каждому кадру — оценка «вау» (флипы/слоумо/трюк/полёт/буст) → скользящее окно 90 кадров;
+// пик окна фиксирует СНИМОК последних ~5с (bestClip) → кнопка КЛИП пишет лучший момент забега, не только финал.
+// Блоб записи ЖИВЁТ до следующего забега → «💾 СОХРАНИТЬ» повторно открывает share-шит (iOS: «Сохранить видео» → Фото).
+let clipPlay=null, clipBlob=null, bestClip=null, bestSum=0, _hlWin=[], _hlSum=0, _hlPend=-1, _hlPendSum=0, _flipPrev=0;
+function clipFrameE(){ const dF=(flipCount||0)-_flipPrev; _flipPrev=flipCount||0;
+  return (dF>0?5:0)+(slowmo>0?2.5:0)+((trick&&trickMix>0.5)?1.2+Math.min(1.3,(trickT||0)/90):0)+((bike&&!bike.onG&&airT>18)?1.1:0)+(boosting>0?0.7:0)+(cashCelebT>0?1.5:0); }
 // ---- b164 LIVE-ХВОСТ: каждый тикер-Забег «живой» — реальная цена подтягивается раз в ~4с и ДЫШИТ последними узлами трассы; финиш = НАСТОЯЩЕЕ («СЕЙЧАС $X»). Наш козырь: едешь по рынку, который движется прямо сейчас ----
 let livePrice=0, liveT=0, liveBusy=false;
 function liveTick(){ if(screen!=='play'||trackSource!=='ticker'||dailyMode||liveBusy||!terr.length)return;
@@ -307,25 +313,34 @@ function liveTick(){ if(screen!=='play'||trackSource!=='ticker'||dailyMode||live
     const yv=clamp(baseY+(tkMid-pr)*tkK,56,H*0.94);   // тот же нормализатор, что у трассы
     for(let k=1;k<=3;k++){ const n=terr[terr.length-k]; if(!n)break; const w=1-(k-1)*0.3; n.y=lerp(n.y,yv,0.5*w); n.close=n.y; }   // последние узлы дышат к реальной цене СЕЙЧАС
   }).catch(()=>{ liveBusy=false; }); }
-function clipSnap(){ if(screen!=='play'||!bike)return; clipBuf.push({x:bike.x,y:bike.y,a:bike.ang,w:bike.wheel,rs:bike.rShift,ln:lean,tk:trick,tm:trickMix,ab:riderAirB,sq:riderSquat,cx:cam.x,cy:cam.y,ca:camAir,tz:trickZoom,wv:wave,cf:bike._cmpF||0,cr:bike._cmpR||0,dn:down,bs:boosting,og:bike.onG}); if(clipBuf.length>430)clipBuf.shift(); }
+function clipSnap(){ if(screen!=='play'||!bike)return; const e=clipFrameE();
+  clipBuf.push({x:bike.x,y:bike.y,a:bike.ang,w:bike.wheel,rs:bike.rShift,ln:lean,tk:trick,tm:trickMix,ab:riderAirB,sq:riderSquat,cx:cam.x,cy:cam.y,ca:camAir,tz:trickZoom,wv:wave,cf:bike._cmpF||0,cr:bike._cmpR||0,dn:down,bs:boosting,og:bike.onG,e:e}); if(clipBuf.length>430)clipBuf.shift();
+  _hlWin.push(e); _hlSum+=e; if(_hlWin.length>90)_hlSum-=_hlWin.shift();   // окно «вау» 1.5с
+  if(_hlPend<0 && clipBuf.length>=300 && _hlSum>Math.max(6,bestSum*1.15)){ _hlPend=90; _hlPendSum=_hlSum; }   // пик найден → ждём 1.5с хвоста
+  else if(_hlPend>0){ _hlPend--; if(_hlSum>_hlPendSum)_hlPendSum=_hlSum;
+    if(_hlPend===0){ bestClip=clipBuf.slice(-300); bestSum=_hlPendSum; _hlPend=-1; } } }
+function clipRecentSum(){ let s=0; for(let i=Math.max(0,clipBuf.length-300);i<clipBuf.length;i++)s+=clipBuf[i].e||0; return s; }
+function clipBestReady(){ return !!(bestClip && bestSum>clipRecentSum()*1.25+3); }   // лучший момент ЗАМЕТНО ярче финала → пишем его
 function clipSupported(){ try{ return !!(window.MediaRecorder && cv.captureStream && ['video/mp4;codecs=avc1','video/mp4','video/webm;codecs=vp9','video/webm'].some(m=>MediaRecorder.isTypeSupported(m))); }catch(e){ return false; } }
 function startClip(){ if(screen!=='dead'||clipBuf.length<90||clipRec)return;
+  clipPlay=clipBestReady()?bestClip:clipBuf;   // b170: авто-выбор — лучший момент забега, если он ЗАМЕТНО ярче финала
   clipMime=['video/mp4;codecs=avc1','video/mp4','video/webm;codecs=vp9','video/webm'].find(m=>MediaRecorder.isTypeSupported(m)); if(!clipMime)return;
   clipSaved={b:Object.assign({},bike),cx:cam.x,cy:cam.y,ca:camAir,tz:trickZoom,wv:wave,tk:trick,tm:trickMix,ln:lean};
   clipI=0; clipChunks=[];
   try{ const stream=cv.captureStream(60); clipRec=new MediaRecorder(stream,{mimeType:clipMime,videoBitsPerSecond:4e6});
     clipRec.ondataavailable=e=>{ if(e.data&&e.data.size)clipChunks.push(e.data); };
-    clipRec.onstop=()=>{ const blob=new Blob(clipChunks,{type:clipMime.split(';')[0]}); shareClip(blob, clipMime.indexOf('mp4')>=0?'mp4':'webm'); clipChunks=[]; };
+    clipRec.onstop=()=>{ const blob=new Blob(clipChunks,{type:clipMime.split(';')[0]}); const ext=clipMime.indexOf('mp4')>=0?'mp4':'webm';
+      clipBlob={blob:blob,ext:ext}; shareClip(blob,ext); clipChunks=[]; };   // b170: блоб ЖИВЁТ → «💾 СОХРАНИТЬ» повторит share (отменил шит — не потерял клип)
     clipRec.start(); screen='clip'; sfxClick(); }catch(e){ clipRec=null; }
 }
 function shareClip(blob,ext){ try{ const f=new File([blob],'chart-runner.'+ext,{type:blob.type});
     if(navigator.canShare && navigator.canShare({files:[f]})){ navigator.share({files:[f],title:'CHART RUNNER',text:'CHART RUNNER 📈🏍'}).catch(()=>{}); return; } }catch(e){}
   try{ const a=document.createElement('a'); a.href=URL.createObjectURL(blob); a.download='chart-runner.'+ext; document.body.appendChild(a); a.click(); setTimeout(()=>{ try{URL.revokeObjectURL(a.href);a.remove();}catch(e){} },4000); }catch(e){} }
-function clipStep(){ const s=clipBuf[clipI];
+function clipStep(){ const s=(clipPlay||clipBuf)[clipI];
   if(!s){ endClip(); return; }
   bike.x=s.x; bike.y=s.y; bike.ang=s.a; bike.wheel=s.w; bike.rShift=s.rs; lean=s.ln; trick=s.tk; trickMix=s.tm; riderAirB=s.ab; riderSquat=s.sq; cam.x=s.cx; cam.y=s.cy; camAir=s.ca; trickZoom=s.tz; wave=s.wv; bike._cmpF=s.cf; bike._cmpR=s.cr; down=s.dn; boosting=s.bs; bike.onG=s.og; slowLerp=1; bike._px=undefined;
   clipI++; }
-function endClip(){ try{ if(clipRec&&clipRec.state!=='inactive')clipRec.stop(); }catch(e){} clipRec=null;
+function endClip(){ try{ if(clipRec&&clipRec.state!=='inactive')clipRec.stop(); }catch(e){} clipRec=null; clipPlay=null;
   if(clipSaved){ Object.assign(bike,clipSaved.b); cam.x=clipSaved.cx; cam.y=clipSaved.cy; camAir=clipSaved.ca; trickZoom=clipSaved.tz; wave=clipSaved.wv; trick=clipSaved.tk; trickMix=clipSaved.tm; lean=clipSaved.ln; clipSaved=null; }
   screen='dead'; }
 let tkPrev={}, setupSel=0;   // b107: экран ЗАЕЗД (терминал) — превью монет (цена/24ч%/волатильность/спарклайн) из РЕАЛЬНЫХ свечей, тот же кэш что трасса (не косметика)
@@ -756,6 +771,7 @@ function reset(){
   chalResult=null;   // b118: новый заезд — итог вызова сброшен (activeChal НЕ трогаем: задан в startTicker до reset)
   mult=1; airT=0; nearMissed=false; hitstop=0; gflash=0; multPulse=0; maxMult=1; flipCount=0; flipAcc=0; wheelieT=0; cashedOut=false; runGems=0; cashCelebT=0; pumpAir=0;
   flipsTotal=0; topKmh=0; lastLandDiff=0; lean=0; rush=0; prevVx=0; down=false; brake=false; jumpReq=0; jumpCd=0; coyote=0; jumpGrace=0; activeTouches={}; leanX=0; ctrlId=null; leanKeyL=false; leanKeyR=false; leanCmd=0; rShiftVel=0; wave=bike.x-W*0.95; waveSpd=0; deathBy=''; boost=0; boosting=0; posPulse=0; _posPrev=0; _dangBuzz=0; prMax=0; prMin=0; slowmo=0; wheelieAim=0; wheelieI=0; trickAir=0; trickZoom=0; trick=0; trickMix=0; trickHeld=false; trickT=0; trickTouch=-1; trickKey=''; touchSX={}; touchSY={}; skids=[]; dailyMode=false; _dailyRes=false; livePrice=0; liveT=0; inpLog=[]; _inpPrev=-1; inpMeta={c:selTicker||'',m:gameMode,s:trackSource,b:selBike,bd:BUILD};
+  clipBuf=[]; clipPlay=null; clipBlob=null; bestClip=null; bestSum=0; _hlWin=[]; _hlSum=0; _hlPend=-1; _flipPrev=0;   // b170: клип-стейт per-забег (b163-фикс: буфер НЕ чистился между забегами → первые 7с могли реплеить старые позы на новой трассе)
   zone=-1; biomeBanner=''; biomeBannerT=0; BSKY=['rgb(20,16,48)','rgb(46,30,78)','rgb(150,80,110)','rgb(230,150,110)']; BLINE='228,250,255'; BRIDGE='60,40,90'; rollMissions();
   parts=[]; dust=[]; trail=[]; streaks=[]; floats=[];
   stars=[]; for(let i=0;i<90;i++)stars.push({x:Math.random()*W,y:Math.random()*H*0.7,z:0.2+Math.random()*0.6,s:Math.random()*1.6+0.4});
@@ -863,7 +879,9 @@ function pointerDown(p){
     if(UI.dtracks && hit(p,UI.dtracks)){ gameMode='career'; screen='career'; sfxClick(); return; }
     if(UI.dretry && hit(p,UI.dretry)){ reset(); sfxClick(); return; }
     if(UI.dshare && hit(p,UI.dshare)){ shareRun(); sfxClick(); return; }   // b93: тап по «ПОДЕЛИТЬСЯ» не рестартит
-    if(UI.dclip && hit(p,UI.dclip)){ startClip(); return; }   // b163: записать клип
+    if(UI.dclip && hit(p,UI.dclip)){ startClip(); return; }   // b163: записать клип (b170: сам берёт лучший момент)
+    if(UI.dsave && hit(p,UI.dsave) && clipBlob){ shareClip(clipBlob.blob,clipBlob.ext); sfxClick(); return; }   // b170: повторный share-шит — «Сохранить видео»
+    if(UI.dre && hit(p,UI.dre)){ clipBlob=null; startClip(); return; }   // b170: перезаписать
     if(gameMode==='career'){ sfxClick(); return; }   // career: only the explicit buttons act (no tap-anywhere-retry → avoids mis-taps near ГАРАЖ)
     if(hit(p,UI.menu)) toTitle(); else reset(); sfxClick(); return; }
   if(hit(p,UI.pause)){ screen='paused'; sfxClick(); return null; }
@@ -1611,12 +1629,24 @@ function draw(){
     ctx.fillStyle=cashedOut?'#9ff0c8':'#ffb0a0';ctx.font='800 15px ui-monospace,monospace';ctx.fillText((cashedOut?'$ '+bank+'  ·  ◆ '+career:'осталось  $ '+bank)+(stakeIncome>0?'  💎+$'+stakeIncome:''),W/2,H*0.34+128);   // b101: убрал дубль «ПРОФИТ ЗАФИКСИРОВАН» (он уже крупно в заголовке)
     if(chalResult){ const md=chalResult.medal; ctx.fillStyle=md>=0?'#ffd678':'#ff9a8a'; ctx.font='800 12px ui-monospace,monospace'; ctx.fillText(md>=0?('🏁 ВЫЗОВ ПРОЙДЕН '+(['🥉','🥈','🥇'][md]||'')+(chalResult.rew>0?'  +◆'+chalResult.rew:'')):'🏁 ВЫЗОВ НЕ ПРОЙДЕН — ещё разок',W/2,H*0.34+150); }   // b118: итог вызова Пути (вместо гир-подсказки)
     else { const tip=deathBy==='wave'?'🛡 качай ЩИТ ОТ ВОЛНЫ — оторвёшься от дампа':(deathBy==='loop'||deathBy==='endo')?'◎ качай СЦЕПЛЕНИЕ — прощает кувырки':deathBy==='crash'?'◎ качай СЦЕПЛЕНИЕ — мягче посадки':'⚙ качай ДВИЖОК — быстрее уедешь'; ctx.fillStyle='#9fd0ea';ctx.font='11px ui-monospace,monospace';ctx.fillText(tip,W/2,H*0.34+150); } }
-    if(gameMode!=='career'){ const _hasClip=clipSupported()&&clipBuf.length>=90; UI.dshare={x:_hasClip?W/2-97:W/2-94,y:H*0.34+156,w:_hasClip?94:188,h:36}; const sp=0.55+0.45*Math.sin(t*0.18);   // b165: ШЕР+КЛИП в ОДНУ строку — клип налезал на МЕНЮ/ГАРАЖ (скрин юзера) + деклаттер
-      ctx.fillStyle='rgba(40,30,62,0.88)'; if(ctx.roundRect){ctx.beginPath();ctx.roundRect(UI.dshare.x,UI.dshare.y,188,36,10);ctx.fill();ctx.strokeStyle='rgba(160,140,255,'+sp+')';ctx.lineWidth=2;ctx.stroke();}else ctx.fillRect(UI.dshare.x,UI.dshare.y,188,36);
-      ctx.fillStyle='#d2c2ff';ctx.font='800 13px ui-monospace,monospace';ctx.textAlign='center';ctx.fillText(_hasClip?'📤 ШЕР':'📤 ПОХВАСТАТЬСЯ',UI.dshare.x+UI.dshare.w/2,UI.dshare.y+24);
-      if(_hasClip){ UI.dclip={x:W/2+3,y:UI.dshare.y,w:94,h:36}; ctx.fillStyle='rgba(24,42,58,0.88)'; ctx.beginPath();ctx.roundRect(UI.dclip.x,UI.dclip.y,94,36,10);ctx.fill(); ctx.strokeStyle='rgba(120,210,255,'+sp+')'; ctx.lineWidth=2; ctx.stroke();
-        ctx.fillStyle='#bfe6ff'; ctx.font='800 13px ui-monospace,monospace'; ctx.fillText('📹 КЛИП',UI.dclip.x+47,UI.dclip.y+24); } else UI.dclip=null;   // b163/165: реплей-клип, компактно рядом с шером
-    } else { UI.dshare=null; UI.dclip=null; } }   // b101: убрал «коснись мимо — снова» — налезало на кнопки МЕНЮ/ГАРАЖ; есть явные кнопки
+    if(gameMode!=='career'){ const _hasClip=clipSupported()&&clipBuf.length>=90; const sp=0.55+0.45*Math.sin(t*0.18); const dy0=H*0.34+156;   // b165: одна строка; b170: [ШЕР][📹 КЛИП·ТОП] → после записи [ШЕР][💾 СОХРАНИТЬ][↻]
+      const bw1=_hasClip?(clipBlob?56:94):188;
+      UI.dshare={x:_hasClip?(W/2-97):(W/2-94),y:dy0,w:bw1,h:36};
+      ctx.fillStyle='rgba(40,30,62,0.88)'; if(ctx.roundRect){ctx.beginPath();ctx.roundRect(UI.dshare.x,UI.dshare.y,UI.dshare.w,36,10);ctx.fill();ctx.strokeStyle='rgba(160,140,255,'+sp+')';ctx.lineWidth=2;ctx.stroke();}else ctx.fillRect(UI.dshare.x,UI.dshare.y,UI.dshare.w,36);
+      ctx.fillStyle='#d2c2ff';ctx.font='800 13px ui-monospace,monospace';ctx.textAlign='center';ctx.fillText(_hasClip?(clipBlob?'📤':'📤 ШЕР'):'📤 ПОХВАСТАТЬСЯ',UI.dshare.x+UI.dshare.w/2,UI.dshare.y+24);
+      if(_hasClip&&!clipBlob){ UI.dclip={x:W/2+3,y:dy0,w:94,h:36}; UI.dsave=null; UI.dre=null;
+        ctx.fillStyle='rgba(24,42,58,0.88)'; ctx.beginPath();ctx.roundRect(UI.dclip.x,UI.dclip.y,94,36,10);ctx.fill(); ctx.strokeStyle='rgba(120,210,255,'+sp+')'; ctx.lineWidth=2; ctx.stroke();
+        ctx.fillStyle='#bfe6ff'; ctx.font='800 13px ui-monospace,monospace'; ctx.fillText(clipBestReady()?'📹 КЛИП·ТОП':'📹 КЛИП',UI.dclip.x+47,UI.dclip.y+24);
+        if(clipBestReady()){ ctx.fillStyle='rgba(255,214,120,0.8)'; ctx.font='600 8px ui-monospace,monospace'; ctx.fillText('лучший момент забега',UI.dclip.x+47,UI.dclip.y+46); }
+      } else if(_hasClip&&clipBlob){ UI.dclip=null;
+        UI.dsave={x:W/2-37,y:dy0,w:96,h:36}; UI.dre={x:W/2+63,y:dy0,w:34,h:36};
+        ctx.fillStyle='rgba(22,48,36,0.9)'; ctx.beginPath();ctx.roundRect(UI.dsave.x,UI.dsave.y,96,36,10);ctx.fill(); ctx.strokeStyle='rgba(120,255,180,'+sp+')'; ctx.lineWidth=2; ctx.stroke();
+        ctx.fillStyle='#9ff0c8'; ctx.font='800 12px ui-monospace,monospace'; ctx.fillText('💾 СОХРАНИТЬ',UI.dsave.x+48,UI.dsave.y+23);
+        ctx.fillStyle='rgba(200,214,234,0.55)'; ctx.font='600 8px ui-monospace,monospace'; ctx.fillText('iOS: шер → «Сохранить видео»',UI.dsave.x+48,UI.dsave.y+46);
+        ctx.fillStyle='rgba(24,32,52,0.9)'; ctx.beginPath();ctx.roundRect(UI.dre.x,UI.dre.y,34,36,10);ctx.fill(); ctx.strokeStyle='rgba(150,180,230,0.5)'; ctx.lineWidth=1.5; ctx.stroke();
+        ctx.fillStyle='#bfd6f2'; ctx.font='800 14px ui-monospace,monospace'; ctx.fillText('↻',UI.dre.x+17,UI.dre.y+24);
+      } else { UI.dclip=null; UI.dsave=null; UI.dre=null; }
+    } else { UI.dshare=null; UI.dclip=null; UI.dsave=null; UI.dre=null; } }   // b101: убрал «коснись мимо — снова» — налезало на кнопки МЕНЮ/ГАРАЖ; есть явные кнопки
   if(screen==='clip'){ ctx.textAlign='left'; ctx.fillStyle='rgba(255,255,255,0.55)'; ctx.font='800 13px ui-monospace,monospace'; ctx.shadowColor='#2fe6ff'; ctx.shadowBlur=8; ctx.fillText('CHART RUNNER 📈',14,H-16); ctx.shadowBlur=0;
     ctx.fillStyle='rgba(255,80,90,'+(0.5+0.5*Math.sin(t*0.4))+')'; ctx.beginPath(); ctx.arc(W-20,22,5,0,7); ctx.fill(); }   // b163: бренд-водяной знак в клипе + REC-точка
   if(screen==='won'){ ctx.fillStyle='rgba(8,20,12,0.72)';ctx.fillRect(0,0,W,H); ctx.textAlign='center'; const T=CAREER_TRACKS[careerTrack]||CAREER_TRACKS[0]; const last=careerTrack>=CAREER_TRACKS.length-1;
