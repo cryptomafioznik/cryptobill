@@ -56,7 +56,7 @@ function lerp(a,b,t){return a+(b-a)*t;} function clamp(v,a,b){return v<a?a:v>b?b
 // false → full game everywhere. Single switch. Systems are GATED, never deleted.
 const CORE_TEST_MODE = false;   // b70: META LIVE — building the progression spine (upgrades/bikes with teeth, career, economy) on the confirmed rigid-body core
 // build stamp — bump on every change so a phone refresh can confirm it loaded fresh code (cache!)
-const BUILD = '2026-07-05 · b176';
+const BUILD = '2026-07-05 · b177';
 
 // ---------- procedural market terrain ----------
 // height map sampled every STEP px; generated forward as we ride. Market character:
@@ -202,9 +202,16 @@ function terrainAt(x){ // interpolated height + slope at world x
 // СОХРАНЯЯ реальную форму графика); каждая монета нормализуется В ЭКРАН (форма играбельна). ⚠️ ЧЕСТНО (проверено симом b97): «волатильность=сложность» НЕ из крутизны — нормализация стирает абсолютную амплитуду (DOGE даже положе BTC). Сложность от волатильности дадим через СКОРОСТЬ ДАМП-ВОЛНЫ на реальном движении (следующий шаг). Узел terr уже =
 // свеча → физика/рендер НЕ трогаются. trackSource переключает источник; конечная трасса (есть финиш на конце).
 let trackSource='proc', selTicker='btc';   // 'proc' = процедурный endless/career | 'ticker' = реальный график
+// b177 ШОРТ: зарабатывай на ПАДЕНИИ — трасса строится по ПЕРЕВЁРНУТОМУ графику (реальный дамп = твоя гора вверх), PnL = честный шорт по РЕАЛЬНОЙ цене (средняя входа − текущая). Дейли/боссы/Путь всегда лонг (у всех одинаково)
+let shortMode=false, _shortRun=false, tkFlipP=0;   // shortMode = выбор на setup (localStorage) · _shortRun = эффективен в ЭТОМ забеге · tkFlipP = ось отражения цены (0 = лонг)
+try{ shortMode=localStorage.getItem('cipher_short')==='1'; }catch(e){}
+function saveShort(){ try{localStorage.setItem('cipher_short',shortMode?'1':'0');}catch(e){} }
 const MARKET_DATA={ btc:{ name:'BTC', sym:'₿', data:[[58705.5,58742.7,58660,58660],[58660,58794,58648.3,58730],[58730,58740,58688.2,58728.9],[58728.9,58770.4,58728,58732],[58732,58770,58722.5,58722.5],[58722.5,58747.8,58675.4,58675.4],[58675.4,58675.4,58552.5,58582.9],[58582.9,58637,58582.9,58611.8],[58611.8,58611.8,58513.8,58513.8],[58513.8,58605.8,58510,58596],[58596,58639.3,58586,58639.3],[58639.3,58662.4,58625.2,58652.1],[58652.1,58664,58586,58586.9],[58586.9,58615.1,58525.1,58588.7],[58588.7,58639.4,58588.7,58614],[58614,58654,58612.8,58640],[58640,58740,58640,58696.4],[58696.4,58742.1,58696.4,58722.6],[58722.6,58748.2,58654,58736],[58736,58806.9,58706.7,58782.6],[58782.6,58782.6,58694,58702],[58702,58702,58650,58654.9],[58654.9,58654.9,58513.8,58530],[58530,58598,58518.9,58596.6],[58596.6,58612,58580,58600],[58600,58630,58573.7,58618],[58618,58621.9,58543.1,58555],[58555,58622,58555,58608],[58608,58627.6,58567.7,58568],[58568,58650,58555,58626.4],[58626.4,58626.4,58594,58610],[58610,58660,58604,58627.4],[58627.4,58644,58578.7,58644],[58644,58653.8,58616,58616],[58616,58638.5,58571.4,58638.5],[58638.5,58638.5,58586,58586],[58586,58612,58572,58612],[58612,58650.1,58589.4,58650],[58650,58664,58620,58636],[58636,58658,58606,58624.7],[58624.7,58726.1,58624.7,58726],[58726,58750.7,58660,58661.9],[58661.9,58718.9,58608,58646],[58646,58685,58520,58520],[58520,58552,58406,58440],[58440,58440,58310,58394],[58394,58575.7,58394,58505.3],[58505.3,58505.3,58436,58436],[58436,58484,58430,58484],[58484,58518,58472,58494],[58494,58618,58494,58548.1],[58548.1,58586,58548,58576],[58576,58584,58390,58390],[58390,58390,58238.9,58293.5],[58293.5,58298,57800.2,58169.8],[58169.8,58347.4,58030.8,58291.5],[58291.4,58399,58198,58225.5],[58225.5,58400,58197.6,58352.9],[58352.9,58569,58334.7,58462],[58462,58933,58462,58764],[58764,58998.4,58728,58900.4],[58900.2,59022.8,58762.4,58794],[58794,58831.5,58720,58831.5],[58831.5,58889.9,58766.9,58770.6],[58770.6,58834,58750,58775.3],[58775.3,58775.3,58663.9,58704],[58704,58865.8,58704,58798],[58798,58889.2,58780,58840],[58840,59031.6,58828,58924.7],[58924.7,59004.1,58900,58947.9],[58948,59066.4,58921.3,59000],[59000,59086.9,58994,59044.9],[59044.9,59159.2,58996.6,59140.1],[59140.1,59171.6,59008,59080.4],[59080.4,59120.7,59021.3,59120.7],[59120.7,59129.9,59082.8,59085],[59085,59090,59017.1,59025.7],[59025.7,59119.7,59025.7,59056],[59056,59056,58996,58999.2],[58999.2,59003.2,58906,58919.8],[58919.8,58933,58885.8,58888.7],[58888.7,58954.3,58886.2,58924],[58924,58933,58850,58906],[58906,59148.4,58906,59006.6],[59006.6,59023.6,58934.5,58939.2],[58939.2,59048,58934,58990.6],[58990.5,59314.5,58981.3,59280.7],[59280.7,59318,59172,59197.1],[59197.1,59197.1,59062,59106],[59106,59146,59106,59146],[59146,59159,59102.2,59113.3],[59113.3,59204.3,59100,59198],[59198,59258.1,59168,59210],[59210,59274,59200,59274],[59274,59292,59236,59242],[59242,59300,59200,59266],[59266,59373.5,59259.2,59359.9],[59359.9,59457,59346.5,59391.3],[59391.3,59400,59308,59349.7],[59349.7,59350,59320.7,59340],[59340,59340,59288,59310.4],[59310.4,59376.5,59272.2,59272.2],[59272.2,59296,59251.3,59292],[59292,59357.3,59289.4,59332.2],[59332.2,59332.2,59192.1,59240.9],[59240.9,59298.3,59154,59174],[59174,59198,59150,59198],[59198,59204.4,59126.4,59172.8],[59172.8,59200,59168,59188.4],[59188.4,59203.3,59150,59150],[59150,59187.5,59135.5,59144.6],[59144.6,59156,59132.7,59154.3],[59154.3,59156,59012,59012],[59012,59049.3,58940.7,58953.6],[58953.6,58984.7,58911.1,58952.1],[58952.1,58974,58868,58868],[58868,58880,58692,58776],[58776,58810.5,58748.7,58791.2],[58791.2,58834.8,58655,58655],[58655,58726.2,58534.3,58637.3],[58637.3,58700,58620,58700],[58700,58700,58618,58685.5],[58685.5,58775.4,58685.5,58736],[58736,58772.7,58729.3,58755.8],[58755.8,58788,58658.1,58682.8],[58682.8,58693.7,58600,58666.5],[58666.5,58687.8,58622.5,58681],[58681,58730,58639.7,58668],[58668,58808,58638,58808],[58807.6,58823.9,58740,58740],[58740,58743.6,58648.2,58743.6],[58743.6,58754,58678.1,58712],[58712,58742.7,58689.7,58689.7],[58689.7,58774.8,58670,58768],[58768,58804.7,58728.6,58728.6],[58728.6,58775.1,58723.2,58768.7],[58768.6,58779.8,58663.3,58747.8],[58747.8,58814,58732,58732],[58732,58748.5,58697.5,58700.1],[58700.1,58723.4,58692,58700.6],[58700.6,58700.6,58600,58600],[58600,58680,58600,58620],[58620,58656,58500,58592],[58592,58654.8,58550.9,58618],[58618,58742,58610,58739.4],[58739.4,58744.1,58678.7,58698.7],[58698.7,58814,58698.7,58807],[58807,58984,58802,58974],[58974,58992,58896.8,58946],[58946,59092,58944,59011],[59011,59018,58950,58956],[58956,59005.1,58950,58969.4],[58969.4,58973.6,58905.2,58933],[58933,58933,58877.1,58888],[58888,58945,58886,58920],[58920,58920,58859.9,58868],[58868,58890,58825.6,58883.8],[58883.8,58962.6,58850,58906],[58906,58954,58871.1,58954],[58954,58973.8,58942,58944.6],[58944.6,58948.5,58878,58914],[58914,58914,58853.1,58874],[58874,58874,58754,58757.4],[58757.4,58776.8,58700,58776.8],[58776.8,58798,58752.8,58752.9],[58752.9,58754,58665.3,58745.2],[58745.2,58756,58704,58723.4],[58723.4,58730,58690.5,58708],[58708,58722.5,58624,58624],[58624,58684.2,58624,58675.6],[58675.6,58699,58650.6,58655.8],[58655.8,58680,58629,58660],[58660,58676,58588,58658],[58658,58704,58640,58657.8],[58657.8,58742.9,58632.8,58706],[58706,58755.9,58676,58706],[58706,58712,58680,58712],[58712,58744,58693.8,58698.2],[58698.2,58736,58634.2,58655.9],[58655.9,58731.8,58651.2,58666],[58666,58678,58628,58678],[58678,58700,58641.5,58651.2],[58651.2,58654,58586.2,58592.9],[58592.9,58626.6,58550,58622],[58622,58676,58536.4,58536.4],[58536.4,58554,58454,58541.4],[58541.4,58608,58393.5,58443.6],[58443.6,58558,58443.6,58539.8],[58539.8,58546.9,58468.7,58546.9],[58546.9,58592,58512.3,58560],[58560,58589.9,58420,58439],[58439,58468,58409.8,58412.5],[58412.5,58452,58377,58398],[58398,58409.6,58326,58355.3],[58355.3,58445.8,58341.4,58430],[58430,58570,58430,58538],[58538,58790,58536,58630],[58630,58694,58614.1,58632],[58632,58708.7,58622.1,58673.3],[58673.3,58765.3,58662.2,58669.1],[58669.2,58904,58669.2,58844],[58844,58851.8,58756,58820],[58820,58880.5,58602,58816],[58816,58963.1,58716,58856.4],[58856.4,59075.6,58820.7,59020],[59020,59410,58944.3,59332],[59332,59497.2,59278,59414.6],[59414.6,59508,59304,59498],[59498,59500.1,59278,59353.5],[59353.5,59500,59284,59500],[59500,59987.8,59500,59978],[59978,60082.5,59876,60028],[60028,60092,59885.5,59918],[59918,59962.8,59775.8,59778],[59778,59813.6,59540,59658],[59658,59740,59548,59730],[59730,59758.2,59597.1,59604],[59604,59692,59420,59616.4],[59616.4,59762,59588,59664],[59664,59668.5,59518,59542],[59542,59764.7,59520.5,59764.7],[59764.7,59986,59726,59808],[59808,59970,59796,59916.5],[59916.6,59944,59844,59894.7],[59894.7,60536.6,59880.3,60412.9],[60412.9,60468,60280,60310.8],[60310.8,60380,60216.3,60247.5],[60247.5,60281.6,60136.2,60171.2],[60171.2,60250,60168,60224.9],[60224.9,60246,60130.8,60130.8],[60130.8,60154,60076.6,60106],[60106,60186,60099,60147.2],[60147.2,60180,60073,60135.3],[60135.3,60225.1,60110,60150],[60150,60157.9,60122,60132],[60132,60160,60080,60118],[60118,60118,59950,60000],[60000,60267.2,59990.2,60144],[60144,60172,60084,60090],[60090,60090,60026.6,60029.2],[60029.2,60082,60024.9,60082],[60082,60090,59982.2,59985.3],[59985.3,60018,59902.5,59915.1],[59915.1,59926,59865.8,59920],[59920,59937.1,59788.6,59820],[59820,59872.8,59787.3,59870.9],[59870.9,59908.8,59824,59902],[59902,60046,59900.4,60028],[60028,60159.2,60010,60155.8],[60155.8,60205.7,60134.5,60148.3],[60148.3,60184,60088,60146],[60146,60239.8,60124.3,60190.6],[60190.6,60224,60152,60156.8],[60156.8,60206,60152,60177],[60177,60238.5,60152,60195],[60195,60221.1,60172,60190.6],[60190.6,60214,60150.9,60214],[60214,60214,60074,60100],[60100,60115,60016.4,60078],[60078,60189.7,60048,60189.7],[60189.7,60189.7,60106,60138],[60138,60151.3,60124,60140],[60140,60188.6,60082,60186],[60186,60248.3,60186,60235.2],[60235.2,60235.2,60188,60222],[60222,60246,60144,60238],[60238,60298,60082,60114.3],[60114.4,60174,60114.4,60171.2],[60171.2,60300,60163.1,60250],[60250,60288,60226,60278],[60278,60285.7,60244.6,60280],[60280,60352.9,60250,60274],[60274,60274,60216.3,60264],[60264,60264,60101.2,60155.4],[60155.4,60276,60155.4,60267.4],[60267.4,60267.4,60200.5,60208],[60208,60214,60151.8,60208.6],[60208.6,60208.6,60119.7,60134],[60134,60190.6,60100,60142],[60142,60142,60000,60028.7],[60029.4,60060,59920.6,59920.7],[59920.7,60032,59909.9,59952],[59952,60024,59928,59997.8],[59997.8,60025.6,59876,59891.1],[59891,59986,59888,59978],[59978,60000,59962.3,59974],[59974,60062,59960,60019.4],[60019.4,60028,59966.1,60028],[60028,60070,60016,60043.4],[60043.4,60198,60029.8,60172],[60172,60172,60116,60123.7],[60123.7,60134,60117,60126],[60126,60186,60124.9,60186],[60186,60294.9,60186,60251.1],[60251.1,60462.1,60244,60447.2],[60447.2,60514.1,60332.3,60513.7],[60513.7,60529.8,60391.1,60405.4],[60405.4,60600,60372.2,60528],[60528,60720,60528,60707.6],[60707.6,60846.9,60684,60726]] } };   // b162: офлайн-fallback заменён на 5m-СНАПШОТ (300 свечей) — старый дневной набор b96 имел непролазные 42°-стены после капа (аудит: ВЕЛИК клинил на узле 186); 5m-рельеф = тот же класс, что live-трассы
 function buildTickerTrack(candles){   // b96: реальная свеча OHLC → узел terr (та же структура, что genSeg). Логика доказана на реальных данных
   terr=[]; genX=0; const SUB=3;
+  if(_shortRun){ let fmn=1e18,fmx=-1e18; for(const c of candles){ if(c[2]<fmn)fmn=c[2]; if(c[1]>fmx)fmx=c[1]; }   // b177 ШОРТ: зеркалим свечи относительно середины диапазона (hi↔lo). Весь пайплайн ниже (вол/трамплины/обрывы) работает на зеркале как есть
+    tkFlipP=fmn+fmx; candles=candles.map(function(c){ return [tkFlipP-c[0], tkFlipP-c[2], tkFlipP-c[1], tkFlipP-c[3]]; }); }
+  else tkFlipP=0;
   let pMin=Infinity,pMax=-Infinity; for(const c of candles){ if(c[2]<pMin)pMin=c[2]; if(c[1]>pMax)pMax=c[1]; }   // c=[open,high,low,close]
   let vs=0,vn=0; for(let i=1;i<candles.length;i++){ if(candles[i-1][3]>0){ vs+=Math.abs(candles[i][3]-candles[i-1][3])/candles[i-1][3]; vn++; } }   // b98 РЕАЛЬНАЯ волатильность монеты (средн |Δ|/цена)
   const vol=vn?vs/vn:0.0008; tickerVolMul=volMulOf(vol); tickerVolLabel=volTier(vol);
@@ -294,7 +301,7 @@ async function loadCandles(t){   // кэш 1ч → live fetch Binance → fallba
     tickerLoadErr=false; return d;
   }catch(e){ tickerLoadErr=true; return MARKET_DATA.btc.data; }
 }
-function startTicker(idx,ch){ activeChal=ch||null;   // b118: ch = вызов Пути (null = свободный Забег)
+function startTicker(idx,ch){ activeChal=ch||null; _shortRun=(!ch)&&shortMode;   // b118: ch = вызов Пути; b177: шорт только в СВОБОДНОМ Забеге (вызовы/дейли/боссы = лонг)
   const t=TICKERS[idx]||TICKERS[0]; selTicker=t.k; tickerName=t.name; screen='tickerload'; tickerLoadT=0;
   try{localStorage.setItem('cipher_last_tk',idx);}catch(e){} lastTk=idx; hasLast=true;   // b107: запомнить последний заезд (hero «Продолжить» на Главной b108)
   loadCandles(t).then(d=>{ tickerData=(d&&d.length?d:MARKET_DATA.btc.data); trackSource='ticker'; gameMode='endless'; reset(); }); }
@@ -314,6 +321,7 @@ async function loadDailyCandles(){ const ds=dayStrUTC(), ck='cipher_dkl_'+ds;
     if(d.length<20)throw 0; try{localStorage.setItem(ck,JSON.stringify(d));}catch(e){} return d;
   }catch(e){ return null; } }
 function startDaily(){ if(dailyTries()>=3){ menuFx=0.9; menuFxAmt=0; popText('📅 3/3 — завтра новая трасса'); return; }
+  _shortRun=false;   // b177: дейли всегда лонг (одна трасса у всех)
   const t=dailyCoin(); selTicker=t.k; tickerName=t.name+'·ДЕНЬ'; screen='tickerload'; tickerLoadT=0;
   loadDailyCandles().then(d=>{ if(!d){ screen='title'; return; } tickerData=d; trackSource='ticker'; gameMode='endless'; activeChal=null; reset(); dailyMode=true; ghostLoad(); ghostRec=[]; if(ghost)popText('👻 ПРИЗРАК твоей лучшей ($'+ghost.res+') на трассе'); }); }   // b174
 function dailyResolve(){ if(!dailyMode||_dailyRes)return; _dailyRes=true; const res=Math.round(runGems||0), ds=dayStrUTC();
@@ -346,7 +354,8 @@ function liveTick(){ if(screen!=='play'||trackSource!=='ticker'||dailyMode||live
   const tk=TICKERS.find(x=>x.k===selTicker)||TICKERS[0];
   fetch('https://api.binance.com/api/v3/ticker/price?symbol='+tk.sym).then(r=>r.ok?r.json():null).then(j=>{ liveBusy=false;
     if(!j||!j.price)return; const pr=+j.price; if(!(pr>0)||!isFinite(pr))return; livePrice=pr;
-    const yv=clamp(baseY+(tkMid-pr)*tkK,56,H*0.94);   // тот же нормализатор, что у трассы
+    const prG=tkFlipP? tkFlipP-pr : pr;   // b177: шорт-трасса живёт в зеркале — живая цена мапится туда же
+    const yv=clamp(baseY+(tkMid-prG)*tkK,56,H*0.94);   // тот же нормализатор, что у трассы
     for(let k=1;k<=3;k++){ const n=terr[terr.length-k]; if(!n)break; const w=1-(k-1)*0.3; n.y=lerp(n.y,yv,0.5*w); n.close=n.y; }   // последние узлы дышат к реальной цене СЕЙЧАС
   }).catch(()=>{ liveBusy=false; }); }
 function clipSnap(){ if(screen!=='play'||!bike)return; const e=clipFrameE();
@@ -586,7 +595,7 @@ const STAKE_BASE=8, STAKE_PER=0.008, STAKE_CAP=30;   // b113 ЭТАП2: марж
 function tkStake(){ return clamp(STAKE_BASE+(bank||0)*STAKE_PER, STAKE_BASE, STAKE_CAP); }
 const STAKE_YIELD=0.03;   // b114 ЭТАП3: СТЕЙКИНГ — холодный ◆ даёт пассивный $ КАЖДЫЙ заезд (награда за закрепление + камбэк после взрыва, без тупиков). Калибровка — руки
 function payStaking(){ stakeIncome=Math.round((career||0)*STAKE_YIELD); if(stakeIncome>0)bank+=stakeIncome; return stakeIncome; }   // career = ◆ холод
-function tickerChg(){ if(trackSource!=='ticker'||!bike||!entryPrice)return 0; const cur=tkMid-(terrainAt(bike.x).y-baseY)/tkK; return cur/entryPrice-1; }   // b106 реальное изменение цены монеты от входа (для HUD/пика)
+function tickerChg(){ if(trackSource!=='ticker'||!bike||!entryPrice)return 0; return tkPrice(bike.x)/entryPrice-1; }   // b106 реальное изменение цены монеты от входа (b177: через tkPrice — всегда настоящая цена)
 // ===== b173 ДОЛИВКА (юзер: «сейчас можно 10м на плече и зафиксироваться — дальше ехать нет смысла; стоимость должна расти по мере трассы») =====
 // ПРИЧИННАЯ МОДЕЛЬ = настоящий DCA: ты НЕ входишь всей котлетой на старте — КАЖДЫЙ МЕТР докупает позицию по ТЕКУЩЕЙ цене
 // (dcaCost = вложено $, dcaQty = куплено монеты). Монетки/трюки = буст доливки («подобрал $ → долил»). Выплата = маржа + плечо × PnL
@@ -594,7 +603,7 @@ function tickerChg(){ if(trackSource!=='ticker'||!bike||!entryPrice)return 0; co
 // на столе (и больше теряешь волне = растущая драма) · памп после долгой езды = профит на ВСЮ позицию · цена НЕ уводит в минус (пол 0, b104).
 const DCA={ M:120, COIN:2.5, PAY:0.55 };   // M = метров на один полный tkStake доливки · COIN = буст монетки (×метровой доли) · PAY = масштаб выплаты к старой экономике. КАЛИБРОВКА — РУКИ
 let dcaCost=0, dcaQty=0, _dcaDist=0, _dcaCoins=0;
-function tkPrice(x){ return tkMid-(terrainAt(x).y-baseY)/tkK; }   // реальная цена монеты в точке трассы
+function tkPrice(x){ const g2=tkMid-(terrainAt(x).y-baseY)/tkK; return tkFlipP? tkFlipP-g2 : g2; }   // реальная цена монеты в точке трассы (b177: шорт-зеркало разворачивается обратно → цена всегда НАСТОЯЩАЯ)
 function dcaTick(){ if(trackSource!=='ticker'||!bike||!entryPrice||cashedOut)return;   // зовётся из update: доливка ∝ пройденным метрам + монеткам
   const cur=Math.max(1e-9,tkPrice(bike.x));
   const dd=Math.max(0,(dist||0)-_dcaDist); _dcaDist=dist||0;
@@ -604,8 +613,9 @@ function dcaTick(){ if(trackSource!=='ticker'||!bike||!entryPrice||cashedOut)ret
 function posValue(){ if(trackSource!=='ticker') return Math.max(0,Math.round((coins||0)*COIN_GEM*posFactor()));   // proc: старый флайвил
   if(!bike||!entryPrice||dcaCost<=0) return 0;
   const cur=Math.max(1e-9,tkPrice(bike.x));
-  return Math.max(0, Math.round((dcaCost + leverage*(dcaQty*cur-dcaCost))*DCA.PAY)); }   // маржа + плечо×PnL по средней; пол 0
-function posPnl(){ if(dcaCost<=0||!bike)return 0; const cur=Math.max(1e-9,tkPrice(bike.x)); return dcaQty*cur/dcaCost-1; }   // PnL% позиции (для «ПИК! ЗАБЕРИ»/HUD)
+  const pl=_shortRun? (dcaCost-dcaQty*cur) : (dcaQty*cur-dcaCost);   // b177: шорт зарабатывает на падении (продал по средней — откупаешь дешевле)
+  return Math.max(0, Math.round((dcaCost + leverage*pl)*DCA.PAY)); }   // маржа + плечо×PnL по средней; пол 0
+function posPnl(){ if(dcaCost<=0||!bike)return 0; const cur=Math.max(1e-9,tkPrice(bike.x)); const raw=dcaQty*cur/dcaCost-1; return _shortRun? -raw : raw; }   // PnL% позиции (шорт = минус движения)
 function posFactor(){   // b106 множитель к размеру позиции (coins×COIN_GEM) при выплате/показе — b173: живёт только для PROC-ветки и миссий
   if(trackSource==='ticker'){ if(!bike||!entryPrice)return tkStake();
     return tkStake()*Math.max(0,1+leverage*tickerChg()); }   // b113 размер = маржа от $-стека × реальный курс × плечо   // РЕАЛЬНЫЙ курс × плечо; пол 0 — цена НЕ ликвидирует капитал (только волна/краш, b104). Плечо живёт ТОЛЬКО здесь (без дубля)
@@ -653,7 +663,7 @@ async function loadEvent(ev){ const ck='cipher_ev_'+ev.id;
   try{ const c=JSON.parse(localStorage.getItem(ck)||'null'); if(c&&c.length)return c; }catch(e){}   // ист.данные неизменны → кэш навсегда
   try{ const r=await fetch('https://api.binance.com/api/v3/klines?symbol='+ev.sym+'&interval=5m&startTime='+ev.startTime+'&limit=250'); if(!r.ok)throw 0; const j=await r.json(); const d=j.map(k=>[+k[1],+k[2],+k[3],+k[4]]).filter(c=>c.length===4&&c.every(v=>v>0&&isFinite(v))); if(d.length<20)throw 0; try{localStorage.setItem(ck,JSON.stringify(d));}catch(e){} return d; }
   catch(e){ return MARKET_DATA.btc.data; } }
-function startEvent(ev){ selTicker='btc'; tickerName=ev.short; screen='tickerload'; tickerLoadT=0;
+function startEvent(ev){ selTicker='btc'; tickerName=ev.short; screen='tickerload'; tickerLoadT=0; _shortRun=false;   // b177: боссы = лонг (исторический сценарий)
   activeChal={id:'ev_'+ev.id, name:ev.short, goal:'finish', rew:ev.rew, daily:false};   // цель = ПЕРЕЖИТЬ обвал (доехать до конца). Награда раз (через chalDone)
   loadEvent(ev).then(d=>{ tickerData=(d&&d.length?d:MARKET_DATA.btc.data); trackSource='ticker'; gameMode='endless'; reset(); }); }
 function finishChallenge(){   // b118: оценка вызова в конце тикер-заезда. runGems = банк за круг; finish = дошёл до конца графика
@@ -699,7 +709,7 @@ function loadCampaignTrack(tr,idx){ const ck='cipher_cmp_'+tr.id+'_'+campaignLen
     .catch(()=>MARKET_DATA.btc.data); }
 function campaignBeaten(i){ return CAMPAIGN[i] && ('cmp_'+CAMPAIGN[i].id in chalDone); }
 function campaignUnlocked(i){ return i===0 || campaignBeaten(i-1); }   // последовательный анлок: пройди предыдущую → откроется следующая
-function startCampaignTrack(tr,idx){ selTicker=tr.coin||'btc'; tickerName=tr.name; screen='tickerload'; tickerLoadT=0;
+function startCampaignTrack(tr,idx){ selTicker=tr.coin||'btc'; tickerName=tr.name; screen='tickerload'; tickerLoadT=0; _shortRun=false;   // b177: Путь = лонг (фикс-лестница)
   activeChal={id:'cmp_'+tr.id, name:tr.name, goal:'campaign', med:tr.med, rew:tr.rew, camp:true};
   loadCampaignTrack(tr,idx).then(d=>{ tickerData=(d&&d.length?d:MARKET_DATA.btc.data); trackSource='ticker'; gameMode='endless'; reset(); }); }
 // b143 ЛЕСТНИЦА БАЙКОВ (велик→супербайк): генуинно разные ФИЗ-ПРОФИЛИ (accel=тяга/движок, grip=сцепление/посадка), у каждого своя ФИШКА (tag). Прокачка PER-BIKE (allUpg). Правило юзера «не даунгрейд»: база растёт лестницей, новый в стоке ≈ предыдущий + фишка (точный оверлап — руки). Гейт: cost ($) + опц. reqRank. Числа/цвета — стартовые, калибровка руками.
@@ -836,8 +846,8 @@ function reset(){
   whoopRunup=0; whoopLeft=0; whoopPhase=0; nextWhoopX=TUNE.whoopStart*10;   // WHOOPS: first rhythm section after whoopStart
   mudLeft=0; mudRamp=0; mudRunup=0; nextMudX=TUNE.mudStart*10;   // MUD: first boggy section after mudStart
   dropLandLeft=0; nextDropX=TUNE.dropStart*10;   // DROPS/CLIFFS: first cliff after dropStart
-  if(trackSource==='ticker'){ buildTickerTrack(tickerData||MARKET_DATA.btc.data); finishDist=Math.floor((terr.length-1)*STEP/10); popText(tickerName+' · ВОЛАТИЛЬНОСТЬ '+tickerVolLabel+(tickerLoadErr?' (нет связи — BTC)':''));
-    entryPrice=tkMid-(terrainAt(60).y-baseY)/tkK; }   // b106: ВХОД = реальная цена монеты на старте графика → P&L позиции считается от неё (реальное движение, не скорость)
+  if(trackSource==='ticker'){ buildTickerTrack(tickerData||MARKET_DATA.btc.data); finishDist=Math.floor((terr.length-1)*STEP/10); popText(tickerName+' · '+(_shortRun?'📉 ШОРТ · ':'')+'ВОЛАТИЛЬНОСТЬ '+tickerVolLabel+(tickerLoadErr?' (нет связи — BTC)':''));
+    entryPrice=tkPrice(60); }   // b106: ВХОД = реальная цена монеты на старте графика; b177: через tkPrice (шорт-зеркало учтено)
   else { for(let i=0;i<Math.ceil(W/STEP)+8;i++)genSeg(); }
   bike={x:60,y:terrainAt(60).y-27.5,vx:0,vy:0,ang:terrainAt(60).ang,angV:0,onG:true,wheel:0,rShift:0};   // rShift = rider weight-shift state (-1 back .. +1 forward), smoothed from the drag input (b47 two-body)
   cam={x:bike.x-W*0.5,y:bike.y-H*0.46}; camAir=0; t=0; coins=0; dist=0; lastMile=0; newDepth=false; wipe=0; screen='play'; shake=0; flash=0; popT=0; daycycle=Math.random()*6.28;
@@ -932,6 +942,7 @@ function pointerDown(p){
     if(hit(p,UI.suBack)){ screen='title'; sfxClick(); return; }
     if(UI.suRows) for(let i=0;i<UI.suRows.length;i++){ if(hit(p,UI.suRows[i])){ setupSel=i; sfxClick(); return; } }   // тап монеты = выбрать
     if(UI.suLev && hit(p,UI.suLev)){ leverage=LEVS[(LEVS.indexOf(leverage)+1)%LEVS.length]; saveLev(); sfxClick(); return; }
+    if(UI.suSide && hit(p,UI.suSide)){ shortMode=!shortMode; saveShort(); sfxClick(); return; }   // b177
     if(UI.suGo && hit(p,UI.suGo)){ startTicker(setupSel); sfxClick(); return; }
     return;
   }
@@ -1905,7 +1916,7 @@ function draw(){
   else if(gameMode==='endless'){   // b84 DEGEN-МОМЕНТ: главное число = ПОЗИЦИЯ на кону (◆ = ровно что зафиксишь = монеты×плечо), пухнет с соком — не абстрактный $профит
     const pos=posValue();   // b106/b173: позиция = доливка × средняя цена × плечо (тикер) / старый флайвил (proc) — растёт ездой, взлетает на пампе, тает на дампе
     pnlEl.textContent='$'+pos.toLocaleString('en-US');
-    if(trackSource==='ticker'){ const chg=(dcaCost>0)?posPnl():tickerChg(); subC.textContent='ПЛЕЧО ×'+leverage+'   ·   '+(chg>=0?'📈 +':'📉 ')+(chg*100).toFixed(1)+'%'; }   // b106/b173: PnL ПОЗИЦИИ (по средней цене доливки)
+    if(trackSource==='ticker'){ const chg=(dcaCost>0)?posPnl():tickerChg(); subC.textContent=(_shortRun?'📉 ШОРТ ×':'ПЛЕЧО ×')+leverage+'   ·   '+(chg>=0?'📈 +':'📉 ')+(chg*100).toFixed(1)+'%'; }   // b106/b173: PnL ПОЗИЦИИ (по средней цене доливки); b177: метка шорта
     else { const _pm=priceMul(); subC.textContent='ПЛЕЧО ×'+leverage+'   ·   ЦЕНА '+(_pm>=1.12?'📈':_pm<=0.88?'📉':'·')+'×'+_pm.toFixed(2); }
     if(pos>_posPrev)posPulse=1; _posPrev=pos; posPulse*=0.86;
     pnlEl.style.transform=posPulse>0.012?('scale('+(1+0.16*posPulse)+')'):'none';
@@ -2308,10 +2319,14 @@ function drawMenus(){
         ctx.textAlign='right'; ctx.fillStyle=pv.up?'#7fe6a8':'#ff7a6a'; ctx.font='700 11px ui-monospace,monospace'; ctx.fillText((pv.up?'+':'')+(pv.chg*100).toFixed(1)+'%',x0+w0-14,ry+20);
         ctx.fillStyle=tc; ctx.font='700 9px ui-monospace,monospace'; ctx.fillText(pv.volLabel,x0+w0-14,ry+38); ctx.textAlign='left'; }
       else { ctx.textAlign='right'; ctx.fillStyle='rgba(120,130,160,0.6)'; ctx.font='10px ui-monospace,monospace'; ctx.fillText('загрузка…',x0+w0-14,ry+28); ctx.textAlign='left'; } }
-    const lb=y0+TICKERS.length*(rowH+gap)+6, lw=Math.round(W*0.42);
+    const lb=Math.min(y0+TICKERS.length*(rowH+gap)+6, H-56), lw=Math.round(W*0.33), sw2=Math.round(W*0.24);   // b177: [ПЛЕЧО][ЛОНГ/ШОРТ][ПОГНАЛИ]; кламп к низу — на низких экранах ряд не уезжает за кадр (rowH min 38 мог выталкивать)
     UI.suLev={x:x0,y:lb,w:lw,h:48}; ctx.fillStyle='rgba(42,33,16,0.85)'; if(ctx.roundRect){ctx.beginPath();ctx.roundRect(x0,lb,lw,48,11);ctx.fill();ctx.strokeStyle='rgba(128,106,48,0.9)';ctx.lineWidth=1.6;ctx.stroke();}else ctx.fillRect(x0,lb,lw,48);
-    ctx.textAlign='center'; ctx.fillStyle='#ffd678'; ctx.font='800 16px ui-monospace,monospace'; ctx.fillText('⚡ ПЛЕЧО ×'+leverage,x0+lw/2,lb+22); ctx.fillStyle='rgba(205,185,140,0.75)'; ctx.font='600 8.5px ui-monospace,monospace'; ctx.fillText('тап = выше · риск/профит',x0+lw/2,lb+37);
-    UI.suGo={x:x0+lw+10,y:lb,w:w0-lw-10,h:48}; panel(UI.suGo.x,UI.suGo.y,UI.suGo.w,48,'rgba(120,255,180,0.9)','rgba(18,58,40,0.55)'); ctx.fillStyle='#9ff0c8'; ctx.font='800 16px ui-monospace,monospace'; ctx.fillText('▶ ПОГНАЛИ',UI.suGo.x+UI.suGo.w/2,lb+22); ctx.fillStyle='rgba(150,255,200,0.8)'; ctx.font='600 9px ui-monospace,monospace'; ctx.fillText(TICKERS[setupSel].name+' ×'+leverage,UI.suGo.x+UI.suGo.w/2,lb+37);
+    ctx.textAlign='center'; ctx.fillStyle='#ffd678'; ctx.font='800 15px ui-monospace,monospace'; ctx.fillText('⚡ ×'+leverage,x0+lw/2,lb+22); ctx.fillStyle='rgba(205,185,140,0.75)'; ctx.font='600 8.5px ui-monospace,monospace'; ctx.fillText('плечо · тап',x0+lw/2,lb+37);
+    UI.suSide={x:x0+lw+8,y:lb,w:sw2,h:48};   // b177: сторона позиции
+    ctx.fillStyle=shortMode?'rgba(58,16,24,0.9)':'rgba(14,48,34,0.9)'; if(ctx.roundRect){ctx.beginPath();ctx.roundRect(UI.suSide.x,lb,sw2,48,11);ctx.fill();ctx.strokeStyle=shortMode?'rgba(255,90,110,0.9)':'rgba(90,230,170,0.9)';ctx.lineWidth=1.6;ctx.stroke();}else ctx.fillRect(UI.suSide.x,lb,sw2,48);
+    ctx.fillStyle=shortMode?'#ff8a9a':'#7fe6a8'; ctx.font='800 14px ui-monospace,monospace'; ctx.fillText(shortMode?'📉 ШОРТ':'📈 ЛОНГ',UI.suSide.x+sw2/2,lb+22);
+    ctx.fillStyle='rgba(190,205,230,0.6)'; ctx.font='600 8px ui-monospace,monospace'; ctx.fillText(shortMode?'профит на дампе':'профит на пампе',UI.suSide.x+sw2/2,lb+37);
+    UI.suGo={x:x0+lw+sw2+16,y:lb,w:w0-lw-sw2-16,h:48}; panel(UI.suGo.x,UI.suGo.y,UI.suGo.w,48,'rgba(120,255,180,0.9)','rgba(18,58,40,0.55)'); ctx.fillStyle='#9ff0c8'; ctx.font='800 15px ui-monospace,monospace'; ctx.fillText('▶ ГОНКА',UI.suGo.x+UI.suGo.w/2,lb+22); ctx.fillStyle='rgba(150,255,200,0.8)'; ctx.font='600 9px ui-monospace,monospace'; ctx.fillText(TICKERS[setupSel].name+' ×'+leverage+(shortMode?' SHORT':''),UI.suGo.x+UI.suGo.w/2,lb+37);
     ctx.textAlign='left'; return;
   }
   if(screen==='bikes'){   // b108: выбор/покупка байка (перенесён с титула — гараж = снаряга)
