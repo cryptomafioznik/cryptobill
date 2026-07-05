@@ -56,7 +56,7 @@ function lerp(a,b,t){return a+(b-a)*t;} function clamp(v,a,b){return v<a?a:v>b?b
 // false → full game everywhere. Single switch. Systems are GATED, never deleted.
 const CORE_TEST_MODE = false;   // b70: META LIVE — building the progression spine (upgrades/bikes with teeth, career, economy) on the confirmed rigid-body core
 // build stamp — bump on every change so a phone refresh can confirm it loaded fresh code (cache!)
-const BUILD = '2026-07-05 · b178';
+const BUILD = '2026-07-05 · b179';
 
 // ---------- procedural market terrain ----------
 // height map sampled every STEP px; generated forward as we ride. Market character:
@@ -772,7 +772,15 @@ function rollMissions(){ const pool=MISSION_POOL.slice(); missions=[]; for(let n
 function checkMissions(){ if(CORE_TEST_MODE)return; const s={dist:dist,coins:coins,maxMult:maxMult,flips:flipsTotal,kmh:topKmh}; for(const m of missions){ if(!m.done && m.val(s)>=m.target){ m.done=true; coins+=m.rew; gflash=0.7; multPulse=1; popText('ЦЕЛЬ ✓  +◆'+m.rew); floatPop(bike.x,bike.y-34,'+◆'+m.rew,'#9ff0c8'); sfxLev(); } } }
 
 // ---------- sound (procedural WebAudio) ----------
-let actx,eng,engGain,master,engLP,engOscs,windG;   // b152: windG = свист ветра на большом полёте (gain ∝ camAir)
+let actx,eng,engGain,master,engLP,engOscs,windG,waveG,noiseBuf,_scrubT=0;   // b152: windG = ветер полёта; b179: waveG = стерео-рокот волны сзади-слева, noiseBuf = общий шум для шорохов
+// b179 ХАРАКТЕР ДВИЖКА ПО ТИПУ БАЙКА (один осц-банк, разные параметры в кадре): велик = почти тишина (накат), скутер/мопед = зудящий 2-такт, дёрт = рык (база), спорт = вой выше. КАЛИБРОВКА — РУКИ
+const ENG_PROF={
+  bike:   {f0:26, fv:1.2, h2:2.01, h3:1.006, lp0:800, lpv:30,  gv:0.0022, gThr:0.008, cap:0.07},
+  scooter:{f0:95, fv:10.5,h2:2.02, h3:2.98,  lp0:700, lpv:70,  gv:0.010,  gThr:0.05,  cap:0.30},
+  moped:  {f0:82, fv:10,  h2:2.02, h3:2.98,  lp0:640, lpv:75,  gv:0.010,  gThr:0.05,  cap:0.30},
+  dirt:   {f0:40, fv:8,   h2:2.01, h3:1.006, lp0:360, lpv:95,  gv:0.011,  gThr:0.05,  cap:0.32},
+  sport:  {f0:58, fv:11,  h2:3.0,  h3:1.5,   lp0:520, lpv:130, gv:0.012,  gThr:0.06,  cap:0.34},
+};
 function makeDistCurve(k){ const n=256,c=new Float32Array(n); for(let i=0;i<n;i++){ const x=i/(n-1)*2-1; c[i]=(1+k)*x/(1+k*Math.abs(x)); } return c; }
 function initAudio(){ if(actx)return; try{
   actx=new (window.AudioContext||window.webkitAudioContext)(); master=actx.createGain(); master.gain.value=muted?0:0.42;
@@ -789,11 +797,23 @@ function initAudio(){ if(actx)return; try{
   const nb=actx.createBuffer(1,actx.sampleRate,actx.sampleRate); const nd=nb.getChannelData(0); for(let i=0;i<nd.length;i++)nd[i]=Math.random()*2-1;
   const ns=actx.createBufferSource(); ns.buffer=nb; ns.loop=true; const nbp=actx.createBiquadFilter(); nbp.type='bandpass'; nbp.frequency.value=1500; nbp.Q.value=0.6; const ng=actx.createGain(); ng.gain.value=0.22; ns.connect(nbp); nbp.connect(ng); ng.connect(emix); ns.start();
   const wn=actx.createBufferSource(); wn.buffer=nb; wn.loop=true; const wbp=actx.createBiquadFilter(); wbp.type='bandpass'; wbp.frequency.value=520; wbp.Q.value=0.45; windG=actx.createGain(); windG.gain.value=0; wn.connect(wbp); wbp.connect(windG); windG.connect(master); wn.start();   // b152 ВЕТЕР: низкий шум-свист, громкость ∝ высоте полёта (camAir) — большой прыжок «слышен»
+  noiseBuf=nb;   // b179: общий шум для шорохов (скид)
+  { const wv=actx.createBufferSource(); wv.buffer=nb; wv.loop=true;   // b179 РОКОТ ВОЛНЫ: низкий гул СЗАДИ-СЛЕВА (StereoPanner) ∝ близости дампа — страх слышен ухом
+    const wlp=actx.createBiquadFilter(); wlp.type='lowpass'; wlp.frequency.value=130; wlp.Q.value=0.9;
+    waveG=actx.createGain(); waveG.gain.value=0;
+    let wpan=null; try{ wpan=actx.createStereoPanner(); wpan.pan.value=-0.6; }catch(e){}
+    wv.connect(wlp); if(wpan){ wlp.connect(wpan); wpan.connect(waveG); } else wlp.connect(waveG);
+    waveG.connect(master); wv.start(); }
   o1.start(); o2.start(); o3.start(); eng=o1; engOscs=[o1,o2,o3];
   initMusic();
 }catch(e){actx=null;} }
 function resumeAudio(){ initAudio(); try{ if(actx&&actx.state==='suspended')actx.resume(); }catch(e){} }
 function blip(freq,dur,type,vol){ if(!actx||muted)return; try{ const o=actx.createOscillator(),g=actx.createGain(),n=actx.currentTime; o.type=type||'square'; o.frequency.setValueAtTime(freq,n); o.connect(g); g.connect(master); g.gain.setValueAtTime(0.0001,n); g.gain.exponentialRampToValueAtTime(vol||0.3,n+0.012); g.gain.exponentialRampToValueAtTime(0.0001,n+(dur||0.12)); o.start(n); o.stop(n+(dur||0.12)+0.03);}catch(e){} }
+function sfxScrub(v){ if(!actx||muted||!noiseBuf)return; try{ const s=actx.createBufferSource(); s.buffer=noiseBuf; s.loop=true;   // b179: шорох резины при торможении ∝ скорости
+  const bp=actx.createBiquadFilter(); bp.type='bandpass'; bp.frequency.value=650+v*35; bp.Q.value=0.8;
+  const gn=actx.createGain(); const n=actx.currentTime, vol=Math.min(0.16,0.04+v*0.010);
+  gn.gain.setValueAtTime(0.0001,n); gn.gain.exponentialRampToValueAtTime(vol,n+0.02); gn.gain.exponentialRampToValueAtTime(0.0001,n+0.12);
+  s.connect(bp); bp.connect(gn); gn.connect(master); s.start(n); s.stop(n+0.15); }catch(e){} }
 function sfxCoin(){ blip(940,0.09,'triangle',0.2); blip(1400,0.07,'triangle',0.11); }
 function sfxFlip(){ blip(260,0.2,'sawtooth',0.16); }
 function sfxFlipCrescendo(n){ blip(240+Math.min(n,6)*95,0.2,'sawtooth',0.16); if(n>=2)blip(560+n*70,0.13,'square',0.10); }   // b90 КРЕЩЕНДО: тон выше с каждым флипом в цепи
@@ -1396,7 +1416,8 @@ function update(){
   dcaTick();    // b173: ДОЛИВКА — каждый метр/монетка докупает позицию по текущей цене
   ghostSnap();  // b174: лог поз для призрака дейли
   if(t%12===0){ nearKickX=-1; const _ck=Math.floor(bike.x/STEP); for(let k=_ck+6;k<_ck+42;k++){ const n=terr[k]; if(n&&n.kick){ nearKickX=n.x; break; } } }   // b156: ближайший трамплин впереди (для HUD-указателя)
-  if(bike.onG && brake && bike.vx>2.5 && t%2===0){ const _st=terrainAt(bike.x-8); skids.push({x:bike.x-8,y:_st.y,a:_st.ang,life:1}); if(skids.length>90)skids.shift(); }   // b160: скид-марки при торможении
+  if(bike.onG && brake && bike.vx>2.5 && t%2===0){ const _st=terrainAt(bike.x-8); skids.push({x:bike.x-8,y:_st.y,a:_st.ang,life:1}); if(skids.length>90)skids.shift();
+    if(t-_scrubT>7){ _scrubT=t; sfxScrub(bike.vx); } }   // b160: скид-марки при торможении; b179: + шорох резины
   if(skids.length){ for(const s of skids)s.life-=0.004; if(skids[0].life<=0)skids.shift(); }
   cam.x=bike.x-W*0.32; cam.y=lerp(cam.y, bike.y-H*(0.52-camAir*0.10), lerp(TUNE.camFollow,0.45,camAir));   // fast follow on big air so the camera tracks the launch+fall (bike stays framed); zoom-out (draw) widens the view
   for(const p of parts){p.x+=p.vx;p.y+=p.vy;p.vy+=0.12;p.vx*=0.97;p.life-=0.03;} parts=parts.filter(p=>p.life>0);
@@ -1908,12 +1929,14 @@ function draw(){
     }
   } else { UI.gas=null; UI.brk=null; UI.jump=null; UI.pumpBtn=null; UI.gasBtn=null; UI.brkBtn=null; UI.leanLBtn=null; UI.leanRBtn=null; UI.jumpBtn=null; }
   // engine audio tracks speed
-  if(eng&&engOscs){ const v=bike?bike.vx:0, f=40+v*8+(down?16:0);
-    engOscs[0].frequency.value=f; engOscs[1].frequency.value=f*2.01; engOscs[2].frequency.value=f*1.006;
+  if(eng&&engOscs){ const v=bike?bike.vx:0, pr=ENG_PROF[(BK()&&BK().type)||'dirt']||ENG_PROF.dirt, f=pr.f0+v*pr.fv+(down?16:0);   // b179: характер движка по типу байка
+    engOscs[0].frequency.value=f; engOscs[1].frequency.value=f*pr.h2; engOscs[2].frequency.value=f*pr.h3;
     if(windG){ const wt=(screen==='play'&&bike&&!bike.onG)?Math.min(0.42,(camAir||0)*0.36+(trickMix||0)*0.12):0; windG.gain.value+=(wt-windG.gain.value)*0.12; }   // b152: ветер ∝ высоте полёта; b159: +свист удержания позы (трюк «слышен»)
-    engLP.frequency.value=360+v*95+(down?520:0)+(boosting>0?700:0);
-    const tgt=(screen==='play'&&!muted)?clamp(0.05+v*0.011+(down?0.05:0)+(boosting>0?0.06:0),0,0.32):0;
-    engGain.gain.value+=(tgt-engGain.gain.value)*0.1; }
+    engLP.frequency.value=pr.lp0+v*pr.lpv+(down?520:0)+(boosting>0?700:0);
+    const tgt=(screen==='play'&&!muted)?clamp(0.05+v*pr.gv+(down?pr.gThr:0)+(boosting>0?0.06:0),0,pr.cap):0;
+    engGain.gain.value+=(tgt-engGain.gain.value)*0.1;
+    if(waveG){ const wg=(screen==='play'&&bike&&wave!==undefined)?clamp(1-(bike.x-wave)/(W*0.62),0,1):0;   // b179: рокот волны ∝ близости (слева в стерео)
+      const wt2=(!muted&&screen==='play')?Math.pow(wg,1.5)*0.30:0; waveG.gain.value+=(wt2-waveG.gain.value)*0.08; } }
   // hud DOM
   const playing=(screen==='play'||screen==='paused');
   hudEl.style.opacity=playing?'1':'0'; spdEl.style.opacity=playing?'1':'0'; hintEl.style.opacity=(screen==='play'&&!TOUCH)?'1':'0';   // on touch the visible buttons replace the text hint
