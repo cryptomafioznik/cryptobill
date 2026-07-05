@@ -56,7 +56,7 @@ function lerp(a,b,t){return a+(b-a)*t;} function clamp(v,a,b){return v<a?a:v>b?b
 // false → full game everywhere. Single switch. Systems are GATED, never deleted.
 const CORE_TEST_MODE = false;   // b70: META LIVE — building the progression spine (upgrades/bikes with teeth, career, economy) on the confirmed rigid-body core
 // build stamp — bump on every change so a phone refresh can confirm it loaded fresh code (cache!)
-const BUILD = '2026-07-02 · b170';
+const BUILD = '2026-07-02 · b171';
 
 // ---------- procedural market terrain ----------
 // height map sampled every STEP px; generated forward as we ride. Market character:
@@ -500,6 +500,9 @@ function savePumpSide(){ try{localStorage.setItem('cipher_pumpside',pumpSide);}c
 const SCHEMES=['gestures','btn2','btn4','tilt'];
 const SCHEME_NAME={gestures:'ЖЕСТЫ',btn2:'АВТО-ГАЗ',btn4:'4 КНОПКИ',tilt:'НАКЛОН ТЕЛЕФОНА'};
 const SCHEME_DESC={gestures:'держишь = газ · драг = наклон · свайп↑ = прыжок',btn2:'газ САМ · тормоз + НОС↑/НОС↓ + прыжок/памп',btn4:'газ/тормоз + кнопки наклона НОС↑ / НОС↓ + прыжок/памп',tilt:'газ/тормоз + наклон ТЕЛЕФОНА (гироскоп)'};
+let trickGrip='sticky'; try{ const _tg=localStorage.getItem('cipher_trickgrip'); if(_tg==='hold'||_tg==='sticky')trickGrip=_tg; }catch(e){}   // b171 ТРЮК-ХВАТ (юзер: «неудобны в управлении»): ЗАЛИПАЕТ (дефолт) = свайп задал позу, она ДЕРЖИТСЯ сама; тап свободным пальцем = отпустить; свайп в другую сторону = СМЕНА позы в полёте. ДЕРЖАТЬ = старый b158 (палец на экране)
+function saveTrickGrip(){ try{localStorage.setItem('cipher_trickgrip',trickGrip);}catch(e){} }
+const TRICK_BASE={1:1,2:2,3:3,4:4,5:1,6:2,7:4};   // жёсткая вариация → её базовое направление (для «тот же свайп = отпустить»)
 let ctrlScheme='btn4'; try{ctrlScheme=localStorage.getItem('cipher_ctrlscheme')||'btn4'; if(SCHEMES.indexOf(ctrlScheme)<0)ctrlScheme='btn4';}catch(e){}   // b56: 4 КНОПКИ = ДЕФОЛТ (юзер выбрал — удобнее). btn2 переделан в АВТО-ГАЗ
 function saveScheme(){ try{localStorage.setItem('cipher_ctrlscheme',ctrlScheme);}catch(e){} }
 let wheelieAssist=true; try{wheelieAssist=localStorage.getItem('cipher_wassist')!=='0';}catch(e){}   // b147: вилли-помощник ВКЛ по умолчанию; PRO (выкл) = чистая физика — тумблер в настройках
@@ -870,6 +873,7 @@ function pointerDown(p){
     if(hit(p,UI.setPump)){ pumpSide=(pumpSide==='left')?'right':'left'; savePumpSide(); sfxClick(); return; }
     if(hit(p,UI.setMute)){ toggleMute(); sfxClick(); return; }
     if(UI.setWassist && hit(p,UI.setWassist)){ wheelieAssist=!wheelieAssist; saveWassist(); sfxClick(); return; }   // b147: тумблер вилли-помощника
+    if(UI.setTgrip && hit(p,UI.setTgrip)){ trickGrip=trickGrip==='sticky'?'hold':'sticky'; saveTrickGrip(); sfxClick(); return; }   // b171: хват трюка
     if(UI.setReset && hit(p,UI.setReset)){ if(resetArm>0){ resetProgress(); } else { resetArm=180; sfxClick(); } return; }   // b95: первый тап «взводит», второй (в течение ~3с) обнуляет
     if(hit(p,UI.setBack)){ resetArm=0; screen=settingsRet||'title'; sfxClick(); return; }
     return;
@@ -917,9 +921,11 @@ addEventListener('keydown',e=>{
   else if((k==='r'||k==='R')&&screen==='dead')reset();
   else if(k==='m'||k==='M')toggleMute();
   else if(k==='f'||k==='F')dbgToggle();   // toggle debug overlay
-  else if(k>='1'&&k<='7'){ if(screen==='play'&&!trick){ if(startTrick(+k)) trickKey=k; } e.preventDefault(); }   // b158/159: десктоп-трюки — 1 СУПЕРМЕН 2 ЦУНАМИ 3 COFFIN 4 NO HANDER 5 SEAT GRAB 6 HEART ATTACK 7 HEEL CLICKER (держать)
+  else if(k>='1'&&k<='7'){ if(screen==='play'&&!trick){ if(startTrick(+k)) trickKey=k; }
+    else if(screen==='play'&&trick&&trickGrip==='sticky'){ if(+k===trick){ trickHeld=false; } else if(bike&&!bike.onG){ trick=+k; trickHeld=true; trickT=0; popText('🤸 '+TRICK_NAMES[+k]); sfxTrick(+k); } }   // b171: залипание — та же клавиша = отпуск, другая = смена
+    e.preventDefault(); }   // b158/159: десктоп-трюки — 1 СУПЕРМЕН 2 ЦУНАМИ 3 COFFIN 4 NO HANDER 5 SEAT GRAB 6 HEART ATTACK 7 HEEL CLICKER
 });
-addEventListener('keyup',e=>{ const k=e.key; if(GAS_KEYS[k])down=false; else if(BRK_KEYS[k])brake=false; else if(LEANL_KEYS[k]){leanKeyL=false;updLeanKeys();} else if(LEANR_KEYS[k]){leanKeyR=false;updLeanKeys();} else if(k===trickKey){ trickHeld=false; trickKey=''; } });
+addEventListener('keyup',e=>{ const k=e.key; if(GAS_KEYS[k])down=false; else if(BRK_KEYS[k])brake=false; else if(LEANL_KEYS[k]){leanKeyL=false;updLeanKeys();} else if(LEANR_KEYS[k]){leanKeyR=false;updLeanKeys();} else if(k===trickKey){ if(trickGrip!=='sticky')trickHeld=false; trickKey=''; } });
 document.addEventListener('visibilitychange',()=>{ if(document.hidden && screen==='play'){ screen='paused'; down=false; brake=false; leanX=0; activeTouches={}; trickHeld=false; } });   // b162 АВТО-ПАУЗА: звонок/сворачивание не скармливает байк волне (аудит; для App Store важно)
 addEventListener('mousedown',e=>{ const p=ptFromEvent(e),z=pointerDown(p);
   if(ctrlScheme==='gestures'){ if(z==='ctrl'){ down=true; ctrlId='mouse'; ctrlOX=p.x; leanX=0; } }
@@ -934,20 +940,31 @@ addEventListener('touchmove',e=>{ for(const tch of e.changedTouches){ const r=cv
     if(ctrlScheme==='gestures'){
       if(touchLowY[id]!==undefined){ if(cy>touchLowY[id]) touchLowY[id]=cy; else if(touchLowY[id]-cy>TUNE.swipeJump && bike && bike.onG){ requestJump(); touchLowY[id]=cy; } }   // swipe up = jump ТОЛЬКО с земли (b158: в воздухе свайп-вверх = ЦУНАМИ, не буфер прыжка)
       if(id===ctrlId){ leanX=clamp((cx-ctrlOX)/LEANRANGE,-1,1); } }
-    if(!trick && screen==='play' && bike && !bike.onG && airT>3 && activeTouches[id]===undefined && id!==ctrlId && touchSX[id]!==undefined){   // b158 ТРЮК-СВАЙП (любая схема): свободный палец, свайп в полёте = трюк; ДЕРЖИШЬ палец = держишь позу
+    if(!trick && screen==='play' && bike && !bike.onG && airT>3 && activeTouches[id]!==undefined && touchSX[id]!==undefined){   // b171: свайп ПОВЕРХ КНОПКИ в полёте = тоже трюк (палец соскальзывает с газа — раньше жест терялся)
+      const dx=cx-touchSX[id], dy=cy-touchSY[id];
+      if(Math.hypot(dx,dy)>34){ delete activeTouches[id]; recompute(); const idT=Math.abs(dy)>Math.abs(dx) ? (dy<0?2:3) : (dx<0?1:4); if(startTrick(idT)) trickTouch=id; } }
+    else if(!trick && screen==='play' && bike && !bike.onG && airT>3 && activeTouches[id]===undefined && id!==ctrlId && touchSX[id]!==undefined){   // b158 ТРЮК-СВАЙП (любая схема): свободный палец, свайп в полёте = трюк
       const dx=cx-touchSX[id], dy=cy-touchSY[id];
       if(Math.hypot(dx,dy)>26){ const idT=Math.abs(dy)>Math.abs(dx) ? (dy<0?2:3) : (dx<0?1:4); if(startTrick(idT)) trickTouch=id; } }
     else if(trick && id===trickTouch && TRICK_UP[trick] && trickMix<0.6 && touchSX[id]!==undefined){   // b159: свайп ПРОДОЛЖИЛСЯ дальше (>78px) = жёсткая вариация (СУПЕРМЕН→SEAT GRAB и т.д.)
       const dx=cx-touchSX[id], dy=cy-touchSY[id];
-      if(Math.hypot(dx,dy)>78){ trick=TRICK_UP[trick]; popText('🤸 '+TRICK_NAMES[trick]+'!'); sfxTrick(trick); buzz(16); } } }
+      if(Math.hypot(dx,dy)>78){ trick=TRICK_UP[trick]; popText('🤸 '+TRICK_NAMES[trick]+'!'); sfxTrick(trick); buzz(16); } }
+    else if(trick && trickGrip==='sticky' && screen==='play' && bike && !bike.onG && id!==trickTouch && id!==ctrlId && activeTouches[id]===undefined && touchSX[id]!==undefined){   // b171 ЗАЛИПАНИЕ: новый свайп при живой позе = смена позы / тот же жест = отпустить
+      const dx=cx-touchSX[id], dy=cy-touchSY[id];
+      if(Math.hypot(dx,dy)>26){ const idT=Math.abs(dy)>Math.abs(dx) ? (dy<0?2:3) : (dx<0?1:4);
+        if(idT===(TRICK_BASE[trick]||trick)){ trickHeld=false; touchSX[id]=undefined; }
+        else { trick=idT; trickHeld=true; trickT=0; trickTouch=id; popText('🤸 '+TRICK_NAMES[idT]); sfxTrick(idT); buzz(12); } } } }
   e.preventDefault(); },{passive:false});
-addEventListener('touchend',e=>{ for(const tch of e.changedTouches){ delete touchLowY[tch.identifier]; delete touchSX[tch.identifier]; delete touchSY[tch.identifier];
-    if(tch.identifier===trickTouch){ trickHeld=false; trickTouch=-1; }   // b158: отпустил трюк-палец → райдер возвращается в седло
-    if(ctrlScheme==='gestures'){ if(tch.identifier===ctrlId){ ctrlId=null; leanX=0; } }
-    else if(activeTouches[tch.identifier]){ delete activeTouches[tch.identifier]; recompute(); } }
+addEventListener('touchend',e=>{ for(const tch of e.changedTouches){ const id=tch.identifier;
+    { const r2=cv.getBoundingClientRect(), ex=tch.clientX-r2.left, ey=tch.clientY-r2.top, sx=touchSX[id], sy=touchSY[id];   // b171 ЗАЛИПАНИЕ: ТАП свободным пальцем в полёте при живой позе = отпустить (вернуться в седло до посадки)
+      if(trickGrip==='sticky' && trick && trickHeld && screen==='play' && bike && !bike.onG && id!==trickTouch && id!==ctrlId && activeTouches[id]===undefined && sx!==undefined && Math.hypot(ex-sx,ey-sy)<12) trickHeld=false; }
+    delete touchLowY[id]; delete touchSX[id]; delete touchSY[id];
+    if(id===trickTouch){ if(trickGrip!=='sticky') trickHeld=false; trickTouch=-1; }   // b158 «держать»: отпустил палец → в седло; b171 «залипает»: поза живёт дальше
+    if(ctrlScheme==='gestures'){ if(id===ctrlId){ ctrlId=null; leanX=0; } }
+    else if(activeTouches[id]){ delete activeTouches[id]; recompute(); } }
   if(ctrlScheme==='gestures') down=(ctrlId!==null); e.preventDefault(); },{passive:false});
 addEventListener('touchcancel',e=>{ for(const tch of e.changedTouches){ delete touchLowY[tch.identifier]; delete touchSX[tch.identifier]; delete touchSY[tch.identifier];
-    if(tch.identifier===trickTouch){ trickHeld=false; trickTouch=-1; }
+    if(tch.identifier===trickTouch){ if(trickGrip!=='sticky') trickHeld=false; trickTouch=-1; }
     if(ctrlScheme==='gestures'){ if(tch.identifier===ctrlId){ ctrlId=null; leanX=0; } }
     else if(activeTouches[tch.identifier]){ delete activeTouches[tch.identifier]; recompute(); } }
   if(ctrlScheme==='gestures') down=(ctrlId!==null); },{passive:false});
@@ -1122,7 +1139,7 @@ function update(){
     airT++;
     if(airT===14) tut('air','✦ В ВОЗДУХЕ: ↓ НОС ВНИЗ К СКЛОНУ ДЛЯ РОВНОЙ ПОСАДКИ');
     if(airT===10 && terr[ci0-2] && (terr[ci0-2].ramp||terr[ci0-1]&&terr[ci0-1].ramp)) tut('flip3','🔄 В ПОЛЁТЕ: НАЖМИ НОС↑ = бросок в БЭКФЛИП · ОТПУСТИ = стоп-вращение');   // b153: импульсная модель — бросок в полёте задаёт вращение, отпускание гасит
-    if(airT===20 && trickAir && !trick) tut('trick1','🤸 СВАЙП свободным пальцем В ПОЛЁТЕ = ТРЮК · ДЕРЖИ! отпусти до земли');   // b158: учим трюкам на большом полёте
+    if(airT===20 && trickAir && !trick) tut('trick1', trickGrip==='sticky'?'🤸 СВАЙП в полёте = ТРЮК (сам держится) · ТАП = отпустить до земли!':'🤸 СВАЙП свободным пальцем В ПОЛЁТЕ = ТРЮК · ДЕРЖИ! отпусти до земли');   // b158/b171: учим трюкам на большом полёте
     if(trickAir){ const _th=terrainAt(bike.x).y-(bike.y+DY);   // b150 ТРИК-КАМЕРА: взлёт/апекс с трамплина = зум К БАЙКУ (флип читается кинематографично), к земле — плавный отъезд (посадка в кадре)
       if(airT>6 && (bike.vy<2 || _th>130)) trickZoom=Math.min(1,trickZoom+0.14); else trickZoom=Math.max(0,trickZoom-0.12);
       if(trickAir===1 && airT>12 && Math.abs(bike.vy)<1.6 && Math.abs(bike.angV)>0.13){ slowmo=Math.max(slowmo,14); trickAir=2; } }   // слоумо на АПЕКСЕ: только реальный полёт (airT>12 — b154: короткий подскок давал «блип»-замедление, читалось лагом) + только если реально крутишь, раз за полёт
@@ -2332,7 +2349,11 @@ function drawMenus(){
     ctx.fillStyle='#9fb6dc'; ctx.font='700 10px ui-monospace,monospace'; ctx.fillText('ВИЛЛИ-БАЛАНС  (езда на заднем колесе)',cx,y+19);
     ctx.fillStyle=wheelieAssist?'#9ff0c8':'#ffb060'; ctx.font='800 15px ui-monospace,monospace'; ctx.fillText(wheelieAssist?'ПОДУШКА У ГРАНИ:  ВКЛ':'PRO:  ЧИСТАЯ ФИЗИКА',cx,y+41);
     ctx.fillStyle='rgba(140,160,195,0.6)'; ctx.font='600 9px ui-monospace,monospace'; ctx.fillText('жесты — для тебя · кнопки/наклон — для новичков',cx,y+68);
-    y+=80; if(resetArm>0)resetArm--; UI.setReset={x:cx-cw/2,y:y,w:cw,h:46}; const armed=resetArm>0;   // b95 СБРОС ПРОГРЕССА (2-тап) — чистый старт для анализа
+    y+=80; UI.setTgrip={x:cx-cw/2,y:y,w:cw,h:54}; panel(UI.setTgrip.x,UI.setTgrip.y,cw,54,'rgba(255,214,120,0.5)');   // b171: хват FMX-поз
+    ctx.fillStyle='#9fb6dc'; ctx.font='700 10px ui-monospace,monospace'; ctx.fillText('ТРЮК-ХВАТ  (FMX-позы в полёте)',cx,y+19);
+    ctx.fillStyle=trickGrip==='sticky'?'#ffd678':'#9ff0c8'; ctx.font='800 13px ui-monospace,monospace';
+    ctx.fillText(trickGrip==='sticky'?'ЗАЛИПАЕТ: свайп = поза · тап = отпуск':'ДЕРЖАТЬ: палец на экране = поза',cx,y+41);
+    y+=66; if(resetArm>0)resetArm--; UI.setReset={x:cx-cw/2,y:y,w:cw,h:46}; const armed=resetArm>0;   // b95 СБРОС ПРОГРЕССА (2-тап) — чистый старт для анализа
     panel(UI.setReset.x,UI.setReset.y,cw,46, armed?'rgba(255,110,90,0.95)':'rgba(255,150,120,0.45)', armed?'rgba(60,20,16,0.66)':'rgba(30,18,16,0.4)');
     ctx.fillStyle=armed?'#ff9a7a':'#e0a890'; ctx.font='800 14px ui-monospace,monospace'; ctx.fillText(armed?'⟲ ТОЧНО? ЖМИ ЕЩЁ РАЗ':'⟲ ОБНУЛИТЬ ПРОГРЕСС',cx,y+28);
     UI.setBack={x:cx-90,y:H-88,w:180,h:46}; panel(UI.setBack.x,UI.setBack.y,180,46,'rgba(150,170,210,0.6)'); ctx.fillStyle='#cfe0ff'; ctx.font='700 15px ui-monospace,monospace'; ctx.fillText('←  НАЗАД',cx,UI.setBack.y+29);
