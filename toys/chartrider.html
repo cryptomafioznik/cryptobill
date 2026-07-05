@@ -56,7 +56,7 @@ function lerp(a,b,t){return a+(b-a)*t;} function clamp(v,a,b){return v<a?a:v>b?b
 // false → full game everywhere. Single switch. Systems are GATED, never deleted.
 const CORE_TEST_MODE = false;   // b70: META LIVE — building the progression spine (upgrades/bikes with teeth, career, economy) on the confirmed rigid-body core
 // build stamp — bump on every change so a phone refresh can confirm it loaded fresh code (cache!)
-const BUILD = '2026-07-02 · b172';
+const BUILD = '2026-07-05 · b173';
 
 // ---------- procedural market terrain ----------
 // height map sampled every STEP px; generated forward as we ride. Market character:
@@ -576,7 +576,26 @@ function tkStake(){ return clamp(STAKE_BASE+(bank||0)*STAKE_PER, STAKE_BASE, STA
 const STAKE_YIELD=0.03;   // b114 ЭТАП3: СТЕЙКИНГ — холодный ◆ даёт пассивный $ КАЖДЫЙ заезд (награда за закрепление + камбэк после взрыва, без тупиков). Калибровка — руки
 function payStaking(){ stakeIncome=Math.round((career||0)*STAKE_YIELD); if(stakeIncome>0)bank+=stakeIncome; return stakeIncome; }   // career = ◆ холод
 function tickerChg(){ if(trackSource!=='ticker'||!bike||!entryPrice)return 0; const cur=tkMid-(terrainAt(bike.x).y-baseY)/tkK; return cur/entryPrice-1; }   // b106 реальное изменение цены монеты от входа (для HUD/пика)
-function posFactor(){   // b106 множитель к размеру позиции (coins×COIN_GEM) при выплате/показе
+// ===== b173 ДОЛИВКА (юзер: «сейчас можно 10м на плече и зафиксироваться — дальше ехать нет смысла; стоимость должна расти по мере трассы») =====
+// ПРИЧИННАЯ МОДЕЛЬ = настоящий DCA: ты НЕ входишь всей котлетой на старте — КАЖДЫЙ МЕТР докупает позицию по ТЕКУЩЕЙ цене
+// (dcaCost = вложено $, dcaQty = куплено монеты). Монетки/трюки = буст доливки («подобрал $ → долил»). Выплата = маржа + плечо × PnL
+// по СРЕДНЕЙ цене входа. Следствия (не правила, а физика модели): ранний фикс = мизер (позиция не набрана) · дальше едешь = больше
+// на столе (и больше теряешь волне = растущая драма) · памп после долгой езды = профит на ВСЮ позицию · цена НЕ уводит в минус (пол 0, b104).
+const DCA={ M:120, COIN:2.5, PAY:0.55 };   // M = метров на один полный tkStake доливки · COIN = буст монетки (×метровой доли) · PAY = масштаб выплаты к старой экономике. КАЛИБРОВКА — РУКИ
+let dcaCost=0, dcaQty=0, _dcaDist=0, _dcaCoins=0;
+function tkPrice(x){ return tkMid-(terrainAt(x).y-baseY)/tkK; }   // реальная цена монеты в точке трассы
+function dcaTick(){ if(trackSource!=='ticker'||!bike||!entryPrice||cashedOut)return;   // зовётся из update: доливка ∝ пройденным метрам + монеткам
+  const cur=Math.max(1e-9,tkPrice(bike.x));
+  const dd=Math.max(0,(dist||0)-_dcaDist); _dcaDist=dist||0;
+  const dc=Math.max(0,(coins||0)-_dcaCoins); _dcaCoins=coins||0;
+  const spend=tkStake()*(dd/DCA.M) + tkStake()*(1/DCA.M)*DCA.COIN*dc;
+  if(spend>0){ dcaCost+=spend; dcaQty+=spend/cur; } }
+function posValue(){ if(trackSource!=='ticker') return Math.max(0,Math.round((coins||0)*COIN_GEM*posFactor()));   // proc: старый флайвил
+  if(!bike||!entryPrice||dcaCost<=0) return 0;
+  const cur=Math.max(1e-9,tkPrice(bike.x));
+  return Math.max(0, Math.round((dcaCost + leverage*(dcaQty*cur-dcaCost))*DCA.PAY)); }   // маржа + плечо×PnL по средней; пол 0
+function posPnl(){ if(dcaCost<=0||!bike)return 0; const cur=Math.max(1e-9,tkPrice(bike.x)); return dcaQty*cur/dcaCost-1; }   // PnL% позиции (для «ПИК! ЗАБЕРИ»/HUD)
+function posFactor(){   // b106 множитель к размеру позиции (coins×COIN_GEM) при выплате/показе — b173: живёт только для PROC-ветки и миссий
   if(trackSource==='ticker'){ if(!bike||!entryPrice)return tkStake();
     return tkStake()*Math.max(0,1+leverage*tickerChg()); }   // b113 размер = маржа от $-стека × реальный курс × плечо   // РЕАЛЬНЫЙ курс × плечо; пол 0 — цена НЕ ликвидирует капитал (только волна/краш, b104). Плечо живёт ТОЛЬКО здесь (без дубля)
   return leverage*priceMul(); }   // proc endless/карьера: плоское плечо × sell-the-top (флайвил без изменений)
@@ -800,6 +819,8 @@ function reset(){
   mult=1; airT=0; nearMissed=false; hitstop=0; gflash=0; multPulse=0; maxMult=1; flipCount=0; flipAcc=0; wheelieT=0; cashedOut=false; runGems=0; cashCelebT=0; pumpAir=0;
   flipsTotal=0; topKmh=0; lastLandDiff=0; lean=0; rush=0; prevVx=0; down=false; brake=false; jumpReq=0; jumpCd=0; coyote=0; jumpGrace=0; activeTouches={}; leanX=0; ctrlId=null; leanKeyL=false; leanKeyR=false; leanCmd=0; rShiftVel=0; wave=bike.x-W*0.95; waveSpd=0; deathBy=''; boost=0; boosting=0; posPulse=0; _posPrev=0; _dangBuzz=0; prMax=0; prMin=0; slowmo=0; wheelieAim=0; wheelieI=0; trickAir=0; trickZoom=0; trick=0; trickMix=0; trickHeld=false; trickT=0; trickTouch=-1; trickKey=''; touchSX={}; touchSY={}; skids=[]; dailyMode=false; _dailyRes=false; livePrice=0; liveT=0; inpLog=[]; _inpPrev=-1; inpMeta={c:selTicker||'',m:gameMode,s:trackSource,b:selBike,bd:BUILD};
   clipBuf=[]; clipPlay=null; clipBlob=null; bestClip=null; bestSum=0; _hlWin=[]; _hlSum=0; _hlPend=-1; _flipPrev=0;   // b170: клип-стейт per-забег (b163-фикс: буфер НЕ чистился между забегами → первые 7с могли реплеить старые позы на новой трассе)
+  dcaCost=0; dcaQty=0; _dcaDist=0; _dcaCoins=0;   // b173: позиция набирается с нуля каждый забег
+  if(trackSource==='ticker') tut('dca','💰 ДОЛИВАЕШЬСЯ ПО ХОДУ: дальше едешь = крупнее позиция · монетки и трюки доливают быстрее');
   zone=-1; biomeBanner=''; biomeBannerT=0; BSKY=['rgb(20,16,48)','rgb(46,30,78)','rgb(150,80,110)','rgb(230,150,110)']; BLINE='228,250,255'; BRIDGE='60,40,90'; rollMissions();
   parts=[]; dust=[]; trail=[]; streaks=[]; floats=[];
   stars=[]; for(let i=0;i<90;i++)stars.push({x:Math.random()*W,y:Math.random()*H*0.7,z:0.2+Math.random()*0.6,s:Math.random()*1.6+0.4});
@@ -1245,7 +1266,7 @@ function update(){
   if(trackSource!=='ticker') while(genX < bike.x + W + 200) genSeg();   // b96: ticker-трасса предзагружена (конечна) — не догенерируем
   dist=Math.max(dist,Math.floor(bike.x/10));
   if(gameMode==='career' && !careerWon && screen==='play' && dist>=finishDist) winRun();   // b60: reached the FINISH line → track complete
-  if(trackSource==='ticker' && screen==='play' && dist>=finishDist){ if((coins||0)>0){ cashOut(); } else { deathBy='cashout'; cashedOut=true; finishChallenge(); screen='dead'; } popText('🏁 ГРАФИК '+((MARKET_DATA[selTicker]||MARKET_DATA.btc).name)+' ПРОЙДЕН'); }   // b96: доехал до конца = финиш; b118: оценка вызова Пути
+  if(trackSource==='ticker' && screen==='play' && dist>=finishDist){ if(posValue()>0){ cashOut(); } else { deathBy='cashout'; cashedOut=true; finishChallenge(); screen='dead'; } popText('🏁 ГРАФИК '+((MARKET_DATA[selTicker]||MARKET_DATA.btc).name)+' ПРОЙДЕН'); }   // b96: доехал до конца = финиш; b118: оценка вызова Пути; b173: гейт по стоимости ПОЗИЦИИ (доливка), не по монеткам
   // depth milestones: every 500m a gem reward (deeper = more) → going deeper directly funds upgrades
   if(!CORE_TEST_MODE && dist>=lastMile+500){ lastMile=Math.floor(dist/500)*500; const rew=20+Math.floor(lastMile/500)*10; coins+=rew; gflash=0.5; multPulse=1; popText('ГЛУБИНА '+lastMile+'м  +$'+rew); floatPop(bike.x,bike.y-40,'+$'+rew,'#9ff0c8'); sfxLev(); }
   if(!newDepth && (best||0)>0 && dist>best){ newDepth=true; gflash=0.6; popText('★ НОВАЯ ГЛУБИНА!'); }
@@ -1278,6 +1299,7 @@ function update(){
     if(!trickHeld && trickMix<=0.01 && bike.onG) { trick=0; trickT=0; } }   // полностью вернулся на земле без посадки-резолва (страховка)
   clipSnap();   // b163: буфер клипа (последние ~7с поз)
   liveTick();   // b164: живой хвост трассы (реальная цена сейчас)
+  dcaTick();    // b173: ДОЛИВКА — каждый метр/монетка докупает позицию по текущей цене
   if(t%12===0){ nearKickX=-1; const _ck=Math.floor(bike.x/STEP); for(let k=_ck+6;k<_ck+42;k++){ const n=terr[k]; if(n&&n.kick){ nearKickX=n.x; break; } } }   // b156: ближайший трамплин впереди (для HUD-указателя)
   if(bike.onG && brake && bike.vx>2.5 && t%2===0){ const _st=terrainAt(bike.x-8); skids.push({x:bike.x-8,y:_st.y,a:_st.ang,life:1}); if(skids.length>90)skids.shift(); }   // b160: скид-марки при торможении
   if(skids.length){ for(const s of skids)s.life-=0.004; if(skids[0].life<=0)skids.shift(); }
@@ -1326,8 +1348,8 @@ function wipeout(reason){ deathBy=reason||'crash'; screen='dead'; dailyResolve()
   if(!CORE_TEST_MODE){ if(gameMode==='endless'){ cashedOut=false; const pen=Math.min(Math.round(bank*leverage*LIQ_PEN), Math.round(bank*LIQ_PEN_MAX)); runGems=-pen; bank=Math.max(0,bank-pen); } else { bank+=Math.round(coins); }   // b76 ENDLESS ликвидация = реальная потеря (∝ плечу, кап LIQ_PEN_MAX, пол ≥0). b87: ликвидация НЕ рекорд и НЕ растит ранг — заработка нет
     if(activeChal){ chalResult={name:activeChal.name,medal:-1,rew:0}; activeChal=null; }   // b118: смерть = вызов Пути провален
     payStaking(); saveProg(); saveMeta(); } }   // b112: ликвидация ест $; ◆-холод не трогает. b114: +стейкинг ◆→$ (камбэк после взрыва)
-function cashOut(){ if(screen!=='play'||gameMode!=='endless'||(coins||0)<=0||cashedOut||cashCelebT>0)return;   // b91: фиксить если есть ПОЗИЦИЯ (coins), не мёртвый pnl. b71: TAKE PROFIT — bank the FULL leveraged PnL & end the run safely (the greed↔safety decision). b134: guard от повторного фикса во время праздника
-  cashedOut=true; runGems=Math.round((coins||0)*COIN_GEM*posFactor()); bank+=runGems; payStaking(); deathBy='cashout';   // b89: выплата по ТЕКУЩЕЙ цене; b114: +стейкинг ◆→$
+function cashOut(){ if(screen!=='play'||gameMode!=='endless'||posValue()<=0||cashedOut||cashCelebT>0)return;   // b91/b173: фиксить если ПОЗИЦИЯ чего-то стоит (тикер = доливка, proc = coins). b71: TAKE PROFIT — the greed↔safety decision. b134: guard от повторного фикса во время праздника
+  cashedOut=true; runGems=posValue(); bank+=runGems; payStaking(); deathBy='cashout';   // b89: выплата по ТЕКУЩЕЙ цене; b114: +стейкинг ◆→$; b173: тикер = ДОЛИВКА (маржа+плечо×PnL по средней), proc = старая формула внутри posValue
   if(runGems>bestPnl){bestPnl=runGems;try{localStorage.setItem('cipher_best_earn',bestPnl);}catch(e){}}   // b87: BEST = лучшая зафиксированная ВЫПЛАТА (◆)
   if(dist>best){best=dist;try{localStorage.setItem('cipher_run_best',best);}catch(e){}}
   // b112: фикс платит в $ (банк); РАНГ растёт через «ВЫВЕСТИ В ХОЛОД» ($→◆), не авто
@@ -1633,8 +1655,8 @@ function draw(){
     ctx.font='800 26px ui-monospace,monospace'; ctx.shadowColor=col; ctx.shadowBlur=12+(multPulse||0)*18; ctx.fillStyle=col; ctx.fillText('×'+mult.toFixed(1),0,0); ctx.shadowBlur=0;
     ctx.font='600 9px ui-monospace,monospace'; ctx.fillStyle='rgba(200,220,240,0.72)'; ctx.fillText('КОМБО',0,12); ctx.restore(); ctx.textAlign='left'; }   // b71: renamed LEVERAGE→КОМБО (the in-run combo mult) to free the name ПЛЕЧО for the player's leverage BET
   // b71: TAKE-PROFIT button (Endless) — sits BELOW the КОМБО badge, clear of the top dev overlays; shows live bankable gems (coins × leverage)
-  if(screen==='play' && gameMode==='endless' && !CORE_TEST_MODE && (coins||0)>=3){
-    const gShow=Math.max(0,Math.round((coins||0)*COIN_GEM*posFactor())), peak=(trackSource==='ticker')?(tickerChg()>0.006):(priceMul()>=1.12);   // b106: выплата по РЕАЛЬНОЙ цене графика (тикер) или sell-top (proc); peak = цена выше входа / пик пампа → «ПИК! ЗАБЕРИ»
+  if(screen==='play' && gameMode==='endless' && !CORE_TEST_MODE && ((trackSource==='ticker')?posValue()>=3:(coins||0)>=3)){
+    const gShow=posValue(), peak=(trackSource==='ticker')?(posPnl()>0.006):(priceMul()>=1.12);   // b106/b173: выплата = стоимость ПОЗИЦИИ (доливка на тикере); peak = PnL позиции в плюсе → «ПИК! ЗАБЕРИ»
     const wgapC=bike.x-wave, dngC=clamp(1-wgapC/(W*0.62),0,1), urge=dngC>0.4;   // b84: близко дамп → кнопка кричит «ЗАБЕРИ» (момент «фиксь сейчас или жадничай»)
     const pulse=0.5+0.5*Math.sin(t*(0.16+0.55*dngC));
     UI.cashBtn={x:W/2-94,y:124,w:188,h:38}; ctx.textAlign='center';   // b85: поднял 150→124 (низ 188→162) — рамка ЗАФИКСИТЬ больше не налазит на байкера в прыжке
@@ -1794,9 +1816,9 @@ function draw(){
   const pnlEl=document.getElementById('pnl'), subC=document.getElementById('coins');
   if(CORE_TEST_MODE){ pnlEl.textContent=dist+' m'; pnlEl.style.transform='none'; subC.textContent='★ рекорд '+(best||0)+'m'; }
   else if(gameMode==='endless'){   // b84 DEGEN-МОМЕНТ: главное число = ПОЗИЦИЯ на кону (◆ = ровно что зафиксишь = монеты×плечо), пухнет с соком — не абстрактный $профит
-    const pos=Math.max(0,Math.round((coins||0)*COIN_GEM*posFactor()));   // b106: позиция = размер × РЕАЛЬНЫЙ курс графика (тикер) / sell-top (proc) — взлетает на пампе, тает на дампе
+    const pos=posValue();   // b106/b173: позиция = доливка × средняя цена × плечо (тикер) / старый флайвил (proc) — растёт ездой, взлетает на пампе, тает на дампе
     pnlEl.textContent='$'+pos.toLocaleString('en-US');
-    if(trackSource==='ticker'){ const chg=tickerChg(); subC.textContent='ПЛЕЧО ×'+leverage+'   ·   '+(chg>=0?'📈 +':'📉 ')+(chg*100).toFixed(1)+'%'; }   // b106 реальное движение цены от входа
+    if(trackSource==='ticker'){ const chg=(dcaCost>0)?posPnl():tickerChg(); subC.textContent='ПЛЕЧО ×'+leverage+'   ·   '+(chg>=0?'📈 +':'📉 ')+(chg*100).toFixed(1)+'%'; }   // b106/b173: PnL ПОЗИЦИИ (по средней цене доливки)
     else { const _pm=priceMul(); subC.textContent='ПЛЕЧО ×'+leverage+'   ·   ЦЕНА '+(_pm>=1.12?'📈':_pm<=0.88?'📉':'·')+'×'+_pm.toFixed(2); }
     if(pos>_posPrev)posPulse=1; _posPrev=pos; posPulse*=0.86;
     pnlEl.style.transform=posPulse>0.012?('scale('+(1+0.16*posPulse)+')'):'none';
