@@ -56,7 +56,7 @@ function lerp(a,b,t){return a+(b-a)*t;} function clamp(v,a,b){return v<a?a:v>b?b
 // false → full game everywhere. Single switch. Systems are GATED, never deleted.
 const CORE_TEST_MODE = false;   // b70: META LIVE — building the progression spine (upgrades/bikes with teeth, career, economy) on the confirmed rigid-body core
 // build stamp — bump on every change so a phone refresh can confirm it loaded fresh code (cache!)
-const BUILD = '2026-07-05 · b173';
+const BUILD = '2026-07-05 · b174';
 
 // ---------- procedural market terrain ----------
 // height map sampled every STEP px; generated forward as we ride. Market character:
@@ -315,11 +315,22 @@ async function loadDailyCandles(){ const ds=dayStrUTC(), ck='cipher_dkl_'+ds;
   }catch(e){ return null; } }
 function startDaily(){ if(dailyTries()>=3){ menuFx=0.9; menuFxAmt=0; popText('📅 3/3 — завтра новая трасса'); return; }
   const t=dailyCoin(); selTicker=t.k; tickerName=t.name+'·ДЕНЬ'; screen='tickerload'; tickerLoadT=0;
-  loadDailyCandles().then(d=>{ if(!d){ screen='title'; return; } tickerData=d; trackSource='ticker'; gameMode='endless'; activeChal=null; reset(); dailyMode=true; }); }
+  loadDailyCandles().then(d=>{ if(!d){ screen='title'; return; } tickerData=d; trackSource='ticker'; gameMode='endless'; activeChal=null; reset(); dailyMode=true; ghostLoad(); ghostRec=[]; if(ghost)popText('👻 ПРИЗРАК твоей лучшей ($'+ghost.res+') на трассе'); }); }   // b174
 function dailyResolve(){ if(!dailyMode||_dailyRes)return; _dailyRes=true; const res=Math.round(runGems||0), ds=dayStrUTC();
   if(dailySt.d!==ds) dailySt={d:ds,tries:0,best:0};
   dailySt.tries=(dailySt.tries||0)+1; if(res>(dailySt.best||0))dailySt.best=res;
-  try{localStorage.setItem('cipher_daily3',JSON.stringify(dailySt));}catch(e){} }
+  try{localStorage.setItem('cipher_daily3',JSON.stringify(dailySt));}catch(e){}
+  ghostSave(res); }
+// ---- b174 GHOST-РЕПЛЕЙ ДЕЙЛИ: 👻 полупрозрачный призрак ЛУЧШЕЙ попытки дня едет рядом в попытках 2-3 («обгони себя» — зубы Wordle-механики). Лог поз каждые 3 кадра (кап 6000 ≈ 5 мин), живёт день ----
+let ghostRec=null, ghost=null;
+function ghostSnap(){ if(!dailyMode||!ghostRec||screen!=='play'||!bike)return;
+  if((t%3)===0 && ghostRec.length<6000) ghostRec.push([Math.round(bike.x),Math.round(bike.y),Math.round(bike.ang*100)]); }
+function ghostSave(res){ if(!ghostRec||!ghostRec.length)return; const ds=dayStrUTC();
+  try{ const prev=JSON.parse(localStorage.getItem('cipher_dghost')||'null');
+    if(prev&&prev.d===ds&&(prev.res||0)>=res)return;   // призрак = ЛУЧШАЯ попытка (по банкнутому $)
+    localStorage.setItem('cipher_dghost',JSON.stringify({d:ds,res:res,bike:selBike,log:ghostRec})); }catch(e){} }
+function ghostLoad(){ ghost=null; try{ const g=JSON.parse(localStorage.getItem('cipher_dghost')||'null');
+  if(g&&g.d===dayStrUTC()&&g.log&&g.log.length>10) ghost={log:g.log,bike:clamp(g.bike||0,0,BIKES.length-1),res:g.res||0}; }catch(e){} }
 // ---- b163 КЛИПЫ: кольцевой буфер поз последних ~7с → перепроигрывание сцены + запись canvas в видео (MediaRecorder) → шер файлом (тикток) / скачивание. БЕЗ пересимуляции физики: реплей = рендер записанных поз на живом terr того же заезда = точный ----
 let clipBuf=[], clipRec=null, clipChunks=[], clipI=0, clipSaved=null, clipMime='';
 // b170 ЛУЧШИЙ МОМЕНТ + СОХРАНЕНИЕ: каждому кадру — оценка «вау» (флипы/слоумо/трюк/полёт/буст) → скользящее окно 90 кадров;
@@ -820,6 +831,7 @@ function reset(){
   flipsTotal=0; topKmh=0; lastLandDiff=0; lean=0; rush=0; prevVx=0; down=false; brake=false; jumpReq=0; jumpCd=0; coyote=0; jumpGrace=0; activeTouches={}; leanX=0; ctrlId=null; leanKeyL=false; leanKeyR=false; leanCmd=0; rShiftVel=0; wave=bike.x-W*0.95; waveSpd=0; deathBy=''; boost=0; boosting=0; posPulse=0; _posPrev=0; _dangBuzz=0; prMax=0; prMin=0; slowmo=0; wheelieAim=0; wheelieI=0; trickAir=0; trickZoom=0; trick=0; trickMix=0; trickHeld=false; trickT=0; trickTouch=-1; trickKey=''; touchSX={}; touchSY={}; skids=[]; dailyMode=false; _dailyRes=false; livePrice=0; liveT=0; inpLog=[]; _inpPrev=-1; inpMeta={c:selTicker||'',m:gameMode,s:trackSource,b:selBike,bd:BUILD};
   clipBuf=[]; clipPlay=null; clipBlob=null; bestClip=null; bestSum=0; _hlWin=[]; _hlSum=0; _hlPend=-1; _flipPrev=0;   // b170: клип-стейт per-забег (b163-фикс: буфер НЕ чистился между забегами → первые 7с могли реплеить старые позы на новой трассе)
   dcaCost=0; dcaQty=0; _dcaDist=0; _dcaCoins=0;   // b173: позиция набирается с нуля каждый забег
+  ghostRec=null; ghost=null;   // b174: призрак живёт только в дейли (startDaily включает после reset)
   if(trackSource==='ticker') tut('dca','💰 ДОЛИВАЕШЬСЯ ПО ХОДУ: дальше едешь = крупнее позиция · монетки и трюки доливают быстрее');
   zone=-1; biomeBanner=''; biomeBannerT=0; BSKY=['rgb(20,16,48)','rgb(46,30,78)','rgb(150,80,110)','rgb(230,150,110)']; BLINE='228,250,255'; BRIDGE='60,40,90'; rollMissions();
   parts=[]; dust=[]; trail=[]; streaks=[]; floats=[];
@@ -1300,6 +1312,7 @@ function update(){
   clipSnap();   // b163: буфер клипа (последние ~7с поз)
   liveTick();   // b164: живой хвост трассы (реальная цена сейчас)
   dcaTick();    // b173: ДОЛИВКА — каждый метр/монетка докупает позицию по текущей цене
+  ghostSnap();  // b174: лог поз для призрака дейли
   if(t%12===0){ nearKickX=-1; const _ck=Math.floor(bike.x/STEP); for(let k=_ck+6;k<_ck+42;k++){ const n=terr[k]; if(n&&n.kick){ nearKickX=n.x; break; } } }   // b156: ближайший трамплин впереди (для HUD-указателя)
   if(bike.onG && brake && bike.vx>2.5 && t%2===0){ const _st=terrainAt(bike.x-8); skids.push({x:bike.x-8,y:_st.y,a:_st.ang,life:1}); if(skids.length>90)skids.shift(); }   // b160: скид-марки при торможении
   if(skids.length){ for(const s of skids)s.life-=0.004; if(skids[0].life<=0)skids.shift(); }
@@ -1549,6 +1562,15 @@ function draw(){
     ctx.beginPath(); ctx.moveTo(s.x-Math.cos(s.a)*5,s.y+1.6-Math.sin(s.a)*5); ctx.lineTo(s.x+Math.cos(s.a)*5,s.y+1.6+Math.sin(s.a)*5); ctx.stroke(); } ctx.lineCap='butt'; }
   // ---- neon speed-ribbon trail behind the bike ----
   if(trail.length>1){ for(let i=1;i<trail.length;i++){ const a=i/trail.length; ctx.strokeStyle='rgba(47,230,255,'+(a*0.5)+')'; ctx.lineWidth=a*5; ctx.shadowColor='#2fe6ff'; ctx.shadowBlur=a*10; ctx.beginPath(); ctx.moveTo(trail[i-1].x,trail[i-1].y); ctx.lineTo(trail[i].x,trail[i].y); ctx.stroke(); } ctx.shadowBlur=0; }
+  // ---- b174 ПРИЗРАК ДЕЙЛИ: лучшая попытка дня едет своей записью (гонка с собой по времени) ----
+  if(dailyMode && ghost && screen==='play'){ const gi=Math.floor(t/3);
+    if(gi<ghost.log.length-1){ const a=ghost.log[gi], b2=ghost.log[gi+1], f=(t%3)/3;
+      const gx=lerp(a[0],b2[0],f), gy=lerp(a[1],b2[1],f), ga=lerp(a[2],b2[2],f)/100;
+      if(gx>cam.x-60 && gx<cam.x+W+60){ ctx.save(); ctx.globalAlpha=0.30;
+        ctx.translate(gx,gy); ctx.rotate(ga); ctx.translate(0,-1);
+        drawMachine(BIKES[ghost.bike],t*0.22,0,0,false,0,0,0,0,0); ctx.restore();
+        ctx.globalAlpha=0.55; ctx.font='12px ui-monospace,monospace'; ctx.textAlign='center';
+        ctx.fillStyle='#cfe0ff'; ctx.fillText('👻',gx,gy-40); ctx.textAlign='left'; ctx.globalAlpha=1; } } }
   // ---- b168 СВЕТ МИРА ОТ ЦЕНЫ: локальный наклон графика (±4 узла) → зелёный/красный отсвет вокруг байка (памп/дамп «чувствуется» средой) ----
   if(bike&&terr.length>10){ const bi2=clamp(Math.round(bike.x/STEP),4,terr.length-5);
     _mktDy=(terr[bi2+4].y-terr[bi2-4].y)/(8*STEP);   // + = линия вниз = дамп
