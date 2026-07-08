@@ -142,6 +142,21 @@ function bikeTex(){ const W=128,H=96,c=document.createElement('canvas'); c.width
 const bike=new THREE.Sprite(new THREE.SpriteMaterial({map:bikeTex(),transparent:true,depthTest:true,depthWrite:false,fog:false}));
 bike.scale.set(3.2,2.4,1); scene.add(bike);
 
+// ---------- palms (Vice-элемент + передний план = глубина): силуэт с неон-ободком, спрайты по сторонам дороги ----------
+function palmTex(){ const W=160,H=240,c=document.createElement('canvas'); c.width=W;c.height=H; const g=c.getContext('2d'); const cx=W*0.5, ty=H*0.30;
+  g.lineCap='round';
+  g.strokeStyle='#14091f'; g.lineWidth=11; g.beginPath(); g.moveTo(cx+8,H); g.quadraticCurveTo(cx-10,H*0.55,cx,ty); g.stroke();
+  g.strokeStyle='rgba(255,60,200,0.7)'; g.lineWidth=2; g.beginPath(); g.moveTo(cx+8,H); g.quadraticCurveTo(cx-10,H*0.55,cx,ty); g.stroke();
+  for(let k=0;k<9;k++){ const a=-Math.PI/2+(k-4)*0.42, L=52+((k%2)?18:0); const ex=cx+Math.cos(a)*L, ey=ty+Math.sin(a)*L*0.8+16;
+    g.strokeStyle='#1c0f30'; g.lineWidth=9; g.beginPath(); g.moveTo(cx,ty); g.quadraticCurveTo(cx+Math.cos(a)*L*0.6, ty+Math.sin(a)*L*0.35, ex,ey); g.stroke();
+    g.strokeStyle=k%2?'rgba(150,70,255,0.85)':'rgba(255,90,210,0.9)'; g.lineWidth=1.6; g.stroke(); }
+  return new THREE.CanvasTexture(c); }
+const palmT=palmTex(), palms=[];
+for(let i=0;i<18;i++){ const near=i%2===0; const s=new THREE.Sprite(new THREE.SpriteMaterial({map:palmT,transparent:true,depthTest:true,depthWrite:false,fog:true}));
+  const size=near?20:13; s.scale.set(size*0.66,size,1);
+  s.userData={x0:(i/18)*PERIOD-PERIOD/2 + (near?0:PERIOD/36), z:near?(W2+3.5+rand()*2):(-5-rand()*22), size:size};
+  scene.add(s); palms.push(s); }
+
 // ---------- input / loop ----------
 let camX=0, T=0, camShake=true, ptx=0,pty=0,tx=0,ty=0, angF=0.30;
 const stage=document.getElementById('stage');
@@ -154,6 +169,7 @@ function loop(){ requestAnimationFrame(loop); T+=0.016; camX+=0.16;
   updateRoad(camX);
   // city recycle (wrap x around camX within PERIOD)
   cityGroup.children.forEach(m=>{ let x=m.userData.x0 - (Math.floor((m.userData.x0-camX+PERIOD/2)/PERIOD))*PERIOD; m.position.x=x; });
+  palms.forEach(s=>{ const x=s.userData.x0 - (Math.floor((s.userData.x0-camX+PERIOD/2)/PERIOD))*PERIOD; s.position.set(x, profile(x)-1.2 + s.userData.size*0.42, s.userData.z); });
   window.__grid.offset.y = -camX*0.02;
   // camera: side view, slight elevation + forward, follows bike; angle slider tilts down for depth
   const ang=angF; const shake=camShake?Math.sin(T*1.7)*0.10:0;
