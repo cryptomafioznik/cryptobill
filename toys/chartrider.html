@@ -56,7 +56,7 @@ function lerp(a,b,t){return a+(b-a)*t;} function clamp(v,a,b){return v<a?a:v>b?b
 // false → full game everywhere. Single switch. Systems are GATED, never deleted.
 const CORE_TEST_MODE = false;   // b70: META LIVE — building the progression spine (upgrades/bikes with teeth, career, economy) on the confirmed rigid-body core
 // build stamp — bump on every change so a phone refresh can confirm it loaded fresh code (cache!)
-const BUILD = '2026-07-08 · b189';
+const BUILD = '2026-07-08 · b190';
 
 // ---------- procedural market terrain ----------
 // height map sampled every STEP px; generated forward as we ride. Market character:
@@ -1618,14 +1618,19 @@ function drawForeground(){ if(!fgCv)return; const img=fgCv;   // b186: пере�
     else ctx.drawImage(img,0,0,img.width,img.height,x,y,dw,dh); }
   ctx.restore();
 }
-function drawTrackDeck(i0,i1){ const TH=13;   // b187 GD-ЛЕНТА: трасса = осязаемая ДОРОГА с телом (дека под верхним рельсом) + нижний неон-рельс + рёбра/шпалы — не «одна линия»
-  for(let i=i0;i<i1;i++){ const a=terr[i],b=terr[i+1]; if(!a||!b||a.gap||b.gap)continue;
-    ctx.beginPath(); ctx.moveTo(a.x,a.y); ctx.lineTo(b.x,b.y); ctx.lineTo(b.x,b.y+TH); ctx.lineTo(a.x,a.y+TH); ctx.closePath();
-    const g=ctx.createLinearGradient(0,a.y,0,a.y+TH); g.addColorStop(0,'rgba(30,26,52,0.92)'); g.addColorStop(1,'rgba(9,7,20,0.96)'); ctx.fillStyle=g; ctx.fill(); }
-  ctx.strokeStyle='rgba('+BLINE+',0.12)'; ctx.lineWidth=1;   // шпалы (рёбра дороги, GD-ощущение сегментов)
-  for(let i=i0;i<=i1;i++){ const c=terr[i]; if(!c||c.gap)continue; ctx.beginPath(); ctx.moveTo(c.x,c.y+2); ctx.lineTo(c.x,c.y+TH-1); ctx.stroke(); }
-  ctx.strokeStyle='rgba('+BLINE+',0.5)'; ctx.lineWidth=1.4; ctx.beginPath(); let pen=false;   // нижний неон-рельс
-  for(let i=i0;i<=i1;i++){ const c=terr[i]; if(!c||c.gap){pen=false;continue;} if(!pen){ctx.moveTo(c.x,c.y+TH);pen=true;} else ctx.lineTo(c.x,c.y+TH); } ctx.stroke(); }
+function drawTrackDeck(i0,i1){ const TH=22;   // b190 GD-ЛЕНТА-ДОРОГА (жирный неон-хайвей Vice): тело + верхний/нижний рельс + осевая разметка + шпалы — осязаемый трек, «не одна линия»
+  for(let i=i0;i<i1;i++){ const a=terr[i],b=terr[i+1]; if(!a||!b||a.gap||b.gap)continue;   // дорожное тело
+    ctx.beginPath(); ctx.moveTo(a.x,a.y+1); ctx.lineTo(b.x,b.y+1); ctx.lineTo(b.x,b.y+TH); ctx.lineTo(a.x,a.y+TH); ctx.closePath();
+    const g=ctx.createLinearGradient(0,a.y,0,a.y+TH); g.addColorStop(0,'rgba(44,34,72,0.97)'); g.addColorStop(0.5,'rgba(26,18,48,0.98)'); g.addColorStop(1,'rgba(10,7,22,0.99)'); ctx.fillStyle=g; ctx.fill(); }
+  let pen=false;
+  ctx.strokeStyle='rgba(235,245,255,0.16)'; ctx.lineWidth=1.2; ctx.beginPath();   // бордюр-блик под верхним рельсом
+  for(let i=i0;i<=i1;i++){ const c=terr[i]; if(!c||c.gap){pen=false;continue;} if(!pen){ctx.moveTo(c.x,c.y+2.5);pen=true;} else ctx.lineTo(c.x,c.y+2.5);} ctx.stroke();
+  ctx.strokeStyle='rgba('+BLINE+',0.13)'; ctx.lineWidth=1;   // шпалы (сегменты)
+  for(let i=i0;i<=i1;i++){ const c=terr[i]; if(!c||c.gap)continue; ctx.beginPath(); ctx.moveTo(c.x,c.y+3); ctx.lineTo(c.x,c.y+TH-1); ctx.stroke(); }
+  ctx.strokeStyle='rgba('+BLINE+',0.42)'; ctx.lineWidth=1.8; ctx.setLineDash([10,11]); ctx.beginPath(); pen=false;   // осевая разметка
+  for(let i=i0;i<=i1;i++){ const c=terr[i]; if(!c||c.gap){pen=false;continue;} if(!pen){ctx.moveTo(c.x,c.y+TH*0.5);pen=true;} else ctx.lineTo(c.x,c.y+TH*0.5);} ctx.stroke(); ctx.setLineDash([]);
+  ctx.strokeStyle='rgba('+BLINE+',0.75)'; ctx.lineWidth=2.2; ctx.shadowColor='rgba('+BLINE+',0.9)'; ctx.shadowBlur=7; ctx.beginPath(); pen=false;   // нижний неон-рельс (светящаяся кромка)
+  for(let i=i0;i<=i1;i++){ const c=terr[i]; if(!c||c.gap){pen=false;continue;} if(!pen){ctx.moveTo(c.x,c.y+TH);pen=true;} else ctx.lineTo(c.x,c.y+TH);} ctx.stroke(); ctx.shadowBlur=0; }
 function drawCityWorld(){ const hz=H*0.6;
   ensureViceLayers(); if(viceLayersReady){ drawViceLayered(); return; }   // b189: слойная глубина (пока только sunset испечён) — проверка в игре; иначе плоский бэкдроп
   const _bi=viceImg(); if(_bi){ drawBackdrop(_bi); return; }   // крафтовый бэкдроп готов → рисуем его; иначе процедурный фолбэк ниже
