@@ -42,6 +42,7 @@ import * as THREE from 'three';
 import {EffectComposer} from 'three/addons/postprocessing/EffectComposer.js';
 import {RenderPass} from 'three/addons/postprocessing/RenderPass.js';
 import {UnrealBloomPass} from 'three/addons/postprocessing/UnrealBloomPass.js';
+import {Reflector} from 'three/addons/objects/Reflector.js';
 const cv=document.getElementById('c'), stEl=document.getElementById('st');
 function st(a,b){ stEl.innerHTML='<b>'+a+'</b>'+(b?'<small>'+b+'</small>':''); }
 st('Инициализация 3D…');
@@ -93,8 +94,8 @@ function buildCity(){
 }
 buildCity();
 // ---------- ground: dark reflective plane + neon centre grid receding ----------
-{ const g=new THREE.Mesh(new THREE.PlaneGeometry(1400,700), new THREE.MeshBasicMaterial({color:0x0a0618,fog:true}));
-  g.rotation.x=-Math.PI/2; g.position.set(0,-0.2,-180); scene.add(g); }
+{ const mirror=new Reflector(new THREE.PlaneGeometry(1400,700), {clipBias:0.003, textureWidth:Math.round(SW*2), textureHeight:Math.round(SH*2), color:0x141c28});
+  mirror.rotation.x=-Math.PI/2; mirror.position.set(0,-0.35,-170); scene.add(mirror); }   // мокрый неон-асфальт: отражает город/байк/солнце = премиум-синтвейв
 function gridTex(){ const S=256,c=document.createElement('canvas'); c.width=c.height=S; const g=c.getContext('2d'); g.fillStyle='#0a0618'; g.fillRect(0,0,S,S);
   g.strokeStyle='rgba(120,60,200,0.5)'; g.lineWidth=2; for(let i=0;i<=S;i+=32){ g.beginPath();g.moveTo(i,0);g.lineTo(i,S);g.stroke(); g.beginPath();g.moveTo(0,i);g.lineTo(S,i);g.stroke(); }
   const t=new THREE.CanvasTexture(c); t.wrapS=t.wrapT=THREE.RepeatWrapping; t.repeat.set(60,30); return t; }
