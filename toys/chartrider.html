@@ -56,7 +56,7 @@ function lerp(a,b,t){return a+(b-a)*t;} function clamp(v,a,b){return v<a?a:v>b?b
 // false → full game everywhere. Single switch. Systems are GATED, never deleted.
 const CORE_TEST_MODE = false;   // b70: META LIVE — building the progression spine (upgrades/bikes with teeth, career, economy) on the confirmed rigid-body core
 // build stamp — bump on every change so a phone refresh can confirm it loaded fresh code (cache!)
-const BUILD = '2026-07-07 · b182';
+const BUILD = '2026-07-07 · b183';
 
 // ---------- procedural market terrain ----------
 // height map sampled every STEP px; generated forward as we ride. Market character:
@@ -1510,6 +1510,7 @@ function wipeout(reason){ deathBy=reason||'crash'; screen='dead'; dailyResolve()
 function cashOut(){ if(screen!=='play'||gameMode!=='endless'||posValue()<=0||cashedOut||cashCelebT>0)return;   // b91/b173: фиксить если ПОЗИЦИЯ чего-то стоит (тикер = доливка, proc = coins). b71: TAKE PROFIT — the greed↔safety decision. b134: guard от повторного фикса во время праздника
   cashedOut=true; runGems=posValue(); bank+=runGems; payStaking(); deathBy='cashout';   // b89: выплата по ТЕКУЩЕЙ цене; b114: +стейкинг ◆→$; b173: тикер = ДОЛИВКА (маржа+плечо×PnL по средней), proc = старая формула внутри posValue
   if(leverage>=50)achv('lev50','ФИКС НА ПЛЕЧЕ ×50+'); if(_shortRun&&runGems>0)achv('bear','ЗАРАБОТАЛ НА ПАДЕНИИ');   // b181
+  for(let i=0;i<26;i++)parts.push({x:bike.x,y:bike.y-6,vx:(Math.random()-0.5)*7,vy:-2-Math.random()*6,life:1,r:1+Math.random()*2.2,gold:true});   // b183: конфетти фиксации (Этап A)
   if(runGems>bestPnl){bestPnl=runGems;try{localStorage.setItem('cipher_best_earn',bestPnl);}catch(e){}}   // b87: BEST = лучшая зафиксированная ВЫПЛАТА (◆)
   if(dist>best){best=dist;try{localStorage.setItem('cipher_run_best',best);}catch(e){}}
   // b112: фикс платит в $ (банк); РАНГ растёт через «ВЫВЕСТИ В ХОЛОД» ($→◆), не авто
@@ -1586,7 +1587,7 @@ function draw(){
   ridgeLayer(0.55,60,H*0.66,'rgba('+BRIDGE+',0.7)');
 
   // ---- the track: a real CANDLESTICK chart the bike rides across ----
-  const zoom=1-(rush||0)*0.04-(camAir||0)*0.40*(1-(trickZoom||0))+(trickZoom||0)*0.22;   // b150 ТРИК-КАМЕРА: на трамплин-полёте зум К БАЙКУ (до ×1.22, camAir-отъезд подавлен) — флип крупно; к посадке trickZoom гаснет → обычный air-отъезд кадрирует приземление
+  const zoom=1-(rush||0)*0.04-(camAir||0)*0.40*(1-(trickZoom||0))+(trickZoom||0)*0.22+(boosting>0?0.045:0);   // b150 ТРИК-КАМЕРА: зум К БАЙКУ на полёте; b183: +зум-пульс буста (Этап A)
   ctx.save(); ctx.translate(W/2,H/2); ctx.scale(zoom,zoom); ctx.translate(-W/2,-H/2);
   ctx.save(); ctx.translate(-cam.x,-cam.y);
   const x0=cam.x-STEP, x1=cam.x+W+STEP;
@@ -1750,6 +1751,12 @@ function draw(){
   // speed streaks (motion) — intensify with velocity
   const spF=rush||0;
   if(spF>0.01&&screen==='play'){ ctx.lineCap='round'; for(const s of streaks){ const al=Math.min(0.55,s.life*0.6)*s.depth*spF; if(al<0.01)continue; ctx.strokeStyle='rgba(205,242,255,'+al+')'; ctx.lineWidth=s.depth*1.7; ctx.beginPath(); ctx.moveTo(s.x,s.y); ctx.lineTo(s.x+s.len,s.y); ctx.stroke(); } ctx.lineCap='butt'; }
+  // ---- b183 BLOOM-ЛАЙТ (Этап A ВАУ-курса): кадр ×0.25 → аддитив обратно (даунскейл = бесплатное размытие). Дышит: сильнее в слоумо/бусте ----
+  if(screen==='play'||screen==='paused'||screen==='clip'){ const gw2=Math.max(2,(W*DPR/4)|0), gh2=Math.max(2,(H*DPR/4)|0);
+    if(!_glowCv||_glowCv.width!==gw2||_glowCv.height!==gh2){ _glowCv=document.createElement('canvas'); _glowCv.width=gw2; _glowCv.height=gh2; _glowCtx=_glowCv.getContext('2d'); }
+    _glowCtx.setTransform(1,0,0,1,0,0); _glowCtx.clearRect(0,0,gw2,gh2); _glowCtx.drawImage(cv,0,0,gw2,gh2);
+    const ga2=0.15+(slowmo>0?0.10:0)+(boosting>0?0.08:0)+(trickZoom||0)*0.06;
+    ctx.save(); ctx.globalCompositeOperation='lighter'; ctx.globalAlpha=ga2; ctx.drawImage(_glowCv,0,0,W,H); ctx.restore(); }
   // vignette — tightens into a tunnel during a rush
   const spv=rush||0, vr=H*(0.3-0.1*spv);
   const v=ctx.createRadialGradient(W/2,H*0.5,vr,W/2,H*0.5,H*0.85); v.addColorStop(0,'rgba(0,0,0,0)'); v.addColorStop(1,'rgba(0,0,0,'+(0.5+0.22*spv)+')'); ctx.fillStyle=v; ctx.fillRect(0,0,W,H);
@@ -2023,6 +2030,7 @@ function ik2(ax,ay,tx,ty,l1,l2,dir){ let dx=tx-ax,dy=ty-ay,d=Math.hypot(dx,dy); 
 // золотые трубы вилок, номерная табличка = ТИКЕР монеты забега) → в кадре 5 drawImage вместо ~150 путей.
 // Колёса — ОТДЕЛЬНЫЕ спрайты: крутятся (wheelv) и ходят к раме на компрессию подвески (b160). Райдер остаётся живым IK.
 var sprCache={};   // key: имя байка|табличка|DPR (var — resize() зовётся раньше объявления)
+var _glowCv=null,_glowCtx=null;   // b183 ЭТАП-А ВАУ: буфер дешёвого bloom (даунскейл кадра → аддитив назад)
 var _noisePat=null;   // b167: кино-зерно (курс C) — тайл 128px, паттерн кэшится
 function noisePat(){ if(_noisePat)return _noisePat; const c=document.createElement('canvas'); c.width=c.height=128; const g=c.getContext('2d');
   const id=g.createImageData(128,128); for(let i=0;i<id.data.length;i+=4){ const v=100+Math.random()*90|0; id.data[i]=id.data[i+1]=id.data[i+2]=v; id.data[i+3]=255; }
@@ -2320,7 +2328,14 @@ function drawMachine(B,wheelv,rShiftv,leanv,roost,boostv,dynAir,dynSquat,tkId,tk
     { const hl = TY==='sport'?[25.4,-12.1] : (TY==='scooter'||TY==='moped')?[19.8,-9.4] : TY==='bike'?[17.8,-16.7] : [31,-4];
       const rl = TY==='sport'?[-25.6,-3.6] : (TY==='scooter'||TY==='moped')?[-16.7,-4.4] : TY==='bike'?[-13.8,-12.1] : [-24.4,-1.2];
       ctx.fillStyle='rgba(255,236,185,0.95)'; ctx.shadowColor='#ffd678'; ctx.shadowBlur=12; ctx.beginPath(); ctx.arc(hl[0],hl[1],TY==='bike'?1.6:2.4,0,7); ctx.fill(); ctx.shadowBlur=0;
-      ctx.fillStyle='rgba(255,80,100,0.9)'; ctx.shadowColor='#ff5060'; ctx.shadowBlur=8; ctx.beginPath(); ctx.arc(rl[0],rl[1],TY==='bike'?1.4:2,0,7); ctx.fill(); ctx.shadowBlur=0; }
+      ctx.fillStyle='rgba(255,80,100,0.9)'; ctx.shadowColor='#ff5060'; ctx.shadowBlur=8; ctx.beginPath(); ctx.arc(rl[0],rl[1],TY==='bike'?1.4:2,0,7); ctx.fill(); ctx.shadowBlur=0;
+      if(screen==='play'||screen==='clip'){ ctx.save(); ctx.globalCompositeOperation='lighter';   // b183: ФАРА-КОНУС — свет имеет источник (Этап A)
+        const cg=ctx.createLinearGradient(hl[0],hl[1],hl[0]+118,hl[1]);
+        cg.addColorStop(0,'rgba(255,240,190,0.15)'); cg.addColorStop(1,'rgba(255,240,190,0)');
+        ctx.fillStyle=cg; ctx.beginPath(); ctx.moveTo(hl[0]+2,hl[1]-3); ctx.lineTo(hl[0]+120,hl[1]-24); ctx.lineTo(hl[0]+120,hl[1]+20); ctx.lineTo(hl[0]+2,hl[1]+3); ctx.closePath(); ctx.fill();
+        if(down&&bike&&bike.onG){ for(let e=0;e<2;e++){ ctx.fillStyle='rgba(255,'+((150+Math.random()*80)|0)+',60,'+(0.22+0.3*Math.random()).toFixed(3)+')';   // искры выхлопа под газом
+          ctx.beginPath(); ctx.arc(-22-Math.random()*16,8+Math.random()*8,0.8+Math.random()*1.3,0,7); ctx.fill(); } }
+        ctx.restore(); } }
     ctx.lineJoin='miter';
 }
 function drawMenus(){
