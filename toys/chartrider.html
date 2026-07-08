@@ -56,7 +56,7 @@ function lerp(a,b,t){return a+(b-a)*t;} function clamp(v,a,b){return v<a?a:v>b?b
 // false → full game everywhere. Single switch. Systems are GATED, never deleted.
 const CORE_TEST_MODE = false;   // b70: META LIVE — building the progression spine (upgrades/bikes with teeth, career, economy) on the confirmed rigid-body core
 // build stamp — bump on every change so a phone refresh can confirm it loaded fresh code (cache!)
-const BUILD = '2026-07-08 · b188';
+const BUILD = '2026-07-08 · b189';
 
 // ---------- procedural market terrain ----------
 // height map sampled every STEP px; generated forward as we ride. Market character:
@@ -596,6 +596,24 @@ function saveWorld(){ try{localStorage.setItem('cipher_world',worldNew?'1':'0');
 // b185 VICE-СИНТВЕЙВ БЭКДРОПЫ (крафтовые AI-ассеты юзера): 4 времени суток = живой мир по эпохам (Alto's-подход). Мир = красивая СЦЕНА позади графика-героя
 let VICE=null; (function(){ try{ VICE=['sunset','day','twilight','night'].map(function(n){ const im=new Image(); im.src='assets/world/vice/'+n+'.jpg'; return im; }); }catch(e){ VICE=null; } })();
 function viceImg(){ if(!VICE)return null; const im=VICE[((zone||0)%4+4)%4]; return (im&&im.complete&&im.naturalWidth)?im:null; }
+// b189 СЛОЙНАЯ ГЛУБИНА (из ОДНОЙ картинки): карта глубины (Depth-Anything, пре-бейк offline) → режем закат на far/mid/near слои, каждый едет со своей скоростью = НАСТОЯЩИЙ параллакс (не warp). Пока только sunset — проверка в игре
+let VICE_DEPTH=new Image(); try{ VICE_DEPTH.src='assets/world/vice/sunset_depth.png'; }catch(e){}
+let viceLayers=null, viceLayersReady=false, _vlTried=false;
+function buildViceLayers(){ _vlTried=true; try{ const color=VICE&&VICE[0]; if(!color||!color.complete||!color.naturalWidth||!VICE_DEPTH.complete||!VICE_DEPTH.naturalWidth) return;
+  const CW=1200, CH=Math.round(CW*color.naturalHeight/color.naturalWidth);
+  const cc=document.createElement('canvas'); cc.width=CW; cc.height=CH; const ccx=cc.getContext('2d'); ccx.drawImage(color,0,0,CW,CH); const cd=ccx.getImageData(0,0,CW,CH).data;
+  const dc=document.createElement('canvas'); dc.width=CW; dc.height=CH; const dcx=dc.getContext('2d'); dcx.drawImage(VICE_DEPTH,0,0,CW,CH); const dd=dcx.getImageData(0,0,CW,CH).data;
+  function band(d,lo,hi,f){ if(d<lo-f||d>hi+f)return 0; if(d<lo)return (d-(lo-f))/f; if(d>hi)return 1-(d-hi)/f; return 1; }
+  const bands=[[0.0,0.44,0.12],[0.34,0.72,0.12],[0.60,1.01,0.12]]; const layers=[];
+  for(const b of bands){ const lc=document.createElement('canvas'); lc.width=CW; lc.height=CH; const lx=lc.getContext('2d'); const out=lx.createImageData(CW,CH), od=out.data;
+    for(let i=0;i<CW*CH;i++){ const dep=dd[i*4]/255, a=band(dep,b[0],b[1],b[2]); od[i*4]=cd[i*4]; od[i*4+1]=cd[i*4+1]; od[i*4+2]=cd[i*4+2]; od[i*4+3]=Math.round(255*(a<0?0:a>1?1:a)); }
+    lx.putImageData(out,0,0); layers.push(lc); }
+  viceLayers=layers; viceLayersReady=true; }catch(e){ viceLayers=null; viceLayersReady=false; } }
+function ensureViceLayers(){ if(viceLayersReady||_vlTried)return; if(VICE&&VICE[0]&&VICE[0].complete&&VICE[0].naturalWidth&&VICE_DEPTH.complete&&VICE_DEPTH.naturalWidth) buildViceLayers(); }
+function drawViceLayered(){ const pars=[0.03,0.07,0.15];
+  for(let li=0;li<3;li++){ const img=viceLayers[li], s=Math.max(W/img.width,H/img.height), dw=img.width*s, dh=img.height*s, y=(H-dh)*0.5, par=pars[li], scrollX=cam.x*par, first=Math.floor(scrollX/dw);
+    for(let i=first-1;(i*dw-scrollX)<W;i++){ const x=i*dw-scrollX; ctx.drawImage(img,0,0,img.width,img.height,x,y,dw,dh); } }
+  const g=ctx.createLinearGradient(0,0,0,H); g.addColorStop(0,'rgba(6,4,16,0.24)'); g.addColorStop(0.55,'rgba(6,4,16,0.03)'); g.addColorStop(0.72,'rgba(6,4,16,0.32)'); g.addColorStop(1,'rgba(6,4,16,0.74)'); ctx.fillStyle=g; ctx.fillRect(0,0,W,H); }
 // b186 ПЕРЕДНИЙ СЛОЙ (глубина/параллакс): пальмы+набережная. b187: файл теперь настоящий PNG-alpha → рисуем как есть, без вырезания белого
 let FG=new Image(), fgCv=null, fgShow=false;   // b188: передний слой выключен до правильного подхода глубины (слои из одной сцены)
 try{ FG.src='assets/world/vice/fg_palms.png'; FG.onload=function(){ try{ const o=document.createElement('canvas'); o.width=FG.naturalWidth; o.height=FG.naturalHeight; o.getContext('2d').drawImage(FG,0,0); fgCv=o; }catch(e){ fgCv=null; } }; }catch(e){}
@@ -1609,6 +1627,7 @@ function drawTrackDeck(i0,i1){ const TH=13;   // b187 GD-ЛЕНТА: трасс�
   ctx.strokeStyle='rgba('+BLINE+',0.5)'; ctx.lineWidth=1.4; ctx.beginPath(); let pen=false;   // нижний неон-рельс
   for(let i=i0;i<=i1;i++){ const c=terr[i]; if(!c||c.gap){pen=false;continue;} if(!pen){ctx.moveTo(c.x,c.y+TH);pen=true;} else ctx.lineTo(c.x,c.y+TH); } ctx.stroke(); }
 function drawCityWorld(){ const hz=H*0.6;
+  ensureViceLayers(); if(viceLayersReady){ drawViceLayered(); return; }   // b189: слойная глубина (пока только sunset испечён) — проверка в игре; иначе плоский бэкдроп
   const _bi=viceImg(); if(_bi){ drawBackdrop(_bi); return; }   // крафтовый бэкдроп готов → рисуем его; иначе процедурный фолбэк ниже
   ctx.save(); ctx.globalCompositeOperation='lighter';
   const hb=ctx.createLinearGradient(0,hz-70,0,hz+50); hb.addColorStop(0,'rgba('+BLINE+',0)'); hb.addColorStop(.5,'rgba('+BLINE+',0.15)'); hb.addColorStop(1,'rgba('+BLINE+',0)'); ctx.fillStyle=hb; ctx.fillRect(0,hz-70,W,120);   // horizon glow (market light)

@@ -128,7 +128,8 @@ async function setImage(name){ curImg=name; ready=false; status('Гружу '+na
   const im=await loadImg(name); imgAsp=im.naturalWidth/im.naturalHeight;
   colorTex=colorTex||makeTex(0); upload(0,colorTex,im);
   const dc=await computeDepth(im); depthTex=depthTex||makeTex(1); upload(1,depthTex,dc); depthCanvas=dc;
-  ready=true; status('Готово · '+name,'двигай палец/мышь — глубина живая'); }
+  ready=true; status('Готово · '+name,'двигай палец/мышь — глубина живая');
+  try{ const t=document.createElement('canvas'), s=384/dc.width; t.width=384; t.height=Math.round(dc.height*s); t.getContext('2d').drawImage(dc,0,0,t.width,t.height); window.__depthURL=t.toDataURL('image/png'); window.__depthName=name; }catch(e){} }
 let depthCanvas=null;
 
 // ---------- input + loop ----------
