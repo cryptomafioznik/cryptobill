@@ -138,17 +138,18 @@ function updateRoad(camX){ const N=roadMesh.userData.N, vp=roadMesh.geometry.att
   for(const l of [lineC,lineTF,lineBF]){ l.geometry.attributes.position.needsUpdate=true; l.computeLineDistances(); }
 }
 
-// ---------- bike sprite (neon silhouette, faithful-ish; real b166 sprite drops in on integration) ----------
-function bikeTex(){ const W=128,H=96,c=document.createElement('canvas'); c.width=W;c.height=H; const g=c.getContext('2d'); g.translate(4,6); g.scale(2.2,2.2);
-  g.lineCap='round'; g.lineJoin='round';
-  g.strokeStyle='#0a0a12'; g.lineWidth=4; g.fillStyle='#0b0b14';
-  for(const wx of [8,40]){ g.beginPath(); g.arc(wx,30,9,0,7); g.fillStyle='#0b0b14'; g.fill(); g.strokeStyle='#4fe6ff'; g.lineWidth=2.4; g.stroke(); }
-  g.strokeStyle='#7fe0ff'; g.lineWidth=3; g.beginPath(); g.moveTo(8,30); g.lineTo(22,18); g.lineTo(40,18); g.lineTo(40,30); g.moveTo(22,18); g.lineTo(30,10); g.stroke();
-  g.strokeStyle='#0d0d17'; g.lineWidth=5; g.beginPath(); g.moveTo(20,14); g.lineTo(26,4); g.lineTo(34,12); g.stroke();
-  g.fillStyle='#ffd24a'; g.beginPath(); g.arc(24,1,4,0,7); g.fill();
-  return new THREE.CanvasTexture(c); }
-const bike=new THREE.Sprite(new THREE.SpriteMaterial({map:bikeTex(),transparent:true,depthTest:true,depthWrite:false,fog:false}));
-bike.scale.set(3.2,2.4,1); scene.add(bike);
+// ---------- BIKE + rider в 3D (самостоятельный объект; наклоняется ПОД УГЛОМ трассы; ловит свет/bloom) ----------
+const bikeGroup=new THREE.Group();
+const nMat=new THREE.MeshBasicMaterial({color:0x9fe8ff}), dMat=new THREE.MeshBasicMaterial({color:0x0b0b16}), gMat=new THREE.MeshBasicMaterial({color:0xffd24a});
+function bar(x1,y1,x2,y2,r){ const dx=x2-x1,dy=y2-y1,len=Math.hypot(dx,dy)||0.01; const m=new THREE.Mesh(new THREE.CylinderGeometry(r,r,len,8), nMat); m.position.set((x1+x2)/2,(y1+y2)/2,0); m.rotation.z=Math.atan2(dy,dx)-Math.PI/2; return m; }
+{ const R=0.8;
+  for(const wx of [-1.05,1.05]){ const w=new THREE.Mesh(new THREE.TorusGeometry(R,0.12,10,26), nMat); w.position.set(wx,0,0); bikeGroup.add(w);
+    const h=new THREE.Mesh(new THREE.CircleGeometry(R-0.18,20), dMat); h.position.set(wx,0,0.02); bikeGroup.add(h); }
+  bikeGroup.add(bar(-1.05,0,0.1,0.5,0.07)); bikeGroup.add(bar(0.1,0.5,1.05,0,0.07)); bikeGroup.add(bar(0.1,0.5,1.05,0.5,0.06)); bikeGroup.add(bar(1.05,0.5,1.05,0.05,0.05)); bikeGroup.add(bar(0.1,0.5,0.55,0.98,0.06));
+  const torso=new THREE.Mesh(new THREE.CapsuleGeometry(0.2,0.62,4,8), dMat); torso.position.set(0.16,1.06,0); torso.rotation.z=-0.35; bikeGroup.add(torso);
+  const armM=new THREE.Mesh(new THREE.CapsuleGeometry(0.08,0.5,4,6), dMat); armM.position.set(0.5,0.92,0.03); armM.rotation.z=-1.1; bikeGroup.add(armM);
+  const head=new THREE.Mesh(new THREE.SphereGeometry(0.27,16,12), gMat); head.position.set(0.36,1.52,0); bikeGroup.add(head); }
+bikeGroup.scale.set(0.82,0.82,0.82); scene.add(bikeGroup);
 
 // ---------- palms (Vice-элемент + передний план = глубина): силуэт с неон-ободком, спрайты по сторонам дороги ----------
 function palmTex(){ const W=220,H=300,c=document.createElement('canvas'); c.width=W;c.height=H; const g=c.getContext('2d'); const cx=W*0.5, ty=H*0.30;
@@ -178,7 +179,9 @@ stage.addEventListener('pointerleave',()=>{tx=0;ty=0;});
 function loop(){ requestAnimationFrame(loop); T+=0.016; camX+=0.16;
   ptx+=(tx-ptx)*0.05; pty+=(ty-pty)*0.05;
   const by=profile(camX);
-  bike.position.set(camX, by+1.4, W2+0.15);   // байк на ПОВЕРХНОСТИ дороги, у передней кромки (к камере)
+  const slope=(profile(camX+0.6)-profile(camX-0.6))/1.2;   // уклон трассы под байком
+  bikeGroup.position.set(camX, by+0.68, W2+0.2);           // колёса на поверхности дороги
+  bikeGroup.rotation.z=Math.atan2(slope,1);                 // НАКЛОН под угол трассы (объект «читает» трассу)
   updateRoad(camX);
   // city recycle (wrap x around camX within PERIOD)
   cityGroup.children.forEach(m=>{ let x=m.userData.x0 - (Math.floor((m.userData.x0-camX+PERIOD/2)/PERIOD))*PERIOD; m.position.x=x; });
