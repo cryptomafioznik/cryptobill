@@ -34,8 +34,14 @@
     <div id="hint">Всё — небо, город-из-свечей, дорога, байк — в ОДНОМ 3D-движке: единый свет/туман/перспектива → сочетается само, глубина настоящая. Двигай пальцем — параллакс.</div>
   </div>
 </div>
+<script type="importmap">
+{"imports":{"three":"https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js","three/addons/":"https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"}}
+</script>
 <script type="module">
-import * as THREE from 'https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js';
+import * as THREE from 'three';
+import {EffectComposer} from 'three/addons/postprocessing/EffectComposer.js';
+import {RenderPass} from 'three/addons/postprocessing/RenderPass.js';
+import {UnrealBloomPass} from 'three/addons/postprocessing/UnrealBloomPass.js';
 const cv=document.getElementById('c'), stEl=document.getElementById('st');
 function st(a,b){ stEl.innerHTML='<b>'+a+'</b>'+(b?'<small>'+b+'</small>':''); }
 st('Инициализация 3D…');
@@ -51,6 +57,8 @@ renderer.setSize(SW,SH); renderer.toneMapping=THREE.ACESFilmicToneMapping; rende
 const scene=new THREE.Scene();
 let fogOn=true; const FOGC=new THREE.Color(0x2a0d3a); scene.fog=new THREE.FogExp2(FOGC.getHex(),0.010);
 const camera=new THREE.PerspectiveCamera(52, SW/SH, 0.1, 900);
+const composer=new EffectComposer(renderer); composer.addPass(new RenderPass(scene,camera));
+const bloom=new UnrealBloomPass(new THREE.Vector2(SW,SH), 0.85, 0.5, 0.35); composer.addPass(bloom);   // strength/radius/threshold — свечение неона = премиум-синтвейв
 
 // ---------- sky (gradient plane, far, no fog) ----------
 function skyTex(){ const c=document.createElement('canvas'); c.width=8; c.height=256; const g=c.getContext('2d'); const gr=g.createLinearGradient(0,0,0,256);
@@ -175,10 +183,10 @@ function loop(){ requestAnimationFrame(loop); T+=0.016; camX+=0.16;
   const ang=angF; const shake=camShake?Math.sin(T*1.7)*0.10:0;
   camera.position.set(camX-4 + ptx*4, by+4.6+ang*6+shake + pty*2, 15.5 - ang*4);
   camera.lookAt(camX+5, by-1.2 - ang*3, -12);
-  renderer.render(scene,camera);
+  composer.render();
   if(T>0.3 && stEl.textContent.indexOf('Готово')<0) st('Готово · 3D-мир','единый движок: свет/туман/глубина — сами');
 }
-function onResize(){ fitSize(); renderer.setSize(SW,SH); camera.aspect=SW/SH; camera.updateProjectionMatrix(); }
+function onResize(){ fitSize(); renderer.setSize(SW,SH); composer.setSize(SW,SH); bloom.setSize(SW,SH); camera.aspect=SW/SH; camera.updateProjectionMatrix(); }
 window.addEventListener('resize',onResize);
 document.getElementById('cam').addEventListener('click',e=>{ camShake=!camShake; e.target.classList.toggle('on',camShake); });
 document.getElementById('fog').addEventListener('click',e=>{ fogOn=!fogOn; scene.fog=fogOn?new THREE.FogExp2(FOGC.getHex(),0.010):null; e.target.classList.toggle('on',fogOn); });
