@@ -56,7 +56,7 @@ function lerp(a,b,t){return a+(b-a)*t;} function clamp(v,a,b){return v<a?a:v>b?b
 // false → full game everywhere. Single switch. Systems are GATED, never deleted.
 const CORE_TEST_MODE = false;   // b70: META LIVE — building the progression spine (upgrades/bikes with teeth, career, economy) on the confirmed rigid-body core
 // build stamp — bump on every change so a phone refresh can confirm it loaded fresh code (cache!)
-const BUILD = '2026-07-07 · b183';
+const BUILD = '2026-07-08 · b184';
 
 // ---------- procedural market terrain ----------
 // height map sampled every STEP px; generated forward as we ride. Market character:
@@ -591,6 +591,8 @@ const SCHEME_NAME={gestures:'ЖЕСТЫ',btn2:'АВТО-ГАЗ',btn4:'4 КНОП
 const SCHEME_DESC={gestures:'держишь = газ · драг = наклон · свайп↑ = прыжок',btn2:'газ САМ · тормоз + НОС↑/НОС↓ + прыжок/памп',btn4:'газ/тормоз + кнопки наклона НОС↑ / НОС↓ + прыжок/памп',tilt:'газ/тормоз + наклон ТЕЛЕФОНА (гироскоп)'};
 let trickGrip='sticky'; try{ const _tg=localStorage.getItem('cipher_trickgrip'); if(_tg==='hold'||_tg==='sticky')trickGrip=_tg; }catch(e){}   // b171 ТРЮК-ХВАТ (юзер: «неудобны в управлении»): ЗАЛИПАЕТ (дефолт) = свайп задал позу, она ДЕРЖИТСЯ сама; тап свободным пальцем = отпустить; свайп в другую сторону = СМЕНА позы в полёте. ДЕРЖАТЬ = старый b158 (палец на экране)
 function saveTrickGrip(){ try{localStorage.setItem('cipher_trickgrip',trickGrip);}catch(e){} }
+let worldNew=true; try{ const _wn=localStorage.getItem('cipher_world'); if(_wn==='0')worldNew=false; }catch(e){}   // b184 ПРЕМИУМ-МИР (фон за реальным графиком/байком, только отрисовка): НОВЫЙ = город-из-свечей + глубина/дымка/god-rays; КЛАССИКА = старые синус-силуэты. Тумблер в настройках, дефолт НОВЫЙ. Физика/калибровка НЕ трогаются
+function saveWorld(){ try{localStorage.setItem('cipher_world',worldNew?'1':'0');}catch(e){} }
 const TRICK_BASE={1:1,2:2,3:3,4:4,5:1,6:2,7:4};   // жёсткая вариация → её базовое направление (для «тот же свайп = отпустить»)
 let ctrlScheme='btn4'; try{ctrlScheme=localStorage.getItem('cipher_ctrlscheme')||'btn4'; if(SCHEMES.indexOf(ctrlScheme)<0)ctrlScheme='btn4';}catch(e){}   // b56: 4 КНОПКИ = ДЕФОЛТ (юзер выбрал — удобнее). btn2 переделан в АВТО-ГАЗ
 function saveScheme(){ try{localStorage.setItem('cipher_ctrlscheme',ctrlScheme);}catch(e){} }
@@ -1074,6 +1076,7 @@ function pointerDown(p){
     if(hit(p,UI.setMute)){ toggleMute(); sfxClick(); return; }
     if(UI.setWassist && hit(p,UI.setWassist)){ wheelieAssist=!wheelieAssist; saveWassist(); sfxClick(); return; }   // b147: тумблер вилли-помощника
     if(UI.setTgrip && hit(p,UI.setTgrip)){ trickGrip=trickGrip==='sticky'?'hold':'sticky'; saveTrickGrip(); sfxClick(); return; }   // b171: хват трюка
+    if(UI.setWorld && hit(p,UI.setWorld)){ worldNew=!worldNew; saveWorld(); sfxClick(); return; }   // b184: тумблер премиум-мира
     if(UI.setReset && hit(p,UI.setReset)){ if(resetArm>0){ resetProgress(); } else { resetArm=180; sfxClick(); } return; }   // b95: первый тап «взводит», второй (в течение ~3с) обнуляет
     if(hit(p,UI.setBack)){ resetArm=0; screen=settingsRet||'title'; sfxClick(); return; }
     return;
@@ -1556,6 +1559,37 @@ function farCandles(par,baseY,alpha){ // distant blurred candle skyline — adds
     ctx.fillStyle='rgba('+(up?'72,150,150':'150,82,108')+','+alpha+')';
     ctx.fillRect(sx, baseY-hgt, fs*0.62, hgt); }
 }
+// ---- b184 ПРЕМИУМ-МИР: город-из-свечей + дымка + god-rays, ПОЗАДИ реального графика/байка (только отрисовка; цвета из биома) ----
+let _fogTex=null;
+function fogTexture(){ if(_fogTex)return _fogTex; const S=200,oc=document.createElement('canvas');oc.width=S;oc.height=S;const g=oc.getContext('2d');const im=g.createImageData(S,S),d=im.data;
+  function nz(x,y,s){let n=Math.sin(x*12.9898+y*78.233+s*3.17)*43758.5453;return n-Math.floor(n);}
+  for(let y=0;y<S;y++)for(let x=0;x<S;x++){ let v=0,amp=.5,f=1/40; for(let o=0;o<4;o++){ const xi=Math.floor(x*f),yi=Math.floor(y*f),fx=x*f-xi,fy=y*f-yi,a=nz(xi,yi,o),b=nz(xi+1,yi,o),c=nz(xi,yi+1,o),dd=nz(xi+1,yi+1,o),sx=fx*fx*(3-2*fx),sy=fy*fy*(3-2*fy); v+=(a+(b-a)*sx+((c+(dd-c)*sx)-(a+(b-a)*sx))*sy)*amp; amp*=.5; f*=2.05; } const i=(y*S+x)*4,l=Math.pow(v<0?0:v>1?1:v,1.35)*255; d[i]=d[i+1]=d[i+2]=255; d[i+3]=l*0.9; }
+  g.putImageData(im,0,0); _fogTex=oc; return oc; }
+function cityPass(par,baseY,near){ const fs=near?46:30, cx=cam.x*par, i0=Math.floor((cx-fs)/fs), i1=Math.ceil((cx+W+fs)/fs);   // башни = свечи (тело bull/bear + фитиль-антенна) = «уже проехавшие свечи» = твоё прошлое
+  for(let i=i0;i<=i1;i++){ const sx=i*fs-cx; let r=(Math.sin(i*12.9898+(near?1.7:4.3))*43758.5)%1; if(r<0)r+=1; let r2=(Math.sin(i*45.77)*9631.1)%1; if(r2<0)r2+=1;
+    const w=fs*0.6, th=near?58+r*150:38+r*120, top=baseY-th, base=r2>0.5?'46,230,166':'255,59,92', a=near?0.5:0.3;
+    const g=ctx.createLinearGradient(0,top,0,H); g.addColorStop(0,'rgba('+base+','+a+')'); g.addColorStop(1,'rgba(8,10,24,'+a+')'); ctx.fillStyle=g; ctx.fillRect(sx,top,w,H-top);
+    ctx.fillStyle='rgba('+base+','+(near?0.68:0.4)+')'; ctx.fillRect(sx,top,w,near?2:1.3);
+    ctx.strokeStyle='rgba('+base+','+(near?0.48:0.28)+')'; ctx.lineWidth=near?1.4:1; ctx.beginPath(); ctx.moveTo(sx+w/2,top); ctx.lineTo(sx+w/2,top-(near?14:9)-r*12); ctx.stroke();
+    ctx.fillStyle='rgba(255,230,170,'+(near?0.12:0.06)+')'; for(let wy=top+7;wy<H;wy+=near?11:9){ for(let wx=sx+4;wx<sx+w-3;wx+=near?8:6){ let rw=(Math.sin(i*3.1+wy*0.7+wx*0.31)*7219.3)%1; if(rw<0)rw+=1; if(rw>0.63)ctx.fillRect(wx,wy,near?2.2:1.5,near?2.2:1.5); } } }
+}
+function fogBandG(y,h,par,alpha){ const ft=fogTexture(); ctx.save(); ctx.globalCompositeOperation='screen'; ctx.globalAlpha=alpha; const dx=(cam.x*par*0.4)%200; ctx.beginPath(); ctx.rect(0,y,W,h); ctx.clip();
+  for(let x=-200-dx;x<W+200;x+=200){ for(let yy=y-60;yy<y+h+60;yy+=200){ ctx.drawImage(ft,x,yy,230,230); } }
+  ctx.globalCompositeOperation='source-atop'; ctx.globalAlpha=alpha*0.85; ctx.fillStyle='rgba('+BRIDGE+',1)'; ctx.fillRect(0,y,W,h); ctx.restore(); }
+function drawCityWorld(){ const hz=H*0.6;
+  ctx.save(); ctx.globalCompositeOperation='lighter';
+  const hb=ctx.createLinearGradient(0,hz-70,0,hz+50); hb.addColorStop(0,'rgba('+BLINE+',0)'); hb.addColorStop(.5,'rgba('+BLINE+',0.15)'); hb.addColorStop(1,'rgba('+BLINE+',0)'); ctx.fillStyle=hb; ctx.fillRect(0,hz-70,W,120);   // horizon glow (market light)
+  const cxr=W*0.5; for(let k=0;k<12;k++){ const a0=-1.15+(k/11)*2.3+Math.sin(t*0.004+k)*0.04, len=H*0.9, w=4+4*Math.abs(Math.sin(t*0.009+k*1.7)), al=0.02+0.018*Math.abs(Math.sin(t*0.011+k));   // god-rays
+    ctx.save(); ctx.translate(cxr,hz); ctx.rotate(a0); const gr=ctx.createLinearGradient(0,0,0,-len); gr.addColorStop(0,'rgba('+BLINE+','+al+')'); gr.addColorStop(1,'rgba('+BLINE+',0)'); ctx.fillStyle=gr; ctx.beginPath(); ctx.moveTo(-w,0); ctx.lineTo(w,0); ctx.lineTo(w*2.2,-len); ctx.lineTo(-w*2.2,-len); ctx.closePath(); ctx.fill(); ctx.restore(); }
+  ctx.restore();
+  ctx.fillStyle='rgba('+BRIDGE+',0.5)'; ctx.beginPath(); ctx.moveTo(0,H); { const cx=cam.x*0.06; for(let sx=0;sx<=W;sx+=10){ const wx=(cx+sx)*0.006; const y=hz-30+Math.sin(wx*1.3)*22+Math.sin(wx*0.5)*30; ctx.lineTo(sx,y);} } ctx.lineTo(W,H); ctx.closePath(); ctx.fill();   // far ridge (hazed)
+  fogBandG(hz-95,120,0.06,0.5);
+  cityPass(0.13,hz-4,false);
+  fogBandG(hz-35,95,0.13,0.55);
+  cityPass(0.26,hz+8,true);
+  fogBandG(hz+8,80,0.26,0.4);
+  ctx.globalCompositeOperation='source-over';
+}
 function draw(){
   if(screen==='tickerload'){ tickerLoadT++; ctx.fillStyle='#0a0a1a'; ctx.fillRect(0,0,W,H); hudEl.style.opacity='0'; spdEl.style.opacity='0'; hintEl.style.opacity='0'; ctx.textAlign='center';   // b97: экран загрузки live-графика
     ctx.fillStyle='#bfe0ff'; ctx.font='800 22px ui-monospace,monospace'; ctx.fillText('📡 ЗАГРУЗКА ГРАФИКА',W/2,H*0.42);
@@ -1579,12 +1613,15 @@ function draw(){
     for(let i=0;i<stars.length;i+=2){ const s=stars[i], yy=((s.y+t*m[1]*0.7)%(H*0.78)+(H*0.78))%(H*0.78), a=0.07+0.11*Math.abs(Math.sin(t*0.04+s.x)); ctx.fillStyle='rgba('+m[0]+','+a.toFixed(3)+')'; ctx.fillRect(((s.x*1.3-cam.x*0.04)%W+W)%W,yy,s.s+0.7,s.s+0.7); }
     ctx.restore(); }
   ctx.globalCompositeOperation='source-over';
-  // parallax ridges (distant market silhouettes)
-  ridgeLayer(0.15,40,H*0.5,'rgba('+BRIDGE+',0.42)');
-  ridgeLayer(0.3,52,H*0.58,'rgba('+BRIDGE+',0.55)');
-  farCandles(0.30,H*0.66,0.12);
-  farCandles(0.46,H*0.62,0.2);
-  ridgeLayer(0.55,60,H*0.66,'rgba('+BRIDGE+',0.7)');
+  // parallax ridges (distant market silhouettes) — b184: НОВЫЙ мир (город-из-свечей + глубина) или КЛАССИКА
+  if(worldNew){ drawCityWorld(); }
+  else {
+    ridgeLayer(0.15,40,H*0.5,'rgba('+BRIDGE+',0.42)');
+    ridgeLayer(0.3,52,H*0.58,'rgba('+BRIDGE+',0.55)');
+    farCandles(0.30,H*0.66,0.12);
+    farCandles(0.46,H*0.62,0.2);
+    ridgeLayer(0.55,60,H*0.66,'rgba('+BRIDGE+',0.7)');
+  }
 
   // ---- the track: a real CANDLESTICK chart the bike rides across ----
   const zoom=1-(rush||0)*0.04-(camAir||0)*0.40*(1-(trickZoom||0))+(trickZoom||0)*0.22+(boosting>0?0.045:0);   // b150 ТРИК-КАМЕРА: зум К БАЙКУ на полёте; b183: +зум-пульс буста (Этап A)
@@ -2609,6 +2646,9 @@ function drawMenus(){
     ctx.fillStyle='#9fb6dc'; ctx.font='700 10px ui-monospace,monospace'; ctx.fillText('ТРЮК-ХВАТ  (FMX-позы в полёте)',cx,y+19);
     ctx.fillStyle=trickGrip==='sticky'?'#ffd678':'#9ff0c8'; ctx.font='800 13px ui-monospace,monospace';
     ctx.fillText(trickGrip==='sticky'?'ЗАЛИПАЕТ: свайп = поза · тап = отпуск':'ДЕРЖАТЬ: палец на экране = поза',cx,y+41);
+    y+=66; UI.setWorld={x:cx-cw/2,y:y,w:cw,h:54}; panel(UI.setWorld.x,UI.setWorld.y,cw,54,'rgba(150,110,255,0.55)');   // b184: премиум-мир (фон)
+    ctx.fillStyle='#9fb6dc'; ctx.font='700 10px ui-monospace,monospace'; ctx.fillText('МИР  (фон за графиком)',cx,y+19);
+    ctx.fillStyle=worldNew?'#c9b0ff':'#9ff0c8'; ctx.font='800 14px ui-monospace,monospace'; ctx.fillText(worldNew?'НОВЫЙ: город-из-свечей + глубина':'КЛАССИКА',cx,y+41);
     y+=66; if(resetArm>0)resetArm--; UI.setReset={x:cx-cw/2,y:y,w:cw,h:46}; const armed=resetArm>0;   // b95 СБРОС ПРОГРЕССА (2-тап) — чистый старт для анализа
     panel(UI.setReset.x,UI.setReset.y,cw,46, armed?'rgba(255,110,90,0.95)':'rgba(255,150,120,0.45)', armed?'rgba(60,20,16,0.66)':'rgba(30,18,16,0.4)');
     ctx.fillStyle=armed?'#ff9a7a':'#e0a890'; ctx.font='800 14px ui-monospace,monospace'; ctx.fillText(armed?'⟲ ТОЧНО? ЖМИ ЕЩЁ РАЗ':'⟲ ОБНУЛИТЬ ПРОГРЕСС',cx,y+28);
