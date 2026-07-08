@@ -56,7 +56,7 @@ function lerp(a,b,t){return a+(b-a)*t;} function clamp(v,a,b){return v<a?a:v>b?b
 // false → full game everywhere. Single switch. Systems are GATED, never deleted.
 const CORE_TEST_MODE = false;   // b70: META LIVE — building the progression spine (upgrades/bikes with teeth, career, economy) on the confirmed rigid-body core
 // build stamp — bump on every change so a phone refresh can confirm it loaded fresh code (cache!)
-const BUILD = '2026-07-08 · b185';
+const BUILD = '2026-07-08 · b186';
 
 // ---------- procedural market terrain ----------
 // height map sampled every STEP px; generated forward as we ride. Market character:
@@ -596,6 +596,13 @@ function saveWorld(){ try{localStorage.setItem('cipher_world',worldNew?'1':'0');
 // b185 VICE-СИНТВЕЙВ БЭКДРОПЫ (крафтовые AI-ассеты юзера): 4 времени суток = живой мир по эпохам (Alto's-подход). Мир = красивая СЦЕНА позади графика-героя
 let VICE=null; (function(){ try{ VICE=['sunset','day','twilight','night'].map(function(n){ const im=new Image(); im.src='assets/world/vice/'+n+'.jpg'; return im; }); }catch(e){ VICE=null; } })();
 function viceImg(){ if(!VICE)return null; const im=VICE[((zone||0)%4+4)%4]; return (im&&im.complete&&im.naturalWidth)?im:null; }
+// b186 ПЕРЕДНИЙ СЛОЙ (глубина/параллакс): пальмы+набережная, белый фон вырезается в альфу в канвасе при загрузке (файл потерял прозрачность при сохранении)
+let FG=new Image(), fgCv=null;
+try{ FG.src='assets/world/vice/fg_palms.png'; FG.onload=function(){ try{ const o=document.createElement('canvas'); o.width=FG.naturalWidth; o.height=FG.naturalHeight; const g=o.getContext('2d'); g.drawImage(FG,0,0);
+  const im=g.getImageData(0,0,o.width,o.height), d=im.data;
+  for(let i=0;i<d.length;i+=4){ const r=d[i],gg=d[i+1],b=d[i+2], m=Math.min(r,gg,b), sat=Math.max(r,gg,b)-m;   // убить запечённую шахматку-прозрачность (бел.+сер. клетки, low-sat, high-lum): saturated ИЛИ тёмное = держим, светло-серое/белое = в ноль, мягкий рамп 150-185 = антиалиас краёв пальм
+    let a; if(sat>=34||m<=150)a=255; else if(m>=185)a=0; else a=(185-m)/35*255; d[i+3]=a; }
+  g.putImageData(im,0,0); fgCv=o; }catch(e){ fgCv=null; } }; }catch(e){}
 const TRICK_BASE={1:1,2:2,3:3,4:4,5:1,6:2,7:4};   // жёсткая вариация → её базовое направление (для «тот же свайп = отпустить»)
 let ctrlScheme='btn4'; try{ctrlScheme=localStorage.getItem('cipher_ctrlscheme')||'btn4'; if(SCHEMES.indexOf(ctrlScheme)<0)ctrlScheme='btn4';}catch(e){}   // b56: 4 КНОПКИ = ДЕФОЛТ (юзер выбрал — удобнее). btn2 переделан в АВТО-ГАЗ
 function saveScheme(){ try{localStorage.setItem('cipher_ctrlscheme',ctrlScheme);}catch(e){} }
@@ -1588,6 +1595,15 @@ function drawBackdrop(img){   // b185: крафтовый бэкдроп (cover-
   const g=ctx.createLinearGradient(0,0,0,H); g.addColorStop(0,'rgba(6,4,16,0.30)'); g.addColorStop(0.48,'rgba(6,4,16,0.04)'); g.addColorStop(0.70,'rgba(6,4,16,0.34)'); g.addColorStop(1,'rgba(6,4,16,0.74)');
   ctx.fillStyle=g; ctx.fillRect(0,0,W,H);
 }
+function drawForeground(){ if(!fgCv)return; const img=fgCv;   // b186: передний слой ПОВЕРХ графика/байка (центр прозрачный → геймплей виден), быстрый параллакс, зеркальный луп; лёгкая прозрачность = байк читается даже под пальмой
+  const s=(H/img.height)*1.06, dw=img.width*s, dh=img.height*s, y=H-dh;
+  const par=0.30, scrollX=cam.x*par, first=Math.floor(scrollX/dw);
+  ctx.save(); ctx.globalAlpha=0.9;
+  for(let i=first-1; (i*dw-scrollX)<W; i++){ const x=i*dw-scrollX, flip=(((i%2)+2)%2)===1;
+    if(flip){ ctx.save(); ctx.translate(x+dw,0); ctx.scale(-1,1); ctx.drawImage(img,0,0,img.width,img.height,0,y,dw,dh); ctx.restore(); }
+    else ctx.drawImage(img,0,0,img.width,img.height,x,y,dw,dh); }
+  ctx.restore();
+}
 function drawCityWorld(){ const hz=H*0.6;
   const _bi=viceImg(); if(_bi){ drawBackdrop(_bi); return; }   // крафтовый бэкдроп готов → рисуем его; иначе процедурный фолбэк ниже
   ctx.save(); ctx.globalCompositeOperation='lighter';
@@ -1787,6 +1803,7 @@ function draw(){
     ctx.restore();
   }
   ctx.restore(); ctx.restore();   // world translate + camera zoom   // b104: убрал красную ликв-линию (заменено плечо→скорость волны)
+  if(worldNew&&fgCv) drawForeground();   // b186: передний слой глубины (screen-space, поверх мира/байка, под bloom/зерном → интегрируется)
   // ---- b168 ЛИКВИДАЦИИ НА ГОРИЗОНТЕ: вспышки в верхнем небе, частота ∝ реальной крутизне свечей × волатильность монеты; дамп = лонги (красные), памп = шорты (зелёные). Суммы синтетические (реальный фид ликвидаций = платные API) ----
   if(screen==='play' && liqFx.length<2){ const lp=(0.003+Math.abs(_mktDy)*0.05)*(trackSource==='ticker'?tickerVolMul:1);
     if(Math.random()<lp) liqFx.push({x:W*(0.15+Math.random()*0.7), y:H*(0.135+Math.random()*0.075), t:0, amt:0.2+Math.pow(Math.random(),2)*7, long:_mktDy>0}); }   // узкая верхняя полоса — не пересекается с баннерами эпох (~H*0.24+)
