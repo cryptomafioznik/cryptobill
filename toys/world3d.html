@@ -91,43 +91,43 @@ function gridTex(){ const S=256,c=document.createElement('canvas'); c.width=c.he
   g.strokeStyle='rgba(120,60,200,0.5)'; g.lineWidth=2; for(let i=0;i<=S;i+=32){ g.beginPath();g.moveTo(i,0);g.lineTo(i,S);g.stroke(); g.beginPath();g.moveTo(0,i);g.lineTo(S,i);g.stroke(); }
   const t=new THREE.CanvasTexture(c); t.wrapS=t.wrapT=THREE.RepeatWrapping; t.repeat.set(60,30); return t; }
 const gridT=gridTex();
-{ const gp=new THREE.Mesh(new THREE.PlaneGeometry(1400,600), new THREE.MeshBasicMaterial({map:gridT,transparent:true,opacity:0.5,fog:true}));
+{ const gp=new THREE.Mesh(new THREE.PlaneGeometry(1400,600), new THREE.MeshBasicMaterial({map:gridT,transparent:true,opacity:0.3,fog:true}));
   gp.rotation.x=-Math.PI/2; gp.position.set(0,0,-140); scene.add(gp); window.__grid=gridT; }
 
 // ---------- ROAD ribbon (the track, at Z~0) following a profile, neon-edged, with body ----------
 function profile(x){ return 3 + Math.sin(x*0.05)*1.6 + Math.sin(x*0.13+1)*0.7 + Math.sin(x*0.021)*1.1; }
-const ROADW=2.2, ROADT=1.6, SEG=2, SPAN=140;
-let roadMesh, roadTop, roadEdgeF, roadEdgeB;
+const W2=3.3, ROADT=1.7, SEG=1.6, SPAN=150;   // W2=пол-ширины дороги → настоящая ПОВЕРХНОСТЬ, по которой едет байк (не линия)
+let roadMesh, roadFront, lineC, lineTF, lineBF;
 function buildRoad(){
-  const N=Math.floor(SPAN/SEG)+2; const pos=[], top=[];
-  // we rebuild each frame around camX; create buffers sized N
-  const geo=new THREE.BufferGeometry(); const verts=new Float32Array(N*2*3); geo.setAttribute('position',new THREE.BufferAttribute(verts,3));
-  const idx=[]; for(let i=0;i<N-1;i++){ const a=i*2,b=i*2+1,cc=(i+1)*2,d=(i+1)*2+1; idx.push(a,b,cc, b,d,cc); }
+  const N=Math.floor(SPAN/SEG)+2;
+  // deck (A=+W2,B=-W2) + front-thickness (C=A−TH). 3 верт/станция
+  const geo=new THREE.BufferGeometry(); geo.setAttribute('position',new THREE.BufferAttribute(new Float32Array(N*3*3),3));
+  const idx=[]; for(let i=0;i<N-1;i++){ const A=i*3,B=i*3+1,C=i*3+2, A2=(i+1)*3,B2=(i+1)*3+1,C2=(i+1)*3+2;
+    idx.push(A,B,A2, B,B2,A2);   // дека (поверхность)
+    idx.push(A,C,A2, C,C2,A2); } // передняя грань (тело)
   geo.setIndex(idx);
-  roadMesh=new THREE.Mesh(geo, new THREE.MeshBasicMaterial({color:0x241a3a,fog:true,side:THREE.DoubleSide}));
-  scene.add(roadMesh);
-  // top neon line + front edge line
-  const lg=new THREE.BufferGeometry(); lg.setAttribute('position',new THREE.BufferAttribute(new Float32Array(N*3),3));
-  roadTop=new THREE.Line(lg, new THREE.LineBasicMaterial({color:0x4fe6ff,fog:true}));
-  scene.add(roadTop);
-  const lg2=new THREE.BufferGeometry(); lg2.setAttribute('position',new THREE.BufferAttribute(new Float32Array(N*3),3));
-  roadEdgeF=new THREE.Line(lg2, new THREE.LineBasicMaterial({color:0xff3bde,transparent:true,opacity:0.8,fog:true}));
-  scene.add(roadEdgeF);
-  roadMesh.userData.N=N;
+  roadMesh=new THREE.Mesh(geo, new THREE.MeshBasicMaterial({color:0x2f2352,fog:true,side:THREE.DoubleSide}));
+  scene.add(roadMesh); roadMesh.userData.N=N;
+  function mkLine(color,op,dash){ const g=new THREE.BufferGeometry(); g.setAttribute('position',new THREE.BufferAttribute(new Float32Array(N*3),3));
+    const m=dash?new THREE.LineDashedMaterial({color:color,transparent:true,opacity:op,fog:true,dashSize:2.4,gapSize:2.4}):new THREE.LineBasicMaterial({color:color,transparent:true,opacity:op,fog:true}); const l=new THREE.Line(g,m); scene.add(l); return l; }
+  lineC=mkLine(0x8fe0ff,0.5,true);      // осевая пунктир-разметка
+  lineTF=mkLine(0x4fe6ff,0.95,false);   // верхний неон-рельс (кромка поверхности у камеры)
+  lineBF=mkLine(0xff3bde,0.8,false);    // нижний неон-рельс (кромка тела)
 }
 buildRoad();
-function updateRoad(camX){ const N=roadMesh.userData.N; const vp=roadMesh.geometry.attributes.position.array;
-  const tp=roadTop.geometry.attributes.position.array, fp=roadEdgeF.geometry.attributes.position.array;
-  const x0=camX-SPAN*0.35;
-  for(let i=0;i<N;i++){ const x=x0+i*SEG; const y=profile(x);
-    // top front (z=+ROADW/2), top back (z=-ROADW/2) at height y; but give body: front-top and front-bottom
-    vp[i*2*3+0]=x; vp[i*2*3+1]=y;        vp[i*2*3+2]=ROADW/2;
-    vp[i*2*3+3]=x; vp[i*2*3+4]=y-ROADT;  vp[i*2*3+5]=ROADW/2;
-    tp[i*3+0]=x; tp[i*3+1]=y+0.02; tp[i*3+2]=ROADW/2+0.01;
-    fp[i*3+0]=x; fp[i*3+1]=y-ROADT; fp[i*3+2]=ROADW/2+0.01;
+function updateRoad(camX){ const N=roadMesh.userData.N, vp=roadMesh.geometry.attributes.position.array;
+  const c=lineC.geometry.attributes.position.array, tf=lineTF.geometry.attributes.position.array, bf=lineBF.geometry.attributes.position.array;
+  const x0=camX-SPAN*0.4;
+  for(let i=0;i<N;i++){ const x=x0+i*SEG, y=profile(x);
+    vp[i*9+0]=x; vp[i*9+1]=y;        vp[i*9+2]=W2;      // A перед-верх
+    vp[i*9+3]=x; vp[i*9+4]=y;        vp[i*9+5]=-W2;     // B зад-верх
+    vp[i*9+6]=x; vp[i*9+7]=y-ROADT;  vp[i*9+8]=W2;      // C перед-низ (тело)
+    c[i*3]=x;  c[i*3+1]=y+0.03;      c[i*3+2]=0;                // центр
+    tf[i*3]=x; tf[i*3+1]=y+0.02;     tf[i*3+2]=W2+0.02;         // верх-передняя кромка
+    bf[i*3]=x; bf[i*3+1]=y-ROADT;    bf[i*3+2]=W2+0.02;         // низ-передняя кромка
   }
   roadMesh.geometry.attributes.position.needsUpdate=true; roadMesh.geometry.computeVertexNormals();
-  roadTop.geometry.attributes.position.needsUpdate=true; roadEdgeF.geometry.attributes.position.needsUpdate=true;
+  for(const l of [lineC,lineTF,lineBF]){ l.geometry.attributes.position.needsUpdate=true; l.computeLineDistances(); }
 }
 
 // ---------- bike sprite (neon silhouette, faithful-ish; real b166 sprite drops in on integration) ----------
@@ -150,15 +150,15 @@ stage.addEventListener('pointerleave',()=>{tx=0;ty=0;});
 function loop(){ requestAnimationFrame(loop); T+=0.016; camX+=0.16;
   ptx+=(tx-ptx)*0.05; pty+=(ty-pty)*0.05;
   const by=profile(camX);
-  bike.position.set(camX, by+1.6, ROADW/2+0.3);
+  bike.position.set(camX, by+1.4, W2+0.15);   // байк на ПОВЕРХНОСТИ дороги, у передней кромки (к камере)
   updateRoad(camX);
   // city recycle (wrap x around camX within PERIOD)
   cityGroup.children.forEach(m=>{ let x=m.userData.x0 - (Math.floor((m.userData.x0-camX+PERIOD/2)/PERIOD))*PERIOD; m.position.x=x; });
   window.__grid.offset.y = -camX*0.02;
   // camera: side view, slight elevation + forward, follows bike; angle slider tilts down for depth
   const ang=angF; const shake=camShake?Math.sin(T*1.7)*0.10:0;
-  camera.position.set(camX-3 + ptx*4, by+2.6+ang*7+shake + pty*2, 22 - ang*5);
-  camera.lookAt(camX+4, by+0.8 - ang*3, -10);
+  camera.position.set(camX-4 + ptx*4, by+4.6+ang*6+shake + pty*2, 15.5 - ang*4);
+  camera.lookAt(camX+5, by-1.2 - ang*3, -12);
   renderer.render(scene,camera);
   if(T>0.3 && stEl.textContent.indexOf('Готово')<0) st('Готово · 3D-мир','единый движок: свет/туман/глубина — сами');
 }
