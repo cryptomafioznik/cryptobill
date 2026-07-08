@@ -1,0 +1,172 @@
+<!doctype html><html lang="ru"><head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no,viewport-fit=cover">
+<meta name="theme-color" content="#0a0618">
+<title>WORLD 3D — прототип единого 3D-мира (2.5D)</title>
+<style>
+  *{margin:0;padding:0;box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+  html,body{height:100%;background:#08040f;color:#e8ecfb;font:13px/1.4 ui-monospace,Menlo,monospace;overflow:hidden;overscroll-behavior:none}
+  #wrap{position:fixed;inset:0;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:10px}
+  #stage{position:relative;border-radius:22px;overflow:hidden;box-shadow:0 30px 80px -20px #000,0 0 0 1px rgba(140,170,255,.09) inset;touch-action:none}
+  canvas{display:block}
+  #st{position:absolute;left:14px;top:12px;font-weight:800;font-size:11px;letter-spacing:.4px;color:#fff;text-shadow:0 2px 12px #000;pointer-events:none}
+  #st small{display:block;font-weight:600;font-size:9.5px;color:#a9b6d8;margin-top:2px}
+  #panel{width:min(94vw,520px);display:flex;flex-direction:column;gap:8px}
+  .row{display:flex;flex-wrap:wrap;gap:6px;justify-content:center;align-items:center}
+  .lbl{font-size:9.5px;letter-spacing:1.2px;color:#7f8cb0;text-align:center;text-transform:uppercase;font-weight:700}
+  button{appearance:none;border:1px solid rgba(150,175,235,.16);background:rgba(22,26,48,.72);color:#c7d2ee;padding:8px 12px;border-radius:11px;font:700 12px ui-monospace,monospace;cursor:pointer;transition:.14s}
+  button:active{transform:scale(.95)}
+  .tog.on{background:linear-gradient(160deg,rgba(53,224,255,.26),rgba(255,45,149,.2));border-color:rgba(120,180,255,.55);color:#eafcff}
+  input[type=range]{width:130px;accent-color:#8a6bff}
+  label{font-size:11px;color:#aeb9db;display:flex;gap:8px;align-items:center}
+  #hint{font-size:10px;color:#6b789c;text-align:center}
+</style></head>
+<body>
+<div id="wrap">
+  <div id="stage"><canvas id="c"></canvas><div id="st"></div></div>
+  <div id="panel">
+    <div class="lbl">прототип: единый 3D-мир (вид сбоку, реальная глубина/туман)</div>
+    <div class="row">
+      <button class="tog on" id="cam">камера-качка</button>
+      <button class="tog on" id="fog">туман</button>
+      <label>ракурс <input id="ang" type="range" min="0" max="100" value="30"></label>
+    </div>
+    <div id="hint">Всё — небо, город-из-свечей, дорога, байк — в ОДНОМ 3D-движке: единый свет/туман/перспектива → сочетается само, глубина настоящая. Двигай пальцем — параллакс.</div>
+  </div>
+</div>
+<script type="module">
+import * as THREE from 'https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js';
+const cv=document.getElementById('c'), stEl=document.getElementById('st');
+function st(a,b){ stEl.innerHTML='<b>'+a+'</b>'+(b?'<small>'+b+'</small>':''); }
+st('Инициализация 3D…');
+let SW=0,SH=0;
+function fitSize(){ const availH=Math.min(window.innerHeight-140,window.innerHeight*0.80), availW=Math.min(window.innerWidth-16,460);
+  let h=availH,w=h*9/19.5; if(w>availW){w=availW;h=w*19.5/9;} SW=Math.round(w); SH=Math.round(h);
+  const s=document.getElementById('stage'); s.style.width=SW+'px'; s.style.height=SH+'px'; }
+fitSize();
+
+const renderer=new THREE.WebGLRenderer({canvas:cv,antialias:true});
+renderer.setPixelRatio(Math.min(2,window.devicePixelRatio||1));
+renderer.setSize(SW,SH); renderer.toneMapping=THREE.ACESFilmicToneMapping; renderer.toneMappingExposure=1.15;
+const scene=new THREE.Scene();
+let fogOn=true; const FOGC=new THREE.Color(0x2a0d3a); scene.fog=new THREE.FogExp2(FOGC.getHex(),0.010);
+const camera=new THREE.PerspectiveCamera(52, SW/SH, 0.1, 900);
+
+// ---------- sky (gradient plane, far, no fog) ----------
+function skyTex(){ const c=document.createElement('canvas'); c.width=8; c.height=256; const g=c.getContext('2d'); const gr=g.createLinearGradient(0,0,0,256);
+  gr.addColorStop(0,'#140a2e'); gr.addColorStop(0.42,'#3a1150'); gr.addColorStop(0.66,'#b02a6a'); gr.addColorStop(0.82,'#ff7a3c'); gr.addColorStop(1,'#ffd05a');
+  g.fillStyle=gr; g.fillRect(0,0,8,256); const t=new THREE.CanvasTexture(c); return t; }
+{ const sky=new THREE.Mesh(new THREE.PlaneGeometry(1400,700), new THREE.MeshBasicMaterial({map:skyTex(),depthWrite:false,fog:false}));
+  sky.position.set(0,120,-360); scene.add(sky); }
+// ---------- retrowave sun (banded, emissive, additive) ----------
+function sunTex(){ const S=256,c=document.createElement('canvas'); c.width=c.height=S; const g=c.getContext('2d');
+  const gr=g.createRadialGradient(S/2,S/2,0,S/2,S/2,S/2); gr.addColorStop(0,'rgba(255,240,180,1)'); gr.addColorStop(0.5,'rgba(255,120,90,1)'); gr.addColorStop(0.8,'rgba(255,60,120,0.85)'); gr.addColorStop(1,'rgba(255,60,120,0)');
+  g.fillStyle=gr; g.beginPath(); g.arc(S/2,S/2,S/2,0,7); g.fill();
+  g.globalCompositeOperation='destination-out'; for(let y=S*0.55;y<S;y+=14){ const h=(y-S*0.5)/S*10; g.fillRect(0,y,S,Math.max(2,h)); }
+  return new THREE.CanvasTexture(c); }
+{ const sun=new THREE.Sprite(new THREE.SpriteMaterial({map:sunTex(),transparent:true,depthWrite:false,fog:false,blending:THREE.AdditiveBlending}));
+  sun.scale.set(120,120,1); sun.position.set(10,40,-330); scene.add(sun); }
+
+// ---------- neon "candle-city" (market = world): green/red towers, receding in depth ----------
+const rand=(function(){let s=20260708;return()=>{s=(s*1103515245+12345)&0x7fffffff;return s/0x7fffffff;};})();
+const cityGroup=new THREE.Group(); scene.add(cityGroup);
+const PERIOD=520; // world x length that loops
+function buildCity(){
+  const bull=new THREE.Color(0x24e69a), bear=new THREE.Color(0xff3b6e);
+  for(let i=0;i<130;i++){ const up=rand()>0.5; const col=up?bull:bear;
+    const depth=8+rand()*150; const w=3+rand()*7, h=8+rand()*46*(1-depth/220);
+    const x=rand()*PERIOD - PERIOD/2;
+    const body=new THREE.Mesh(new THREE.BoxGeometry(w,h,w), new THREE.MeshBasicMaterial({color:col.clone().multiplyScalar(0.16),fog:true}));
+    body.position.set(x, h/2, -depth);
+    const edges=new THREE.LineSegments(new THREE.EdgesGeometry(body.geometry), new THREE.LineBasicMaterial({color:col,transparent:true,opacity:0.9,fog:true}));
+    edges.position.copy(body.position);
+    body.userData.x0=x; edges.userData.x0=x;
+    cityGroup.add(body); cityGroup.add(edges); }
+}
+buildCity();
+// ---------- ground: dark reflective plane + neon centre grid receding ----------
+{ const g=new THREE.Mesh(new THREE.PlaneGeometry(1400,700), new THREE.MeshBasicMaterial({color:0x0a0618,fog:true}));
+  g.rotation.x=-Math.PI/2; g.position.set(0,-0.2,-180); scene.add(g); }
+function gridTex(){ const S=256,c=document.createElement('canvas'); c.width=c.height=S; const g=c.getContext('2d'); g.fillStyle='#0a0618'; g.fillRect(0,0,S,S);
+  g.strokeStyle='rgba(120,60,200,0.5)'; g.lineWidth=2; for(let i=0;i<=S;i+=32){ g.beginPath();g.moveTo(i,0);g.lineTo(i,S);g.stroke(); g.beginPath();g.moveTo(0,i);g.lineTo(S,i);g.stroke(); }
+  const t=new THREE.CanvasTexture(c); t.wrapS=t.wrapT=THREE.RepeatWrapping; t.repeat.set(60,30); return t; }
+const gridT=gridTex();
+{ const gp=new THREE.Mesh(new THREE.PlaneGeometry(1400,600), new THREE.MeshBasicMaterial({map:gridT,transparent:true,opacity:0.5,fog:true}));
+  gp.rotation.x=-Math.PI/2; gp.position.set(0,0,-140); scene.add(gp); window.__grid=gridT; }
+
+// ---------- ROAD ribbon (the track, at Z~0) following a profile, neon-edged, with body ----------
+function profile(x){ return 3 + Math.sin(x*0.05)*1.6 + Math.sin(x*0.13+1)*0.7 + Math.sin(x*0.021)*1.1; }
+const ROADW=2.2, ROADT=1.6, SEG=2, SPAN=140;
+let roadMesh, roadTop, roadEdgeF, roadEdgeB;
+function buildRoad(){
+  const N=Math.floor(SPAN/SEG)+2; const pos=[], top=[];
+  // we rebuild each frame around camX; create buffers sized N
+  const geo=new THREE.BufferGeometry(); const verts=new Float32Array(N*2*3); geo.setAttribute('position',new THREE.BufferAttribute(verts,3));
+  const idx=[]; for(let i=0;i<N-1;i++){ const a=i*2,b=i*2+1,cc=(i+1)*2,d=(i+1)*2+1; idx.push(a,b,cc, b,d,cc); }
+  geo.setIndex(idx);
+  roadMesh=new THREE.Mesh(geo, new THREE.MeshBasicMaterial({color:0x241a3a,fog:true,side:THREE.DoubleSide}));
+  scene.add(roadMesh);
+  // top neon line + front edge line
+  const lg=new THREE.BufferGeometry(); lg.setAttribute('position',new THREE.BufferAttribute(new Float32Array(N*3),3));
+  roadTop=new THREE.Line(lg, new THREE.LineBasicMaterial({color:0x4fe6ff,fog:true}));
+  scene.add(roadTop);
+  const lg2=new THREE.BufferGeometry(); lg2.setAttribute('position',new THREE.BufferAttribute(new Float32Array(N*3),3));
+  roadEdgeF=new THREE.Line(lg2, new THREE.LineBasicMaterial({color:0xff3bde,transparent:true,opacity:0.8,fog:true}));
+  scene.add(roadEdgeF);
+  roadMesh.userData.N=N;
+}
+buildRoad();
+function updateRoad(camX){ const N=roadMesh.userData.N; const vp=roadMesh.geometry.attributes.position.array;
+  const tp=roadTop.geometry.attributes.position.array, fp=roadEdgeF.geometry.attributes.position.array;
+  const x0=camX-SPAN*0.35;
+  for(let i=0;i<N;i++){ const x=x0+i*SEG; const y=profile(x);
+    // top front (z=+ROADW/2), top back (z=-ROADW/2) at height y; but give body: front-top and front-bottom
+    vp[i*2*3+0]=x; vp[i*2*3+1]=y;        vp[i*2*3+2]=ROADW/2;
+    vp[i*2*3+3]=x; vp[i*2*3+4]=y-ROADT;  vp[i*2*3+5]=ROADW/2;
+    tp[i*3+0]=x; tp[i*3+1]=y+0.02; tp[i*3+2]=ROADW/2+0.01;
+    fp[i*3+0]=x; fp[i*3+1]=y-ROADT; fp[i*3+2]=ROADW/2+0.01;
+  }
+  roadMesh.geometry.attributes.position.needsUpdate=true; roadMesh.geometry.computeVertexNormals();
+  roadTop.geometry.attributes.position.needsUpdate=true; roadEdgeF.geometry.attributes.position.needsUpdate=true;
+}
+
+// ---------- bike sprite (neon silhouette, faithful-ish; real b166 sprite drops in on integration) ----------
+function bikeTex(){ const W=128,H=96,c=document.createElement('canvas'); c.width=W;c.height=H; const g=c.getContext('2d'); g.translate(4,6); g.scale(2.2,2.2);
+  g.lineCap='round'; g.lineJoin='round';
+  g.strokeStyle='#0a0a12'; g.lineWidth=4; g.fillStyle='#0b0b14';
+  for(const wx of [8,40]){ g.beginPath(); g.arc(wx,30,9,0,7); g.fillStyle='#0b0b14'; g.fill(); g.strokeStyle='#4fe6ff'; g.lineWidth=2.4; g.stroke(); }
+  g.strokeStyle='#7fe0ff'; g.lineWidth=3; g.beginPath(); g.moveTo(8,30); g.lineTo(22,18); g.lineTo(40,18); g.lineTo(40,30); g.moveTo(22,18); g.lineTo(30,10); g.stroke();
+  g.strokeStyle='#0d0d17'; g.lineWidth=5; g.beginPath(); g.moveTo(20,14); g.lineTo(26,4); g.lineTo(34,12); g.stroke();
+  g.fillStyle='#ffd24a'; g.beginPath(); g.arc(24,1,4,0,7); g.fill();
+  return new THREE.CanvasTexture(c); }
+const bike=new THREE.Sprite(new THREE.SpriteMaterial({map:bikeTex(),transparent:true,depthTest:true,depthWrite:false,fog:false}));
+bike.scale.set(3.2,2.4,1); scene.add(bike);
+
+// ---------- input / loop ----------
+let camX=0, T=0, camShake=true, ptx=0,pty=0,tx=0,ty=0, angF=0.30;
+const stage=document.getElementById('stage');
+stage.addEventListener('pointermove',e=>{ const r=cv.getBoundingClientRect(); tx=((e.clientX-r.left)/r.width-0.5)*2; ty=((e.clientY-r.top)/r.height-0.5)*2; });
+stage.addEventListener('pointerleave',()=>{tx=0;ty=0;});
+function loop(){ requestAnimationFrame(loop); T+=0.016; camX+=0.16;
+  ptx+=(tx-ptx)*0.05; pty+=(ty-pty)*0.05;
+  const by=profile(camX);
+  bike.position.set(camX, by+1.6, ROADW/2+0.3);
+  updateRoad(camX);
+  // city recycle (wrap x around camX within PERIOD)
+  cityGroup.children.forEach(m=>{ let x=m.userData.x0 - (Math.floor((m.userData.x0-camX+PERIOD/2)/PERIOD))*PERIOD; m.position.x=x; });
+  window.__grid.offset.y = -camX*0.02;
+  // camera: side view, slight elevation + forward, follows bike; angle slider tilts down for depth
+  const ang=angF; const shake=camShake?Math.sin(T*1.7)*0.10:0;
+  camera.position.set(camX-3 + ptx*4, by+2.6+ang*7+shake + pty*2, 22 - ang*5);
+  camera.lookAt(camX+4, by+0.8 - ang*3, -10);
+  renderer.render(scene,camera);
+  if(T>0.3 && stEl.textContent.indexOf('Готово')<0) st('Готово · 3D-мир','единый движок: свет/туман/глубина — сами');
+}
+function onResize(){ fitSize(); renderer.setSize(SW,SH); camera.aspect=SW/SH; camera.updateProjectionMatrix(); }
+window.addEventListener('resize',onResize);
+document.getElementById('cam').addEventListener('click',e=>{ camShake=!camShake; e.target.classList.toggle('on',camShake); });
+document.getElementById('fog').addEventListener('click',e=>{ fogOn=!fogOn; scene.fog=fogOn?new THREE.FogExp2(FOGC.getHex(),0.010):null; e.target.classList.toggle('on',fogOn); });
+document.getElementById('ang').addEventListener('input',e=>{ angF=e.target.value/100; });
+requestAnimationFrame(loop);
+</script>
+</body></html>
