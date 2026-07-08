@@ -56,7 +56,7 @@ function lerp(a,b,t){return a+(b-a)*t;} function clamp(v,a,b){return v<a?a:v>b?b
 // false → full game everywhere. Single switch. Systems are GATED, never deleted.
 const CORE_TEST_MODE = false;   // b70: META LIVE — building the progression spine (upgrades/bikes with teeth, career, economy) on the confirmed rigid-body core
 // build stamp — bump on every change so a phone refresh can confirm it loaded fresh code (cache!)
-const BUILD = '2026-07-08 · b187';
+const BUILD = '2026-07-08 · b188';
 
 // ---------- procedural market terrain ----------
 // height map sampled every STEP px; generated forward as we ride. Market character:
@@ -597,7 +597,7 @@ function saveWorld(){ try{localStorage.setItem('cipher_world',worldNew?'1':'0');
 let VICE=null; (function(){ try{ VICE=['sunset','day','twilight','night'].map(function(n){ const im=new Image(); im.src='assets/world/vice/'+n+'.jpg'; return im; }); }catch(e){ VICE=null; } })();
 function viceImg(){ if(!VICE)return null; const im=VICE[((zone||0)%4+4)%4]; return (im&&im.complete&&im.naturalWidth)?im:null; }
 // b186 ПЕРЕДНИЙ СЛОЙ (глубина/параллакс): пальмы+набережная. b187: файл теперь настоящий PNG-alpha → рисуем как есть, без вырезания белого
-let FG=new Image(), fgCv=null;
+let FG=new Image(), fgCv=null, fgShow=false;   // b188: передний слой выключен до правильного подхода глубины (слои из одной сцены)
 try{ FG.src='assets/world/vice/fg_palms.png'; FG.onload=function(){ try{ const o=document.createElement('canvas'); o.width=FG.naturalWidth; o.height=FG.naturalHeight; o.getContext('2d').drawImage(FG,0,0); fgCv=o; }catch(e){ fgCv=null; } }; }catch(e){}
 const TRICK_BASE={1:1,2:2,3:3,4:4,5:1,6:2,7:4};   // жёсткая вариация → её базовое направление (для «тот же свайп = отпустить»)
 let ctrlScheme='btn4'; try{ctrlScheme=localStorage.getItem('cipher_ctrlscheme')||'btn4'; if(SCHEMES.indexOf(ctrlScheme)<0)ctrlScheme='btn4';}catch(e){}   // b56: 4 КНОПКИ = ДЕФОЛТ (юзер выбрал — удобнее). btn2 переделан в АВТО-ГАЗ
@@ -1808,7 +1808,7 @@ function draw(){
     ctx.restore();
   }
   ctx.restore(); ctx.restore();   // world translate + camera zoom   // b104: убрал красную ликв-линию (заменено плечо→скорость волны)
-  if(worldNew&&fgCv) drawForeground();   // b186: передний слой глубины (screen-space, поверх мира/байка, под bloom/зерном → интегрируется)
+  if(worldNew&&fgCv&&fgShow) drawForeground();   // b188: передний слой ВРЕМЕННО ВЫКЛ (fgShow=false) — кляш двух независимых картинок; ждём правильный подход глубины (слои из ОДНОЙ сцены)
   // ---- b168 ЛИКВИДАЦИИ НА ГОРИЗОНТЕ: вспышки в верхнем небе, частота ∝ реальной крутизне свечей × волатильность монеты; дамп = лонги (красные), памп = шорты (зелёные). Суммы синтетические (реальный фид ликвидаций = платные API) ----
   if(screen==='play' && liqFx.length<2){ const lp=(0.003+Math.abs(_mktDy)*0.05)*(trackSource==='ticker'?tickerVolMul:1);
     if(Math.random()<lp) liqFx.push({x:W*(0.15+Math.random()*0.7), y:H*(0.135+Math.random()*0.075), t:0, amt:0.2+Math.pow(Math.random(),2)*7, long:_mktDy>0}); }   // узкая верхняя полоса — не пересекается с баннерами эпох (~H*0.24+)
