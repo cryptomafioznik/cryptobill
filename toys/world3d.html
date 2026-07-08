@@ -151,14 +151,19 @@ const bike=new THREE.Sprite(new THREE.SpriteMaterial({map:bikeTex(),transparent:
 bike.scale.set(3.2,2.4,1); scene.add(bike);
 
 // ---------- palms (Vice-элемент + передний план = глубина): силуэт с неон-ободком, спрайты по сторонам дороги ----------
-function palmTex(){ const W=160,H=240,c=document.createElement('canvas'); c.width=W;c.height=H; const g=c.getContext('2d'); const cx=W*0.5, ty=H*0.30;
-  g.lineCap='round';
-  g.strokeStyle='#14091f'; g.lineWidth=11; g.beginPath(); g.moveTo(cx+8,H); g.quadraticCurveTo(cx-10,H*0.55,cx,ty); g.stroke();
-  g.strokeStyle='rgba(255,60,200,0.7)'; g.lineWidth=2; g.beginPath(); g.moveTo(cx+8,H); g.quadraticCurveTo(cx-10,H*0.55,cx,ty); g.stroke();
-  for(let k=0;k<9;k++){ const a=-Math.PI/2+(k-4)*0.42, L=52+((k%2)?18:0); const ex=cx+Math.cos(a)*L, ey=ty+Math.sin(a)*L*0.8+16;
-    g.strokeStyle='#1c0f30'; g.lineWidth=9; g.beginPath(); g.moveTo(cx,ty); g.quadraticCurveTo(cx+Math.cos(a)*L*0.6, ty+Math.sin(a)*L*0.35, ex,ey); g.stroke();
-    g.strokeStyle=k%2?'rgba(150,70,255,0.85)':'rgba(255,90,210,0.9)'; g.lineWidth=1.6; g.stroke(); }
-  return new THREE.CanvasTexture(c); }
+function palmTex(){ const W=220,H=300,c=document.createElement('canvas'); c.width=W;c.height=H; const g=c.getContext('2d'); const cx=W*0.5, ty=H*0.30;
+  g.lineJoin='round';
+  // ствол (сужается кверху, лёгкий изгиб), заливка + неон-ободок
+  g.fillStyle='#150a24'; g.beginPath(); g.moveTo(cx-8,H); g.quadraticCurveTo(cx-14,H*0.55,cx-4,ty+8); g.lineTo(cx+4,ty+8); g.quadraticCurveTo(cx+6,H*0.55,cx+10,H); g.closePath(); g.fill();
+  g.strokeStyle='rgba(255,70,205,0.45)'; g.lineWidth=1.5; g.stroke();
+  // листья — ЗАЛИТЫЕ поникающие «перья»
+  for(let k=0;k<9;k++){ const a=-Math.PI/2+(k-4)*0.40, L=80+((k===4)?16:0);
+    const tx=cx+Math.cos(a)*L, tyy=ty+Math.sin(a)*L*0.72+22, mx=cx+Math.cos(a)*L*0.5, my=ty+Math.sin(a)*L*0.36;
+    g.fillStyle=k%2?'#1e1035':'#251442'; g.beginPath(); g.moveTo(cx,ty);
+    g.quadraticCurveTo(mx-5,my-3, tx,tyy); g.quadraticCurveTo(mx+6,my+7, cx,ty+5); g.closePath(); g.fill();
+    g.strokeStyle=k%2?'rgba(150,70,255,0.55)':'rgba(255,95,215,0.65)'; g.lineWidth=1.2; g.stroke(); }
+  g.fillStyle='#2a1545'; g.beginPath(); g.arc(cx,ty,6,0,7); g.fill();
+  const t=new THREE.CanvasTexture(c); return t; }
 const palmT=palmTex(), palms=[];
 for(let i=0;i<18;i++){ const near=i%2===0; const s=new THREE.Sprite(new THREE.SpriteMaterial({map:palmT,transparent:true,depthTest:true,depthWrite:false,fog:true}));
   const size=near?20:13; s.scale.set(size*0.66,size,1);
