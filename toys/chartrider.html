@@ -56,7 +56,7 @@ function lerp(a,b,t){return a+(b-a)*t;} function clamp(v,a,b){return v<a?a:v>b?b
 // false → full game everywhere. Single switch. Systems are GATED, never deleted.
 const CORE_TEST_MODE = false;   // b70: META LIVE — building the progression spine (upgrades/bikes with teeth, career, economy) on the confirmed rigid-body core
 // build stamp — bump on every change so a phone refresh can confirm it loaded fresh code (cache!)
-const BUILD = '2026-07-08 · b184';
+const BUILD = '2026-07-08 · b185';
 
 // ---------- procedural market terrain ----------
 // height map sampled every STEP px; generated forward as we ride. Market character:
@@ -593,6 +593,9 @@ let trickGrip='sticky'; try{ const _tg=localStorage.getItem('cipher_trickgrip');
 function saveTrickGrip(){ try{localStorage.setItem('cipher_trickgrip',trickGrip);}catch(e){} }
 let worldNew=true; try{ const _wn=localStorage.getItem('cipher_world'); if(_wn==='0')worldNew=false; }catch(e){}   // b184 ПРЕМИУМ-МИР (фон за реальным графиком/байком, только отрисовка): НОВЫЙ = город-из-свечей + глубина/дымка/god-rays; КЛАССИКА = старые синус-силуэты. Тумблер в настройках, дефолт НОВЫЙ. Физика/калибровка НЕ трогаются
 function saveWorld(){ try{localStorage.setItem('cipher_world',worldNew?'1':'0');}catch(e){} }
+// b185 VICE-СИНТВЕЙВ БЭКДРОПЫ (крафтовые AI-ассеты юзера): 4 времени суток = живой мир по эпохам (Alto's-подход). Мир = красивая СЦЕНА позади графика-героя
+let VICE=null; (function(){ try{ VICE=['sunset','day','twilight','night'].map(function(n){ const im=new Image(); im.src='assets/world/vice/'+n+'.jpg'; return im; }); }catch(e){ VICE=null; } })();
+function viceImg(){ if(!VICE)return null; const im=VICE[((zone||0)%4+4)%4]; return (im&&im.complete&&im.naturalWidth)?im:null; }
 const TRICK_BASE={1:1,2:2,3:3,4:4,5:1,6:2,7:4};   // жёсткая вариация → её базовое направление (для «тот же свайп = отпустить»)
 let ctrlScheme='btn4'; try{ctrlScheme=localStorage.getItem('cipher_ctrlscheme')||'btn4'; if(SCHEMES.indexOf(ctrlScheme)<0)ctrlScheme='btn4';}catch(e){}   // b56: 4 КНОПКИ = ДЕФОЛТ (юзер выбрал — удобнее). btn2 переделан в АВТО-ГАЗ
 function saveScheme(){ try{localStorage.setItem('cipher_ctrlscheme',ctrlScheme);}catch(e){} }
@@ -1576,7 +1579,17 @@ function cityPass(par,baseY,near){ const fs=near?46:30, cx=cam.x*par, i0=Math.fl
 function fogBandG(y,h,par,alpha){ const ft=fogTexture(); ctx.save(); ctx.globalCompositeOperation='screen'; ctx.globalAlpha=alpha; const dx=(cam.x*par*0.4)%200; ctx.beginPath(); ctx.rect(0,y,W,h); ctx.clip();
   for(let x=-200-dx;x<W+200;x+=200){ for(let yy=y-60;yy<y+h+60;yy+=200){ ctx.drawImage(ft,x,yy,230,230); } }
   ctx.globalCompositeOperation='source-atop'; ctx.globalAlpha=alpha*0.85; ctx.fillStyle='rgba('+BRIDGE+',1)'; ctx.fillRect(0,y,W,h); ctx.restore(); }
+function drawBackdrop(img){   // b185: крафтовый бэкдроп (cover-fit, зеркальный бесшовный луп, медленный параллакс) + грейд для «посадки» графика-героя
+  const s=Math.max(W/img.width, H/img.height), dw=img.width*s, dh=img.height*s, y=(H-dh)*0.5;
+  const par=0.05, scrollX=cam.x*par, first=Math.floor(scrollX/dw);
+  for(let i=first-1; (i*dw-scrollX)<W; i++){ const x=i*dw-scrollX, flip=(((i%2)+2)%2)===1;
+    if(flip){ ctx.save(); ctx.translate(x+dw,0); ctx.scale(-1,1); ctx.drawImage(img,0,0,img.width,img.height,0,y,dw,dh); ctx.restore(); }
+    else ctx.drawImage(img,0,0,img.width,img.height,x,y,dw,dh); }
+  const g=ctx.createLinearGradient(0,0,0,H); g.addColorStop(0,'rgba(6,4,16,0.30)'); g.addColorStop(0.48,'rgba(6,4,16,0.04)'); g.addColorStop(0.70,'rgba(6,4,16,0.34)'); g.addColorStop(1,'rgba(6,4,16,0.74)');
+  ctx.fillStyle=g; ctx.fillRect(0,0,W,H);
+}
 function drawCityWorld(){ const hz=H*0.6;
+  const _bi=viceImg(); if(_bi){ drawBackdrop(_bi); return; }   // крафтовый бэкдроп готов → рисуем его; иначе процедурный фолбэк ниже
   ctx.save(); ctx.globalCompositeOperation='lighter';
   const hb=ctx.createLinearGradient(0,hz-70,0,hz+50); hb.addColorStop(0,'rgba('+BLINE+',0)'); hb.addColorStop(.5,'rgba('+BLINE+',0.15)'); hb.addColorStop(1,'rgba('+BLINE+',0)'); ctx.fillStyle=hb; ctx.fillRect(0,hz-70,W,120);   // horizon glow (market light)
   const cxr=W*0.5; for(let k=0;k<12;k++){ const a0=-1.15+(k/11)*2.3+Math.sin(t*0.004+k)*0.04, len=H*0.9, w=4+4*Math.abs(Math.sin(t*0.009+k*1.7)), al=0.02+0.018*Math.abs(Math.sin(t*0.011+k));   // god-rays
