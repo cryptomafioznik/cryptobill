@@ -64,7 +64,7 @@ function lerp(a,b,t){return a+(b-a)*t;} function clamp(v,a,b){return v<a?a:v>b?b
 // false → full game everywhere. Single switch. Systems are GATED, never deleted.
 const CORE_TEST_MODE = false;   // b70: META LIVE — building the progression spine (upgrades/bikes with teeth, career, economy) on the confirmed rigid-body core
 // build stamp — bump on every change so a phone refresh can confirm it loaded fresh code (cache!)
-const BUILD = '2026-07-09 · b203';
+const BUILD = '2026-07-09 · b204';
 
 // ---------- procedural market terrain ----------
 // height map sampled every STEP px; generated forward as we ride. Market character:
@@ -601,40 +601,14 @@ let trickGrip='sticky'; try{ const _tg=localStorage.getItem('cipher_trickgrip');
 function saveTrickGrip(){ try{localStorage.setItem('cipher_trickgrip',trickGrip);}catch(e){} }
 let worldNew=true; try{ const _wn=localStorage.getItem('cipher_world'); if(_wn==='0')worldNew=false; }catch(e){}   // b184 ПРЕМИУМ-МИР (фон за реальным графиком/байком, только отрисовка): НОВЫЙ = город-из-свечей + глубина/дымка/god-rays; КЛАССИКА = старые синус-силуэты. Тумблер в настройках, дефолт НОВЫЙ. Физика/калибровка НЕ трогаются
 function saveWorld(){ try{localStorage.setItem('cipher_world',worldNew?'1':'0');}catch(e){} }
-// b203 ФАЗА 1 2D-курса «график-герой + грейд-склейка»: свечи b167 проектировались под ТЁМНЫЙ фон (альфы 0.10-0.38) и ТОНУТ на ярком фото-бэкдропе →
-// (1) СКРИМ = затемнение-лента ЗА зоной графика (сила ∝ яркости конкретного бэкдропа) — данные всегда читаются («терминал поверх города»);
-// (2) буст альф свечей на фото; (3) чипы-подложки за ценами оси; (4) ГРЕЙД: тонировка эпохи soft-light поверх ВСЕГО кадра (фото+код+байк в одной палитре = анти-склейка).
-// Всё под гейтом photoOn (фото реально нарисовано); КЛАССИКА и физика не тронуты. Числа = КАЛИБРОВКА РУКАМИ юзера.
-const GRADE={ scrim:[0.46,0.52,0.36,0.26],   // сила скрима по бэкдропу [sunset,day,twilight,night]; слойный путь b189 = всегда sunset (индекс 0)
-  cand:1.5, tint:0.14, sky:0.10 };           // cand = множитель альф свечей на фото · tint = тонировка эпохи (soft-light) · sky = верхний overlay-градиент неба
+// b204 РЕШЕНИЕ ФОНА (после b203-вердикта юзера «фон ужасен, не сочетается»): ФОТО-БЭКДРОПЫ УБРАНЫ ИЗ ИГРЫ НАСОВСЕМ.
+// Корень (3 захода b185-191/b203 не склеились): фото = язык иллюстрации, весь кадр полон ЯРКОГО не-данных света → структурно несовместим
+// с C-правилом «светятся только данные». Мир теперь = ОДИН код-язык: композиция Vice нашим стилем (закат-солнце + город-свечи + пальмы-силуэты
+// + отсвет набережной), см. drawCityWorld. Файлы toys/assets/world/vice/* остаются в репо как АРТ-РЕФЕРЕНС палитр (в игре не грузятся).
 const TDECK=18;   // b203: толщина тела трассы-деки (b191) — общий knob: дека + посадка свечей-колонн под ней
-let _photoOn=false;   // b203: «фото-бэкдроп реально в кадре» (ставится в draw каждый кадр; на процедурном фолбэке скрим/грейд не нужны)
 let R3D_ON=false; try{ R3D_ON=localStorage.getItem('cb_r3d')==='1'; }catch(e){}   // b192 ФАЗА 2: тумблер 3D-РЕНДЕР (весь мир в Three.js читает мою физику) ↔ 2D-эталон. Физика/190 билдов НЕ трогаются — меняется только слой отрисовки
 function saveR3D(){ try{localStorage.setItem('cb_r3d',R3D_ON?'1':'0');}catch(e){} }
-// b185 VICE-СИНТВЕЙВ БЭКДРОПЫ (крафтовые AI-ассеты юзера): 4 времени суток = живой мир по эпохам (Alto's-подход). Мир = красивая СЦЕНА позади графика-героя
-let VICE=null; (function(){ try{ VICE=['sunset','day','twilight','night'].map(function(n){ const im=new Image(); im.src='assets/world/vice/'+n+'.jpg'; return im; }); }catch(e){ VICE=null; } })();
-function viceImg(){ if(!VICE)return null; const im=VICE[((zone||0)%4+4)%4]; return (im&&im.complete&&im.naturalWidth)?im:null; }
-// b189 СЛОЙНАЯ ГЛУБИНА (из ОДНОЙ картинки): карта глубины (Depth-Anything, пре-бейк offline) → режем закат на far/mid/near слои, каждый едет со своей скоростью = НАСТОЯЩИЙ параллакс (не warp). Пока только sunset — проверка в игре
-let VICE_DEPTH=new Image(); try{ VICE_DEPTH.src='assets/world/vice/sunset_depth.png'; }catch(e){}
-let viceLayers=null, viceLayersReady=false, _vlTried=false;
-function buildViceLayers(){ _vlTried=true; try{ const color=VICE&&VICE[0]; if(!color||!color.complete||!color.naturalWidth||!VICE_DEPTH.complete||!VICE_DEPTH.naturalWidth) return;
-  const CW=1200, CH=Math.round(CW*color.naturalHeight/color.naturalWidth);
-  const cc=document.createElement('canvas'); cc.width=CW; cc.height=CH; const ccx=cc.getContext('2d'); ccx.drawImage(color,0,0,CW,CH); const cd=ccx.getImageData(0,0,CW,CH).data;
-  const dc=document.createElement('canvas'); dc.width=CW; dc.height=CH; const dcx=dc.getContext('2d'); dcx.drawImage(VICE_DEPTH,0,0,CW,CH); const dd=dcx.getImageData(0,0,CW,CH).data;
-  function band(d,lo,hi,f){ if(d<lo-f||d>hi+f)return 0; if(d<lo)return (d-(lo-f))/f; if(d>hi)return 1-(d-hi)/f; return 1; }
-  const bands=[[0.0,0.44,0.12],[0.34,0.72,0.12],[0.60,1.01,0.12]]; const layers=[];
-  for(const b of bands){ const lc=document.createElement('canvas'); lc.width=CW; lc.height=CH; const lx=lc.getContext('2d'); const out=lx.createImageData(CW,CH), od=out.data;
-    for(let i=0;i<CW*CH;i++){ const dep=dd[i*4]/255, a=band(dep,b[0],b[1],b[2]); od[i*4]=cd[i*4]; od[i*4+1]=cd[i*4+1]; od[i*4+2]=cd[i*4+2]; od[i*4+3]=Math.round(255*(a<0?0:a>1?1:a)); }
-    lx.putImageData(out,0,0); layers.push(lc); }
-  viceLayers=layers; viceLayersReady=true; }catch(e){ viceLayers=null; viceLayersReady=false; } }
-function ensureViceLayers(){ if(viceLayersReady||_vlTried)return; if(VICE&&VICE[0]&&VICE[0].complete&&VICE[0].naturalWidth&&VICE_DEPTH.complete&&VICE_DEPTH.naturalWidth) buildViceLayers(); }
-function drawViceLayered(){ const pars=[0.03,0.07,0.15];
-  for(let li=0;li<3;li++){ const img=viceLayers[li], s=Math.max(W/img.width,H/img.height), dw=img.width*s, dh=img.height*s, y=(H-dh)*0.5, par=pars[li], scrollX=cam.x*par, first=Math.floor(scrollX/dw);
-    for(let i=first-1;(i*dw-scrollX)<W;i++){ const x=i*dw-scrollX; ctx.drawImage(img,0,0,img.width,img.height,x,y,dw,dh); } }
-  const g=ctx.createLinearGradient(0,0,0,H); g.addColorStop(0,'rgba(6,4,16,0.24)'); g.addColorStop(0.55,'rgba(6,4,16,0.03)'); g.addColorStop(0.72,'rgba(6,4,16,0.32)'); g.addColorStop(1,'rgba(6,4,16,0.74)'); ctx.fillStyle=g; ctx.fillRect(0,0,W,H); }
-// b186 ПЕРЕДНИЙ СЛОЙ (глубина/параллакс): пальмы+набережная. b187: файл теперь настоящий PNG-alpha → рисуем как есть, без вырезания белого
-let FG=new Image(), fgCv=null, fgShow=false;   // b188: передний слой выключен до правильного подхода глубины (слои из одной сцены)
-try{ FG.src='assets/world/vice/fg_palms.png'; FG.onload=function(){ try{ const o=document.createElement('canvas'); o.width=FG.naturalWidth; o.height=FG.naturalHeight; o.getContext('2d').drawImage(FG,0,0); fgCv=o; }catch(e){ fgCv=null; } }; }catch(e){}
+// (b185-189 фото-пайплайн VICE/depth-слои/передний план УДАЛЁН в b204 — история в git)
 const TRICK_BASE={1:1,2:2,3:3,4:4,5:1,6:2,7:4};   // жёсткая вариация → её базовое направление (для «тот же свайп = отпустить»)
 let ctrlScheme='btn4'; try{ctrlScheme=localStorage.getItem('cipher_ctrlscheme')||'btn4'; if(SCHEMES.indexOf(ctrlScheme)<0)ctrlScheme='btn4';}catch(e){}   // b56: 4 КНОПКИ = ДЕФОЛТ (юзер выбрал — удобнее). btn2 переделан в АВТО-ГАЗ
 function saveScheme(){ try{localStorage.setItem('cipher_ctrlscheme',ctrlScheme);}catch(e){} }
@@ -1610,50 +1584,57 @@ function fogTexture(){ if(_fogTex)return _fogTex; const S=200,oc=document.create
 function cityPass(par,baseY,near){ const fs=near?46:30, cx=cam.x*par, i0=Math.floor((cx-fs)/fs), i1=Math.ceil((cx+W+fs)/fs);   // башни = свечи (тело bull/bear + фитиль-антенна) = «уже проехавшие свечи» = твоё прошлое
   for(let i=i0;i<=i1;i++){ const sx=i*fs-cx; let r=(Math.sin(i*12.9898+(near?1.7:4.3))*43758.5)%1; if(r<0)r+=1; let r2=(Math.sin(i*45.77)*9631.1)%1; if(r2<0)r2+=1;
     const w=fs*0.6, th=near?58+r*150:38+r*120, top=baseY-th, base=r2>0.5?'46,230,166':'255,59,92', a=near?0.5:0.3;
-    const g=ctx.createLinearGradient(0,top,0,H); g.addColorStop(0,'rgba('+base+','+a+')'); g.addColorStop(1,'rgba(8,10,24,'+a+')'); ctx.fillStyle=g; ctx.fillRect(sx,top,w,H-top);
+    const dkY=baseY+150;   // b204: башня РАСТВОРЯЕТСЯ в темноту чуть ниже своего основания — низ кадра тихий, не спорит с данными (раньше градиент тянулся цветным до низа экрана)
+    const g=ctx.createLinearGradient(0,top,0,H); const dkStop=Math.min(0.99,Math.max(0.02,(dkY-top)/(H-top)));
+    g.addColorStop(0,'rgba('+base+','+a+')'); g.addColorStop(dkStop,'rgba(8,10,24,'+a+')'); g.addColorStop(1,'rgba(8,10,24,'+(a*0.85).toFixed(3)+')'); ctx.fillStyle=g; ctx.fillRect(sx,top,w,H-top);
     ctx.fillStyle='rgba('+base+','+(near?0.68:0.4)+')'; ctx.fillRect(sx,top,w,near?2:1.3);
     ctx.strokeStyle='rgba('+base+','+(near?0.48:0.28)+')'; ctx.lineWidth=near?1.4:1; ctx.beginPath(); ctx.moveTo(sx+w/2,top); ctx.lineTo(sx+w/2,top-(near?14:9)-r*12); ctx.stroke();
-    ctx.fillStyle='rgba(255,230,170,'+(near?0.12:0.06)+')'; for(let wy=top+7;wy<H;wy+=near?11:9){ for(let wx=sx+4;wx<sx+w-3;wx+=near?8:6){ let rw=(Math.sin(i*3.1+wy*0.7+wx*0.31)*7219.3)%1; if(rw<0)rw+=1; if(rw>0.63)ctx.fillRect(wx,wy,near?2.2:1.5,near?2.2:1.5); } } }
+    ctx.fillStyle='rgba(255,230,170,'+(near?0.12:0.06)+')'; for(let wy=top+7;wy<dkY;wy+=near?11:9){ for(let wx=sx+4;wx<sx+w-3;wx+=near?8:6){ let rw=(Math.sin(i*3.1+wy*0.7+wx*0.31)*7219.3)%1; if(rw<0)rw+=1; if(rw>0.63)ctx.fillRect(wx,wy,near?2.2:1.5,near?2.2:1.5); } } }
 }
 function fogBandG(y,h,par,alpha){ const ft=fogTexture(); ctx.save(); ctx.globalCompositeOperation='screen'; ctx.globalAlpha=alpha; const dx=(cam.x*par*0.4)%200; ctx.beginPath(); ctx.rect(0,y,W,h); ctx.clip();
   for(let x=-200-dx;x<W+200;x+=200){ for(let yy=y-60;yy<y+h+60;yy+=200){ ctx.drawImage(ft,x,yy,230,230); } }
   ctx.globalCompositeOperation='source-atop'; ctx.globalAlpha=alpha*0.85; ctx.fillStyle='rgba('+BRIDGE+',1)'; ctx.fillRect(0,y,W,h); ctx.restore(); }
-function drawBackdrop(img){   // b185: крафтовый бэкдроп (cover-fit, зеркальный бесшовный луп, медленный параллакс) + грейд для «посадки» графика-героя
-  const s=Math.max(W/img.width, H/img.height), dw=img.width*s, dh=img.height*s, y=(H-dh)*0.5;
-  const par=0.05, scrollX=cam.x*par, first=Math.floor(scrollX/dw);
-  for(let i=first-1; (i*dw-scrollX)<W; i++){ const x=i*dw-scrollX, flip=(((i%2)+2)%2)===1;
-    if(flip){ ctx.save(); ctx.translate(x+dw,0); ctx.scale(-1,1); ctx.drawImage(img,0,0,img.width,img.height,0,y,dw,dh); ctx.restore(); }
-    else ctx.drawImage(img,0,0,img.width,img.height,x,y,dw,dh); }
-  const g=ctx.createLinearGradient(0,0,0,H); g.addColorStop(0,'rgba(6,4,16,0.30)'); g.addColorStop(0.48,'rgba(6,4,16,0.04)'); g.addColorStop(0.70,'rgba(6,4,16,0.34)'); g.addColorStop(1,'rgba(6,4,16,0.74)');
-  ctx.fillStyle=g; ctx.fillRect(0,0,W,H);
-}
-function drawForeground(){ if(!fgCv)return; const img=fgCv;   // b186: передний слой ПОВЕРХ графика/байка (центр прозрачный → геймплей виден), быстрый параллакс, зеркальный луп; лёгкая прозрачность = байк читается даже под пальмой
-  const s=(H/img.height)*1.06, dw=img.width*s, dh=img.height*s, y=H-dh;
-  const par=0.30, scrollX=cam.x*par, first=Math.floor(scrollX/dw);
-  ctx.save(); ctx.globalAlpha=0.9;
-  for(let i=first-1; (i*dw-scrollX)<W; i++){ const x=i*dw-scrollX, flip=(((i%2)+2)%2)===1;
-    if(flip){ ctx.save(); ctx.translate(x+dw,0); ctx.scale(-1,1); ctx.drawImage(img,0,0,img.width,img.height,0,y,dw,dh); ctx.restore(); }
-    else ctx.drawImage(img,0,0,img.width,img.height,x,y,dw,dh); }
-  ctx.restore();
-}
-function drawTrackReal(i0,i1){ const TH=TDECK;   // b191 ТРАССА = САМОСТОЯТЕЛЬНЫЙ ОБЪЕКТ: приподнятая лента-дорога с ТЕЛОМ; байк едет ПО её верхней поверхности; под ней структура (опоры) + мир, а не слитый обрыв. Система трассы отдельна, связана с байком через контакт колёс
+// ---- b204 VICE НАШИМ ЯЗЫКОМ (фото убраны): солнце-закат + пальмы-силуэты + отсвет набережной. Минимализм, один стиль, C-правило: мир тихий, светятся данные ----
+let _palmCv=null;
+function palmSprites(){ if(_palmCv)return _palmCv; _palmCv=[0,1,2].map(function(v){ const c=document.createElement('canvas'); c.width=150; c.height=210; const g=c.getContext('2d'); const cx=75, ty=52+v*7; g.lineJoin='round'; g.lineCap='round';
+  g.strokeStyle='#0e0a20'; g.lineWidth=6.5-v*1.1; g.beginPath(); g.moveTo(cx-9+v*6,210); g.quadraticCurveTo(cx-15+v*9,126, cx-1,ty+5); g.stroke();   // ствол с изгибом
+  for(let k=0;k<9;k++){ const a=-Math.PI/2+(k-4)*0.42+(v-1)*0.06, L=50+((k===4)?11:0)+(k%3)*5, mx=cx+Math.cos(a)*L*0.52, my=ty+Math.sin(a)*L*0.30, tx=cx+Math.cos(a)*L, tyy=ty+Math.sin(a)*L*0.62+15;
+    g.strokeStyle='#0e0a20'; g.lineWidth=4.6; g.beginPath(); g.moveTo(cx,ty); g.quadraticCurveTo(mx,my,tx,tyy); g.stroke();   // лист-дуга
+    g.lineWidth=1.5; for(let f=0.34;f<=0.94;f+=0.15){ const px=cx+(tx-cx)*f, py=ty+(tyy-ty)*f-(1-f)*7; g.beginPath(); g.moveTo(px,py); g.lineTo(px+Math.cos(a+0.95)*7, py+Math.sin(a+0.95)*7+5); g.stroke(); } }   // бахрома
+  g.fillStyle='#0e0a20'; g.beginPath(); g.arc(cx,ty,5,0,7); g.fill(); return c; }); return _palmCv; }
+function drawPalms(par,baseY,scale,alpha){ const P=palmSprites(), cx=cam.x*par, sp=310, i0p=Math.floor((cx-170)/sp), i1p=Math.ceil((cx+W+170)/sp);   // редкие детерминированные силуэты, НЕ частокол
+  ctx.save(); ctx.globalAlpha=alpha;
+  for(let i=i0p;i<=i1p;i++){ let r=(Math.sin(i*91.17)*7817.3)%1; if(r<0)r+=1; if(r<0.34)continue;
+    const v=Math.floor(r*97)%3, s=(0.72+((r*7.7)%1)*0.5)*scale, w=150*s, h=210*s, x=i*sp-cx+(((r*13.3)%1)-0.5)*130, flip=((r*29.7)%1)>0.5;
+    if(flip){ ctx.save(); ctx.translate(x,0); ctx.scale(-1,1); ctx.drawImage(P[v],-w/2,baseY-h,w,h); ctx.restore(); }
+    else ctx.drawImage(P[v],x-w/2,baseY-h,w,h); }
+  ctx.restore(); }
+function drawSun(hz){ const sx=W*0.66, sy=hz-24, r=46;   // низкое ретро-солнце: тёплая дымка, НЕ неон (свет мира, не данных)
+  ctx.save(); ctx.globalCompositeOperation='lighter';
+  let g=ctx.createRadialGradient(sx,sy,2,sx,sy,r*2.3); g.addColorStop(0,'rgba(255,196,120,0.30)'); g.addColorStop(0.45,'rgba(255,120,96,0.13)'); g.addColorStop(1,'rgba(255,90,110,0)');
+  ctx.fillStyle=g; ctx.beginPath(); ctx.arc(sx,sy,r*2.3,0,7); ctx.fill();
+  g=ctx.createRadialGradient(sx,sy,1,sx,sy,r); g.addColorStop(0,'rgba(255,216,150,0.46)'); g.addColorStop(0.78,'rgba(255,142,110,0.30)'); g.addColorStop(1,'rgba(255,120,110,0)');
+  ctx.fillStyle=g; ctx.beginPath(); ctx.arc(sx,sy,r,0,7); ctx.fill(); ctx.restore(); }
+function drawSheen(hz){ const cx=cam.x*0.26, fs=46, i0s=Math.floor((cx-fs)/fs), i1s=Math.ceil((cx+W+fs)/fs);   // отсвет «мокрой набережной»: вертикальные смазы ЦВЕТОВ ближних башен (same hash/par, что cityPass near — отражения совпадают с городом)
+  ctx.save(); ctx.globalCompositeOperation='lighter';
+  for(let i=i0s;i<=i1s;i++){ let r2=(Math.sin(i*45.77)*9631.1)%1; if(r2<0)r2+=1; const sx=i*fs-cx, base=r2>0.5?'46,230,166':'255,59,92', hh=30+r2*28;
+    const g=ctx.createLinearGradient(0,hz+8,0,hz+8+hh); g.addColorStop(0,'rgba('+base+',0.09)'); g.addColorStop(1,'rgba('+base+',0)'); ctx.fillStyle=g; ctx.fillRect(sx,hz+8,fs*0.6,hh); }
+  ctx.restore(); }
+function drawTrackReal(i0,i1){ const TH=TDECK;   // b204 ТРАССА = ОДИН ОБЪЕКТ (GD-профиль, строгий вид сбоку): тень → тело-асфальт → диагональ-шпалы → тихий низ. ВЕРХНЯЯ КРОМКА = ПОВЕРХНОСТЬ ЕЗДЫ (edge-light рисуется в draw). Опоры-струты убраны — дорога стоит на СВЕЧАХ-КОЛОННАХ (b203, структура = данные)
   for(let i=i0;i<i1;i++){ const a=terr[i],b=terr[i+1]; if(!a||!b||a.gap||b.gap)continue;   // мягкая тень-глубина сразу под дорогой → дорога читается ПРИПОДНЯТОЙ, мир виден дальше
     ctx.beginPath(); ctx.moveTo(a.x,a.y+TH); ctx.lineTo(b.x,b.y+TH); ctx.lineTo(b.x,b.y+TH+110); ctx.lineTo(a.x,a.y+TH+110); ctx.closePath();
     const wg=ctx.createLinearGradient(0,a.y+TH,0,a.y+TH+110); wg.addColorStop(0,'rgba(6,4,16,0.55)'); wg.addColorStop(1,'rgba(6,4,16,0)'); ctx.fillStyle=wg; ctx.fill(); }
-  for(let i=i0;i<=i1;i+=3){ const c=terr[i]; if(!c||c.gap)continue; const g=ctx.createLinearGradient(0,c.y+TH,0,c.y+TH+60); g.addColorStop(0,'rgba('+BLINE+',0.22)'); g.addColorStop(1,'rgba('+BLINE+',0)'); ctx.strokeStyle=g; ctx.lineWidth=2.6; ctx.beginPath(); ctx.moveTo(c.x,c.y+TH); ctx.lineTo(c.x,c.y+TH+60); ctx.stroke(); }   // опоры-фермы (структура эстакады)
   for(let i=i0;i<i1;i++){ const a=terr[i],b=terr[i+1]; if(!a||!b||a.gap||b.gap)continue;   // ТЕЛО дороги (конечная толщина = реальный объект)
     ctx.beginPath(); ctx.moveTo(a.x,a.y); ctx.lineTo(b.x,b.y); ctx.lineTo(b.x,b.y+TH); ctx.lineTo(a.x,a.y+TH); ctx.closePath();
     const g=ctx.createLinearGradient(0,a.y,0,a.y+TH); g.addColorStop(0,'rgba(58,48,92,1)'); g.addColorStop(0.5,'rgba(32,24,58,1)'); g.addColorStop(1,'rgba(15,11,30,1)'); ctx.fillStyle=g; ctx.fill(); }
-  let pen=false;
-  ctx.strokeStyle='rgba('+BLINE+',0.12)'; ctx.lineWidth=1;   // шпалы (сегменты)
-  for(let i=i0;i<=i1;i++){ const c=terr[i]; if(!c||c.gap)continue; ctx.beginPath(); ctx.moveTo(c.x,c.y+3); ctx.lineTo(c.x,c.y+TH-1); ctx.stroke(); }
-  ctx.strokeStyle='rgba('+BLINE+',0.4)'; ctx.lineWidth=1.6; ctx.setLineDash([9,10]); ctx.beginPath();   // осевая разметка
-  for(let i=i0;i<=i1;i++){ const c=terr[i]; if(!c||c.gap){pen=false;continue;} if(!pen){ctx.moveTo(c.x,c.y+TH*0.5);pen=true;} else ctx.lineTo(c.x,c.y+TH*0.5);} ctx.stroke(); ctx.setLineDash([]);
-  pen=false; ctx.strokeStyle='rgba('+BLINE+',0.8)'; ctx.lineWidth=2.4; ctx.shadowColor='rgba('+BLINE+',0.9)'; ctx.shadowBlur=8; ctx.beginPath();   // нижний неон-рельс = кромка тела дороги
-  for(let i=i0;i<=i1;i++){ const c=terr[i]; if(!c||c.gap){pen=false;continue;} if(!pen){ctx.moveTo(c.x,c.y+TH);pen=true;} else ctx.lineTo(c.x,c.y+TH);} ctx.stroke(); ctx.shadowBlur=0; }
-function drawCityWorld(){ const hz=H*0.6;
-  ensureViceLayers(); if(viceLayersReady){ drawViceLayered(); return; }   // b189: слойная глубина (пока только sunset испечён) — проверка в игре; иначе плоский бэкдроп
-  const _bi=viceImg(); if(_bi){ drawBackdrop(_bi); return; }   // крафтовый бэкдроп готов → рисуем его; иначе процедурный фолбэк ниже
+  // b204 ПРОФИЛЬ-МАТЕРИАЛ (строгий вид сбоку, GD-шпалы): диагональные штрихи внутри тела. Осевая разметка «сверху» и вертикальные шпалы УБРАНЫ — они смешивали вид сверху с видом сбоку («байк поверх картинки дороги»)
+  ctx.strokeStyle='rgba('+BLINE+',0.13)'; ctx.lineWidth=1.5;
+  for(let i=i0;i<i1;i++){ const a=terr[i],b=terr[i+1]; if(!a||!b||a.gap||b.gap)continue; const dx=b.x-a.x, dy=b.y-a.y, L=Math.hypot(dx,dy)||1, nx=dx/L, ny=dy/L;
+    for(let s=5;s<L;s+=11){ const px=a.x+nx*s, py=a.y+ny*s; ctx.beginPath(); ctx.moveTo(px+3.5,py+2); ctx.lineTo(px-3.5,py+TH-2); ctx.stroke(); } }
+  let pen=false; ctx.strokeStyle='rgba('+BLINE+',0.30)'; ctx.lineWidth=1.4; ctx.beginPath();   // нижняя кромка = тихий hairline (яркий неон-рельс снизу спорил с поверхностью сверху)
+  for(let i=i0;i<=i1;i++){ const c=terr[i]; if(!c||c.gap){pen=false;continue;} if(!pen){ctx.moveTo(c.x,c.y+TH);pen=true;} else ctx.lineTo(c.x,c.y+TH);} ctx.stroke(); }
+function drawCityWorld(){ const hz=H*0.6;   // b204: ЕДИНЫЙ КОД-ЯЗЫК, композиция Vice нашим стилем (фото-ветки удалены): солнце → лучи → хребет → [дымка → город-свечи]×2 + пальмы-силуэты + отсвет набережной. Цвета = биом (8 эпох живут)
+  drawSun(hz);
   ctx.save(); ctx.globalCompositeOperation='lighter';
   const hb=ctx.createLinearGradient(0,hz-70,0,hz+50); hb.addColorStop(0,'rgba('+BLINE+',0)'); hb.addColorStop(.5,'rgba('+BLINE+',0.15)'); hb.addColorStop(1,'rgba('+BLINE+',0)'); ctx.fillStyle=hb; ctx.fillRect(0,hz-70,W,120);   // horizon glow (market light)
   const cxr=W*0.5; for(let k=0;k<12;k++){ const a0=-1.15+(k/11)*2.3+Math.sin(t*0.004+k)*0.04, len=H*0.9, w=4+4*Math.abs(Math.sin(t*0.009+k*1.7)), al=0.02+0.018*Math.abs(Math.sin(t*0.011+k));   // god-rays
@@ -1663,8 +1644,13 @@ function drawCityWorld(){ const hz=H*0.6;
   fogBandG(hz-95,120,0.06,0.5);
   cityPass(0.13,hz-4,false);
   fogBandG(hz-35,95,0.13,0.55);
+  drawPalms(0.18,hz+4,0.62,0.66);   // дальние пальмы-силуэты (между слоями города = глубина)
   cityPass(0.26,hz+8,true);
-  fogBandG(hz+8,80,0.26,0.4);
+  drawSheen(hz);                     // отсвет города на «мокрой набережной»
+  fogBandG(hz+8,80,0.26,0.24);
+  { const dg=ctx.createLinearGradient(0,hz+20,0,H); dg.addColorStop(0,'rgba(6,5,16,0)'); dg.addColorStop(0.38,'rgba(6,5,16,0.58)'); dg.addColorStop(1,'rgba(6,5,16,0.92)');   // ГЛУБИНА ПОД ЭСТАКАДОЙ: низ кадра уходит в темноту (раньше просвечивал яркий низ неба — низ спорил с данными)
+    ctx.fillStyle=dg; ctx.fillRect(0,hz+20,W,H-hz-20); }
+  drawPalms(0.37,hz+30,1.0,0.88);   // ближние пальмы-силуэты (Vice-подпись; рисуются ДО трассы = чистый задний план)
   ctx.globalCompositeOperation='source-over';
 }
 function draw(){
@@ -1694,7 +1680,6 @@ function draw(){
     ctx.restore(); }
   ctx.globalCompositeOperation='source-over';
   // parallax ridges (distant market silhouettes) — b184: НОВЫЙ мир (город-из-свечей + глубина) или КЛАССИКА
-  _photoOn = worldNew && (viceLayersReady || !!viceImg());   // b203: скрим/буст/грейд только когда фото реально рисуется
   if(worldNew){ drawCityWorld(); }
   else {
     ridgeLayer(0.15,40,H*0.5,'rgba('+BRIDGE+',0.42)');
@@ -1718,13 +1703,8 @@ function draw(){
     for(let i=i0;i<=i1;i++){ const c=terr[i]; ctx.lineTo(c.x,c.y); }
     ctx.lineTo(x1,cam.y+H+260); ctx.closePath();
     const gf=ctx.createLinearGradient(0,cam.y+H*0.12,0,cam.y+H); gf.addColorStop(0,'rgba(34,38,64,1)'); gf.addColorStop(0.5,'rgba(18,18,42,1)'); gf.addColorStop(1,'rgba(6,5,16,1)'); ctx.fillStyle=gf; ctx.fill(); }
-  // ---- b203 СКРИМ ДАННЫХ: тёмная лента ЗА зоной графика — свечи/ось не тонут в фото («терминал поверх города»; кап высоты на флеш-крах) ----
-  if(_photoOn){ let sT=1e9,sB=-1e9; for(let i=i0;i<=i1;i++){ const c=terr[i]; if(!c||c.gap)continue; const h=(c.hi!==undefined?c.hi:c.y),l=(c.lo!==undefined?c.lo:c.y); if(h<sT)sT=h; if(l>sB)sB=l; }
-    if(sB>sT){ sT-=34; sB+=42+(worldNew?TDECK:0); if(sB-sT>H*0.9)sB=sT+H*0.9; const sa=GRADE.scrim[viceLayersReady?0:(((zone||0)%4+4)%4)];
-      const sg=ctx.createLinearGradient(0,sT,0,sB); sg.addColorStop(0,'rgba(5,6,18,0)'); sg.addColorStop(0.30,'rgba(5,6,18,'+sa+')'); sg.addColorStop(0.78,'rgba(5,6,18,'+sa+')'); sg.addColorStop(1,'rgba(5,6,18,'+(sa*0.55).toFixed(3)+')');
-      ctx.fillStyle=sg; ctx.fillRect(x0,sT,x1-x0,sB-sT); } }
   // ---- b167 СВЕЧИ-ТЕЛА (курс C «дорогой график») → b203 СИСТЕМА «дорога стоит на свечах»: в worldNew тела = КОЛОННЫ ДАННЫХ под декой (top=низ деки, размер/цвет/фитили = данные) и рисуются ПОСЛЕ деки — раньше дека (18px) их перекрывала, на тихих участках график исчезал. КЛАССИКА = позиции как были ----
-  function drawCandleBodies(){ const cw=STEP*0.66, cdx=3, cdy=2.6, CA=_photoOn?GRADE.cand:1;   // на фото свечи ярче (альфы ×CA под скрим) — график-герой
+  function drawCandleBodies(){ const cw=STEP*0.66, cdx=3, cdy=2.6, CA=worldNew?1.28:1;   // worldNew: свечи чуть ярче (герой в глубоком мире); классика = как всегда
     const aW=(0.30*CA).toFixed(3), aS=(0.10*CA).toFixed(3), aT=(0.38*CA).toFixed(3), aF=(0.20*CA).toFixed(3), aH=(0.10*CA).toFixed(3);
     for(let i=i0;i<=i1;i++){ const c=terr[i]; if(!c||c.gap)continue; const col=c.up?'46,230,166':'255,59,92';
       const by0=Math.min(c.open,c.close), bh=Math.max(2,Math.abs(c.close-c.open)), wlo=Math.max(0,c.lo-(by0+bh));
@@ -1740,14 +1720,24 @@ function draw(){
       ctx.strokeStyle='rgba(235,255,248,'+aH+')'; ctx.lineWidth=1; ctx.beginPath(); ctx.moveTo(c.x-cw/2+0.5,by); ctx.lineTo(c.x-cw/2+0.5,bo); ctx.stroke(); } }   // hairline-блик левой грани
   if(!worldNew) drawCandleBodies();   // классика: свечи до линии, как всегда
   if(worldNew){ drawTrackReal(i0,i1); drawCandleBodies(); }   // b191 дека → b203 свечи-колонны ПОВЕРХ её тени (не съедены)
-  // ---- b167 ЛИНИЯ ТРАССЫ: двухпроходный управляемый глоу (широкая подложка + ядро; БЕЗ shadowBlur per-сегмент — спокойнее и дешевле), цвета склона в C-палитре ----
+  // ---- b204 КРОМКА = ПОВЕРХНОСТЬ (worldNew): свет наклона живёт НА верхней грани тела дороги, утоплен в неё — отдельный «провод» НАД декой и был причиной «едет по линии, а не по трассе». КЛАССИКА: старый двухпроходный глоу b167 ----
   ctx.lineCap='round'; ctx.lineJoin='round';
-  for(let i=i0;i<i1;i++){ const a=terr[i],b=terr[i+1]; if(!a||!b||a.gap||b.gap)continue; const climb=b.y<a.y-1,drop=b.y>a.y+1;
-    const col=climb?'46,230,166':drop?'255,59,92':'127,212,255';
-    ctx.strokeStyle='rgba('+col+',0.16)'; ctx.lineWidth=7; ctx.beginPath(); ctx.moveTo(a.x,a.y); ctx.lineTo(b.x,b.y); ctx.stroke();
-    ctx.strokeStyle='rgba('+col+',0.85)'; ctx.lineWidth=2.4; ctx.beginPath(); ctx.moveTo(a.x,a.y); ctx.lineTo(b.x,b.y); ctx.stroke(); }
-  ctx.beginPath(); let _pen=false; for(let i=i0;i<=i1;i++){ const c=terr[i]; if(!c||c.gap){ _pen=false; continue; } if(!_pen){ctx.moveTo(c.x,c.y);_pen=true;} else ctx.lineTo(c.x,c.y); }   // break the line across chasms
-  ctx.strokeStyle='rgba('+BLINE+',0.9)'; ctx.lineWidth=1.6; ctx.stroke();
+  if(worldNew){
+    for(let i=i0;i<i1;i++){ const a=terr[i],b=terr[i+1]; if(!a||!b||a.gap||b.gap)continue; const climb=b.y<a.y-1,drop=b.y>a.y+1;
+      const col=climb?'46,230,166':drop?'255,59,92':'127,212,255';
+      ctx.strokeStyle='rgba('+col+',0.20)'; ctx.lineWidth=4.4; ctx.beginPath(); ctx.moveTo(a.x,a.y+1.4); ctx.lineTo(b.x,b.y+1.4); ctx.stroke();   // мягкий свет кромки, светит В тело
+      ctx.strokeStyle='rgba('+col+',0.88)'; ctx.lineWidth=1.8; ctx.beginPath(); ctx.moveTo(a.x,a.y+0.5); ctx.lineTo(b.x,b.y+0.5); ctx.stroke(); }   // ядро на самой грани — низ колеса перекрывает его = контакт, не «на нитке»
+    if(bike&&bike.onG&&(screen==='play'||screen==='paused'||screen==='clip')){ const ca=Math.cos(bike.ang);   // контактные пятна: байк стоит НА поверхности (тень под каждым колесом)
+      ctx.fillStyle='rgba(2,4,12,0.30)';
+      for(const off of [-27,27]){ const wx=bike.x+off*ca, gy=terrainAt(wx).y; ctx.beginPath(); ctx.ellipse(wx,gy+1.6,10,2.4,0,0,7); ctx.fill(); } }
+  } else {
+    for(let i=i0;i<i1;i++){ const a=terr[i],b=terr[i+1]; if(!a||!b||a.gap||b.gap)continue; const climb=b.y<a.y-1,drop=b.y>a.y+1;
+      const col=climb?'46,230,166':drop?'255,59,92':'127,212,255';
+      ctx.strokeStyle='rgba('+col+',0.16)'; ctx.lineWidth=7; ctx.beginPath(); ctx.moveTo(a.x,a.y); ctx.lineTo(b.x,b.y); ctx.stroke();
+      ctx.strokeStyle='rgba('+col+',0.85)'; ctx.lineWidth=2.4; ctx.beginPath(); ctx.moveTo(a.x,a.y); ctx.lineTo(b.x,b.y); ctx.stroke(); }
+    ctx.beginPath(); let _pen=false; for(let i=i0;i<=i1;i++){ const c=terr[i]; if(!c||c.gap){ _pen=false; continue; } if(!_pen){ctx.moveTo(c.x,c.y);_pen=true;} else ctx.lineTo(c.x,c.y); }   // break the line across chasms
+    ctx.strokeStyle='rgba('+BLINE+',0.9)'; ctx.lineWidth=1.6; ctx.stroke();
+  }
   ctx.lineCap='butt'; ctx.lineJoin='miter';
   // ---- GAPS: void edges (red takeoff lip / green landing lip) + telegraph ----
   for(let i=i0;i<i1;i++){ const a=terr[i],b=terr[i+1]; if(!a||!b)continue;
@@ -1866,7 +1856,6 @@ function draw(){
     ctx.restore();
   }
   ctx.restore(); ctx.restore();   // world translate + camera zoom   // b104: убрал красную ликв-линию (заменено плечо→скорость волны)
-  if(worldNew&&fgCv&&fgShow) drawForeground();   // b188: передний слой ВРЕМЕННО ВЫКЛ (fgShow=false) — кляш двух независимых картинок; ждём правильный подход глубины (слои из ОДНОЙ сцены)
   // ---- b168 ЛИКВИДАЦИИ НА ГОРИЗОНТЕ: вспышки в верхнем небе, частота ∝ реальной крутизне свечей × волатильность монеты; дамп = лонги (красные), памп = шорты (зелёные). Суммы синтетические (реальный фид ликвидаций = платные API) ----
   if(screen==='play' && liqFx.length<2){ const lp=(0.003+Math.abs(_mktDy)*0.05)*(trackSource==='ticker'?tickerVolMul:1);
     if(Math.random()<lp) liqFx.push({x:W*(0.15+Math.random()*0.7), y:H*(0.135+Math.random()*0.075), t:0, amt:0.2+Math.pow(Math.random(),2)*7, long:_mktDy>0}); }   // узкая верхняя полоса — не пересекается с баннерами эпох (~H*0.24+)
@@ -1887,10 +1876,6 @@ function draw(){
     _glowCtx.setTransform(1,0,0,1,0,0); _glowCtx.clearRect(0,0,gw2,gh2); _glowCtx.drawImage(cv,0,0,gw2,gh2);
     const ga2=0.15+(slowmo>0?0.10:0)+(boosting>0?0.08:0)+(trickZoom||0)*0.06;
     ctx.save(); ctx.globalCompositeOperation='lighter'; ctx.globalAlpha=ga2; ctx.drawImage(_glowCv,0,0,W,H); ctx.restore(); }
-  // ---- b203 ГРЕЙД-СКЛЕЙКА: тонировка эпохи поверх ВСЕГО кадра (фото+код-мир+байк в одной палитре — единый свет, не «две картинки») ----
-  if(_photoOn){ ctx.save(); ctx.globalCompositeOperation='soft-light'; ctx.fillStyle='rgba('+BLINE+','+GRADE.tint+')'; ctx.fillRect(0,0,W,H);
-    const tg=ctx.createLinearGradient(0,0,0,H*0.5); tg.addColorStop(0,'rgba('+BRIDGE+','+GRADE.sky+')'); tg.addColorStop(1,'rgba('+BRIDGE+',0)');
-    ctx.globalCompositeOperation='overlay'; ctx.fillStyle=tg; ctx.fillRect(0,0,W,H*0.5); ctx.restore(); }
   // vignette — tightens into a tunnel during a rush
   const spv=rush||0, vr=H*(0.3-0.1*spv);
   const v=ctx.createRadialGradient(W/2,H*0.5,vr,W/2,H*0.5,H*0.85); v.addColorStop(0,'rgba(0,0,0,0)'); v.addColorStop(1,'rgba(0,0,0,'+(0.5+0.22*spv)+')'); ctx.fillStyle=v; ctx.fillRect(0,0,W,H);
@@ -1961,8 +1946,7 @@ function draw(){
   ctx.textAlign='right'; ctx.font='10px ui-monospace,monospace';
   const TKR=(trackSource==='ticker'), priceAt=(y)=> TKR ? (tkMid-(y-baseY)/tkK) : (42000+(baseY-y)*6.2);   // b107: было хардкод 42000 (фейк «BTC $42k» даже на WIF) — теперь реальная цена графика
   if(screen==='play'||screen==='paused'){ const lvl2=Math.floor(cam.y/70)*70; for(let gy=lvl2;gy<cam.y+H;gy+=70){ const sy=gy-cam.y; if(sy<70||sy>H-30)continue;
-      if(_photoOn){ ctx.fillStyle='rgba(4,6,16,0.40)'; ctx.fillRect(W-84,sy-14,84,14); }   // b203: чип-подложка — цена оси читается на фото
-      ctx.fillStyle=_photoOn?'rgba(175,205,245,0.60)':'rgba(150,180,220,0.28)'; ctx.fillText(TKR?fmtPrice(priceAt(gy)):('$'+Math.round(priceAt(gy)).toLocaleString('en-US')),W-12,sy-3); } }
+      ctx.fillStyle='rgba(150,180,220,0.28)'; ctx.fillText(TKR?fmtPrice(priceAt(gy)):('$'+Math.round(priceAt(gy)).toLocaleString('en-US')),W-12,sy-3); } }
   // live price tag at the bike's level
   const lp=priceAt(bike.y); const tk=document.getElementById('ticker'); tk.textContent=CORE_TEST_MODE?'CORE TEST':(activeChal?('🏁 '+activeChal.name):(TKR?(tickerName+'  '+fmtPrice(lp)):('BTC  $'+Math.round(lp).toLocaleString('en-US'))));   // b118: во время вызова — цель Пути
   ctx.textAlign='left';
