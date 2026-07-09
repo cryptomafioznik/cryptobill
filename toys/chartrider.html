@@ -64,7 +64,7 @@ function lerp(a,b,t){return a+(b-a)*t;} function clamp(v,a,b){return v<a?a:v>b?b
 // false → full game everywhere. Single switch. Systems are GATED, never deleted.
 const CORE_TEST_MODE = false;   // b70: META LIVE — building the progression spine (upgrades/bikes with teeth, career, economy) on the confirmed rigid-body core
 // build stamp — bump on every change so a phone refresh can confirm it loaded fresh code (cache!)
-const BUILD = '2026-07-09 · b196';
+const BUILD = '2026-07-09 · b197';
 
 // ---------- procedural market terrain ----------
 // height map sampled every STEP px; generated forward as we ride. Market character:
@@ -2847,7 +2847,7 @@ let gridMesh;
   gridMesh.rotation.x=-Math.PI/2; gridMesh.position.set(0,FLOOR_Y+0.05,-70); scene.add(gridMesh); }   // неон-сетка поверх отражений
 
 // ---------- WET ASPHALT (Reflector) — отражает город/солнце/байк = премиум-синтвейв ----------
-const mirror=new Reflector(new THREE.PlaneGeometry(1600,900),{clipBias:0.003,textureWidth:Math.round(SW*1.5),textureHeight:Math.round(SH*1.5),color:0x2a3550});   // ярче = мокрый асфальт заметно отражает неон-город/свечи
+const mirror=new Reflector(new THREE.PlaneGeometry(1600,900),{clipBias:0.003,textureWidth:Math.round(SW*1.5),textureHeight:Math.round(SH*1.5),color:0x151b2a});   // приглушённый мокрый асфальт (тонкий блик неона, не зеркало-мешанина)
 mirror.rotation.x=-Math.PI/2; mirror.position.set(0,FLOOR_Y,-70); scene.add(mirror);
 
 // ---------- MARKET-DRIVEN CANDLE-CITY (дальний рынок; цвет башен = недавний тренд) ----------
@@ -2857,9 +2857,9 @@ function winTex(rgb){ const W=64,H=128,cn=document.createElement('canvas'); cn.w
   const t=new THREE.CanvasTexture(cn); t.wrapS=t.wrapT=THREE.RepeatWrapping; t.repeat.set(2,4); return t; }
 const bullMat=new THREE.MeshBasicMaterial({map:winTex('70,245,175'),fog:true}), bearMat=new THREE.MeshBasicMaterial({map:winTex('255,80,120'),fog:true});
 const GRN=new THREE.Color(0x24e69a), REDC=new THREE.Color(0xff3b6e);
-const CITY_PERIOD=360, cityGroup=new THREE.Group(), cityTowers=[]; scene.add(cityGroup);
+const CITY_PERIOD=420, cityGroup=new THREE.Group(), cityTowers=[]; scene.add(cityGroup);
 cityGroup.position.y=FLOOR_Y;   // город стоит на асфальте (отражается)
-for(let i=0;i<92;i++){ const depth=26+crnd()*150, w=3+crnd()*7, h=12+crnd()*52*(1-depth/230), x=crnd()*CITY_PERIOD-CITY_PERIOD/2;
+for(let i=0;i<96;i++){ const depth=70+crnd()*300, w=4+crnd()*9, h=16+crnd()*58*Math.max(0.25,1-depth/380), x=crnd()*CITY_PERIOD-CITY_PERIOD/2;   // ДАЛЕКО в глубину = скайлайн-фон, не стена перед байком
   const body=new THREE.Mesh(new THREE.BoxGeometry(w,h,w),bullMat); body.position.set(x,h/2,-depth); cityGroup.add(body);
   const edge=new THREE.LineSegments(new THREE.EdgesGeometry(body.geometry), new THREE.LineBasicMaterial({color:0x24e69a,transparent:true,opacity:0.8,fog:true})); edge.position.copy(body.position); cityGroup.add(edge);
   const wick=new THREE.Mesh(new THREE.CylinderGeometry(0.05,0.05,1.6+crnd()*3,5), new THREE.MeshBasicMaterial({color:0x24e69a})); wick.position.set(x,h+1.2+crnd()*1.6,-depth); cityGroup.add(wick);
@@ -2932,9 +2932,10 @@ function updateCandles(bx,baseY){ const S=window.CRS, terr=S.terr, STEP=S.STEP; 
     const X=c.x*SC, col=c.up?cGreen:cRed;
     const lineY=-(c.y-baseY)*SC, gh=Math.max(0.2,lineY-botY);                 // тёмная земля: ride-линия → пол
     dummy.position.set(X,(lineY+botY)/2,-0.1); dummy.rotation.set(0,0,0); dummy.scale.set(GW,gh,1.5); dummy.updateMatrix(); groundMesh.setMatrixAt(k,dummy.matrix);
-    const oy=-(c.open-baseY)*SC, cy=-(c.close-baseY)*SC, bt=Math.max(oy,cy), bb=Math.min(oy,cy), bh=Math.max(0.14,bt-bb);   // тело свечи open→close (выступает вперёд)
+    const oy=-(c.open-baseY)*SC, cy=-(c.close-baseY)*SC;                            // тело свечи open→close, ОГРАНИЧЕНО вокруг линии (гига-свеча флеш-краха не даёт столб на весь экран)
+    let bt=Math.min(Math.max(oy,cy),lineY+2.6), bb=Math.max(Math.min(oy,cy),lineY-2.6); const bh=Math.max(0.14,bt-bb);
     dummy.position.set(X,(bt+bb)/2,W2+0.12); dummy.scale.set(CW,bh,0.55); dummy.updateMatrix(); candMesh.setMatrixAt(k,dummy.matrix); candMesh.setColorAt(k,col);
-    const hy=-(c.hi-baseY)*SC, ly=-(c.lo-baseY)*SC, wh=Math.max(0.14,hy-ly);   // фитиль hi→lo (тонкий)
+    let hy=Math.min(-(c.hi-baseY)*SC,lineY+3.4), ly=Math.max(-(c.lo-baseY)*SC,lineY-3.4); const wh=Math.max(0.14,hy-ly);   // фитиль hi→lo (тонкий), тоже ограничен
     dummy.position.set(X,(hy+ly)/2,W2+0.06); dummy.scale.set(WW,wh,0.3); dummy.updateMatrix(); wickMesh.setMatrixAt(k,dummy.matrix); wickMesh.setColorAt(k,col);
   }
   for(; k<CAND_N; k++){ dummy.scale.set(0,0,0); dummy.updateMatrix(); groundMesh.setMatrixAt(k,dummy.matrix); candMesh.setMatrixAt(k,dummy.matrix); wickMesh.setMatrixAt(k,dummy.matrix); }
@@ -3003,15 +3004,15 @@ function makePoints(max,additive){ const g=new THREE.BufferGeometry();
   const pts=new THREE.Points(g,new THREE.ShaderMaterial({vertexShader:P_VS,fragmentShader:P_FS,transparent:true,depthWrite:false,blending:additive?THREE.AdditiveBlending:THREE.NormalBlending})); pts.frustumCulled=false; scene.add(pts);
   return {geo:g,pos,sz,al,col}; }
 const dustPts=makePoints(280,false), glowPts=makePoints(360,true);
-function fillPts(P,arr,colFn,zBase,baseY){ let k=0; const M=P.sz.length;
+function fillPts(P,arr,colFn,zBase,baseY,sizeK){ let k=0; const M=P.sz.length;
   for(let i=0;i<arr.length && k<M;i++){ const p=arr[i]; if(!p||p.life<=0)continue;
     P.pos[k*3]=p.x*SC; P.pos[k*3+1]=-(p.y-baseY)*SC; P.pos[k*3+2]=zBase;
-    P.sz[k]=Math.max(1,p.r||2)*SC*46; P.al[k]=Math.min(1,p.life); const c=colFn(p); P.col[k*3]=c[0]; P.col[k*3+1]=c[1]; P.col[k*3+2]=c[2]; k++; }
+    P.sz[k]=Math.max(1,p.r||2)*SC*sizeK; P.al[k]=Math.min(1,p.life); const c=colFn(p); P.col[k*3]=c[0]; P.col[k*3+1]=c[1]; P.col[k*3+2]=c[2]; k++; }
   P.geo.setDrawRange(0,k);
   P.geo.attributes.position.needsUpdate=true; P.geo.attributes.aSize.needsUpdate=true; P.geo.attributes.aAlpha.needsUpdate=true; P.geo.attributes.aColor.needsUpdate=true; }
 function updateParticles(baseY){ const S=window.CRS;
-  fillPts(dustPts, S.dust||[], ()=>[0.5,0.46,0.42], BIKE_Z+0.1, baseY);                         // мягкий серо-песочный дым (ниже порога bloom → не блобит)
-  fillPts(glowPts, S.parts||[], p=>p.gold?[1.0,0.82,0.29]:[0.62,0.94,1.0], BIKE_Z+0.15, baseY); }  // золото пампа / неон-искры
+  fillPts(dustPts, S.dust||[], ()=>[0.5,0.46,0.42], BIKE_Z+0.1, baseY, 40);                        // мягкий серо-песочный дым (ниже порога bloom → не блобит)
+  fillPts(glowPts, S.parts||[], p=>p.gold?[1.0,0.82,0.29]:[0.62,0.94,1.0], BIKE_Z+0.15, baseY, 20); }  // искры мельче (аддитив+bloom = отдельные искры, не пятно)
 
 // ---------- TELEGRAPHS (мировые метки препятствий, лицом к камере) ----------
 function labelTex(txt,rgb){ const c=document.createElement('canvas'); c.width=300;c.height=84; const g=c.getContext('2d');
@@ -3037,6 +3038,7 @@ function updateTelegraphs(bx,baseY,t){ const S=window.CRS, terr=S.terr, STEP=S.S
 // ---------- loop ----------
 const CAM_ANG=0.16;   // ниже = более сбоку (лицо свеча-стены видно), выше = более сверху
 const _fog=new THREE.Color(0x2a0d3a), _skyTint=new THREE.Color(1,1,1);
+let camFocusY=0;   // сглаженная высота фокуса камеры — следит за байком (в прыжке держит в кадре), с уклоном к земле чтобы график был виден
 function frame(){ const S=window.CRS; const terr=S.terr;
   if(!terr||terr.length<4){ composer.render(); return; }
   const bike=S.bike, sl=S.slowLerp, baseY=S.baseY;
@@ -3051,10 +3053,13 @@ function frame(){ const S=window.CRS; const terr=S.terr;
   // тинт тумана/фона по рыночной эпохе (биом) — плавно
   const bm=S.biome; if(bm){ const dp=bm.sky[1]; _fog.setRGB(dp[0]/255,dp[1]/255,dp[2]/255); scene.fog.color.lerp(_fog,0.04); renderer.setClearColor(scene.fog.color,1);
     const hz=bm.sky[2], mx=Math.max(hz[0],hz[1],hz[2],1); _skyTint.setRGB(hz[0]/mx,hz[1]/mx,hz[2]/mx); skyMat.color.lerp(_skyTint,0.04); }   // тинт неба под рыночную эпоху (медвежий краснит, капитуляция сереет)
-  bikeGroup.position.set(BX, -(by-baseY)*SC + BIKE_YOFF, BIKE_Z);
+  const bikeY3=-(by-baseY)*SC;
+  bikeGroup.position.set(BX, bikeY3 + BIKE_YOFF, BIKE_Z);
   bikeGroup.rotation.z=-ba;   // ЗНАК проверить визуально (canvas y-вниз ↔ 3D y-вверх)
-  camera.position.set(BX-4.5, gY+5.0+CAM_ANG*6, 17-CAM_ANG*4);
-  camera.lookAt(BX+5.5, gY-1.4-CAM_ANG*3, -14);
+  // фокус: земля + доля высоты байка → в прыжке камера поднимается за байком, но график остаётся в кадре
+  const targetFocus=gY + (bikeY3-gY)*0.6; camFocusY += (targetFocus-camFocusY)*0.09;
+  camera.position.set(BX-4.5, camFocusY+5.0+CAM_ANG*6, 17-CAM_ANG*4);
+  camera.lookAt(BX+5.5, camFocusY-1.4-CAM_ANG*3, -14);
   composer.render();
   renderer.autoClear=false; renderer.clearDepth(); renderer.render(teleScene,camera); renderer.autoClear=true;   // телеграфы поверх bloom = чёткие
 }
