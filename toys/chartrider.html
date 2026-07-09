@@ -64,7 +64,7 @@ function lerp(a,b,t){return a+(b-a)*t;} function clamp(v,a,b){return v<a?a:v>b?b
 // false → full game everywhere. Single switch. Systems are GATED, never deleted.
 const CORE_TEST_MODE = false;   // b70: META LIVE — building the progression spine (upgrades/bikes with teeth, career, economy) on the confirmed rigid-body core
 // build stamp — bump on every change so a phone refresh can confirm it loaded fresh code (cache!)
-const BUILD = '2026-07-09 · b199';
+const BUILD = '2026-07-09 · b200';
 
 // ---------- procedural market terrain ----------
 // height map sampled every STEP px; generated forward as we ride. Market character:
@@ -3058,10 +3058,11 @@ function frame(){ const S=window.CRS; const terr=S.terr;
   const bikeY3=-(by-baseY)*SC;
   bikeGroup.position.set(BX, bikeY3 + BIKE_YOFF, BIKE_Z);
   bikeGroup.rotation.z=-ba;   // ЗНАК проверить визуально (canvas y-вниз ↔ 3D y-вверх)
-  // фокус: земля + доля высоты байка → в прыжке камера поднимается за байком, но график остаётся в кадре
-  const targetFocus=gY + (bikeY3-gY)*0.6; camFocusY += (targetFocus-camFocusY)*0.09;
-  camera.position.set(BX-4.5, camFocusY+5.0+CAM_ANG*6, 17-CAM_ANG*4);
-  camera.lookAt(BX+5.5, camFocusY-1.4-CAM_ANG*3, -14);
+  // фокус следит за байком (быстрее+ближе к байку = не отстаёт, не роняет вниз кадра)
+  const targetFocus=gY + (bikeY3-gY)*0.72; camFocusY += (targetFocus-camFocusY)*0.14;
+  // БОЛЕЕ СБОКУ, меньше наклон вниз → байк ПО ЦЕНТРУ, чарт+город заполняют кадр, минимум мёртвой сетки-пола
+  camera.position.set(BX-4.2, camFocusY+2.1, 13.6);
+  camera.lookAt(BX+3.6, camFocusY-1.1, -9);
   composer.render();
   renderer.autoClear=false; renderer.clearDepth(); renderer.render(teleScene,camera); renderer.autoClear=true;   // телеграфы поверх bloom = чёткие
 }
