@@ -64,7 +64,7 @@ function lerp(a,b,t){return a+(b-a)*t;} function clamp(v,a,b){return v<a?a:v>b?b
 // false → full game everywhere. Single switch. Systems are GATED, never deleted.
 const CORE_TEST_MODE = false;   // b70: META LIVE — building the progression spine (upgrades/bikes with teeth, career, economy) on the confirmed rigid-body core
 // build stamp — bump on every change so a phone refresh can confirm it loaded fresh code (cache!)
-const BUILD = '2026-07-09 · b201';
+const BUILD = '2026-07-09 · b202';
 
 // ---------- procedural market terrain ----------
 // height map sampled every STEP px; generated forward as we ride. Market character:
@@ -2954,7 +2954,7 @@ scene.add(new THREE.AmbientLight(0x8a92cc,0.9));
 // env-map = отражения на металле байка (город/свечи на MeshBasic не трогает — только PBR-байк)
 try{ const _pm=new THREE.PMREMGenerator(renderer); scene.environment=_pm.fromScene(new RoomEnvironment(),0.04).texture; }catch(e){}
 const bikeGroup=new THREE.Group(); scene.add(bikeGroup);
-let BIKE_YOFF=-1.55, BIKE_FLIP=Math.PI/2;   // калибруется визуально в игре
+let BIKE_YOFF=-1.55, BIKE_FLIP=-Math.PI/2;   // разворот: байк едет ВПЕРЁД (+X), не задом. калибруется визуально
 { const glow=new THREE.Mesh(new THREE.BoxGeometry(2.2,0.05,0.34), new THREE.MeshBasicMaterial({color:0xff6be8})); glow.position.set(0,0.06,0); bikeGroup.add(glow); }   // неон-подсветка снизу
 const bikeModel=new THREE.Group(); bikeGroup.add(bikeModel);
 new GLTFLoader().load('assets/models/moto1.glb',(g)=>{ const o=g.scene;
