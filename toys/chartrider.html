@@ -64,7 +64,7 @@ function lerp(a,b,t){return a+(b-a)*t;} function clamp(v,a,b){return v<a?a:v>b?b
 // false → full game everywhere. Single switch. Systems are GATED, never deleted.
 const CORE_TEST_MODE = false;   // b70: META LIVE — building the progression spine (upgrades/bikes with teeth, career, economy) on the confirmed rigid-body core
 // build stamp — bump on every change so a phone refresh can confirm it loaded fresh code (cache!)
-const BUILD = '2026-07-09 · b198';
+const BUILD = '2026-07-09 · b199';
 
 // ---------- procedural market terrain ----------
 // height map sampled every STEP px; generated forward as we ride. Market character:
@@ -2814,11 +2814,11 @@ const scene=new THREE.Scene();
 const FOGC=new THREE.Color(0x2a0d3a); scene.fog=new THREE.FogExp2(FOGC.getHex(),0.010);
 const camera=new THREE.PerspectiveCamera(52,SW/SH,0.1,900);
 const composer=new EffectComposer(renderer); composer.addPass(new RenderPass(scene,camera));
-const bloom=new UnrealBloomPass(new THREE.Vector2(SW,SH),0.42,0.4,0.72); composer.addPass(bloom);   // b192: слабее+выше порог — только неон светится, не пересвет всего кадра
+const bloom=new UnrealBloomPass(new THREE.Vector2(SW,SH),0.7,0.6,0.6); composer.addPass(bloom);   // управляемый глоу: неон-элементы ГОРЯТ, тёмное остаётся тёмным (не пересвет в белое)
 
 // ---------- sky / sun / stars (атмосфера-база, дёшево) ----------
 function skyTex(){ const c=document.createElement('canvas'); c.width=8; c.height=256; const g=c.getContext('2d'); const gr=g.createLinearGradient(0,0,0,256);
-  gr.addColorStop(0,'#140a2e'); gr.addColorStop(0.42,'#3a1150'); gr.addColorStop(0.66,'#b02a6a'); gr.addColorStop(0.82,'#ff7a3c'); gr.addColorStop(1,'#ffd05a');
+  gr.addColorStop(0,'#0c0620'); gr.addColorStop(0.38,'#3a1160'); gr.addColorStop(0.6,'#8a1f7a'); gr.addColorStop(0.78,'#ff5a7a'); gr.addColorStop(0.9,'#ff9a4a'); gr.addColorStop(1,'#ffd85a');   // глубже/сочнее синтвейв-градиент
   g.fillStyle=gr; g.fillRect(0,0,8,256); return new THREE.CanvasTexture(c); }
 let skyMat;
 { skyMat=new THREE.MeshBasicMaterial({map:skyTex(),depthWrite:false,fog:false}); const sky=new THREE.Mesh(new THREE.PlaneGeometry(1400,700), skyMat);
@@ -2829,7 +2829,7 @@ function sunTex(){ const S=256,c=document.createElement('canvas'); c.width=c.hei
   g.globalCompositeOperation='destination-out'; for(let y=S*0.55;y<S;y+=14){ const h=(y-S*0.5)/S*10; g.fillRect(0,y,S,Math.max(2,h)); }
   return new THREE.CanvasTexture(c); }
 { const sun=new THREE.Sprite(new THREE.SpriteMaterial({map:sunTex(),transparent:true,depthWrite:false,fog:false,blending:THREE.AdditiveBlending}));
-  sun.scale.set(120,120,1); sun.position.set(10,40,-330); scene.add(sun); }
+  sun.scale.set(215,215,1); sun.position.set(0,34,-230); scene.add(sun); }   // большое ретро-солнце ВПЕРЕДИ (не загорожено дальним городом), низко на горизонте = синтвейв-подпись
 { const N=340,sg=new THREE.BufferGeometry(),sp=new Float32Array(N*3); let s=99991;
   const rnd=()=>{ s=(s*1103515245+12345)&0x7fffffff; return s/0x7fffffff; };
   for(let i=0;i<N;i++){ sp[i*3]=(rnd()-0.5)*680; sp[i*3+1]=55+rnd()*140; sp[i*3+2]=-90-rnd()*250; }
@@ -2847,7 +2847,7 @@ const floorMesh=new THREE.Mesh(new THREE.PlaneGeometry(2600,1500), new THREE.Mes
 floorMesh.rotation.x=-Math.PI/2; floorMesh.position.set(0,FLOOR_Y-0.03,-70); scene.add(floorMesh);
 let gridMesh;
 { gridMesh=new THREE.Mesh(new THREE.PlaneGeometry(1600,700), new THREE.MeshBasicMaterial({map:gridT,transparent:true,opacity:0.22,fog:true,blending:THREE.AdditiveBlending,depthWrite:false}));
-  gridMesh.rotation.x=-Math.PI/2; gridMesh.position.set(0,FLOOR_Y+0.04,-70); scene.add(gridMesh); }   // неон-сетка на полу
+  gridMesh.rotation.x=-Math.PI/2; gridMesh.position.set(0,FLOOR_Y+0.04,-70); scene.add(gridMesh); gridMesh.material.opacity=0.34; }   // неон-сетка на полу (ярче = глоу)
 
 // ---------- MARKET-DRIVEN CANDLE-CITY (дальний рынок; цвет башен = недавний тренд) ----------
 let cseed=20260709; const crnd=()=>{ cseed=(cseed*1103515245+12345)&0x7fffffff; return cseed/0x7fffffff; };
@@ -2888,7 +2888,7 @@ function buildRoad(){
   const idx=[]; for(let i=0;i<ROAD_N-1;i++){ const A=i*3,B=i*3+1,C=i*3+2,A2=(i+1)*3,B2=(i+1)*3+1,C2=(i+1)*3+2;
     idx.push(A,B,A2, B,B2,A2); idx.push(A,C,A2, C,C2,A2); }
   geo.setIndex(idx);
-  roadMesh=new THREE.Mesh(geo,new THREE.MeshBasicMaterial({color:0x2b2150,fog:true,side:THREE.DoubleSide})); roadMesh.frustumCulled=false; scene.add(roadMesh);   // frustumCulled=false: геометрия двигается по x байка, bounding-sphere от origin иначе куллит меш = график пропадает
+  roadMesh=new THREE.Mesh(geo,new THREE.MeshBasicMaterial({color:0x37dcff,fog:true,side:THREE.DoubleSide})); roadMesh.frustumCulled=false; scene.add(roadMesh);   // ЯРКАЯ неон-лента-дорога (глоу) = чёткая ездовая кромка. frustumCulled=false: геометрия двигается по x байка
   function mkLine(color,op){ const g=new THREE.BufferGeometry(); g.setAttribute('position',new THREE.BufferAttribute(new Float32Array(ROAD_N*3),3));
     const l=new THREE.Line(g,new THREE.LineBasicMaterial({color,transparent:true,opacity:op,fog:true})); l.frustumCulled=false; return l; }
   lineTop=mkLine(0x6ff2ff,1.0); scene.add(lineTop);   // неон-рельс у камеры
@@ -2911,9 +2911,9 @@ function updateRoad(bx,baseY){ const S=window.CRS, STEP=S.STEP, vp=roadMesh.geom
 
 // ---------- CANDLESTICK CHART = 3D-ТЕРРЕЙН: тёмная земля-масса + ЯРКИЕ свечи-тела рельефом ----------
 const CAND_N=84, dummy=new THREE.Object3D();
-const cGreen=new THREE.Color(0x2ee6a6), cRed=new THREE.Color(0xff3b5c);
-// тёмная солидная земля под ride-линией (масса террейна; приглушённая — не конкурирует со свечами)
-const groundMat=new THREE.MeshBasicMaterial({color:0x3a2c63,fog:true});   // видимая континуальная масса (не сливается с фоном)
+const cGreen=new THREE.Color(0x2bf0a4), cRed=new THREE.Color(0xff4468);   // светятся, но не пересвет в белое
+// тёмная солидная земля под ride-линией (масса террейна; тёмная — светящиеся свечи выступают на ней)
+const groundMat=new THREE.MeshBasicMaterial({color:0x201a3a,fog:true});
 const groundMesh=new THREE.InstancedMesh(new THREE.BoxGeometry(1,1,1), groundMat, CAND_N);
 groundMesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage); groundMesh.frustumCulled=false; scene.add(groundMesh);   // frustumCulled=false: инстансы двигаются далеко по x, иначе весь меш куллится = террейн пропадает
 // яркие тела свечей (open→close, с зазорами = ОТДЕЛЬНЫЕ свечи) выступают на лице земли
@@ -2924,18 +2924,19 @@ for(let i=0;i<CAND_N;i++) candMesh.setColorAt(i,cGreen);
 const wickMesh=new THREE.InstancedMesh(new THREE.BoxGeometry(1,1,1), new THREE.MeshBasicMaterial({fog:true}), CAND_N);
 wickMesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage); wickMesh.frustumCulled=false; scene.add(wickMesh);
 for(let i=0;i<CAND_N;i++) wickMesh.setColorAt(i,cGreen);
+// СВЕЧА = ЧАСТЬ ТРАССЫ: светящийся бар висит ОТ линии-езды ВНИЗ (высота = тело open-close), снизу тёмная земля до пола,
+// сверху яркая неон-лента-дорога (roadMesh), тонкий фитиль вверх к максимуму. Едешь по верхней кромке своего свечного чарта.
 function updateCandles(bx,baseY){ const S=window.CRS, terr=S.terr, STEP=S.STEP; const i0=Math.max(0,Math.floor(bx/STEP)-16);
-  const GW=STEP*SC*1.02, CW=STEP*SC*0.62, WW=STEP*SC*0.12, botY=FLOOR_Y+0.25; let k=0;
+  const GW=STEP*SC*1.02, CW=STEP*SC*0.9, WW=STEP*SC*0.13, botY=FLOOR_Y+0.25; let k=0;
   for(let i=i0;i<i0+CAND_N && i<terr.length;i++,k++){ const c=terr[i];
     if(!c||c.gap){ dummy.scale.set(0,0,0); dummy.updateMatrix(); groundMesh.setMatrixAt(k,dummy.matrix); candMesh.setMatrixAt(k,dummy.matrix); wickMesh.setMatrixAt(k,dummy.matrix); continue; }
     const X=c.x*SC, col=c.up?cGreen:cRed;
-    const lineY=-(c.y-baseY)*SC, gh=Math.max(0.2,lineY-botY);                 // тёмная земля: ride-линия → пол
-    dummy.position.set(X,(lineY+botY)/2,-0.1); dummy.rotation.set(0,0,0); dummy.scale.set(GW,gh,1.5); dummy.updateMatrix(); groundMesh.setMatrixAt(k,dummy.matrix);
-    const oy=-(c.open-baseY)*SC, cy=-(c.close-baseY)*SC;                            // тело свечи open→close, ОГРАНИЧЕНО вокруг линии (гига-свеча флеш-краха не даёт столб на весь экран)
-    let bt=Math.min(Math.max(oy,cy),lineY+2.6), bb=Math.max(Math.min(oy,cy),lineY-2.6); const bh=Math.max(0.14,bt-bb);
-    dummy.position.set(X,(bt+bb)/2,W2+0.12); dummy.scale.set(CW,bh,0.55); dummy.updateMatrix(); candMesh.setMatrixAt(k,dummy.matrix); candMesh.setColorAt(k,col);
-    let hy=Math.min(-(c.hi-baseY)*SC,lineY+3.4), ly=Math.max(-(c.lo-baseY)*SC,lineY-3.4); const wh=Math.max(0.14,hy-ly);   // фитиль hi→lo (тонкий), тоже ограничен
-    dummy.position.set(X,(hy+ly)/2,W2+0.06); dummy.scale.set(WW,wh,0.3); dummy.updateMatrix(); wickMesh.setMatrixAt(k,dummy.matrix); wickMesh.setColorAt(k,col);
+    const lineY=-(c.y-baseY)*SC, gh=Math.max(0.2,lineY-botY);                       // тёмная твёрдая земля: линия → пол
+    dummy.position.set(X,(lineY+botY)/2,-0.15); dummy.rotation.set(0,0,0); dummy.scale.set(GW,gh,1.6); dummy.updateMatrix(); groundMesh.setMatrixAt(k,dummy.matrix);
+    const bodyH=Math.min(2.6,Math.max(0.5,Math.abs(c.close-c.open)*SC));            // светящийся бар свечи ВНИЗ от линии (мин 0.5 = всегда виден, кап 2.6 = гига-краш не столб)
+    dummy.position.set(X,lineY-bodyH/2,W2+0.1); dummy.scale.set(CW,bodyH,0.5); dummy.updateMatrix(); candMesh.setMatrixAt(k,dummy.matrix); candMesh.setColorAt(k,col);
+    const wickUp=Math.min(1.8,Math.max(0.15,(-(c.hi-baseY)*SC)-lineY));             // тонкий фитиль ВВЕРХ к максимуму (hi)
+    dummy.position.set(X,lineY+wickUp/2,W2+0.05); dummy.scale.set(WW,wickUp,0.3); dummy.updateMatrix(); wickMesh.setMatrixAt(k,dummy.matrix); wickMesh.setColorAt(k,col);
   }
   for(; k<CAND_N; k++){ dummy.scale.set(0,0,0); dummy.updateMatrix(); groundMesh.setMatrixAt(k,dummy.matrix); candMesh.setMatrixAt(k,dummy.matrix); wickMesh.setMatrixAt(k,dummy.matrix); }
   groundMesh.instanceMatrix.needsUpdate=true; candMesh.instanceMatrix.needsUpdate=true; wickMesh.instanceMatrix.needsUpdate=true;
@@ -2944,16 +2945,18 @@ function updateCandles(bx,baseY){ const S=window.CRS, terr=S.terr, STEP=S.STEP; 
 
 // ---------- BIKE + RIDER (детальная 3D-модель: шейдед металл-корпус ловит свет = объём, неон-акценты ловят bloom) ----------
 // свет влияет ТОЛЬКО на Standard-материалы (байк/райдер); город/свечи/дорога на MeshBasic — не трогает
-scene.add(new THREE.AmbientLight(0x6474a8,0.75));
-{ const keyL=new THREE.DirectionalLight(0xffe6cc,1.2); keyL.position.set(4,7,7); scene.add(keyL);
-  const rimL=new THREE.DirectionalLight(0xff4fa0,0.7); rimL.position.set(-5,3,-4); scene.add(rimL); }
-const bodyMat=new THREE.MeshStandardMaterial({color:0x1b2030,metalness:0.82,roughness:0.36});
-const panelMat=new THREE.MeshStandardMaterial({color:0x2a3350,metalness:0.6,roughness:0.34,emissive:0x0a1428,emissiveIntensity:0.4});
-const tireMat=new THREE.MeshStandardMaterial({color:0x0b0b12,metalness:0.2,roughness:0.85});
-const goldMat=new THREE.MeshStandardMaterial({color:0xc9a54a,metalness:0.92,roughness:0.28,emissive:0x3a2c08,emissiveIntensity:0.3});
-const neonMat=new THREE.MeshBasicMaterial({color:0x6ff2ff}), neonPink=new THREE.MeshBasicMaterial({color:0xff5be0});
+scene.add(new THREE.AmbientLight(0x8a92cc,0.95));
+{ const keyL=new THREE.DirectionalLight(0xfff0e0,1.7); keyL.position.set(4,7,8); scene.add(keyL);
+  const rimL=new THREE.DirectionalLight(0xff4fb0,1.3); rimL.position.set(-6,3,-3); scene.add(rimL);
+  const fillL=new THREE.DirectionalLight(0x3ce0ff,0.9); fillL.position.set(7,1,4); scene.add(fillL);
+  const frontL=new THREE.DirectionalLight(0xffffff,1.0); frontL.position.set(0,3,12); scene.add(frontL); }   // фронт-свет со стороны КАМЕРЫ = байк освещён к зрителю, не силуэт
+const bodyMat=new THREE.MeshStandardMaterial({color:0x3a4770,metalness:0.85,roughness:0.32,emissive:0x111a34,emissiveIntensity:0.55});   // светлее+эмиссив = байк не чёрное пятно
+const panelMat=new THREE.MeshStandardMaterial({color:0x435284,metalness:0.62,roughness:0.3,emissive:0x14224a,emissiveIntensity:0.55});
+const tireMat=new THREE.MeshStandardMaterial({color:0x14141f,metalness:0.25,roughness:0.8});
+const goldMat=new THREE.MeshStandardMaterial({color:0xe0b854,metalness:0.95,roughness:0.24,emissive:0x4a3808,emissiveIntensity:0.5});
+const neonMat=new THREE.MeshBasicMaterial({color:0x8ff8ff}), neonPink=new THREE.MeshBasicMaterial({color:0xff6be8});
 const headMat=new THREE.MeshBasicMaterial({color:0xfff0c0}), visorMat=new THREE.MeshBasicMaterial({color:0x9fe8ff});
-const riderMat=new THREE.MeshStandardMaterial({color:0x14161f,metalness:0.42,roughness:0.55});
+const riderMat=new THREE.MeshStandardMaterial({color:0x2a3050,metalness:0.45,roughness:0.5,emissive:0x0e1226,emissiveIntensity:0.4});
 const bikeGroup=new THREE.Group(); const R=0.6;
 function tube(x1,y1,x2,y2,r,mat,seg){ const dx=x2-x1,dy=y2-y1,len=Math.hypot(dx,dy)||0.01; const m=new THREE.Mesh(new THREE.CylinderGeometry(r,r,len,seg||10),mat); m.position.set((x1+x2)/2,(y1+y2)/2,0); m.rotation.z=Math.atan2(dy,dx)-Math.PI/2; return m; }
 function wheel(cx){ const g=new THREE.Group();
