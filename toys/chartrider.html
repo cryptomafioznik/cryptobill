@@ -13,8 +13,9 @@
   canvas{display:block;}
   #c3d{position:fixed;inset:0;width:100%;height:100%;display:none;z-index:0;}   /* b192: WebGL-слой (3D-мир) ПОД 2D-канвасом */
   #c{position:fixed;inset:0;z-index:1;}   /* 2D-канвас сверху: HUD/контролы/FX; в 3D-режиме мир на нём не рисуется (прозрачно) */
-  #b3d{position:fixed;right:10px;top:104px;z-index:62;padding:5px 11px;background:rgba(30,22,54,.82);color:#d9c8ff;
-    font:800 12px ui-monospace,monospace;border:1px solid rgba(150,110,230,.5);border-radius:9px;cursor:pointer;letter-spacing:.06em;}
+  #b3d{position:fixed;right:10px;top:104px;z-index:62;padding:11px 18px;min-width:56px;text-align:center;background:rgba(30,22,54,.9);color:#d9c8ff;
+    font:800 15px ui-monospace,monospace;border:1px solid rgba(150,110,230,.6);border-radius:11px;cursor:pointer;letter-spacing:.08em;
+    -webkit-user-select:none;user-select:none;touch-action:none;}
   #b3d.on{background:linear-gradient(150deg,rgba(53,224,255,.3),rgba(255,45,149,.24));border-color:rgba(120,180,255,.6);color:#eafcff;}
   #hud{position:fixed;top:18px;left:12px;color:#cdbef0;font-size:12px;letter-spacing:.14em;line-height:1.5;pointer-events:none;text-shadow:0 1px 6px rgba(0,0,0,.5);
     background:rgba(9,14,28,.48);border:1px solid rgba(150,180,230,.16);border-radius:12px;padding:7px 12px 8px;
@@ -63,7 +64,7 @@ function lerp(a,b,t){return a+(b-a)*t;} function clamp(v,a,b){return v<a?a:v>b?b
 // false → full game everywhere. Single switch. Systems are GATED, never deleted.
 const CORE_TEST_MODE = false;   // b70: META LIVE — building the progression spine (upgrades/bikes with teeth, career, economy) on the confirmed rigid-body core
 // build stamp — bump on every change so a phone refresh can confirm it loaded fresh code (cache!)
-const BUILD = '2026-07-08 · b195';
+const BUILD = '2026-07-09 · b196';
 
 // ---------- procedural market terrain ----------
 // height map sampled every STEP px; generated forward as we ride. Market character:
@@ -2771,7 +2772,11 @@ window.CRS = {
 // применить сохранённое состояние тумблера, когда 3D-модуль загрузится (модуль дёргает этот колбэк на .ready)
 const _b3d=document.getElementById('b3d');
 window.__applyR3D=function(){ if(window.R3D){ window.R3D.setActive(R3D_ON); } _b3d.classList.toggle('on',R3D_ON); _b3d.textContent=R3D_ON?'3D':'2D'; };
-_b3d.addEventListener('click',function(){ R3D_ON=!R3D_ON; saveR3D(); if(typeof sfxClick==='function')sfxClick(); window.__applyR3D(); });
+function _toggle3D(){ R3D_ON=!R3D_ON; saveR3D(); if(typeof sfxClick==='function')sfxClick(); window.__applyR3D(); }
+// b196 FIX: игра делает preventDefault на window-touchstart → на телефоне click НЕ генерится. Ловим сам тач на кнопке + stopPropagation (игра не перехватывает тап).
+_b3d.addEventListener('touchstart',function(e){ e.stopPropagation(); e.preventDefault(); },{passive:false});
+_b3d.addEventListener('touchend',function(e){ e.stopPropagation(); e.preventDefault(); _toggle3D(); },{passive:false});
+_b3d.addEventListener('click',function(e){ e.stopPropagation(); _toggle3D(); });   // десктоп (мышь)
 window.__applyR3D();
 toTitle();
 // apply shake in draw by jittering before skyGrad
