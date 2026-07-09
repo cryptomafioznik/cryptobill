@@ -64,7 +64,7 @@ function lerp(a,b,t){return a+(b-a)*t;} function clamp(v,a,b){return v<a?a:v>b?b
 // false → full game everywhere. Single switch. Systems are GATED, never deleted.
 const CORE_TEST_MODE = false;   // b70: META LIVE — building the progression spine (upgrades/bikes with teeth, career, economy) on the confirmed rigid-body core
 // build stamp — bump on every change so a phone refresh can confirm it loaded fresh code (cache!)
-const BUILD = '2026-07-09 · b200';
+const BUILD = '2026-07-09 · b201';
 
 // ---------- procedural market terrain ----------
 // height map sampled every STEP px; generated forward as we ride. Market character:
@@ -2798,6 +2798,8 @@ import {EffectComposer} from 'three/addons/postprocessing/EffectComposer.js';
 import {RenderPass} from 'three/addons/postprocessing/RenderPass.js';
 import {UnrealBloomPass} from 'three/addons/postprocessing/UnrealBloomPass.js';
 import {Reflector} from 'three/addons/objects/Reflector.js';
+import {GLTFLoader} from 'three/addons/loaders/GLTFLoader.js';
+import {RoomEnvironment} from 'three/addons/environments/RoomEnvironment.js';
 
 const cv3=document.getElementById('c3d');
 const lerp=(a,b,t)=>a+(b-a)*t;
@@ -2943,57 +2945,27 @@ function updateCandles(bx,baseY){ const S=window.CRS, terr=S.terr, STEP=S.STEP; 
   if(candMesh.instanceColor)candMesh.instanceColor.needsUpdate=true; if(wickMesh.instanceColor)wickMesh.instanceColor.needsUpdate=true;
 }
 
-// ---------- BIKE + RIDER (детальная 3D-модель: шейдед металл-корпус ловит свет = объём, неон-акценты ловят bloom) ----------
-// свет влияет ТОЛЬКО на Standard-материалы (байк/райдер); город/свечи/дорога на MeshBasic — не трогает
-scene.add(new THREE.AmbientLight(0x8a92cc,0.95));
-{ const keyL=new THREE.DirectionalLight(0xfff0e0,1.7); keyL.position.set(4,7,8); scene.add(keyL);
+// ---------- BIKE — РЕАЛЬНАЯ 3D-МОДЕЛЬ (GLB) + премиум-финиш: env-отражения, металл, неон-подсветка ----------
+scene.add(new THREE.AmbientLight(0x8a92cc,0.9));
+{ const keyL=new THREE.DirectionalLight(0xfff0e0,1.8); keyL.position.set(4,7,8); scene.add(keyL);
   const rimL=new THREE.DirectionalLight(0xff4fb0,1.3); rimL.position.set(-6,3,-3); scene.add(rimL);
   const fillL=new THREE.DirectionalLight(0x3ce0ff,0.9); fillL.position.set(7,1,4); scene.add(fillL);
-  const frontL=new THREE.DirectionalLight(0xffffff,1.0); frontL.position.set(0,3,12); scene.add(frontL); }   // фронт-свет со стороны КАМЕРЫ = байк освещён к зрителю, не силуэт
-const bodyMat=new THREE.MeshStandardMaterial({color:0x3a4770,metalness:0.85,roughness:0.32,emissive:0x111a34,emissiveIntensity:0.55});   // светлее+эмиссив = байк не чёрное пятно
-const panelMat=new THREE.MeshStandardMaterial({color:0x435284,metalness:0.62,roughness:0.3,emissive:0x14224a,emissiveIntensity:0.55});
-const tireMat=new THREE.MeshStandardMaterial({color:0x14141f,metalness:0.25,roughness:0.8});
-const goldMat=new THREE.MeshStandardMaterial({color:0xe0b854,metalness:0.95,roughness:0.24,emissive:0x4a3808,emissiveIntensity:0.5});
-const neonMat=new THREE.MeshBasicMaterial({color:0x8ff8ff}), neonPink=new THREE.MeshBasicMaterial({color:0xff6be8});
-const headMat=new THREE.MeshBasicMaterial({color:0xfff0c0}), visorMat=new THREE.MeshBasicMaterial({color:0x9fe8ff});
-const riderMat=new THREE.MeshStandardMaterial({color:0x2a3050,metalness:0.45,roughness:0.5,emissive:0x0e1226,emissiveIntensity:0.4});
-const bikeGroup=new THREE.Group(); const R=0.6;
-function tube(x1,y1,x2,y2,r,mat,seg){ const dx=x2-x1,dy=y2-y1,len=Math.hypot(dx,dy)||0.01; const m=new THREE.Mesh(new THREE.CylinderGeometry(r,r,len,seg||10),mat); m.position.set((x1+x2)/2,(y1+y2)/2,0); m.rotation.z=Math.atan2(dy,dx)-Math.PI/2; return m; }
-function wheel(cx){ const g=new THREE.Group();
-  g.add(new THREE.Mesh(new THREE.TorusGeometry(R,0.13,14,32),tireMat));
-  g.add(new THREE.Mesh(new THREE.TorusGeometry(R-0.14,0.035,8,32),neonMat));                       // неон-обод
-  const hub=new THREE.Mesh(new THREE.CylinderGeometry(0.13,0.13,0.22,14),bodyMat); hub.rotation.x=Math.PI/2; g.add(hub);
-  for(let s=0;s<6;s++){ g.add(tube(0,0,Math.cos(s*1.047)*(R-0.15),Math.sin(s*1.047)*(R-0.15),0.02,bodyMat,6)); }   // спицы
-  g.position.set(cx,0,0); return g; }
-bikeGroup.add(wheel(-1.02)); bikeGroup.add(wheel(1.02));
-bikeGroup.add(tube(-1.02,0,-0.25,0.18,0.05,bodyMat));           // маятник
-bikeGroup.add(tube(-0.25,0.18,0.58,0.6,0.055,bodyMat));         // главный лонжерон
-bikeGroup.add(tube(-0.5,0.52,0.58,0.6,0.05,bodyMat));           // верхняя труба
-{ const eng=new THREE.Mesh(new THREE.BoxGeometry(0.62,0.5,0.42),bodyMat); eng.position.set(-0.05,0.24,0); bikeGroup.add(eng);
-  for(let f=0;f<3;f++){ const fin=new THREE.Mesh(new THREE.BoxGeometry(0.52,0.05,0.46),panelMat); fin.position.set(-0.05,0.14+f*0.1,0); bikeGroup.add(fin); } }   // рёбра мотора
-{ const tank=new THREE.Mesh(new THREE.SphereGeometry(0.34,20,16),panelMat); tank.scale.set(1.25,0.6,0.82); tank.position.set(0.22,0.72,0); bikeGroup.add(tank); }
-{ const seat=new THREE.Mesh(new THREE.BoxGeometry(0.62,0.12,0.34),bodyMat); seat.position.set(-0.5,0.62,0); seat.rotation.z=0.05; bikeGroup.add(seat);
-  const tail=new THREE.Mesh(new THREE.BoxGeometry(0.32,0.13,0.3),panelMat); tail.position.set(-0.83,0.64,0); tail.rotation.z=0.26; bikeGroup.add(tail); }
-bikeGroup.add(tube(1.02,0,0.62,0.9,0.045,goldMat));            // золотая вилка
-bikeGroup.add(tube(1.02,0,0.68,0.58,0.05,bodyMat));            // защита вилки
-bikeGroup.add(tube(0.55,0.88,0.84,0.96,0.03,bodyMat));         // руль
-{ const cowl=new THREE.Mesh(new THREE.SphereGeometry(0.2,16,14),panelMat); cowl.scale.set(0.68,1.0,0.7); cowl.position.set(0.74,0.86,0); bikeGroup.add(cowl);
-  const hl=new THREE.Mesh(new THREE.SphereGeometry(0.11,14,12),headMat); hl.scale.set(0.8,1,0.7); hl.position.set(0.82,0.72,0); bikeGroup.add(hl); }   // обтекатель + фара
-bikeGroup.add(tube(-0.05,0.06,-0.86,0.16,0.04,goldMat));       // выхлоп
-{ const muf=new THREE.Mesh(new THREE.CylinderGeometry(0.08,0.09,0.4,12),bodyMat); muf.position.set(-0.96,0.2,0); muf.rotation.z=Math.PI/2-0.16; bikeGroup.add(muf); }
-{ const glow=new THREE.Mesh(new THREE.BoxGeometry(1.7,0.04,0.28),neonPink); glow.position.set(-0.05,-0.04,0); bikeGroup.add(glow); }   // неон-подсветка снизу
-// --- RIDER (спорт-посадка, корпус вперёд к рулю) ---
-{ const pelvis=new THREE.Mesh(new THREE.SphereGeometry(0.16,12,10),riderMat); pelvis.scale.set(1,0.8,0.9); pelvis.position.set(-0.35,0.8,0); bikeGroup.add(pelvis);
-  const torso=new THREE.Mesh(new THREE.CapsuleGeometry(0.16,0.44,6,10),riderMat); torso.position.set(-0.02,1.04,0); torso.rotation.z=-0.72; bikeGroup.add(torso);
-  const spine=new THREE.Mesh(new THREE.CapsuleGeometry(0.028,0.4,4,6),neonMat); spine.position.set(-0.05,1.02,0.15); spine.rotation.z=-0.72; bikeGroup.add(spine);   // неон-полоса на спине
-  const head=new THREE.Mesh(new THREE.SphereGeometry(0.19,18,14),riderMat); head.position.set(0.34,1.3,0); bikeGroup.add(head);
-  const visor=new THREE.Mesh(new THREE.SphereGeometry(0.12,14,10),visorMat); visor.scale.set(0.5,0.7,0.9); visor.position.set(0.46,1.29,0); bikeGroup.add(visor);
-  const arm=new THREE.Mesh(new THREE.CapsuleGeometry(0.07,0.5,5,8),riderMat); arm.position.set(0.3,1.02,0.13); arm.rotation.z=-1.16; bikeGroup.add(arm);
-  const thigh=new THREE.Mesh(new THREE.CapsuleGeometry(0.1,0.34,5,8),riderMat); thigh.position.set(-0.12,0.64,0.16); thigh.rotation.z=-0.9; bikeGroup.add(thigh);
-  const shin=new THREE.Mesh(new THREE.CapsuleGeometry(0.075,0.36,5,8),riderMat); shin.position.set(0.02,0.36,0.16); shin.rotation.z=0.5; bikeGroup.add(shin);
-  const boot=new THREE.Mesh(new THREE.BoxGeometry(0.2,0.1,0.12),riderMat); boot.position.set(-0.08,0.18,0.16); bikeGroup.add(boot); }
-scene.add(bikeGroup);
-const BIKE_YOFF=-1.07, BIKE_Z=W2+0.55;   // z: байк едет ПЕРЕД телами свечей (не загорожен). YOFF: колёса на дорогу когда на земле
+  const frontL=new THREE.DirectionalLight(0xffffff,1.1); frontL.position.set(0,3,12); scene.add(frontL); }   // фронт-свет со стороны камеры
+// env-map = отражения на металле байка (город/свечи на MeshBasic не трогает — только PBR-байк)
+try{ const _pm=new THREE.PMREMGenerator(renderer); scene.environment=_pm.fromScene(new RoomEnvironment(),0.04).texture; }catch(e){}
+const bikeGroup=new THREE.Group(); scene.add(bikeGroup);
+let BIKE_YOFF=-1.55, BIKE_FLIP=Math.PI/2;   // калибруется визуально в игре
+{ const glow=new THREE.Mesh(new THREE.BoxGeometry(2.2,0.05,0.34), new THREE.MeshBasicMaterial({color:0xff6be8})); glow.position.set(0,0.06,0); bikeGroup.add(glow); }   // неон-подсветка снизу
+const bikeModel=new THREE.Group(); bikeGroup.add(bikeModel);
+new GLTFLoader().load('assets/models/moto1.glb',(g)=>{ const o=g.scene;
+  let box=new THREE.Box3().setFromObject(o); const sz=box.getSize(new THREE.Vector3()); const s=2.5/(Math.max(sz.x,sz.z)||1); o.scale.setScalar(s);
+  box=new THREE.Box3().setFromObject(o); const ctr=box.getCenter(new THREE.Vector3());
+  o.position.set(-ctr.x,-box.min.y,-ctr.z);   // центр по X/Z, низ (колёса) на y=0
+  bikeModel.rotation.y=BIKE_FLIP;              // длина модели → вдоль X игры
+  o.traverse(m=>{ if(m.isMesh){ m.frustumCulled=false; if(m.material&&m.material.isMeshStandardMaterial){ const mt=m.material; mt.metalness=Math.max(mt.metalness,0.6); mt.roughness=Math.min(Math.max(mt.roughness,0.18),0.55); mt.envMapIntensity=1.5; mt.needsUpdate=true; } } });
+  bikeModel.add(o);
+},undefined,(e)=>{ if(!window.__bikeErr){window.__bikeErr=String(e&&e.message||e);console.error('bike GLB',e);} });
+const BIKE_Z=W2+0.55;
 
 // ---------- PARTICLES (пыль/выхлоп из физики → 3D-точки, per-point size/alpha/color) ----------
 const P_VS=`attribute float aSize; attribute float aAlpha; attribute vec3 aColor; varying float vA; varying vec3 vC;

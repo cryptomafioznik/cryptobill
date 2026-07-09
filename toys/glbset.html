@@ -16,7 +16,9 @@ sc.add(new THREE.AmbientLight(0xffffff,0.55));
 const k=new THREE.DirectionalLight(0xffffff,2.0);k.position.set(4,7,6);sc.add(k);
 const rc=new THREE.DirectionalLight(0x40d0ff,1.0);rc.position.set(-5,2,-3);sc.add(rc);
 const rp=new THREE.DirectionalLight(0xff3ea0,0.9);rp.position.set(3,1,-5);sc.add(rp);
-const names=(new URLSearchParams(location.search).get('list')||'set/bicycle1,set/bicycle2,set/scooter1,set/scooter2,set/moto2,set/moto3,set/moto4,set/moto5').split(',');
+const names=(new URLSearchParams(location.search).get('list')||'set/bicycle1,moto1,set/moto2,set/moto3,set/moto4,set/moto5').split(',');
+// единая неон-синтвейв-палитра корпусов (согласованная, разные оттенки = разнообразие + цельность)
+const PAL=[0x2ad1ff,0xff4d8d,0x39e6a0,0xffa63a,0xb06bff,0xff5bd0];
 const cam=new THREE.PerspectiveCamera(42,innerWidth/innerHeight,0.01,1000);
 const n=names.length, sp=2.6; const rowW=(n-1)*sp;
 cam.position.set(0,2.2,rowW*0.62+4); cam.lookAt(0,0.2,0);
@@ -28,8 +30,15 @@ names.forEach((nm,i)=>{ const x=(i-(n-1)/2)*sp;
     const sz=box.getSize(new THREE.Vector3()), ctr=box.getCenter(new THREE.Vector3());
     const s=1.8/(Math.max(sz.x,sz.y,sz.z)||1); o.scale.setScalar(s);
     o.position.set(-ctr.x*s,-ctr.y*s,-ctr.z*s);
-    o.traverse(m=>{ if(m.isMesh&&m.material&&m.material.isMeshStandardMaterial){ m.material.metalness=Math.max(m.material.metalness,0.5); m.material.envMapIntensity=1.3; } });
-    const pv=new THREE.Group(); pv.add(o); pv.position.set(x,0,0); sc.add(pv); grp.push(pv);
+    const hue=new THREE.Color(PAL[i%PAL.length]);
+    o.traverse(m=>{ if(m.isMesh&&m.material){ const mat=m.material;
+      if(mat.isMeshStandardMaterial){ mat.metalness=Math.max(mat.metalness,0.62); mat.roughness=Math.min(Math.max(mat.roughness,0.16),0.5); mat.envMapIntensity=1.5;
+        mat.emissive=hue.clone(); mat.emissiveIntensity=0.1; mat.needsUpdate=true; }   // согласованный неон-тон по палитре = цельность
+    }});
+    const pv=new THREE.Group(); pv.add(o);
+    // неон-подсветка снизу (эмиссив-бар) — вписывает в синтвейв-мир и связывает набор
+    const glow=new THREE.Mesh(new THREE.BoxGeometry(1.7,0.05,0.5), new THREE.MeshBasicMaterial({color:hue})); glow.position.set(0,-0.92,0); pv.add(glow);
+    pv.position.set(x,0,0); sc.add(pv); grp.push(pv);
     label(nm.split('/').pop(),x);
     done++; if(done===n){info.textContent='loaded '+grp.length+'/'+n; window.__loaded=true;}
   },undefined,()=>{ done++; if(done===n){info.textContent='loaded '+grp.length+'/'+n; window.__loaded=true;} });
