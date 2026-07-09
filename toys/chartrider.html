@@ -64,7 +64,7 @@ function lerp(a,b,t){return a+(b-a)*t;} function clamp(v,a,b){return v<a?a:v>b?b
 // false → full game everywhere. Single switch. Systems are GATED, never deleted.
 const CORE_TEST_MODE = false;   // b70: META LIVE — building the progression spine (upgrades/bikes with teeth, career, economy) on the confirmed rigid-body core
 // build stamp — bump on every change so a phone refresh can confirm it loaded fresh code (cache!)
-const BUILD = '2026-07-09 · b204';
+const BUILD = '2026-07-09 · b205';
 
 // ---------- procedural market terrain ----------
 // height map sampled every STEP px; generated forward as we ride. Market character:
@@ -605,7 +605,7 @@ function saveWorld(){ try{localStorage.setItem('cipher_world',worldNew?'1':'0');
 // Корень (3 захода b185-191/b203 не склеились): фото = язык иллюстрации, весь кадр полон ЯРКОГО не-данных света → структурно несовместим
 // с C-правилом «светятся только данные». Мир теперь = ОДИН код-язык: композиция Vice нашим стилем (закат-солнце + город-свечи + пальмы-силуэты
 // + отсвет набережной), см. drawCityWorld. Файлы toys/assets/world/vice/* остаются в репо как АРТ-РЕФЕРЕНС палитр (в игре не грузятся).
-const TDECK=18;   // b203: толщина тела трассы-деки (b191) — общий knob: дека + посадка свечей-колонн под ней
+const TDECK=26;   // b205: ширина GD-ленты (≈диаметр колеса — на видео юзера 18px читалось «тенью под линией», не дорогой); общий knob: лента + посадка свечей-колонн
 let R3D_ON=false; try{ R3D_ON=localStorage.getItem('cb_r3d')==='1'; }catch(e){}   // b192 ФАЗА 2: тумблер 3D-РЕНДЕР (весь мир в Three.js читает мою физику) ↔ 2D-эталон. Физика/190 билдов НЕ трогаются — меняется только слой отрисовки
 function saveR3D(){ try{localStorage.setItem('cb_r3d',R3D_ON?'1':'0');}catch(e){} }
 // (b185-189 фото-пайплайн VICE/depth-слои/передний план УДАЛЁН в b204 — история в git)
@@ -1620,19 +1620,25 @@ function drawSheen(hz){ const cx=cam.x*0.26, fs=46, i0s=Math.floor((cx-fs)/fs), 
   for(let i=i0s;i<=i1s;i++){ let r2=(Math.sin(i*45.77)*9631.1)%1; if(r2<0)r2+=1; const sx=i*fs-cx, base=r2>0.5?'46,230,166':'255,59,92', hh=30+r2*28;
     const g=ctx.createLinearGradient(0,hz+8,0,hz+8+hh); g.addColorStop(0,'rgba('+base+',0.09)'); g.addColorStop(1,'rgba('+base+',0)'); ctx.fillStyle=g; ctx.fillRect(sx,hz+8,fs*0.6,hh); }
   ctx.restore(); }
-function drawTrackReal(i0,i1){ const TH=TDECK;   // b204 ТРАССА = ОДИН ОБЪЕКТ (GD-профиль, строгий вид сбоку): тень → тело-асфальт → диагональ-шпалы → тихий низ. ВЕРХНЯЯ КРОМКА = ПОВЕРХНОСТЬ ЕЗДЫ (edge-light рисуется в draw). Опоры-струты убраны — дорога стоит на СВЕЧАХ-КОЛОННАХ (b203, структура = данные)
-  for(let i=i0;i<i1;i++){ const a=terr[i],b=terr[i+1]; if(!a||!b||a.gap||b.gap)continue;   // мягкая тень-глубина сразу под дорогой → дорога читается ПРИПОДНЯТОЙ, мир виден дальше
-    ctx.beginPath(); ctx.moveTo(a.x,a.y+TH); ctx.lineTo(b.x,b.y+TH); ctx.lineTo(b.x,b.y+TH+110); ctx.lineTo(a.x,a.y+TH+110); ctx.closePath();
-    const wg=ctx.createLinearGradient(0,a.y+TH,0,a.y+TH+110); wg.addColorStop(0,'rgba(6,4,16,0.55)'); wg.addColorStop(1,'rgba(6,4,16,0)'); ctx.fillStyle=wg; ctx.fill(); }
-  for(let i=i0;i<i1;i++){ const a=terr[i],b=terr[i+1]; if(!a||!b||a.gap||b.gap)continue;   // ТЕЛО дороги (конечная толщина = реальный объект)
-    ctx.beginPath(); ctx.moveTo(a.x,a.y); ctx.lineTo(b.x,b.y); ctx.lineTo(b.x,b.y+TH); ctx.lineTo(a.x,a.y+TH); ctx.closePath();
-    const g=ctx.createLinearGradient(0,a.y,0,a.y+TH); g.addColorStop(0,'rgba(58,48,92,1)'); g.addColorStop(0.5,'rgba(32,24,58,1)'); g.addColorStop(1,'rgba(15,11,30,1)'); ctx.fillStyle=g; ctx.fill(); }
-  // b204 ПРОФИЛЬ-МАТЕРИАЛ (строгий вид сбоку, GD-шпалы): диагональные штрихи внутри тела. Осевая разметка «сверху» и вертикальные шпалы УБРАНЫ — они смешивали вид сверху с видом сбоку («байк поверх картинки дороги»)
-  ctx.strokeStyle='rgba('+BLINE+',0.13)'; ctx.lineWidth=1.5;
-  for(let i=i0;i<i1;i++){ const a=terr[i],b=terr[i+1]; if(!a||!b||a.gap||b.gap)continue; const dx=b.x-a.x, dy=b.y-a.y, L=Math.hypot(dx,dy)||1, nx=dx/L, ny=dy/L;
-    for(let s=5;s<L;s+=11){ const px=a.x+nx*s, py=a.y+ny*s; ctx.beginPath(); ctx.moveTo(px+3.5,py+2); ctx.lineTo(px-3.5,py+TH-2); ctx.stroke(); } }
-  let pen=false; ctx.strokeStyle='rgba('+BLINE+',0.30)'; ctx.lineWidth=1.4; ctx.beginPath();   // нижняя кромка = тихий hairline (яркий неон-рельс снизу спорил с поверхностью сверху)
-  for(let i=i0;i<=i1;i++){ const c=terr[i]; if(!c||c.gap){pen=false;continue;} if(!pen){ctx.moveTo(c.x,c.y+TH);pen=true;} else ctx.lineTo(c.x,c.y+TH);} ctx.stroke(); }
+function drawTrackReal(i0,i1){ const TH=TDECK;   // b205 GD-ЛЕНТА (по видео-вердикту юзера: «две линии, смотрим чуть сверху» = Gravity Defied): ширина ПОСТОЯННА ПОПЕРЁК трассы (нормаль-оффсет — вертикальный сдвиг b204 худел на склонах), ДВЕ чёткие линии (верхняя = edge-light в draw, нижняя тут), ПЛОТНАЯ диагональ-штриховка. Наша неон-тема, вид «чуть сверху»
+  const bxA=[], byA=[];   // нижняя кромка: узел + нормаль×TH (центральная разность)
+  for(let i=i0;i<=i1;i++){ const c=terr[i]; if(!c||c.gap){ bxA[i]=0; byA[i]=0; continue; }
+    const p0=(terr[i-1]&&!terr[i-1].gap)?terr[i-1]:c, p1=(terr[i+1]&&!terr[i+1].gap)?terr[i+1]:c;
+    let tx=p1.x-p0.x, ty=p1.y-p0.y; const L=Math.hypot(tx,ty)||1; tx/=L; ty/=L;
+    let nx=-ty, ny=tx; if(ny<0){nx=-nx;ny=-ny;}   // нормаль всегда вниз (лента ПОД линией езды)
+    bxA[i]=c.x+nx*TH; byA[i]=c.y+ny*TH; }
+  for(let i=i0;i<i1;i++){ const a=terr[i],b=terr[i+1]; if(!a||!b||a.gap||b.gap)continue;   // мягкая тень-глубина под лентой → дорога ПРИПОДНЯТА над миром
+    ctx.beginPath(); ctx.moveTo(bxA[i],byA[i]); ctx.lineTo(bxA[i+1],byA[i+1]); ctx.lineTo(bxA[i+1],byA[i+1]+96); ctx.lineTo(bxA[i],byA[i]+96); ctx.closePath();
+    const wg=ctx.createLinearGradient(0,byA[i],0,byA[i]+96); wg.addColorStop(0,'rgba(6,4,16,0.55)'); wg.addColorStop(1,'rgba(6,4,16,0)'); ctx.fillStyle=wg; ctx.fill(); }
+  for(let i=i0;i<i1;i++){ const a=terr[i],b=terr[i+1]; if(!a||!b||a.gap||b.gap)continue;   // ПОЛОТНО (верх чуть светлее = поверхность ловит свет — ракурс «чуть сверху»)
+    ctx.beginPath(); ctx.moveTo(a.x,a.y); ctx.lineTo(b.x,b.y); ctx.lineTo(bxA[i+1],byA[i+1]); ctx.lineTo(bxA[i],byA[i]); ctx.closePath();
+    const g=ctx.createLinearGradient(0,a.y,0,byA[i]+0.001); g.addColorStop(0,'rgba(78,66,120,1)'); g.addColorStop(0.45,'rgba(40,32,68,1)'); g.addColorStop(1,'rgba(17,13,34,1)'); ctx.fillStyle=g; ctx.fill(); }
+  ctx.strokeStyle='rgba('+BLINE+',0.36)'; ctx.lineWidth=1.7;   // диагональ-шпалы: плотные, читаются (GD-подпись)
+  for(let i=i0;i<i1;i++){ const a=terr[i],b=terr[i+1]; if(!a||!b||a.gap||b.gap)continue; const dxs=b.x-a.x, dys=b.y-a.y, L=Math.hypot(dxs,dys)||1, txn=dxs/L, tyn=dys/L;
+    for(let s=5;s<L;s+=9){ const f=s/L, px=a.x+dxs*f, py=a.y+dys*f, qx=bxA[i]+(bxA[i+1]-bxA[i])*f, qy=byA[i]+(byA[i+1]-byA[i])*f;
+      ctx.beginPath(); ctx.moveTo(px+txn*3.4,py+tyn*3.4); ctx.lineTo(qx-txn*3.4,qy-tyn*3.4); ctx.stroke(); } }
+  let pen=false; ctx.strokeStyle='rgba('+BLINE+',0.72)'; ctx.lineWidth=2; ctx.beginPath();   // НИЖНЯЯ ЛИНИЯ — чёткая, как верхняя (b204 hairline 0.30 не читался на телефоне → «лента без низа»)
+  for(let i=i0;i<=i1;i++){ const c=terr[i]; if(!c||c.gap){pen=false;continue;} if(!pen){ctx.moveTo(bxA[i],byA[i]);pen=true;} else ctx.lineTo(bxA[i],byA[i]);} ctx.stroke(); }
 function drawCityWorld(){ const hz=H*0.6;   // b204: ЕДИНЫЙ КОД-ЯЗЫК, композиция Vice нашим стилем (фото-ветки удалены): солнце → лучи → хребет → [дымка → город-свечи]×2 + пальмы-силуэты + отсвет набережной. Цвета = биом (8 эпох живут)
   drawSun(hz);
   ctx.save(); ctx.globalCompositeOperation='lighter';
@@ -1726,7 +1732,7 @@ function draw(){
     for(let i=i0;i<i1;i++){ const a=terr[i],b=terr[i+1]; if(!a||!b||a.gap||b.gap)continue; const climb=b.y<a.y-1,drop=b.y>a.y+1;
       const col=climb?'46,230,166':drop?'255,59,92':'127,212,255';
       ctx.strokeStyle='rgba('+col+',0.20)'; ctx.lineWidth=4.4; ctx.beginPath(); ctx.moveTo(a.x,a.y+1.4); ctx.lineTo(b.x,b.y+1.4); ctx.stroke();   // мягкий свет кромки, светит В тело
-      ctx.strokeStyle='rgba('+col+',0.88)'; ctx.lineWidth=1.8; ctx.beginPath(); ctx.moveTo(a.x,a.y+0.5); ctx.lineTo(b.x,b.y+0.5); ctx.stroke(); }   // ядро на самой грани — низ колеса перекрывает его = контакт, не «на нитке»
+      ctx.strokeStyle='rgba('+col+',0.9)'; ctx.lineWidth=2.2; ctx.beginPath(); ctx.moveTo(a.x,a.y+0.5); ctx.lineTo(b.x,b.y+0.5); ctx.stroke(); }   // ВЕРХНЯЯ ЛИНИЯ ленты (цвет = данные склона); низ колеса перекрывает её = контакт, не «на нитке»
     if(bike&&bike.onG&&(screen==='play'||screen==='paused'||screen==='clip')){ const ca=Math.cos(bike.ang);   // контактные пятна: байк стоит НА поверхности (тень под каждым колесом)
       ctx.fillStyle='rgba(2,4,12,0.30)';
       for(const off of [-27,27]){ const wx=bike.x+off*ca, gy=terrainAt(wx).y; ctx.beginPath(); ctx.ellipse(wx,gy+1.6,10,2.4,0,0,7); ctx.fill(); } }
