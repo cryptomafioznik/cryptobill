@@ -64,7 +64,7 @@ function lerp(a,b,t){return a+(b-a)*t;} function clamp(v,a,b){return v<a?a:v>b?b
 // false → full game everywhere. Single switch. Systems are GATED, never deleted.
 const CORE_TEST_MODE = false;   // b70: META LIVE — building the progression spine (upgrades/bikes with teeth, career, economy) on the confirmed rigid-body core
 // build stamp — bump on every change so a phone refresh can confirm it loaded fresh code (cache!)
-const BUILD = '2026-07-09 · b206';
+const BUILD = '2026-07-09 · b207';
 
 // ---------- procedural market terrain ----------
 // height map sampled every STEP px; generated forward as we ride. Market character:
@@ -605,7 +605,7 @@ function saveWorld(){ try{localStorage.setItem('cipher_world',worldNew?'1':'0');
 // Корень (3 захода b185-191/b203 не склеились): фото = язык иллюстрации, весь кадр полон ЯРКОГО не-данных света → структурно несовместим
 // с C-правилом «светятся только данные». Мир теперь = ОДИН код-язык: композиция Vice нашим стилем (закат-солнце + город-свечи + пальмы-силуэты
 // + отсвет набережной), см. drawCityWorld. Файлы toys/assets/world/vice/* остаются в репо как АРТ-РЕФЕРЕНС палитр (в игре не грузятся).
-const TDECK=26;   // b205: ширина GD-ленты (≈диаметр колеса — на видео юзера 18px читалось «тенью под линией», не дорогой); общий knob: лента + посадка свечей-колонн
+const TDECK=40;   // b207: ПОЛНАЯ ширина GD-ленты; лента симметрична вокруг линии езды (±TDECK/2 по нормали) — байк едет ПО ЦЕНТРУ, «внутри трассы» (вердикт юзера). Верх ленты проходит ЗА байком по верху колёс. Общий knob: лента + посадка свечей-колонн
 let _zoomD=1;   // b206: отображаемый зум — сглаживается в draw на каждом кадре (60Гц), лечит ступеньки зума при 30Гц-слоумо (сальто-синема)
 let R3D_ON=false; try{ R3D_ON=localStorage.getItem('cb_r3d')==='1'; }catch(e){}   // b192 ФАЗА 2: тумблер 3D-РЕНДЕР (весь мир в Three.js читает мою физику) ↔ 2D-эталон. Физика/190 билдов НЕ трогаются — меняется только слой отрисовки
 function saveR3D(){ try{localStorage.setItem('cb_r3d',R3D_ON?'1':'0');}catch(e){} }
@@ -1623,21 +1623,26 @@ function drawSheen(hz){ const cx=cam.x*0.26, fs=52, i0s=Math.floor((cx-fs)/fs), 
   for(let i=i0s;i<=i1s;i++){ let r2=(Math.sin(i*45.77)*9631.1)%1; if(r2<0)r2+=1; const sx=i*fs-cx, base=r2>0.5?'64,225,190':'255,96,150', hh=30+r2*28;
     const g=ctx.createLinearGradient(0,hz+8,0,hz+8+hh); g.addColorStop(0,'rgba('+base+',0.09)'); g.addColorStop(1,'rgba('+base+',0)'); ctx.fillStyle=g; ctx.fillRect(sx,hz+8,fs*0.6,hh); }
   ctx.restore(); }
-function drawTrackReal(i0,i1){ const TH=TDECK;   // b205 GD-ЛЕНТА (по видео-вердикту юзера: «две линии, смотрим чуть сверху» = Gravity Defied): ширина ПОСТОЯННА ПОПЕРЁК трассы (нормаль-оффсет — вертикальный сдвиг b204 худел на склонах), ДВЕ чёткие линии (верхняя = edge-light в draw, нижняя тут), ПЛОТНАЯ диагональ-штриховка. Наша неон-тема, вид «чуть сверху»
-  const bxA=[], byA=[];   // нижняя кромка: узел + нормаль×TH (центральная разность)
-  for(let i=i0;i<=i1;i++){ const c=terr[i]; if(!c||c.gap){ bxA[i]=0; byA[i]=0; continue; }
+function drawTrackReal(i0,i1){ const HF=TDECK*0.5;   // b207 ЛЕНТА СИММЕТРИЧНО ВОКРУГ ЛИНИИ ЕЗДЫ (вердикт юзера на b206: «едет по верхней линии, ты просто пририсовал снизу линию; надо чтобы ехал ПО ЦЕНТРУ, ВНУТРИ трассы, пошире»): линия езды = ОСЬ ленты, верх/низ = ±TDECK/2 по нормали. Байк рисуется ПОВЕРХ ленты → колёса «в» дороге, как в GD-скрине. Линии по центру НЕТ — «едет по линии» умерло
+  const txA=[], tyA=[], bxA=[], byA=[];   // верхняя/нижняя кромки: узел ± нормаль×HF (центральная разность)
+  for(let i=i0;i<=i1;i++){ const c=terr[i]; if(!c||c.gap){ txA[i]=0; tyA[i]=0; bxA[i]=0; byA[i]=0; continue; }
     const p0=(terr[i-1]&&!terr[i-1].gap)?terr[i-1]:c, p1=(terr[i+1]&&!terr[i+1].gap)?terr[i+1]:c;
     let tx=p1.x-p0.x, ty=p1.y-p0.y; const L=Math.hypot(tx,ty)||1; tx/=L; ty/=L;
-    let nx=-ty, ny=tx; if(ny<0){nx=-nx;ny=-ny;}   // нормаль всегда вниз (лента ПОД линией езды)
-    bxA[i]=c.x+nx*TH; byA[i]=c.y+ny*TH; }
-  for(let i=i0;i<i1;i++){ const a=terr[i],b=terr[i+1]; if(!a||!b||a.gap||b.gap)continue;   // мягкая тень-глубина под лентой → дорога ПРИПОДНЯТА над миром
-    ctx.beginPath(); ctx.moveTo(bxA[i],byA[i]); ctx.lineTo(bxA[i+1],byA[i+1]); ctx.lineTo(bxA[i+1],byA[i+1]+96); ctx.lineTo(bxA[i],byA[i]+96); ctx.closePath();
-    const wg=ctx.createLinearGradient(0,byA[i],0,byA[i]+96); wg.addColorStop(0,'rgba(6,4,16,0.55)'); wg.addColorStop(1,'rgba(6,4,16,0)'); ctx.fillStyle=wg; ctx.fill(); }
-  // b206 ИНТЕРЬЕР ПУСТОЙ (точно как в GD-референсе юзера): заливка+плотная штриховка b205 на телефоне сливались в «полосатую трубу» и мерцали. Лента = ДВЕ линии + РЕДКИЕ поперечные рёбра ПО УЗЛАМ (~26px, GD-плотность), мир просвечивает
-  ctx.strokeStyle='rgba('+BLINE+',0.46)'; ctx.lineWidth=1.6;   // рёбра: узел → его нормаль-точка = строго поперёк ленты
-  for(let i=i0;i<=i1;i++){ const c=terr[i]; if(!c||c.gap)continue; ctx.beginPath(); ctx.moveTo(c.x,c.y); ctx.lineTo(bxA[i],byA[i]); ctx.stroke(); }
-  let pen=false; ctx.strokeStyle='rgba('+BLINE+',0.72)'; ctx.lineWidth=2; ctx.beginPath();   // НИЖНЯЯ ЛИНИЯ — чёткая, как верхняя
-  for(let i=i0;i<=i1;i++){ const c=terr[i]; if(!c||c.gap){pen=false;continue;} if(!pen){ctx.moveTo(bxA[i],byA[i]);pen=true;} else ctx.lineTo(bxA[i],byA[i]);} ctx.stroke(); }
+    let nx=-ty, ny=tx; if(ny<0){nx=-nx;ny=-ny;}   // нормаль вниз
+    txA[i]=c.x-nx*HF; tyA[i]=c.y-ny*HF; bxA[i]=c.x+nx*HF; byA[i]=c.y+ny*HF; }
+  for(let i=i0;i<i1;i++){ const a=terr[i],b=terr[i+1]; if(!a||!b||a.gap||b.gap)continue;   // мягкая тень-глубина под лентой → дорога приподнята над миром
+    ctx.beginPath(); ctx.moveTo(bxA[i],byA[i]); ctx.lineTo(bxA[i+1],byA[i+1]); ctx.lineTo(bxA[i+1],byA[i+1]+90); ctx.lineTo(bxA[i],byA[i]+90); ctx.closePath();
+    const wg=ctx.createLinearGradient(0,byA[i],0,byA[i]+90); wg.addColorStop(0,'rgba(6,4,16,0.5)'); wg.addColorStop(1,'rgba(6,4,16,0)'); ctx.fillStyle=wg; ctx.fill(); }
+  ctx.strokeStyle='rgba('+BLINE+',0.44)'; ctx.lineWidth=1.6;   // рёбра ПО УЗЛАМ (~26px, GD-плотность): поперёк всей ленты, за байком
+  for(let i=i0;i<=i1;i++){ const c=terr[i]; if(!c||c.gap)continue; ctx.beginPath(); ctx.moveTo(txA[i],tyA[i]); ctx.lineTo(bxA[i],byA[i]); ctx.stroke(); }
+  let pen=false; ctx.strokeStyle='rgba('+BLINE+',0.72)'; ctx.lineWidth=2; ctx.beginPath();   // НИЖНЯЯ линия
+  for(let i=i0;i<=i1;i++){ const c=terr[i]; if(!c||c.gap){pen=false;continue;} if(!pen){ctx.moveTo(bxA[i],byA[i]);pen=true;} else ctx.lineTo(bxA[i],byA[i]);} ctx.stroke();
+  ctx.lineCap='round'; ctx.lineJoin='round';   // ВЕРХНЯЯ линия = цвет данных склона (зелёный подъём / красный спуск), сегментно
+  for(let i=i0;i<i1;i++){ const a=terr[i],b=terr[i+1]; if(!a||!b||a.gap||b.gap)continue; const climb=b.y<a.y-1,drop=b.y>a.y+1;
+    const col=climb?'46,230,166':drop?'255,59,92':'127,212,255';
+    ctx.strokeStyle='rgba('+col+',0.18)'; ctx.lineWidth=4.4; ctx.beginPath(); ctx.moveTo(txA[i],tyA[i]+1.2); ctx.lineTo(txA[i+1],tyA[i+1]+1.2); ctx.stroke();   // мягкий свет внутрь ленты
+    ctx.strokeStyle='rgba('+col+',0.9)'; ctx.lineWidth=2.2; ctx.beginPath(); ctx.moveTo(txA[i],tyA[i]); ctx.lineTo(txA[i+1],tyA[i+1]); ctx.stroke(); }
+  ctx.lineCap='butt'; ctx.lineJoin='miter'; }
 function drawCityWorld(){ const hz=H*0.6;   // b204: ЕДИНЫЙ КОД-ЯЗЫК, композиция Vice нашим стилем (фото-ветки удалены): солнце → лучи → хребет → [дымка → город-свечи]×2 + пальмы-силуэты + отсвет набережной. Цвета = биом (8 эпох живут)
   drawSun(hz);
   ctx.save(); ctx.globalCompositeOperation='lighter';
@@ -1714,7 +1719,7 @@ function draw(){
     const aW=(0.30*CA).toFixed(3), aS=(0.10*CA).toFixed(3), aT=(0.38*CA).toFixed(3), aF=(0.20*CA).toFixed(3), aH=(0.10*CA).toFixed(3);
     for(let i=i0;i<=i1;i++){ const c=terr[i]; if(!c||c.gap)continue; const col=c.up?'46,230,166':'255,59,92';
       const by0=Math.min(c.open,c.close), bh=Math.max(2,Math.abs(c.close-c.open)), wlo=Math.max(0,c.lo-(by0+bh));
-      const by=worldNew? c.y+TDECK+1 : by0, bo=by+bh;   // worldNew: тело свисает с НИЗА деки (высота bh = данные), классика: на линии как было
+      const by=worldNew? c.y+TDECK*0.5+2 : by0, bo=by+bh;   // worldNew: тело свисает с НИЗА ленты (b207 лента симметрична: низ = ось+TDECK/2), классика: на линии как было
       ctx.strokeStyle='rgba('+col+','+aW+')'; ctx.lineWidth=1;
       ctx.beginPath(); ctx.moveTo(c.x,c.hi); ctx.lineTo(c.x,worldNew?c.y:by0); ctx.stroke();   // фитиль ВВЕРХ: hi → линия (точка данных над дорогой)
       if(wlo>0){ ctx.beginPath(); ctx.moveTo(c.x,bo); ctx.lineTo(c.x,bo+wlo); ctx.stroke(); }   // фитиль ВНИЗ: длина lo-под-телом = данные
@@ -1726,14 +1731,10 @@ function draw(){
       ctx.strokeStyle='rgba(235,255,248,'+aH+')'; ctx.lineWidth=1; ctx.beginPath(); ctx.moveTo(c.x-cw/2+0.5,by); ctx.lineTo(c.x-cw/2+0.5,bo); ctx.stroke(); } }   // hairline-блик левой грани
   if(!worldNew) drawCandleBodies();   // классика: свечи до линии, как всегда
   if(worldNew){ drawTrackReal(i0,i1); drawCandleBodies(); }   // b191 дека → b203 свечи-колонны ПОВЕРХ её тени (не съедены)
-  // ---- b204 КРОМКА = ПОВЕРХНОСТЬ (worldNew): свет наклона живёт НА верхней грани тела дороги, утоплен в неё — отдельный «провод» НАД декой и был причиной «едет по линии, а не по трассе». КЛАССИКА: старый двухпроходный глоу b167 ----
+  // ---- b207 (worldNew): ВСЕ линии ленты рисует drawTrackReal (симметрично вокруг оси; линии по центру НЕТ — «едет по линии» умерло). Тут только контактные пятна колёс. КЛАССИКА: старый двухпроходный глоу b167 ----
   ctx.lineCap='round'; ctx.lineJoin='round';
   if(worldNew){
-    for(let i=i0;i<i1;i++){ const a=terr[i],b=terr[i+1]; if(!a||!b||a.gap||b.gap)continue; const climb=b.y<a.y-1,drop=b.y>a.y+1;
-      const col=climb?'46,230,166':drop?'255,59,92':'127,212,255';
-      ctx.strokeStyle='rgba('+col+',0.20)'; ctx.lineWidth=4.4; ctx.beginPath(); ctx.moveTo(a.x,a.y+1.4); ctx.lineTo(b.x,b.y+1.4); ctx.stroke();   // мягкий свет кромки, светит В тело
-      ctx.strokeStyle='rgba('+col+',0.9)'; ctx.lineWidth=2.2; ctx.beginPath(); ctx.moveTo(a.x,a.y+0.5); ctx.lineTo(b.x,b.y+0.5); ctx.stroke(); }   // ВЕРХНЯЯ ЛИНИЯ ленты (цвет = данные склона); низ колеса перекрывает её = контакт, не «на нитке»
-    if(bike&&bike.onG&&(screen==='play'||screen==='paused'||screen==='clip')){ const ca=Math.cos(bike.ang);   // контактные пятна: байк стоит НА поверхности (тень под каждым колесом)
+    if(bike&&bike.onG&&(screen==='play'||screen==='paused'||screen==='clip')){ const ca=Math.cos(bike.ang);   // контактные пятна: колёса стоят на оси ленты
       ctx.fillStyle='rgba(2,4,12,0.30)';
       for(const off of [-27,27]){ const wx=bike.x+off*ca, gy=terrainAt(wx).y; ctx.beginPath(); ctx.ellipse(wx,gy+1.6,10,2.4,0,0,7); ctx.fill(); } }
   } else {
