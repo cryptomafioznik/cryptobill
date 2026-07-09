@@ -1,0 +1,39 @@
+<!doctype html><html><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<style>html,body{margin:0;height:100%;overflow:hidden}#i{position:fixed;left:8px;top:8px;color:#bff;font:12px monospace;z-index:2;text-shadow:0 1px 4px #000}</style></head><body><div id="i">loading…</div>
+<script type="importmap">{"imports":{"three":"https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js","three/addons/":"https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"}}</script>
+<script type="module">
+import * as THREE from 'three';
+import {GLTFLoader} from 'three/addons/loaders/GLTFLoader.js';
+import {RoomEnvironment} from 'three/addons/environments/RoomEnvironment.js';
+const info=document.getElementById('i');
+const rn=new THREE.WebGLRenderer({antialias:true}); rn.setPixelRatio(Math.min(2,devicePixelRatio||1)); rn.setSize(innerWidth,innerHeight);
+rn.outputColorSpace=THREE.SRGBColorSpace; rn.toneMapping=THREE.ACESFilmicToneMapping; rn.toneMappingExposure=1.12; document.body.appendChild(rn.domElement);
+const sc=new THREE.Scene();
+function bgTex(){ const c=document.createElement('canvas');c.width=8;c.height=256;const g=c.getContext('2d');const gr=g.createLinearGradient(0,0,0,256);gr.addColorStop(0,'#160b2e');gr.addColorStop(0.55,'#3a1550');gr.addColorStop(1,'#141e38');g.fillStyle=gr;g.fillRect(0,0,8,256);return new THREE.CanvasTexture(c);}
+sc.background=bgTex();
+const pmrem=new THREE.PMREMGenerator(rn); sc.environment=pmrem.fromScene(new RoomEnvironment(),0.04).texture;
+sc.add(new THREE.AmbientLight(0xffffff,0.55));
+const k=new THREE.DirectionalLight(0xffffff,2.0);k.position.set(4,7,6);sc.add(k);
+const rc=new THREE.DirectionalLight(0x40d0ff,1.0);rc.position.set(-5,2,-3);sc.add(rc);
+const rp=new THREE.DirectionalLight(0xff3ea0,0.9);rp.position.set(3,1,-5);sc.add(rp);
+const names=(new URLSearchParams(location.search).get('list')||'set/bicycle1,set/bicycle2,set/scooter1,set/scooter2,set/moto2,set/moto3,set/moto4,set/moto5').split(',');
+const cam=new THREE.PerspectiveCamera(42,innerWidth/innerHeight,0.01,1000);
+const n=names.length, sp=2.6; const rowW=(n-1)*sp;
+cam.position.set(0,2.2,rowW*0.62+4); cam.lookAt(0,0.2,0);
+function label(txt,x){ const c=document.createElement('canvas');c.width=256;c.height=64;const g=c.getContext('2d');g.fillStyle='#bff';g.font='700 26px monospace';g.textAlign='center';g.textBaseline='middle';g.fillText(txt,128,32);const t=new THREE.CanvasTexture(c);const s=new THREE.Sprite(new THREE.SpriteMaterial({map:t,transparent:true,depthTest:false}));s.position.set(x,-1.4,0);s.scale.set(2.2,0.55,1);sc.add(s);}
+const grp=[]; let done=0; const ld=new GLTFLoader();
+names.forEach((nm,i)=>{ const x=(i-(n-1)/2)*sp;
+  ld.load('assets/models/'+nm+'.glb',(g)=>{ const o=g.scene;
+    const box=new THREE.Box3().setFromObject(o); if(box.isEmpty()){done++;return;}
+    const sz=box.getSize(new THREE.Vector3()), ctr=box.getCenter(new THREE.Vector3());
+    const s=1.8/(Math.max(sz.x,sz.y,sz.z)||1); o.scale.setScalar(s);
+    o.position.set(-ctr.x*s,-ctr.y*s,-ctr.z*s);
+    o.traverse(m=>{ if(m.isMesh&&m.material&&m.material.isMeshStandardMaterial){ m.material.metalness=Math.max(m.material.metalness,0.5); m.material.envMapIntensity=1.3; } });
+    const pv=new THREE.Group(); pv.add(o); pv.position.set(x,0,0); sc.add(pv); grp.push(pv);
+    label(nm.split('/').pop(),x);
+    done++; if(done===n){info.textContent='loaded '+grp.length+'/'+n; window.__loaded=true;}
+  },undefined,()=>{ done++; if(done===n){info.textContent='loaded '+grp.length+'/'+n; window.__loaded=true;} });
+});
+let t=0; function loop(){requestAnimationFrame(loop);t+=0.006;grp.forEach(g=>g.rotation.y=t);rn.render(sc,cam);} loop();
+addEventListener('resize',()=>{rn.setSize(innerWidth,innerHeight);cam.aspect=innerWidth/innerHeight;cam.updateProjectionMatrix();});
+</script></body></html>
