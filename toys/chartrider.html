@@ -64,7 +64,7 @@ function lerp(a,b,t){return a+(b-a)*t;} function clamp(v,a,b){return v<a?a:v>b?b
 // false → full game everywhere. Single switch. Systems are GATED, never deleted.
 const CORE_TEST_MODE = false;   // b70: META LIVE — building the progression spine (upgrades/bikes with teeth, career, economy) on the confirmed rigid-body core
 // build stamp — bump on every change so a phone refresh can confirm it loaded fresh code (cache!)
-const BUILD = '2026-07-09 · b212';
+const BUILD = '2026-07-10 · b213';
 
 // ---------- procedural market terrain ----------
 // height map sampled every STEP px; generated forward as we ride. Market character:
@@ -571,6 +571,8 @@ const RB={
   springK:0.40, springC:0.55,                 // ПОДВЕСКА: жёсткость пружины (мягче) / демпфер БОЛЬШЕ (гасит отскок от угловатой ценовой линии → меньше скачет)
   rollResist:0.05, mudRoll:0.20,              // b147 СКОРОСТЬ ↓: качение 0.04→0.05 — ГЛАВНЫЙ лимитер крейсера на ровном (потеря ∝ скорости × 2 колеса; drag почти не влияет). Крейсер ~−15-18% (ВЕЛИК ~6.6→5.5). Тягу/движок НЕ трогаем — климб цел (урок b81). ЕЩЁ медленнее = подними; БЫСТРЕЕ = опусти. РУКИ
   mu:2.6, engine:1.15, brakeF:0.5,            // конус трения/тяги / сила двигателя (×стат байка) / тормоз — высокие т.к. трасса крутая, traction-limited байк иначе вязнет на подъёмах
+  climbGrip:1.3, climbFrom:0.28, climbSpan:0.30,   // b213 ЭНДУРО-СЦЕПЛЕНИЕ НА КРУТОМ ПОДЪЁМЕ (РУКИ): буст сцепления ведущего от climbFrom(~16° — уклон ПОД ЦЕНТРОМ байка на рампе положе сегмента) до +climbSpan(~33°); climbGrip = сила на макс. Крутой склон берётся ТЯГОЙ, не только разгоном — прокачка/байк (muEff) расширяют. МЕНЬШЕ = сложнее
+  climbCalm:0.45,                             // b213 ГАШЕНИЕ ЗАКРУТКИ на крутом подъёме: доля, на которую момент тяги/наклона задирающий нос ослабляется (наклон пальцем на крутизне больше НЕ швыряет в loop). 0 = выкл, 1 = полностью гасит вилли на крутом
   thrRamp:0.11, spinGrip:0.97,                // b68: АНАЛОГ.ГАЗ (рампа 0→1 → вилли/тяга ∝ сколько газу) + БУКС ПОЧТИ КОСМЕТИЧЕСКИЙ (spinGrip 0.86→0.97 — почти не режет тягу, чтобы НЕ ощущалось «торможением» на подъёме; видно роост/прокрут, но байк замедляется только от гравитации = логично). Хочешь жёстче букс позже — опусти spinGrip
   jump:9.0,                                    // импульс хопа (свайп вверх)
   airDrag:0.992, rollDrag:0.997,              // аэро / качение (потолок скорости). b83: вернул АРКАДНУЮ (живую) скорость, что нравилась (b81-замедление под баланс снято)
@@ -1230,20 +1232,24 @@ function rigidStep(){
         const vt=vpx*tx+vpy*ty;
         let Ft=-vt*(onMud?R.mudRoll:R.rollResist);          // wheel ROLLS (slight resistance; mud = more = sap)
         const maxF=muEff*Fn;                                // боковой/тормоз cone — мгновенный Fn (физика приземления/стабильности цела)
-        const FnDrive=Math.max(Fn, R.mass*R.grav*0.85), maxFd=muEff*FnDrive;   // b100: ТЯГА вперёд опирается на СТАБИЛЬНУЮ нагрузку (floor). Корень «залипания»: Fn пульсирует на неровностях (колесо разгружается на гребнях) → maxF дёргался → тяга проваливалась. Floor убирает дёрготню = лезет РОВНО
+        let FnDrive=Math.max(Fn, R.mass*R.grav*0.85);   // b100: ТЯГА вперёд опирается на СТАБИЛЬНУЮ нагрузку (floor). Корень «залипания»: Fn пульсирует на неровностях (колесо разгружается на гребнях) → maxF дёргался → тяга проваливалась. Floor убирает дёрготню = лезет РОВНО
+        if(drive){ const up=-ta.ang; if(up>R.climbFrom){ FnDrive *= 1 + Math.min(1,(up-R.climbFrom)/R.climbSpan)*R.climbGrip; } }   // b213 ЭНДУРО-СЦЕПЛЕНИЕ на крутом подъёме (баг «не заехать ни на одном байке»): зубастая резина/1-я передача цепляется → крутой склон (памп-рампа до 40°) берётся ТЯГОЙ уверенно, не только скоростью. muEff уже ×(стат grip)×(апгрейд СЦЕПЛЕНИЕ) → байк/прокачка РАСШИРЯЮТ предел проходимости
+        const maxFd=muEff*FnDrive;
         if(drive&&thr>0.02){ const want=R.engine*engScale*thr; Ft += Math.min(want, maxFd); spun=want>maxFd*1.2; }   // b100: тяга до стабильного предела — букс МЯГКИЙ (юзер: «залипание/торможение мешает, особ. с волной — убрать»)
         if(brake) Ft+=-Math.sign(vt)*R.brakeF;
         if(Ft>maxFd)Ft=maxFd; else if(Ft<-maxF)Ft=-maxF;   // b100: верхний cap по СТАБИЛЬНОЙ тяге (не пульсирует = не залипает), нижний/боковой по мгновенному maxF
         fx+=Ft*tx; fy+=Ft*ty; tq+=rx*(Ft*ty)-ry*(Ft*tx);
       }
     }
-    if(onGround) tq+=(bike.rShift*R.leanGround + dRS*R.leanYank)*R.inertia;    // b83: аркадный вес=тангаж + b153 РЫВОК ТЕЛОМ (dRS×leanYank): быстрый бросок веса назад = импульс подъёма переда (инициация вилли), вперёд = прижим. Вес полный всегда (магнита нет — баланс из рук)
+    if(onGround){ let leanK=1; { const _gs=terrainAt(bike.x).ang; if(_gs<-R.climbFrom) leanK=1-R.climbCalm*Math.min(1,(-_gs-R.climbFrom)/R.climbSpan); }   // b213: на крутом подъёме вклад веса в тангаж ослаблен (наклон пальцем не швыряет в кувырок — на крутизне баланс переда держит стабилизатор, не рывок телом)
+      tq+=(bike.rShift*R.leanGround + dRS*R.leanYank)*R.inertia*leanK; }    // b83: аркадный вес=тангаж + b153 РЫВОК ТЕЛОМ (dRS×leanYank): быстрый бросок веса назад = импульс подъёма переда (инициация вилли), вперёд = прижим. Вес полный всегда (магнита нет — баланс из рук)
     else { const _au=trickAir? 1 : clamp(Math.max(R.airAuthMin+(1-R.airAuthMin)*airT/R.airAuthT, Math.abs(bike.vy)/5), R.airAuthMin, 1);   // авторитет: ТРАМПЛИН-полёт (trickAir) = полный СРАЗУ (намеренный прыжок, даже с медленного захода); кочки = слабый ранний (max(время, |vy|/5)) — случайный флик в подскоке не крутанёт
       tq+=(dRS*R.leanYankAir*(1+0.18*_aL) + bike.rShift*leanAirEff*R.airHold)*R.inertia*_au;   // b153 ИМПУЛЬСНОЕ ВРАЩЕНИЕ (физика: статичный вес в полёте НЕ крутит — нет опоры; вращение = ПЕРЕБРОС массы): РЫВОК наклона в воздухе задаёт спин (∝ ВОЗД.КОНТРОЛЬ-апгрейду и авторитету=времени полёта), ОБРАТНЫЙ рывок/отпускание гасит его же импульсом, удержание = лишь лёгкий докрут (airHold). Итог: кочка с зажатым НОС↑ НЕ раскручивает (вес уже был назад = нет переброса), намеренный флип = бросок телом В ПОЛЁТЕ, полный оборот ~20-25к = мотокросс-темп, спам не работает
       if(Math.abs(bike.rShift)<0.15 && pumpAir<=0){ const la=terrainAt(bike.x+Math.max(20,bike.vx*8)).ang; let d=la-bike.ang; while(d>Math.PI)d-=6.283; while(d<-Math.PI)d+=6.283; const near=clamp(1-(terrainAt(bike.x).y-(bike.y+R.oy+R.wr))/240,0,1); tq+=(d*R.uprightAir-bike.angV*R.uprightDamp)*(0.4+near)*R.inertia; }   // not holding lean → PD auto-level + spin-damp = forgiving normal launches/landings
     }
     if(onGround){ const gs=terrainAt(bike.x).ang; let rp=bike.ang-gs; while(rp>Math.PI)rp-=6.283; while(rp<-Math.PI)rp+=6.283;
       if(Math.abs(bike.rShift)<0.2) tq += (-rp*R.frontLevel - bike.angV*R.frontLevelD)*R.inertia;   // b139 СТАБИЛИЗАЦИЯ ПЕРЕДА: когда райдер НЕ наклоняется — мягкий PD держит байк ВЫРОВНЕННЫМ по склону. Фикс «встаёт на колесо просто на газу»: момент макс-движка постоянно вздёргивал перед (видео: 31% времени на дыбах, ~45°). Реальный мотоцикл держит перед внизу. ВЫКЛ при наклоне (|rShift|≥0.2) → намеренные вилли/флипы целы; ВЫКЛ в воздухе. Тормозило скорость (ехал на 1 колесе) → мешало обгонять волну на боссе
+      if(gs < -R.climbFrom && Math.abs(bike.rShift)>=0.2){ const ck=Math.min(1,(-gs-R.climbFrom)/R.climbSpan); tq += (-rp*R.frontLevel - bike.angV*R.frontLevelD)*R.climbCalm*ck*R.inertia; }   // b213 ГАШЕНИЕ ЗАКРУТКИ НА КРУТОМ ПОДЪЁМЕ: при наклоне пальцем обычный стабилизатор переда выключен → тяга-момент швыряла в loop. Тут возвращаем PD-стабилизацию (с демпфером −angV, гасит вращение) частично (climbCalm ∝ крутизне) → крутой подъём не кувыркает, но вилли на пологом цел
       if(wheelieAssist && rp<-0.2){ const _ed=clamp((-R.wheelieZone-rp)/(R.wheelieEdge-R.wheelieZone),0,1); tq += (_ed*_ed*R.wheelieGuard - bike.angV*R.wheelieD*0.5)*R.inertia; }   // b153 v2: ПОДУШКА У ГРАНИ (квадратично от wheelieZone к wheelieEdge — мягкая стена, полный газ+наклон = висишь у грани в драме) + демпфер дрожи. НЕ магнит: ниже зоны игрок сам (газ↑/тормоз↓/вес)
       if(brake && rp<-0.15) tq += clamp(-rp,0,1)*R.wheelieBrk*R.inertia;   // b153 РЕАЛЬНАЯ ФИЗИКА СПАСЕНИЯ: задний тормоз на вилли опускает перед (∝ задранности) — ГЛАВНЫЙ инструмент баланса игрока, работает и в PRO
       if(rp<-R.loopLimit)tq+=(-R.loopLimit-rp)*R.antiLoop*R.inertia; else if(rp>R.loopLimit)tq+=(R.loopLimit-rp)*R.antiLoop*R.inertia; }   // b83: ВЕРНУЛ прощающий anti-loop (аркада)
