@@ -64,7 +64,7 @@ function lerp(a,b,t){return a+(b-a)*t;} function clamp(v,a,b){return v<a?a:v>b?b
 // false → full game everywhere. Single switch. Systems are GATED, never deleted.
 const CORE_TEST_MODE = false;   // b70: META LIVE — building the progression spine (upgrades/bikes with teeth, career, economy) on the confirmed rigid-body core
 // build stamp — bump on every change so a phone refresh can confirm it loaded fresh code (cache!)
-const BUILD = '2026-07-11 · b217';
+const BUILD = '2026-07-11 · b218';
 
 // ---------- procedural market terrain ----------
 // height map sampled every STEP px; generated forward as we ride. Market character:
@@ -611,6 +611,11 @@ let trickGrip='sticky'; try{ const _tg=localStorage.getItem('cipher_trickgrip');
 function saveTrickGrip(){ try{localStorage.setItem('cipher_trickgrip',trickGrip);}catch(e){} }
 let worldNew=true; try{ const _wn=localStorage.getItem('cipher_world'); if(_wn==='0')worldNew=false; }catch(e){}   // b184 ПРЕМИУМ-МИР (фон за реальным графиком/байком, только отрисовка): НОВЫЙ = город-из-свечей + глубина/дымка/god-rays; КЛАССИКА = старые синус-силуэты. Тумблер в настройках, дефолт НОВЫЙ. Физика/калибровка НЕ трогаются
 function saveWorld(){ try{localStorage.setItem('cipher_world',worldNew?'1':'0');}catch(e){} }
+let coinAsset=true; try{ if(localStorage.getItem('cb_coin')==='0')coinAsset=false; }catch(e){}   // b217: премиум-СПРАЙТ монеты (assets/coin.png — золото=деньги, единственный ассет-класс что не фон и не ломает «светятся только данные») ↔ КЛАССИКА процедурный кружок. Тумблер в настройках, откат если картинка не загрузилась
+function saveCoin(){ try{localStorage.setItem('cb_coin',coinAsset?'1':'0');}catch(e){} }
+let _coinImg=null,_coinRdy=false; try{ const _im=new Image(); _im.onload=()=>{ const S=_im.naturalWidth||256, cc=document.createElement('canvas'); cc.width=S; cc.height=S; const cg=cc.getContext('2d'); cg.drawImage(_im,0,0);   // b217: РАДИАЛЬНАЯ АЛЬФА-МАСКА при загрузке — у исходника углы не совсем прозрачны (заваленный глоу = тёмный квадрат на светлом фоне). destination-in радиалом убивает углы (r>S/2), диск+ореол живут с мягким краем
+    cg.globalCompositeOperation='destination-in'; const rg=cg.createRadialGradient(S/2,S/2,S*0.40,S/2,S/2,S*0.44); rg.addColorStop(0,'rgba(0,0,0,1)'); rg.addColorStop(1,'rgba(0,0,0,0)'); cg.fillStyle=rg; cg.fillRect(0,0,S,S); _coinImg=cc; _coinRdy=true; };   // .40/.44: режем ровно у золотого обода — тёмный глоу-ореол убран (на тёмном мире чисто; белого фона в игре нет)
+  _im.src=(location.pathname.indexOf('/toys/')>=0?'':'toys/')+'assets/coin.png'; }catch(e){}   // путь как у moto1.glb (корневой URL vs /toys/)
 // b204 РЕШЕНИЕ ФОНА (после b203-вердикта юзера «фон ужасен, не сочетается»): ФОТО-БЭКДРОПЫ УБРАНЫ ИЗ ИГРЫ НАСОВСЕМ.
 // Корень (3 захода b185-191/b203 не склеились): фото = язык иллюстрации, весь кадр полон ЯРКОГО не-данных света → структурно несовместим
 // с C-правилом «светятся только данные». Мир теперь = ОДИН код-язык: композиция Vice нашим стилем (закат-солнце + город-свечи + пальмы-силуэты
@@ -1106,6 +1111,7 @@ function pointerDown(p){
     if(UI.setWassist && hit(p,UI.setWassist)){ wheelieAssist=!wheelieAssist; saveWassist(); sfxClick(); return; }   // b147: тумблер вилли-помощника
     if(UI.setTgrip && hit(p,UI.setTgrip)){ trickGrip=trickGrip==='sticky'?'hold':'sticky'; saveTrickGrip(); sfxClick(); return; }   // b171: хват трюка
     if(UI.setWorld && hit(p,UI.setWorld)){ worldNew=!worldNew; saveWorld(); sfxClick(); return; }   // b184: тумблер премиум-мира
+    if(UI.setCoin && hit(p,UI.setCoin)){ coinAsset=!coinAsset; saveCoin(); sfxClick(); return; }   // b217: тумблер спрайт-монеты
     if(UI.setReset && hit(p,UI.setReset)){ if(resetArm>0){ resetProgress(); } else { resetArm=180; sfxClick(); } return; }   // b95: первый тап «взводит», второй (в течение ~3с) обнуляет
     if(hit(p,UI.setBack)){ resetArm=0; screen=settingsRet||'title'; sfxClick(); return; }
     return;
@@ -1861,10 +1867,12 @@ function draw(){
     ctx.restore();
     if(c.x>bike.x){ ctx.fillStyle='rgba(255,80,100,'+(0.4+0.4*Math.sin(t*0.3))+')'; ctx.textAlign='center'; ctx.font='700 12px ui-monospace,monospace'; ctx.fillText('▼',c.x,c.y-28); ctx.textAlign='left'; } } }
   // coins floating above the surface — $ tokens (b124: ромб→$-монета, совпадает с экономикой — собираешь $)
-  for(let i=i0;i<=i1;i++){const c=terr[i];if(c&&c.coin){const cy=c.y-30-2*Math.sin(t*0.08+i);const p=0.55+0.45*Math.sin(t*0.12+i);const rr=6+0.8*Math.abs(Math.sin(t*0.09+i));
+  for(let i=i0;i<=i1;i++){const c=terr[i];if(c&&c.coin){const cy=c.y-30-2*Math.sin(t*0.08+i);const p=0.55+0.45*Math.sin(t*0.12+i);
+    if(coinAsset&&_coinRdy){ const sz=28+3*p; ctx.save();ctx.translate(c.x,cy);ctx.globalAlpha=0.92+0.08*p; ctx.drawImage(_coinImg,-sz/2,-sz/2,sz,sz); ctx.restore(); }   // b217 ПРЕМИУМ-СПРАЙТ: свой обод+грань+ореол (у спрайта прозрачный запас под свечение), пульс = лёгкая альфа+размер
+    else { const rr=6+0.8*Math.abs(Math.sin(t*0.09+i));   // КЛАССИКА: процедурный золотой кружок с $
     ctx.save();ctx.translate(c.x,cy);ctx.shadowColor='#ffd678';ctx.shadowBlur=12;
     ctx.fillStyle='rgba(255,205,110,'+(0.6+0.35*p)+')';ctx.beginPath();ctx.arc(0,0,rr,0,7);ctx.fill();ctx.shadowBlur=0;
-    ctx.fillStyle='rgba(110,72,16,'+(0.78+0.22*p)+')';ctx.font='800 '+Math.round(rr*1.4)+'px ui-monospace,monospace';ctx.textAlign='center';ctx.textBaseline='middle';ctx.fillText('$',0,0.5);ctx.restore();}}
+    ctx.fillStyle='rgba(110,72,16,'+(0.78+0.22*p)+')';ctx.font='800 '+Math.round(rr*1.4)+'px ui-monospace,monospace';ctx.textAlign='center';ctx.textBaseline='middle';ctx.fillText('$',0,0.5);ctx.restore(); }}}
   // floating score popups (gems / near-miss) — world space
   ctx.textAlign='center'; ctx.font='700 13px ui-monospace,monospace';
   for(const f of floats){ ctx.globalAlpha=Math.min(1,f.life*1.4); ctx.fillStyle=f.col; ctx.fillText(f.txt,f.x,f.y); } ctx.globalAlpha=1; ctx.textAlign='left';
@@ -2829,6 +2837,9 @@ function drawMenus(){
     y+=66; UI.setWorld={x:cx-cw/2,y:y,w:cw,h:54}; panel(UI.setWorld.x,UI.setWorld.y,cw,54,'rgba(150,110,255,0.55)');   // b184: премиум-мир (фон)
     ctx.fillStyle='#9fb6dc'; ctx.font='700 10px ui-monospace,monospace'; ctx.fillText('МИР  (фон за графиком)',cx,y+19);
     ctx.fillStyle=worldNew?'#c9b0ff':'#9ff0c8'; ctx.font='800 14px ui-monospace,monospace'; ctx.fillText(worldNew?'НОВЫЙ: город-из-свечей + глубина':'КЛАССИКА',cx,y+41);
+    y+=66; UI.setCoin={x:cx-cw/2,y:y,w:cw,h:54}; panel(UI.setCoin.x,UI.setCoin.y,cw,54,'rgba(255,200,90,0.5)');   // b217: спрайт монеты ↔ классика
+    ctx.fillStyle='#9fb6dc'; ctx.font='700 10px ui-monospace,monospace'; ctx.fillText('МОНЕТЫ',cx,y+19);
+    ctx.fillStyle=coinAsset?'#ffd678':'#9ff0c8'; ctx.font='800 14px ui-monospace,monospace'; ctx.fillText(coinAsset?'ПРЕМИУМ-СПРАЙТ':'КЛАССИКА (кружок $)',cx,y+41);
     y+=66; if(resetArm>0)resetArm--; UI.setReset={x:cx-cw/2,y:y,w:cw,h:46}; const armed=resetArm>0;   // b95 СБРОС ПРОГРЕССА (2-тап) — чистый старт для анализа
     panel(UI.setReset.x,UI.setReset.y,cw,46, armed?'rgba(255,110,90,0.95)':'rgba(255,150,120,0.45)', armed?'rgba(60,20,16,0.66)':'rgba(30,18,16,0.4)');
     ctx.fillStyle=armed?'#ff9a7a':'#e0a890'; ctx.font='800 14px ui-monospace,monospace'; ctx.fillText(armed?'⟲ ТОЧНО? ЖМИ ЕЩЁ РАЗ':'⟲ ОБНУЛИТЬ ПРОГРЕСС',cx,y+28);
