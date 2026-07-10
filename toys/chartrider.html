@@ -64,7 +64,7 @@ function lerp(a,b,t){return a+(b-a)*t;} function clamp(v,a,b){return v<a?a:v>b?b
 // false → full game everywhere. Single switch. Systems are GATED, never deleted.
 const CORE_TEST_MODE = false;   // b70: META LIVE — building the progression spine (upgrades/bikes with teeth, career, economy) on the confirmed rigid-body core
 // build stamp — bump on every change so a phone refresh can confirm it loaded fresh code (cache!)
-const BUILD = '2026-07-09 · b207';
+const BUILD = '2026-07-09 · b208';
 
 // ---------- procedural market terrain ----------
 // height map sampled every STEP px; generated forward as we ride. Market character:
@@ -605,7 +605,9 @@ function saveWorld(){ try{localStorage.setItem('cipher_world',worldNew?'1':'0');
 // Корень (3 захода b185-191/b203 не склеились): фото = язык иллюстрации, весь кадр полон ЯРКОГО не-данных света → структурно несовместим
 // с C-правилом «светятся только данные». Мир теперь = ОДИН код-язык: композиция Vice нашим стилем (закат-солнце + город-свечи + пальмы-силуэты
 // + отсвет набережной), см. drawCityWorld. Файлы toys/assets/world/vice/* остаются в репо как АРТ-РЕФЕРЕНС палитр (в игре не грузятся).
-const TDECK=40;   // b207: ПОЛНАЯ ширина GD-ленты; лента симметрична вокруг линии езды (±TDECK/2 по нормали) — байк едет ПО ЦЕНТРУ, «внутри трассы» (вердикт юзера). Верх ленты проходит ЗА байком по верху колёс. Общий knob: лента + посадка свечей-колонн
+const TDECK=34;   // b208: ВЕРТИКАЛЬНЫЙ размах ленты (косоугольная проекция: низ = верх + константный вектор (TRV_X,TDECK); ось = линия езды, байк по центру). Knob: лента + посадка свечей-колонн
+const TRV_X=-9;   // b208: горизонтальный сдвиг проекции (наклон рёбер — «смотрим чуть сверху-справа», как GD); 0 = рёбра вертикальны
+const TSTEEL='208,224,248';   // b208: СТАЛЬ структуры трассы (константа во всех эпохах — идентичность элемента; цвет остаётся только у ДАННЫХ: зелёный/красный склоны)
 let _zoomD=1;   // b206: отображаемый зум — сглаживается в draw на каждом кадре (60Гц), лечит ступеньки зума при 30Гц-слоумо (сальто-синема)
 let R3D_ON=false; try{ R3D_ON=localStorage.getItem('cb_r3d')==='1'; }catch(e){}   // b192 ФАЗА 2: тумблер 3D-РЕНДЕР (весь мир в Three.js читает мою физику) ↔ 2D-эталон. Физика/190 билдов НЕ трогаются — меняется только слой отрисовки
 function saveR3D(){ try{localStorage.setItem('cb_r3d',R3D_ON?'1':'0');}catch(e){} }
@@ -1623,25 +1625,22 @@ function drawSheen(hz){ const cx=cam.x*0.26, fs=52, i0s=Math.floor((cx-fs)/fs), 
   for(let i=i0s;i<=i1s;i++){ let r2=(Math.sin(i*45.77)*9631.1)%1; if(r2<0)r2+=1; const sx=i*fs-cx, base=r2>0.5?'64,225,190':'255,96,150', hh=30+r2*28;
     const g=ctx.createLinearGradient(0,hz+8,0,hz+8+hh); g.addColorStop(0,'rgba('+base+',0.09)'); g.addColorStop(1,'rgba('+base+',0)'); ctx.fillStyle=g; ctx.fillRect(sx,hz+8,fs*0.6,hh); }
   ctx.restore(); }
-function drawTrackReal(i0,i1){ const HF=TDECK*0.5;   // b207 ЛЕНТА СИММЕТРИЧНО ВОКРУГ ЛИНИИ ЕЗДЫ (вердикт юзера на b206: «едет по верхней линии, ты просто пририсовал снизу линию; надо чтобы ехал ПО ЦЕНТРУ, ВНУТРИ трассы, пошире»): линия езды = ОСЬ ленты, верх/низ = ±TDECK/2 по нормали. Байк рисуется ПОВЕРХ ленты → колёса «в» дороге, как в GD-скрине. Линии по центру НЕТ — «едет по линии» умерло
-  const txA=[], tyA=[], bxA=[], byA=[];   // верхняя/нижняя кромки: узел ± нормаль×HF (центральная разность)
-  for(let i=i0;i<=i1;i++){ const c=terr[i]; if(!c||c.gap){ txA[i]=0; tyA[i]=0; bxA[i]=0; byA[i]=0; continue; }
-    const p0=(terr[i-1]&&!terr[i-1].gap)?terr[i-1]:c, p1=(terr[i+1]&&!terr[i+1].gap)?terr[i+1]:c;
-    let tx=p1.x-p0.x, ty=p1.y-p0.y; const L=Math.hypot(tx,ty)||1; tx/=L; ty/=L;
-    let nx=-ty, ny=tx; if(ny<0){nx=-nx;ny=-ny;}   // нормаль вниз
-    txA[i]=c.x-nx*HF; tyA[i]=c.y-ny*HF; bxA[i]=c.x+nx*HF; byA[i]=c.y+ny*HF; }
+function drawTrackReal(i0,i1){ const hx=TRV_X*0.5, hy=TDECK*0.5;   // b208 КОСОУГОЛЬНАЯ ПРОЕКЦИЯ (вердикт юзера на b207: «геометрически неправильно/неестественно; нужна адекватная проекция как на листке бумаги») = математика GD: нижняя кромка = верхняя + ПОСТОЯННЫЙ вектор (TRV_X,TDECK) — ВСЕ рёбра ПАРАЛЛЕЛЬНЫ, на крутых участках лента честно сужается как проекция плоской дороги. Ось = линия езды (байк по центру — ок юзера b207). Нормаль-вращение b207 и давало «странные подъёмы»
+  const txA=[], tyA=[], bxA=[], byA=[];
+  for(let i=i0;i<=i1;i++){ const c=terr[i]; if(!c||c.gap)continue; txA[i]=c.x-hx; tyA[i]=c.y-hy; bxA[i]=c.x+hx; byA[i]=c.y+hy; }
   for(let i=i0;i<i1;i++){ const a=terr[i],b=terr[i+1]; if(!a||!b||a.gap||b.gap)continue;   // мягкая тень-глубина под лентой → дорога приподнята над миром
     ctx.beginPath(); ctx.moveTo(bxA[i],byA[i]); ctx.lineTo(bxA[i+1],byA[i+1]); ctx.lineTo(bxA[i+1],byA[i+1]+90); ctx.lineTo(bxA[i],byA[i]+90); ctx.closePath();
     const wg=ctx.createLinearGradient(0,byA[i],0,byA[i]+90); wg.addColorStop(0,'rgba(6,4,16,0.5)'); wg.addColorStop(1,'rgba(6,4,16,0)'); ctx.fillStyle=wg; ctx.fill(); }
-  ctx.strokeStyle='rgba('+BLINE+',0.44)'; ctx.lineWidth=1.6;   // рёбра ПО УЗЛАМ (~26px, GD-плотность): поперёк всей ленты, за байком
+  // b208 ИДЕНТИЧНОСТЬ ЭЛЕМЕНТОВ («всё сливается в один тон»): структура трассы = НЕЙТРАЛЬНАЯ СТАЛЬ (константа, не биом-циан) — свой элемент во всех эпохах; ЦВЕТ только у ДАННЫХ (зелёный подъём/красный спуск на верхней кромке)
+  ctx.strokeStyle='rgba('+TSTEEL+',0.38)'; ctx.lineWidth=1.5;   // рёбра ПО УЗЛАМ (~26px): все параллельны (проекция)
   for(let i=i0;i<=i1;i++){ const c=terr[i]; if(!c||c.gap)continue; ctx.beginPath(); ctx.moveTo(txA[i],tyA[i]); ctx.lineTo(bxA[i],byA[i]); ctx.stroke(); }
-  let pen=false; ctx.strokeStyle='rgba('+BLINE+',0.72)'; ctx.lineWidth=2; ctx.beginPath();   // НИЖНЯЯ линия
+  let pen=false; ctx.strokeStyle='rgba('+TSTEEL+',0.66)'; ctx.lineWidth=2; ctx.beginPath();   // НИЖНЯЯ линия — сталь
   for(let i=i0;i<=i1;i++){ const c=terr[i]; if(!c||c.gap){pen=false;continue;} if(!pen){ctx.moveTo(bxA[i],byA[i]);pen=true;} else ctx.lineTo(bxA[i],byA[i]);} ctx.stroke();
-  ctx.lineCap='round'; ctx.lineJoin='round';   // ВЕРХНЯЯ линия = цвет данных склона (зелёный подъём / красный спуск), сегментно
+  ctx.lineCap='round'; ctx.lineJoin='round';   // ВЕРХНЯЯ линия: данные красят склоны, плоское = сталь (не циан — циан был «кашей» с UI/городом)
   for(let i=i0;i<i1;i++){ const a=terr[i],b=terr[i+1]; if(!a||!b||a.gap||b.gap)continue; const climb=b.y<a.y-1,drop=b.y>a.y+1;
-    const col=climb?'46,230,166':drop?'255,59,92':'127,212,255';
-    ctx.strokeStyle='rgba('+col+',0.18)'; ctx.lineWidth=4.4; ctx.beginPath(); ctx.moveTo(txA[i],tyA[i]+1.2); ctx.lineTo(txA[i+1],tyA[i+1]+1.2); ctx.stroke();   // мягкий свет внутрь ленты
-    ctx.strokeStyle='rgba('+col+',0.9)'; ctx.lineWidth=2.2; ctx.beginPath(); ctx.moveTo(txA[i],tyA[i]); ctx.lineTo(txA[i+1],tyA[i+1]); ctx.stroke(); }
+    const col=climb?'46,230,166':drop?'255,59,92':TSTEEL, ca2=climb||drop?0.9:0.78;
+    if(climb||drop){ ctx.strokeStyle='rgba('+col+',0.16)'; ctx.lineWidth=4.2; ctx.beginPath(); ctx.moveTo(txA[i],tyA[i]+1.2); ctx.lineTo(txA[i+1],tyA[i+1]+1.2); ctx.stroke(); }   // мягкий свет данных внутрь ленты
+    ctx.strokeStyle='rgba('+col+','+ca2+')'; ctx.lineWidth=2.2; ctx.beginPath(); ctx.moveTo(txA[i],tyA[i]); ctx.lineTo(txA[i+1],tyA[i+1]); ctx.stroke(); }
   ctx.lineCap='butt'; ctx.lineJoin='miter'; }
 function drawCityWorld(){ const hz=H*0.6;   // b204: ЕДИНЫЙ КОД-ЯЗЫК, композиция Vice нашим стилем (фото-ветки удалены): солнце → лучи → хребет → [дымка → город-свечи]×2 + пальмы-силуэты + отсвет набережной. Цвета = биом (8 эпох живут)
   drawSun(hz);
@@ -2434,17 +2433,17 @@ function drawMachine(B,wheelv,rShiftv,leanv,roost,boostv,dynAir,dynSquat,tkId,tk
     ctx.lineCap='round';
     ctx.strokeStyle='rgba(6,7,12,0.85)'; ctx.lineWidth=4.6; ctx.beginPath(); ctx.moveTo(px-1.5,py); ctx.lineTo(L2[0],L2[1]); ctx.lineTo(L2[2],L2[3]); ctx.stroke();   // дальняя нога (глубина)
     ctx.strokeStyle='rgba('+B.rider+',0.4)'; ctx.lineWidth=3.2; ctx.beginPath(); ctx.moveTo(shx-1.5,shy); ctx.lineTo(A2[0],A2[1]); ctx.lineTo(A2[2],A2[3]); ctx.stroke();   // дальняя рука
-    ctx.save(); ctx.translate(px,py); ctx.rotate(ta);   // торс-капсула (куртка)
-    const tg=ctx.createLinearGradient(0,-16,0,2); tg.addColorStop(0,'#343e54'); tg.addColorStop(1,'#0b0d13');
+    ctx.save(); ctx.translate(px,py); ctx.rotate(ta);   // торс-капсула — b208: КОМБЕЗ = сплошной цвет райдера (был тёмный силуэт с тонкой обводкой = «каша»; GD-принцип: у каждого элемента своя заливка)
+    const tg=ctx.createLinearGradient(0,-16,0,2); tg.addColorStop(0,'rgba('+B.rider+',1)'); tg.addColorStop(1,'rgba('+B.rider+',0.5)');
     ctx.beginPath(); ctx.arc(0,-13,3.7,Math.PI,0); ctx.arc(0,-0.5,4.6,0,Math.PI); ctx.closePath(); ctx.fillStyle=tg; ctx.fill();
-    ctx.strokeStyle='rgba('+B.rider+',0.75)'; ctx.lineWidth=1.3; ctx.stroke();
+    ctx.strokeStyle='rgba(8,10,18,0.8)'; ctx.lineWidth=1.2; ctx.stroke();   // тёмный контур вокруг светлого тела (инверсия)
     ctx.restore();
     ctx.strokeStyle='#10131d'; ctx.lineWidth=5.2; ctx.beginPath(); ctx.moveTo(px,py); ctx.lineTo(L1[0],L1[1]); ctx.lineTo(L1[2],L1[3]); ctx.stroke();   // ближняя нога
     { const bdx=L1[2]-L1[0], bdy=L1[3]-L1[1], bl=Math.hypot(bdx,bdy)||1;
       ctx.strokeStyle='#161a26'; ctx.lineWidth=4.8; ctx.beginPath(); ctx.moveTo(L1[2]-bdx/bl*1.2,L1[3]-bdy/bl*1.2); ctx.lineTo(L1[2]+bdx/bl*2.6,L1[3]+bdy/bl*2.6); ctx.stroke();
       ctx.strokeStyle=RIM+'0.5)'; ctx.lineWidth=1.2; ctx.beginPath(); ctx.moveTo(L1[2]-1.5,L1[3]+2.4); ctx.lineTo(L1[2]+3.2,L1[3]+2.4); ctx.stroke(); }   // ботинок + подошва
     const hcx=px+Math.sin(ta)*18.6, hcy=py-Math.cos(ta)*18.6;   // шлем
-    const hg2=ctx.createRadialGradient(hcx-1.6,hcy-2.2,1,hcx,hcy,6.2); hg2.addColorStop(0,'#414b63'); hg2.addColorStop(1,'#0a0c12');
+    const hg2=ctx.createRadialGradient(hcx-1.6,hcy-2.2,1,hcx,hcy,6.2); hg2.addColorStop(0,'#f3f7ff'); hg2.addColorStop(1,'#a9b6d0');   // b208: БЕЛЫЙ шлем — райдер читается мгновенно (GD-разделение элементов; тёмный визор на белом = контраст)
     ctx.fillStyle=hg2; ctx.beginPath(); ctx.arc(hcx,hcy,5.9,0,7); ctx.fill();
     ctx.strokeStyle='rgba('+B.rim+',0.75)'; ctx.lineWidth=1.3; ctx.beginPath(); ctx.arc(hcx,hcy,5.9,Math.PI*0.95,Math.PI*1.9); ctx.stroke();   // полоса-акцент
     ctx.strokeStyle='#0a1520'; ctx.lineWidth=3.1; ctx.beginPath(); ctx.arc(hcx,hcy,4.3,ta-0.62,ta+0.72); ctx.stroke();   // визор по ходу движения
