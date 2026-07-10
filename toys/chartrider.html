@@ -64,7 +64,7 @@ function lerp(a,b,t){return a+(b-a)*t;} function clamp(v,a,b){return v<a?a:v>b?b
 // false → full game everywhere. Single switch. Systems are GATED, never deleted.
 const CORE_TEST_MODE = false;   // b70: META LIVE — building the progression spine (upgrades/bikes with teeth, career, economy) on the confirmed rigid-body core
 // build stamp — bump on every change so a phone refresh can confirm it loaded fresh code (cache!)
-const BUILD = '2026-07-10 · b216';
+const BUILD = '2026-07-11 · b216';
 
 // ---------- procedural market terrain ----------
 // height map sampled every STEP px; generated forward as we ride. Market character:
@@ -435,7 +435,7 @@ function shareClip(blob,ext){ try{ const f=new File([blob],'chart-runner.'+ext,{
   try{ const a=document.createElement('a'); a.href=URL.createObjectURL(blob); a.download='chart-runner.'+ext; document.body.appendChild(a); a.click(); setTimeout(()=>{ try{URL.revokeObjectURL(a.href);a.remove();}catch(e){} },4000); }catch(e){} }
 function clipStep(){ const s=(clipPlay||clipBuf)[clipI];
   if(!s){ endClip(); return; }
-  bike.x=s.x; bike.y=s.y; bike.ang=s.a; bike.wheel=s.w; bike.rShift=s.rs; lean=s.ln; trick=s.tk; trickMix=s.tm; riderAirB=s.ab; riderSquat=s.sq; cam.x=s.cx; cam.y=s.cy; camAir=s.ca; trickZoom=s.tz; wave=s.wv; bike._cmpF=s.cf; bike._cmpR=s.cr; down=s.dn; boosting=s.bs; bike.onG=s.og; slowLerp=1; bike._px=undefined;
+  bike.x=s.x; bike.y=s.y; bike.ang=s.a; bike.wheel=s.w; bike.rShift=s.rs; lean=s.ln; trick=s.tk; trickMix=s.tm; riderAirB=s.ab; riderSquat=s.sq; cam.x=s.cx; cam.y=s.cy; camAir=s.ca; trickZoom=s.tz; wave=s.wv; bike._cmpF=s.cf; bike._cmpR=s.cr; down=s.dn; boosting=s.bs; bike.onG=s.og; slowLerp=1; physAcc=0; slowTS=1; bike._px=undefined;
   clipI++; }
 function endClip(){ try{ if(clipRec&&clipRec.state!=='inactive')clipRec.stop(); }catch(e){} clipRec=null; clipPlay=null;
   if(clipSaved){ Object.assign(bike,clipSaved.b); cam.x=clipSaved.cx; cam.y=clipSaved.cy; camAir=clipSaved.ca; trickZoom=clipSaved.tz; wave=clipSaved.wv; trick=clipSaved.tk; trickMix=clipSaved.tm; lean=clipSaved.ln; clipSaved=null; }
@@ -453,7 +453,9 @@ function drawSpark(arr,sx,sy,sw,sh,col){ let mn=Infinity,mx=-Infinity; for(const
 
 // ---------- bike ----------
 let bike, cam, t, coins, dist, best, screen, wipe, parts, stars, dust, shake, flash, daycycle, trail, streaks, mult, bestPnl, airT, nearMissed, hitstop, gflash, floats, multPulse, maxMult, lean, rush, prevVx, wave, waveSpd, deathBy, boost, boosting, zone, biomeBanner, biomeBannerT, BSKY, BLINE, BRIDGE, lastMile, newDepth, camAir=0, wheelieT=0;
-let posPulse=0,_posPrev=0,_dangBuzz=0,prMax=0,prMin=0,slowmo=0,menuFx=0,menuFxAmt=0,wheelieAim=0,wheelieI=0,trickAir=0,trickZoom=0,trickGnd=0,slowLerp=1,riderAirB=0,riderSquat=0,nearKickX=-1;   // b155: riderAirB 0..1 = стойка райдера в полёте, riderSquat 0..1 = присед-амортизация посадки (∝ высоте). b156: nearKickX = ближайший трамплин впереди (HUD-указатель)
+let posPulse=0,_posPrev=0,_dangBuzz=0,prMax=0,prMin=0,slowmo=0,menuFx=0,menuFxAmt=0,wheelieAim=0,wheelieI=0,trickAir=0,trickZoom=0,trickGnd=0,slowLerp=1,riderAirB=0,riderSquat=0,nearKickX=-1;
+let physAcc=0, slowTS=1;   // b216 ФЛИП-СЛОУМО-РЕДИЗАЙН: physAcc=аккумулятор дробных физ-шагов, slowTS=текущий масштаб времени (плавно едет к цели). Заменяет бинарный «пропуск каждого 2-го кадра» (b154) на fixed-timestep+интерполяцию — физика идёт дробным темпом, рендер интерполирует slowLerp∈[0,1) между двумя последними состояниями (не только 0.5) = плавно, без статтера
+const SLOWMO_SCALE=0.4;   // масштаб времени в слоумо (0.4 = 2.5× медленнее). Длительности slowmo (20/28 кадров) не тронуты → та же ~0.47с реального времени покрывает меньше движения = драматичнее   // b155: riderAirB 0..1 = стойка райдера в полёте, riderSquat 0..1 = присед-амортизация посадки (∝ высоте). b156: nearKickX = ближайший трамплин впереди (HUD-указатель)
 let trick=0,trickMix=0,trickHeld=false,trickT=0,trickTouch=-1,trickKey='',touchSX={},touchSY={},skids=[];   // b160: skids = следы торможения на трассе   // b158 FMX-ТРЮКИ: trick 1=СУПЕРМЕН 2=ЦУНАМИ 3=COFFIN 4=NO HANDER; trickMix 0..1 = твин позы; trickT = кадры удержания (очки); trickTouch/Key = чей палец/клавиша держит
 const TRICK_NAMES={1:'СУПЕРМЕН',2:'ЦУНАМИ',3:'COFFIN',4:'NO HANDER',5:'SEAT GRAB',6:'HEART ATTACK',7:'HEEL CLICKER'};   // b159: 4→7 трюков — ДЛИННЫЙ свайп (>78px) апгрейдит направление в жёсткую вариацию
 const TRICK_UP={1:5,2:6,4:7};   // СУПЕРМЕН→SEAT GRAB · ЦУНАМИ→HEART ATTACK · NO HANDER→HEEL CLICKER
@@ -946,7 +948,7 @@ function reset(){
   cam={x:bike.x-W*0.5,y:bike.y-H*0.46}; camAir=0; t=0; coins=0; dist=0; lastMile=0; newDepth=false; wipe=0; screen='play'; shake=0; flash=0; popT=0; daycycle=Math.random()*6.28;
   chalResult=null;   // b118: новый заезд — итог вызова сброшен (activeChal НЕ трогаем: задан в startTicker до reset)
   mult=1; airT=0; nearMissed=false; hitstop=0; gflash=0; multPulse=0; maxMult=1; flipCount=0; flipAcc=0; wheelieT=0; cashedOut=false; runGems=0; cashCelebT=0; pumpAir=0;
-  flipsTotal=0; topKmh=0; lastLandDiff=0; lean=0; rush=0; prevVx=0; down=false; brake=false; jumpReq=0; jumpCd=0; coyote=0; jumpGrace=0; activeTouches={}; leanX=0; ctrlId=null; leanKeyL=false; leanKeyR=false; leanCmd=0; rShiftVel=0; wave=bike.x-W*0.95; waveSpd=0; deathBy=''; boost=0; boosting=0; posPulse=0; _posPrev=0; _dangBuzz=0; prMax=0; prMin=0; slowmo=0; wheelieAim=0; wheelieI=0; trickAir=0; trickZoom=0; trick=0; trickMix=0; trickHeld=false; trickT=0; trickTouch=-1; trickKey=''; touchSX={}; touchSY={}; skids=[]; dailyMode=false; _dailyRes=false; livePrice=0; liveT=0; inpLog=[]; _inpPrev=-1; inpMeta={c:selTicker||'',m:gameMode,s:trackSource,b:selBike,bd:BUILD};
+  flipsTotal=0; topKmh=0; lastLandDiff=0; lean=0; rush=0; prevVx=0; down=false; brake=false; jumpReq=0; jumpCd=0; coyote=0; jumpGrace=0; activeTouches={}; leanX=0; ctrlId=null; leanKeyL=false; leanKeyR=false; leanCmd=0; rShiftVel=0; wave=bike.x-W*0.95; waveSpd=0; deathBy=''; boost=0; boosting=0; posPulse=0; _posPrev=0; _dangBuzz=0; prMax=0; prMin=0; slowmo=0; physAcc=0; slowTS=1; wheelieAim=0; wheelieI=0; trickAir=0; trickZoom=0; trick=0; trickMix=0; trickHeld=false; trickT=0; trickTouch=-1; trickKey=''; touchSX={}; touchSY={}; skids=[]; dailyMode=false; _dailyRes=false; livePrice=0; liveT=0; inpLog=[]; _inpPrev=-1; inpMeta={c:selTicker||'',m:gameMode,s:trackSource,b:selBike,bd:BUILD};
   clipBuf=[]; clipPlay=null; clipBlob=null; bestClip=null; bestSum=0; _hlWin=[]; _hlSum=0; _hlPend=-1; _flipPrev=0;   // b170: клип-стейт per-забег (b163-фикс: буфер НЕ чистился между забегами → первые 7с могли реплеить старые позы на новой трассе)
   dcaCost=0; dcaQty=0; _dcaDist=0; _dcaCoins=0;   // b173: позиция набирается с нуля каждый забег
   ghostRec=null; ghost=null;   // b174: призрак живёт только в дейли (startDaily включает после reset)
@@ -1377,11 +1379,11 @@ function update(){
     if(airT===20 && trickAir && !trick) tut('trick1', trickGrip==='sticky'?'🤸 СВАЙП в полёте = ТРЮК (сам держится) · ТАП = отпустить до земли!':'🤸 СВАЙП свободным пальцем В ПОЛЁТЕ = ТРЮК · ДЕРЖИ! отпусти до земли');   // b158/b171: учим трюкам на большом полёте
     if(trickAir){ const _th=terrainAt(bike.x).y-(bike.y+DY);   // b150 ТРИК-КАМЕРА: взлёт/апекс с трамплина = зум К БАЙКУ (флип читается кинематографично), к земле — плавный отъезд (посадка в кадре)
       if(airT>6 && (bike.vy<2 || _th>130)) trickZoom=Math.min(1,trickZoom+0.09); else trickZoom=Math.max(0,trickZoom-0.09);   // b214: нарастание/спад зума мягче (0.14/0.12→0.09) → плавный наезд камеры, без рывка
-      if(trickAir===1 && airT>12 && Math.abs(bike.vy)<1.6 && Math.abs(bike.angV)>0.13){ slowmo=Math.max(slowmo,20); trickAir=2; } }   // b214: слоумо апекса 14→20 (дольше/драматичнее). Только реальный полёт (airT>12) + реально крутишь, раз за полёт
+      if(trickAir===1 && airT>8 && Math.abs(bike.vy)<1.6 && Math.abs(bike.angV)>0.13){ slowmo=Math.max(slowmo,20); trickAir=2; } }   // b214: слоумо апекса 14→20. b216: airT>12→8 (раньше ловим апекс, пол сохранён от подскоков). Только реальный полёт + реально крутишь, раз за полёт
     const skim=terrainAt(bike.x).y-(bike.y+DY);                        // gap of lower wheel above surface
     if(airT>16 && skim>0 && skim<16 && bike.vx>6 && !nearMissed){ nearMissed=true; mult+=0.5; boost=Math.min(1,(boost||0)+0.15); multPulse=1; const g2=1.5*mult; coins+=g2; floatPop(bike.x,bike.y-22,'NEAR MISS +$'+Math.round(g2),'#9ff0ff'); shake=4; hitstop=2; gflash=0.4; sfxNear(); }
     flipAcc+=Math.abs(bike.angV); if(flipAcc>6.283){flipAcc-=6.283;flipCount++; blip(150+flipCount*40,0.18,'sawtooth',0.13); buzz(10);}   // b152: «вжух» на каждом ПОЛНОМ обороте В ВОЗДУХЕ (тон растёт с витками) — флип слышен в момент, не только при посадке
-    if(!bike._flipCine && airT>8 && flipAcc>3.4){ bike._flipCine=1; trickAir=1; if(slowmo<28)slowmo=28; }   // b182 ФЛИП-СИНЕМА: полоборота в ЛЮБОМ полёте → слоумо + трик-зум К БАЙКУ, раз за полёт. b214: 22→28 дольше замедление (юзер «больше замедление/плавность»)
+    if(!bike._flipCine && airT>5 && flipAcc>3.4){ bike._flipCine=1; trickAir=1; if(slowmo<28)slowmo=28; }   // b182 ФЛИП-СИНЕМА: полоборота в ЛЮБОМ полёте → слоумо + трик-зум К БАЙКУ, раз за полёт. b214: 22→28 дольше. b216: airT>8→5 (гейт flipAcc>3.4=полоборота держит от микро-кочек, но синема стартует раньше)
   }
   if(wasG && !grounded){ airT=0; nearMissed=false;
     if(Math.abs(bike.rShift)>0.4) bike.angV=clamp(bike.angV,-0.03,0.03);   // b153: отрыв с ЗАЖАТЫМ весом (вилли через кочку/кикер) НЕ уносит наземное вращение в полёт (остаток капа крутил 2-3 оборота за длинный полёт = случайные перевороты, сим). Намеренное вращение = РЫВОК в воздухе или кромка ↓
@@ -2848,7 +2850,14 @@ function dbgTick(){
     +'<b>'+(dist||0)+'</b>m · дамп <span class="'+wc+'">'+gapM+'m</span><br>'
     +'<span class="lab">'+state+' · CORE '+(CORE_TEST_MODE?'ON':'OFF')+' · '+BUILD+'</span>';
 }
-function loop(){ requestAnimationFrame(loop); try{ if(screen==='clip'){ clipStep(); } else if(screen==='play'){ if(slowmo>0){ slowmo--; if(!(slowmo&1)){ update(); slowLerp=1; } else slowLerp=0.5; } else { update(); slowLerp=1; } } draw(); musicTick(); dbgTick(); }catch(e){ if(!loop._e){loop._e=1; console.error('CHART loop error (self-healed, screen='+screen+'):',e&&e.stack||e); } } }   // b154: slowLerp=0.5 в пропущенном слоумо-кадре → байк рисуется на полпути между кадрами физики = ПЛАВНОЕ замедление (юзер: «подлагивает» — статтер пропуска кадров)   // b65: rAF re-requested FIRST + try/catch → one bad frame can no longer permanently FREEZE the game (was: any throw skipped the re-request → stuck until a page refresh, matching the "магазин дёргается/не работает до обновления" report). The first error is logged so the real cause surfaces.
+function loop(){ requestAnimationFrame(loop); try{ if(screen==='clip'){ clipStep(); } else if(screen==='play'){
+      const tgt = slowmo>0 ? (slowmo--, SLOWMO_SCALE) : 1;   // цель масштаба времени; slowmo декрементим тут (счётчик кадров как раньше)
+      slowTS += (tgt - slowTS)*0.18;                          // плавный въезд/выезд слоумо (нет рывка 0→28) — timeScale глайдит
+      physAcc += slowTS;                                      // копим дробные физ-шаги
+      if(physAcc>3) physAcc=3;                                // кап от «спирали смерти» на длинном пропущенном кадре (таб-свич)
+      let _st=0; while(physAcc>=1 && _st<4){ update(); physAcc-=1; _st++; }
+      slowLerp = (slowTS>0.985) ? 1 : physAcc;                // норма: рисуем текущий кадр (как раньше). Слоумо: дробная фаза 0..1 → интерполяция байка/камеры/3D/зума
+    } draw(); musicTick(); dbgTick(); }catch(e){ if(!loop._e){loop._e=1; console.error('CHART loop error (self-healed, screen='+screen+'):',e&&e.stack||e); } } }   // b216: fixed-timestep+интерполяция (Gaffer) вместо бинарного пропуска b154 → плавное замедление, дробный slowLerp. Читатели slowLerp (байк 1916/камера 1729/3D 3113/зум _zoomD 60Гц) уже готовы к дробному.   // b65: rAF re-requested FIRST + try/catch → one bad frame can no longer permanently FREEZE the game. Первая ошибка логируется.
 function shakeApply(){} // (shake folded into camera draw via translate jitter)
 // ===================== b192 ФАЗА 2: МОСТ ФИЗИКА → 3D-РЕНДЕР =====================
 // Three.js-модуль (внизу файла, type=module) не видит let/const этого классического скрипта.
