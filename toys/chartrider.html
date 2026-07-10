@@ -64,7 +64,7 @@ function lerp(a,b,t){return a+(b-a)*t;} function clamp(v,a,b){return v<a?a:v>b?b
 // false → full game everywhere. Single switch. Systems are GATED, never deleted.
 const CORE_TEST_MODE = false;   // b70: META LIVE — building the progression spine (upgrades/bikes with teeth, career, economy) on the confirmed rigid-body core
 // build stamp — bump on every change so a phone refresh can confirm it loaded fresh code (cache!)
-const BUILD = '2026-07-10 · b215';
+const BUILD = '2026-07-10 · b216';
 
 // ---------- procedural market terrain ----------
 // height map sampled every STEP px; generated forward as we ride. Market character:
@@ -1424,11 +1424,11 @@ function update(){
     if(gn && gn.gap){
       let fe=ci0; while(terr[fe]&&terr[fe].gap)fe++; gapFarX=(terr[fe]?terr[fe].x:fe*STEP); const landY=terr[fe]?terr[fe].y:gn.lipY; gapLipNow=gn.lipY; overGap=true;
       const fwx=bike.x+DX, fwy=bike.y+DY;
-      if(fwx>=gapFarX-20 && fwy>landY+10 && fwy<landY+72 && bike.vy>=-1){                                         // ONLY a near-miss (front wheel came in BELOW the runway top) → scrabble up the far edge. A clean clear (at/above the runway) flies PAST & lands naturally, keeping its momentum (no snap, no speed-kill).
+      if(fwx>=gapFarX-6 && fwy>landY+6 && fwy<landY+34 && bike.vy>=-1){                                          // b216 УЖЕ: зацеп ТОЛЬКО когда переднее колесо реально НА кромке дальнего края (fwx≈gapFarX) и лишь чуть ниже неё (≤34px). Раньше −20px/72px ловило «почти долетел» → обрыв проезжался всегда. Теперь недолёт = падение
         bike.x=gapFarX+4; bike.y=terrainAt(bike.x).y-DY; bike.vy=Math.min(bike.vy,0); bike.onG=true; bike.vx*=0.97; bike.angV*=0.4; overGap=false;   // b45: gentler pitch settle on the edge-catch (was 0.5) → smoother no-jump landings
         bike.ang=lerp(bike.ang, terrainAt(bike.x).ang, 0.5); jumpReq=0; jumpCd=Math.max(jumpCd,14); coyote=0;   // b48: a scrabble is a SAVE → settle the pitch to the runway & DROP the buffered jump, so a stale gap-swipe can't relaunch you off the far edge into a tumble (the user's "снова баг с обрывом": caught the edge → buffered jump fired → crash)
         gapFxT=1; gapFxMsg='ЗАЦЕПИЛ КРАЙ'; boost=Math.min(1,(boost||0)+0.12); gflash=0.45; shake=Math.max(shake,5); sfxAir(); buzz(14);
-      } else if(screen==='play' && bike.y>gn.lipY+120){                                                          // the arc came up short → fell into the pit (only NOW, deep below the lip — not at the edge)
+      } else if(screen==='play' && bike.y>gn.lipY+64){                                                           // b216 РАНЬШЕ: недолёт → падение на 64px ниже кромки (было 120 — байк успевал «проехать» пропасть). Попал в обрыв = падаешь, как хотел юзер
         wipeout('gap');
       }
     } else if(overGap && screen==='play' && bike.x>gapFarX){ overGap=false; jumpReq=0; boost=Math.min(1,(boost||0)+0.16); shake=Math.max(shake,6); gflash=0.5; gapFxT=1; gapFxMsg='ПРОПАСТЬ ✓'; sfxAir(); buzz(18); }   // cleared past the far edge (landed naturally on the far side); b48: drop a stale buffered jump so it can't relaunch you into the next feature
@@ -1692,7 +1692,7 @@ function drawCityWorld(){ const hz=H*0.6;   // b204: ЕДИНЫЙ КОД-ЯЗЫ�
   drawSun(hz);
   ctx.save(); ctx.globalCompositeOperation='lighter';
   const hb=ctx.createLinearGradient(0,hz-70,0,hz+50); hb.addColorStop(0,'rgba('+BLINE+',0)'); hb.addColorStop(.5,'rgba('+BLINE+',0.15)'); hb.addColorStop(1,'rgba('+BLINE+',0)'); ctx.fillStyle=hb; ctx.fillRect(0,hz-70,W,120);   // horizon glow (market light)
-  const cxr=W*0.5; for(let k=0;k<12;k++){ const a0=-1.15+(k/11)*2.3+Math.sin(t*0.004+k)*0.04, len=H*0.9, w=4+4*Math.abs(Math.sin(t*0.009+k*1.7)), al=0.02+0.018*Math.abs(Math.sin(t*0.011+k));   // god-rays
+  const cxr=(_sunSX>0?_sunSX:W*0.5); for(let k=0;k<12;k++){ const a0=-1.15+(k/11)*2.3+Math.sin(t*0.004+k)*0.04, len=H*0.9, w=4+4*Math.abs(Math.sin(t*0.009+k*1.7)), al=0.02+0.018*Math.abs(Math.sin(t*0.011+k));   // god-rays — b216: из позиции диска (_sunSX), не из центра экрана → лучи реально идут ОТ солнца
     ctx.save(); ctx.translate(cxr,hz); ctx.rotate(a0); const gr=ctx.createLinearGradient(0,0,0,-len); gr.addColorStop(0,'rgba('+BLINE+','+al+')'); gr.addColorStop(1,'rgba('+BLINE+',0)'); ctx.fillStyle=gr; ctx.beginPath(); ctx.moveTo(-w,0); ctx.lineTo(w,0); ctx.lineTo(w*2.2,-len); ctx.lineTo(-w*2.2,-len); ctx.closePath(); ctx.fill(); ctx.restore(); }
   ctx.restore();
   ctx.fillStyle='rgba('+BRIDGE+',0.5)'; ctx.beginPath(); ctx.moveTo(0,H); { const cx=cam.x*0.06; for(let sx=0;sx<=W;sx+=10){ const wx=(cx+sx)*0.006; const y=hz-30+Math.sin(wx*1.3)*22+Math.sin(wx*0.5)*30; ctx.lineTo(sx,y);} } ctx.lineTo(W,H); ctx.closePath(); ctx.fill();   // far ridge (hazed)
@@ -1734,9 +1734,9 @@ function draw(){
   if(_skip3D){ ctx.clearRect(0,0,W,H); try{ window.R3D.frame(); }catch(e){ if(!window.R3D._e){window.R3D._e=1; console.error('R3D frame:',e&&e.stack||e);} } }
   if(!_skip3D){
   skyGrad();
-  // sun/halo on horizon
-  ctx.globalCompositeOperation='lighter';
-  const sx=W*0.5, sy=H*0.74; const sg=ctx.createRadialGradient(sx,sy,0,sx,sy,H*0.5); sg.addColorStop(0,'rgba(255,200,150,0.28)'); sg.addColorStop(1,'rgba(255,200,150,0)'); ctx.fillStyle=sg; ctx.fillRect(0,0,W,H);
+  // sun/halo on horizon — b216: ТОЛЬКО классика. В worldNew есть свой диск drawSun (цвет/позиция по эпохе, день/ночь) — фикс-тёплый ореол ломал ночь (грел воду когда луна холодная) = один из 3 конкурирующих свечений
+  if(!worldNew){ ctx.globalCompositeOperation='lighter';
+    const sx=W*0.5, sy=H*0.74; const sg=ctx.createRadialGradient(sx,sy,0,sx,sy,H*0.5); sg.addColorStop(0,'rgba(255,200,150,0.28)'); sg.addColorStop(1,'rgba(255,200,150,0)'); ctx.fillStyle=sg; ctx.fillRect(0,0,W,H); }
   // stars/dust drifting
   for(const s of stars){ ctx.fillStyle='rgba(220,225,255,'+(0.3+0.4*Math.sin(t*0.03+s.x))+')'; ctx.fillRect((s.x-cam.x*s.z*0.1)%W,s.y,s.s,s.s); }
   { const len=BIOMES.length, bi=(((zone||0)%len)+len)%len;   // b130: атмосфера ПО НАСТРОЕНИЮ биома — бычий/эйфория/ралли = искры вверх, медвежий/капитуляция = угли вниз
@@ -1936,8 +1936,9 @@ function draw(){
   // ---- b183 BLOOM-ЛАЙТ (Этап A ВАУ-курса): кадр ×0.25 → аддитив обратно (даунскейл = бесплатное размытие). Дышит: сильнее в слоумо/бусте ----
   if(screen==='play'||screen==='paused'||screen==='clip'){ const gw2=Math.max(2,(W*DPR/4)|0), gh2=Math.max(2,(H*DPR/4)|0);
     if(!_glowCv||_glowCv.width!==gw2||_glowCv.height!==gh2){ _glowCv=document.createElement('canvas'); _glowCv.width=gw2; _glowCv.height=gh2; _glowCtx=_glowCv.getContext('2d'); }
-    _glowCtx.setTransform(1,0,0,1,0,0); _glowCtx.clearRect(0,0,gw2,gh2); _glowCtx.drawImage(cv,0,0,gw2,gh2);
-    const ga2=0.15+(slowmo>0?0.10:0)+(boosting>0?0.08:0)+(trickZoom||0)*0.06;
+    _glowCtx.setTransform(1,0,0,1,0,0); _glowCtx.globalCompositeOperation='source-over'; _glowCtx.clearRect(0,0,gw2,gh2); _glowCtx.drawImage(cv,0,0,gw2,gh2);
+    _glowCtx.globalCompositeOperation='multiply'; _glowCtx.drawImage(_glowCv,0,0); _glowCtx.drawImage(_glowCv,0,0); _glowCtx.globalCompositeOperation='source-over';   // b216 BRIGHT-PASS ПОРОГ: self-multiply ×2 (значение³) → тёмное гаснет (50³/255²≈2), яркий неон остаётся (230³/255²≈187). Bloom больше НЕ молочит чёрные — контраст/«дорого» держится
+    const ga2=0.30+(slowmo>0?0.16:0)+(boosting>0?0.10:0)+(trickZoom||0)*0.08;   // порог убрал тёмное → можно сильнее аддитив (только неон горит)
     ctx.save(); ctx.globalCompositeOperation='lighter'; ctx.globalAlpha=ga2; ctx.drawImage(_glowCv,0,0,W,H); ctx.restore(); }
   // vignette — tightens into a tunnel during a rush
   const spv=rush||0, vr=H*(0.3-0.1*spv);
@@ -2008,8 +2009,12 @@ function draw(){
   // price axis (right) — РЕАЛЬНАЯ цена монеты на тикере (из tkK/tkMid), абстрактная на proc-тренажёре
   ctx.textAlign='right'; ctx.font='10px ui-monospace,monospace';
   const TKR=(trackSource==='ticker'), priceAt=(y)=> TKR ? (tkMid-(y-baseY)/tkK) : (42000+(baseY-y)*6.2);   // b107: было хардкод 42000 (фейк «BTC $42k» даже на WIF) — теперь реальная цена графика
-  if(screen==='play'||screen==='paused'){ const lvl2=Math.floor(cam.y/70)*70; for(let gy=lvl2;gy<cam.y+H;gy+=70){ const sy=gy-cam.y; if(sy<70||sy>H-30)continue;
-      ctx.fillStyle='rgba(150,180,220,0.28)'; ctx.fillText(TKR?fmtPrice(priceAt(gy)):('$'+Math.round(priceAt(gy)).toLocaleString('en-US')),W-12,sy-3); } }
+  if(screen==='play'||screen==='paused'){ const lvl2=Math.floor(cam.y/70)*70; ctx.font='700 11px ui-monospace,monospace'; ctx.textAlign='right';
+      for(let gy=lvl2;gy<cam.y+H;gy+=70){ const sy=gy-cam.y; if(sy<70||sy>H-30)continue;
+        const _s=TKR?fmtPrice(priceAt(gy)):('$'+Math.round(priceAt(gy)).toLocaleString('en-US')), _w=ctx.measureText(_s).width;   // b216: цена оси = ДАННЫЕ, дать тёмную подложку-полоску (последний data-элемент не в чип-языке b210, тонул на пёстром небе/городе)
+        ctx.fillStyle='rgba(6,8,18,0.5)'; ctx.fillRect(W-_w-16,sy-12,_w+12,14);
+        ctx.fillStyle='rgba(170,198,236,0.7)'; ctx.fillText(_s,W-12,sy-2); }
+      ctx.textAlign='left'; }
   // live price tag at the bike's level
   const lp=priceAt(bike.y); const tk=document.getElementById('ticker'); tk.textContent=CORE_TEST_MODE?'CORE TEST':(activeChal?('🏁 '+activeChal.name):(TKR?(tickerName+'  '+fmtPrice(lp)):('BTC  $'+Math.round(lp).toLocaleString('en-US'))));   // b118: во время вызова — цель Пути
   ctx.textAlign='left';
@@ -2824,7 +2829,7 @@ function drawMenus(){
 // ---------- mobile debug overlay (FPS / speed / distance / dump gap / state / mode / build) ----------
 let _fpsT=performance.now(), _fpsN=0, _fps=0;
 const dbgEl=document.getElementById('dbg');
-let dbgMin=false; try{ dbgMin=localStorage.getItem('cipher_dbg')==='0'; }catch(e){}
+let dbgMin=true; try{ if(localStorage.getItem('cipher_dbg')==='1')dbgMin=false; }catch(e){}   // b216: дефолт СКРЫТ (игрок не видит fps/vx/build — читалось «недоделка»). Dev-разворот клавишей F или localStorage cipher_dbg=1
 dbgEl.classList.toggle('min',dbgMin);
 function setPhyslink(){ try{ const pl=document.getElementById('physlink'); if(pl)pl.style.display=dbgMin?'none':''; }catch(e){} }   // b109: dev-ссылка физлаба налазила на заголовки меню → прячем когда debug свёрнут
 setPhyslink();
@@ -2833,7 +2838,8 @@ dbgEl.addEventListener('touchstart',e=>{ e.stopPropagation(); e.preventDefault()
 dbgEl.addEventListener('mousedown',e=>{ e.stopPropagation(); dbgToggle(); });
 function dbgTick(){
   _fpsN++; const now=performance.now(); if(now-_fpsT>=500){ _fps=Math.round(_fpsN*1000/(now-_fpsT)); _fpsN=0; _fpsT=now; }
-  if(dbgMin){ if(dbgEl.innerHTML!=='🐞')dbgEl.innerHTML='🐞'; return; }
+  if(dbgMin){ if(dbgEl.style.display!=='none')dbgEl.style.display='none'; return; }   // b216: свёрнут = полностью скрыт (не 🐞-значок), чтобы игрок не видел dev-оверлей
+  if(dbgEl.style.display==='none')dbgEl.style.display='';
   const vx=bike?bike.vx:0, kmh=Math.round(vx*12);
   let state; if(screen==='dead')state='CRASHED'; else if(screen==='title')state='TITLE'; else if(screen==='paused')state='PAUSED'; else if(screen==='garage')state='GARAGE'; else state=(bike&&bike.onG)?'GROUNDED':'AIR';
   const gapPx=bike?(bike.x-wave):0, gapM=Math.round(gapPx/10);
