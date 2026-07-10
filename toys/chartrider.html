@@ -64,7 +64,7 @@ function lerp(a,b,t){return a+(b-a)*t;} function clamp(v,a,b){return v<a?a:v>b?b
 // false → full game everywhere. Single switch. Systems are GATED, never deleted.
 const CORE_TEST_MODE = false;   // b70: META LIVE — building the progression spine (upgrades/bikes with teeth, career, economy) on the confirmed rigid-body core
 // build stamp — bump on every change so a phone refresh can confirm it loaded fresh code (cache!)
-const BUILD = '2026-07-10 · b213';
+const BUILD = '2026-07-10 · b214';
 
 // ---------- procedural market terrain ----------
 // height map sampled every STEP px; generated forward as we ride. Market character:
@@ -573,6 +573,7 @@ const RB={
   mu:2.6, engine:1.15, brakeF:0.5,            // конус трения/тяги / сила двигателя (×стат байка) / тормоз — высокие т.к. трасса крутая, traction-limited байк иначе вязнет на подъёмах
   climbGrip:1.3, climbFrom:0.28, climbSpan:0.30,   // b213 ЭНДУРО-СЦЕПЛЕНИЕ НА КРУТОМ ПОДЪЁМЕ (РУКИ): буст сцепления ведущего от climbFrom(~16° — уклон ПОД ЦЕНТРОМ байка на рампе положе сегмента) до +climbSpan(~33°); climbGrip = сила на макс. Крутой склон берётся ТЯГОЙ, не только разгоном — прокачка/байк (muEff) расширяют. МЕНЬШЕ = сложнее
   climbCalm:0.45,                             // b213 ГАШЕНИЕ ЗАКРУТКИ на крутом подъёме: доля, на которую момент тяги/наклона задирающий нос ослабляется (наклон пальцем на крутизне больше НЕ швыряет в loop). 0 = выкл, 1 = полностью гасит вилли на крутом
+  reverse:5.5, reverseV:1.6,                  // b214 ЗАДНИЙ ХОД (РУКИ): reverse = сила заднего хода (×engScale, байк-зависимо) когда тормоз на почти-стоящем байке; reverseV = порог скорости, ниже которого тормоз = реверс (выше = обычный тормоз). БОЛЬШЕ reverse = резвее назад
   thrRamp:0.11, spinGrip:0.97,                // b68: АНАЛОГ.ГАЗ (рампа 0→1 → вилли/тяга ∝ сколько газу) + БУКС ПОЧТИ КОСМЕТИЧЕСКИЙ (spinGrip 0.86→0.97 — почти не режет тягу, чтобы НЕ ощущалось «торможением» на подъёме; видно роост/прокрут, но байк замедляется только от гравитации = логично). Хочешь жёстче букс позже — опусти spinGrip
   jump:9.0,                                    // импульс хопа (свайп вверх)
   airDrag:0.992, rollDrag:0.997,              // аэро / качение (потолок скорости). b83: вернул АРКАДНУЮ (живую) скорость, что нравилась (b81-замедление под баланс снято)
@@ -1236,8 +1237,9 @@ function rigidStep(){
         if(drive){ const up=-ta.ang; if(up>R.climbFrom){ FnDrive *= 1 + Math.min(1,(up-R.climbFrom)/R.climbSpan)*R.climbGrip; } }   // b213 ЭНДУРО-СЦЕПЛЕНИЕ на крутом подъёме (баг «не заехать ни на одном байке»): зубастая резина/1-я передача цепляется → крутой склон (памп-рампа до 40°) берётся ТЯГОЙ уверенно, не только скоростью. muEff уже ×(стат grip)×(апгрейд СЦЕПЛЕНИЕ) → байк/прокачка РАСШИРЯЮТ предел проходимости
         const maxFd=muEff*FnDrive;
         if(drive&&thr>0.02){ const want=R.engine*engScale*thr; Ft += Math.min(want, maxFd); spun=want>maxFd*1.2; }   // b100: тяга до стабильного предела — букс МЯГКИЙ (юзер: «залипание/торможение мешает, особ. с волной — убрать»)
-        if(brake) Ft+=-Math.sign(vt)*R.brakeF;
-        if(Ft>maxFd)Ft=maxFd; else if(Ft<-maxF)Ft=-maxF;   // b100: верхний cap по СТАБИЛЬНОЙ тяге (не пульсирует = не залипает), нижний/боковой по мгновенному maxF
+        if(brake){ Ft+=-Math.sign(vt)*R.brakeF; if(drive && !down && bike.vx<R.reverseV){ Ft += -R.reverse*engScale; } }   // b214 ЗАДНИЙ ХОД (юзер): тормоз на почти-стоящем = сдать НАЗАД → отъехал, разогнался, взял крутой подъём со 2-го раза. Гейт !down (газ приоритетнее) + vx<reverseV (только когда встал, на ходу это тормоз). engScale = байк-зависимо
+        const loCap = drive ? maxFd : maxF;   // b214: ведущее колесо — реверс/задний тормоз опираются на СТАБИЛЬНУЮ нагрузку (floor maxFd), не на мгновенный Fn (мал когда байк стоит ровно → реверс проваливался в 0)
+        if(Ft>maxFd)Ft=maxFd; else if(Ft<-loCap)Ft=-loCap;   // b100: верхний cap по СТАБИЛЬНОЙ тяге; нижний по loCap (ведущее=floor, переднее=мгновенный)
         fx+=Ft*tx; fy+=Ft*ty; tq+=rx*(Ft*ty)-ry*(Ft*tx);
       }
     }
@@ -1369,12 +1371,12 @@ function update(){
     if(airT===10 && terr[ci0-2] && (terr[ci0-2].ramp||terr[ci0-1]&&terr[ci0-1].ramp)) tut('flip3','🔄 В ПОЛЁТЕ: НАЖМИ НОС↑ = бросок в БЭКФЛИП · ОТПУСТИ = стоп-вращение');   // b153: импульсная модель — бросок в полёте задаёт вращение, отпускание гасит
     if(airT===20 && trickAir && !trick) tut('trick1', trickGrip==='sticky'?'🤸 СВАЙП в полёте = ТРЮК (сам держится) · ТАП = отпустить до земли!':'🤸 СВАЙП свободным пальцем В ПОЛЁТЕ = ТРЮК · ДЕРЖИ! отпусти до земли');   // b158/b171: учим трюкам на большом полёте
     if(trickAir){ const _th=terrainAt(bike.x).y-(bike.y+DY);   // b150 ТРИК-КАМЕРА: взлёт/апекс с трамплина = зум К БАЙКУ (флип читается кинематографично), к земле — плавный отъезд (посадка в кадре)
-      if(airT>6 && (bike.vy<2 || _th>130)) trickZoom=Math.min(1,trickZoom+0.14); else trickZoom=Math.max(0,trickZoom-0.12);
-      if(trickAir===1 && airT>12 && Math.abs(bike.vy)<1.6 && Math.abs(bike.angV)>0.13){ slowmo=Math.max(slowmo,14); trickAir=2; } }   // слоумо на АПЕКСЕ: только реальный полёт (airT>12 — b154: короткий подскок давал «блип»-замедление, читалось лагом) + только если реально крутишь, раз за полёт
+      if(airT>6 && (bike.vy<2 || _th>130)) trickZoom=Math.min(1,trickZoom+0.09); else trickZoom=Math.max(0,trickZoom-0.09);   // b214: нарастание/спад зума мягче (0.14/0.12→0.09) → плавный наезд камеры, без рывка
+      if(trickAir===1 && airT>12 && Math.abs(bike.vy)<1.6 && Math.abs(bike.angV)>0.13){ slowmo=Math.max(slowmo,20); trickAir=2; } }   // b214: слоумо апекса 14→20 (дольше/драматичнее). Только реальный полёт (airT>12) + реально крутишь, раз за полёт
     const skim=terrainAt(bike.x).y-(bike.y+DY);                        // gap of lower wheel above surface
     if(airT>16 && skim>0 && skim<16 && bike.vx>6 && !nearMissed){ nearMissed=true; mult+=0.5; boost=Math.min(1,(boost||0)+0.15); multPulse=1; const g2=1.5*mult; coins+=g2; floatPop(bike.x,bike.y-22,'NEAR MISS +$'+Math.round(g2),'#9ff0ff'); shake=4; hitstop=2; gflash=0.4; sfxNear(); }
     flipAcc+=Math.abs(bike.angV); if(flipAcc>6.283){flipAcc-=6.283;flipCount++; blip(150+flipCount*40,0.18,'sawtooth',0.13); buzz(10);}   // b152: «вжух» на каждом ПОЛНОМ обороте В ВОЗДУХЕ (тон растёт с витками) — флип слышен в момент, не только при посадке
-    if(!bike._flipCine && airT>8 && flipAcc>3.4){ bike._flipCine=1; trickAir=1; if(slowmo<22)slowmo=22; }   // b182 ФЛИП-СИНЕМА (видео юзера: «при флипе нет приближения/замедления»): полоборота в ЛЮБОМ полёте → слоумо + трик-зум К БАЙКУ (trickAir включает камеру b150), раз за полёт
+    if(!bike._flipCine && airT>8 && flipAcc>3.4){ bike._flipCine=1; trickAir=1; if(slowmo<28)slowmo=28; }   // b182 ФЛИП-СИНЕМА: полоборота в ЛЮБОМ полёте → слоумо + трик-зум К БАЙКУ, раз за полёт. b214: 22→28 дольше замедление (юзер «больше замедление/плавность»)
   }
   if(wasG && !grounded){ airT=0; nearMissed=false;
     if(Math.abs(bike.rShift)>0.4) bike.angV=clamp(bike.angV,-0.03,0.03);   // b153: отрыв с ЗАЖАТЫМ весом (вилли через кочку/кикер) НЕ уносит наземное вращение в полёт (остаток капа крутил 2-3 оборота за длинный полёт = случайные перевороты, сим). Намеренное вращение = РЫВОК в воздухе или кромка ↓
@@ -1749,8 +1751,8 @@ function draw(){
   }
 
   // ---- the track: a real CANDLESTICK chart the bike rides across ----
-  const zoomT=1-(rush||0)*0.04-(camAir||0)*0.40*(1-(trickZoom||0))+(trickZoom||0)*0.22+(boosting>0?0.045:0);   // b150 ТРИК-КАМЕРА: зум К БАЙКУ на полёте; b183: +зум-пульс буста (Этап A)
-  _zoomD+=(zoomT-_zoomD)*0.42; const zoom=_zoomD;   // b206 FIX «притормаживание на сальто»: в слоумо физика (и цель зума) шагает 30Гц — байк/камера интерполировались (b154/157), а ЗУМ дёргался ступеньками. Теперь зум доезжает на КАЖДОМ кадре отрисовки (60Гц), независимо от каденции update
+  const zoomT=1-(rush||0)*0.04-(camAir||0)*0.40*(1-(trickZoom||0))+(trickZoom||0)*0.34+(boosting>0?0.045:0);   // b150 ТРИК-КАМЕРА: зум К БАЙКУ на полёте; b214 вклад 0.22→0.34 = БОЛЬШЕ приближения на сальто (юзер); b183: +зум-пульс буста
+  _zoomD+=(zoomT-_zoomD)*0.14; const zoom=_zoomD;   // b214 ПЛАВНОСТЬ: сглаживание зума 0.42→0.14 (мягче наезд/отъезд камеры, кинематографично — юзер «сглажено и плавно»). b206: зум доезжает на КАЖДОМ кадре 60Гц (не ступеньками в слоумо 30Гц)
   ctx.save(); ctx.translate(W/2,H/2); ctx.scale(zoom,zoom); ctx.translate(-W/2,-H/2);
   ctx.save(); ctx.translate(-cam.x,-cam.y);
   const x0=cam.x-STEP, x1=cam.x+W+STEP;
