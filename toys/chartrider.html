@@ -64,7 +64,7 @@ function lerp(a,b,t){return a+(b-a)*t;} function clamp(v,a,b){return v<a?a:v>b?b
 // false → full game everywhere. Single switch. Systems are GATED, never deleted.
 const CORE_TEST_MODE = false;   // b70: META LIVE — building the progression spine (upgrades/bikes with teeth, career, economy) on the confirmed rigid-body core
 // build stamp — bump on every change so a phone refresh can confirm it loaded fresh code (cache!)
-const BUILD = '2026-07-11 · b223';
+const BUILD = '2026-07-11 · b224';
 
 // ---------- procedural market terrain ----------
 // height map sampled every STEP px; generated forward as we ride. Market character:
@@ -1395,7 +1395,7 @@ function update(){
     const skim=terrainAt(bike.x).y-(bike.y+DY);                        // gap of lower wheel above surface
     if(airT>16 && skim>0 && skim<16 && bike.vx>6 && !nearMissed){ nearMissed=true; mult+=0.5; boost=Math.min(1,(boost||0)+0.15); multPulse=1; const g2=1.5*mult; coins+=g2; floatPop(bike.x,bike.y-22,'NEAR MISS +$'+Math.round(g2),'#9ff0ff'); shake=4; hitstop=2; gflash=0.4; sfxNear(); }
     flipAcc+=Math.abs(bike.angV); if(flipAcc>6.283){flipAcc-=6.283;flipCount++; blip(150+flipCount*40,0.18,'sawtooth',0.13); buzz(10);}   // b152: «вжух» на каждом ПОЛНОМ обороте В ВОЗДУХЕ (тон растёт с витками) — флип слышен в момент, не только при посадке
-    if(!bike._flipCine && airT>5 && flipAcc>3.4){ bike._flipCine=1; trickAir=1; if(slowmo<28)slowmo=28; }   // b182 ФЛИП-СИНЕМА: полоборота в ЛЮБОМ полёте → слоумо + трик-зум К БАЙКУ, раз за полёт. b214: 22→28 дольше. b216: airT>8→5 (гейт flipAcc>3.4=полоборота держит от микро-кочек, но синема стартует раньше)
+    if(!bike._flipCine && airT>4 && flipAcc>3.4){ bike._flipCine=1; trickAir=1; if(slowmo<28)slowmo=28; }   // b182 ФЛИП-СИНЕМА: полоборота в ЛЮБОМ полёте → слоумо + трик-зум К БАЙКУ, раз за полёт. b214: 22→28 дольше. b216: airT>8→5 (гейт flipAcc>3.4=полоборота держит от микро-кочек, но синема стартует раньше)
   }
   if(wasG && !grounded){ airT=0; nearMissed=false;
     if(Math.abs(bike.rShift)>0.4) bike.angV=clamp(bike.angV,-0.03,0.03);   // b153: отрыв с ЗАЖАТЫМ весом (вилли через кочку/кикер) НЕ уносит наземное вращение в полёт (остаток капа крутил 2-3 оборота за длинный полёт = случайные перевороты, сим). Намеренное вращение = РЫВОК в воздухе или кромка ↓
@@ -1775,8 +1775,8 @@ function draw(){
     BSKY=[mix(A.sky[0],Bz.sky[0],tb),mix(A.sky[1],Bz.sky[1],tb),mix(A.sky[2],Bz.sky[2],tb),mix(A.sky[3],Bz.sky[3],tb)]; _bt=tb;   // b212: прогресс перехода эпохи → плавная фаза суток
     BLINE=lerp3(A.line,Bz.line,tb).join(','); BRIDGE=lerp3(A.ridge,Bz.ridge,tb).join(','); }
   if(depthNew){   // b221 GOLDEN-HOUR: перезаписываю палитру на СОЧНЫЙ ЗАКАТ (обходит SKY_UNIFY, что душит все биомы к тёмной базе = корень «однотонности»). Тёплое небо + тёплый свет (BLINE) + ХОЛОДНАЯ даль (BRIDGE) = свет/тень + контраст температуры
-    BSKY=['rgb(36,20,62)','rgb(96,38,102)','rgb(234,104,86)','rgb(255,184,106)'];   // зенит-фиолет → магента → коралл → золото у горизонта
-    BLINE='255,226,190'; BRIDGE='48,44,94'; }   // BLINE тёплый (солнце/лучи/горизонт-глоу греются) · BRIDGE холодный сине-фиолет (дальний скайлайн/гряда уходят в холод = глубина)
+    BSKY=['rgb(60,36,96)','rgb(140,58,128)','rgb(248,122,98)','rgb(255,200,124)'];   // b223: ЯРЧЕ+СОЧНЕЕ закат (юзер «всё ещё тёмная тема, хочу закатную») — зенит поднят из почти-чёрного, магента/коралл насыщеннее, золото у горизонта
+    BLINE='255,230,196'; BRIDGE='58,52,104'; }   // BLINE тёплый (солнце/лучи/горизонт-глоу греются) · BRIDGE холодный сине-фиолет (дальний скайлайн/гряда уходят в холод = глубина)
   const _skip3D = (R3D_ON && screen==='play' && window.R3D && window.R3D._ready);   // b192: в 3D-режиме мир рисует Three.js; на 2D-канвасе остаются только контролы/HUD (звук идёт всегда)
   if(_skip3D){ ctx.clearRect(0,0,W,H); try{ window.R3D.frame(); }catch(e){ if(!window.R3D._e){window.R3D._e=1; console.error('R3D frame:',e&&e.stack||e);} } }
   if(!_skip3D){
@@ -1803,7 +1803,7 @@ function draw(){
   }
 
   // ---- the track: a real CANDLESTICK chart the bike rides across ----
-  const zoomT=1-(rush||0)*0.04-(camAir||0)*0.40*(1-(trickZoom||0))+(trickZoom||0)*0.34+(boosting>0?0.045:0);   // b150 ТРИК-КАМЕРА: зум К БАЙКУ на полёте; b214 вклад 0.22→0.34 = БОЛЬШЕ приближения на сальто (юзер); b183: +зум-пульс буста
+  const zoomT=1-(rush||0)*0.04-(camAir||0)*0.40*(1-(trickZoom||0))+(trickZoom||0)*0.48+(boosting>0?0.045:0);   // b150 ТРИК-КАМЕРА: зум К БАЙКУ на полёте; b223 вклад 0.34→0.48 = ЕЩЁ БЛИЖЕ на сальто (юзер «больше зума, флипы круче»); b183: +зум-пульс буста
   _zoomD+=(zoomT-_zoomD)*0.14; const zoom=_zoomD;   // b214 ПЛАВНОСТЬ: сглаживание зума 0.42→0.14 (мягче наезд/отъезд камеры, кинематографично — юзер «сглажено и плавно»). b206: зум доезжает на КАЖДОМ кадре 60Гц (не ступеньками в слоумо 30Гц)
   ctx.save(); ctx.translate(W/2,H/2); ctx.scale(zoom,zoom); ctx.translate(-W/2,-H/2);
   ctx.save(); ctx.translate(-cam.x,-cam.y);
@@ -2567,24 +2567,30 @@ function drawMachine(B,wheelv,rShiftv,leanv,roost,boostv,dynAir,dynSquat,tkId,tk
     const L1=ik2(px,py,f1[0],f1[1],PS.l1,PS.l2,-1), L2=ik2(px-1.5,py,f2[0]-1.5,f2[1],PS.l1,PS.l2,-1);
     const A1=ik2(shx,shy,hbx,hby,7.6,8.2,1), A2=ik2(shx-1.5,shy,hbx-2.5,hby,7.6,8.2,1);
     ctx.lineCap='round';
-    ctx.strokeStyle='rgba(6,7,12,0.85)'; ctx.lineWidth=4.6; ctx.beginPath(); ctx.moveTo(px-1.5,py); ctx.lineTo(L2[0],L2[1]); ctx.lineTo(L2[2],L2[3]); ctx.stroke();   // дальняя нога (глубина)
-    ctx.strokeStyle='rgba('+B.rider+',0.4)'; ctx.lineWidth=3.2; ctx.beginPath(); ctx.moveTo(shx-1.5,shy); ctx.lineTo(A2[0],A2[1]); ctx.lineTo(A2[2],A2[3]); ctx.stroke();   // дальняя рука
+    ctx.strokeStyle='rgba(6,7,12,0.85)'; ctx.lineWidth=5.8; ctx.beginPath(); ctx.moveTo(px-1.5,py); ctx.lineTo(L2[0],L2[1]); ctx.stroke();   // дальняя нога: бедро толще
+    ctx.lineWidth=3.8; ctx.beginPath(); ctx.moveTo(L2[0],L2[1]); ctx.lineTo(L2[2],L2[3]); ctx.stroke();   // голень тоньше
+    ctx.strokeStyle='rgba('+B.rider+',0.4)'; ctx.lineWidth=4.0; ctx.beginPath(); ctx.moveTo(shx-1.5,shy); ctx.lineTo(A2[0],A2[1]); ctx.stroke(); ctx.lineWidth=2.8; ctx.beginPath(); ctx.moveTo(A2[0],A2[1]); ctx.lineTo(A2[2],A2[3]); ctx.stroke();   // дальняя рука: плечо толще, предплечье тоньше
     ctx.save(); ctx.translate(px,py); ctx.rotate(ta);   // торс-капсула — b208: КОМБЕЗ = сплошной цвет райдера (был тёмный силуэт с тонкой обводкой = «каша»; GD-принцип: у каждого элемента своя заливка)
     const tg=ctx.createLinearGradient(0,-16,0,2); tg.addColorStop(0,'rgba('+B.rider+',1)'); tg.addColorStop(1,'rgba('+B.rider+',0.5)');
     ctx.beginPath(); ctx.arc(0,-13,3.7,Math.PI,0); ctx.arc(0,-0.5,4.6,0,Math.PI); ctx.closePath(); ctx.fillStyle=tg; ctx.fill();
     ctx.strokeStyle='rgba(8,10,18,0.8)'; ctx.lineWidth=1.2; ctx.stroke();   // тёмный контур вокруг светлого тела (инверсия)
     ctx.restore();
-    ctx.strokeStyle='#10131d'; ctx.lineWidth=5.2; ctx.beginPath(); ctx.moveTo(px,py); ctx.lineTo(L1[0],L1[1]); ctx.lineTo(L1[2],L1[3]); ctx.stroke();   // ближняя нога
+    ctx.strokeStyle='#10131d'; ctx.lineWidth=7.0; ctx.beginPath(); ctx.moveTo(px,py); ctx.lineTo(L1[0],L1[1]); ctx.stroke();   // b223 ОБЪЁМ: бедро ТОЛСТОЕ
+    ctx.lineWidth=4.6; ctx.beginPath(); ctx.moveTo(L1[0],L1[1]); ctx.lineTo(L1[2],L1[3]); ctx.stroke();   // голень тоньше = мышечное сужение, не палка
+    ctx.fillStyle='#191d2a'; ctx.beginPath(); ctx.arc(L1[0],L1[1],2.5,0,7); ctx.fill();   // наколенник (MTB-защита)
     { const bdx=L1[2]-L1[0], bdy=L1[3]-L1[1], bl=Math.hypot(bdx,bdy)||1;
       ctx.strokeStyle='#161a26'; ctx.lineWidth=4.8; ctx.beginPath(); ctx.moveTo(L1[2]-bdx/bl*1.2,L1[3]-bdy/bl*1.2); ctx.lineTo(L1[2]+bdx/bl*2.6,L1[3]+bdy/bl*2.6); ctx.stroke();
       ctx.strokeStyle=RIM+'0.5)'; ctx.lineWidth=1.2; ctx.beginPath(); ctx.moveTo(L1[2]-1.5,L1[3]+2.4); ctx.lineTo(L1[2]+3.2,L1[3]+2.4); ctx.stroke(); }   // ботинок + подошва
     const hcx=px+Math.sin(ta)*18.6, hcy=py-Math.cos(ta)*18.6;   // шлем
     const hg2=ctx.createRadialGradient(hcx-1.6,hcy-2.2,1,hcx,hcy,6.2); hg2.addColorStop(0,'#f3f7ff'); hg2.addColorStop(1,'#a9b6d0');   // b208: БЕЛЫЙ шлем — райдер читается мгновенно (GD-разделение элементов; тёмный визор на белом = контраст)
     ctx.fillStyle=hg2; ctx.beginPath(); ctx.arc(hcx,hcy,5.9,0,7); ctx.fill();
+    ctx.strokeStyle='#0e1420'; ctx.lineWidth=2.6; ctx.lineCap='round'; ctx.beginPath(); ctx.moveTo(hcx+2.6,hcy-3.6); ctx.lineTo(hcx+8.4,hcy-4.4); ctx.stroke(); ctx.lineCap='butt';   // b223 КОЗЫРЁК full-face MTB-шлема (вынос вперёд) = не просто круг-голова
     ctx.strokeStyle='rgba('+B.rim+',0.75)'; ctx.lineWidth=1.3; ctx.beginPath(); ctx.arc(hcx,hcy,5.9,Math.PI*0.95,Math.PI*1.9); ctx.stroke();   // полоса-акцент
     ctx.strokeStyle='#0a1520'; ctx.lineWidth=3.1; ctx.beginPath(); ctx.arc(hcx,hcy,4.3,ta-0.62,ta+0.72); ctx.stroke();   // визор по ходу движения
     ctx.strokeStyle='rgba(190,235,255,0.75)'; ctx.lineWidth=1.1; ctx.beginPath(); ctx.arc(hcx,hcy,4.3,ta-0.5,ta+0.05); ctx.stroke();   // блик визора
-    ctx.strokeStyle='rgba('+B.rider+',0.9)'; ctx.lineWidth=3.7; ctx.beginPath(); ctx.moveTo(shx,shy); ctx.lineTo(A1[0],A1[1]); ctx.lineTo(A1[2],A1[3]); ctx.stroke();   // ближняя рука к рулю
+    ctx.strokeStyle='rgba('+B.rider+',0.9)'; ctx.lineWidth=5.0; ctx.beginPath(); ctx.moveTo(shx,shy); ctx.lineTo(A1[0],A1[1]); ctx.stroke();   // ближняя рука: плечо толще
+    ctx.fillStyle='#1a1e2b'; ctx.beginPath(); ctx.arc(A1[0],A1[1],1.8,0,7); ctx.fill();   // налокотник
+    ctx.lineWidth=3.4; ctx.beginPath(); ctx.moveTo(A1[0],A1[1]); ctx.lineTo(A1[2],A1[3]); ctx.stroke();   // предплечье тоньше
     ctx.fillStyle='#171b28'; ctx.beginPath(); ctx.arc(A1[2],A1[3],2,0,7); ctx.fill();   // перчатка
     ctx.lineCap='butt';
     // lights — b166: позиции ПО ТИПУ (на носу/щите/руле/хвосте, не в воздухе)
