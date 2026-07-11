@@ -64,7 +64,7 @@ function lerp(a,b,t){return a+(b-a)*t;} function clamp(v,a,b){return v<a?a:v>b?b
 // false → full game everywhere. Single switch. Systems are GATED, never deleted.
 const CORE_TEST_MODE = false;   // b70: META LIVE — building the progression spine (upgrades/bikes with teeth, career, economy) on the confirmed rigid-body core
 // build stamp — bump on every change so a phone refresh can confirm it loaded fresh code (cache!)
-const BUILD = '2026-07-11 · b222';
+const BUILD = '2026-07-11 · b223';
 
 // ---------- procedural market terrain ----------
 // height map sampled every STEP px; generated forward as we ride. Market character:
@@ -613,7 +613,7 @@ let worldNew=true; try{ const _wn=localStorage.getItem('cipher_world'); if(_wn==
 function saveWorld(){ try{localStorage.setItem('cipher_world',worldNew?'1':'0');}catch(e){} }
 let coinAsset=true; try{ if(localStorage.getItem('cb_coin')==='0')coinAsset=false; }catch(e){}   // b217: премиум-СПРАЙТ монеты (assets/coin.png — золото=деньги, единственный ассет-класс что не фон и не ломает «светятся только данные») ↔ КЛАССИКА процедурный кружок. Тумблер в настройках, откат если картинка не загрузилась
 function saveCoin(){ try{localStorage.setItem('cb_coin',coinAsset?'1':'0');}catch(e){} }
-let depthNew=false; try{ if(localStorage.getItem('cb_depth')==='1')depthNew=true; }catch(e){}   // b219: ГЛУБИНА ФОНА — далёкий силуэт-скайлайн (твой IMG_8006) вместо вялой синус-гряды, медленный параллакс+дымка. Дефолт ВЫКЛ = текущий мир не трогается
+let depthNew=true; try{ if(localStorage.getItem('cb_depth')==='0')depthNew=false; }catch(e){}   // b222: golden-hour атмосфера = ДЕФОЛТ-тема (юзер: «переделать тему», не робкий пробник). Тумблер оставлен для сравнения с классикой   // b219: ГЛУБИНА ФОНА — далёкий силуэт-скайлайн (твой IMG_8006) вместо вялой синус-гряды, медленный параллакс+дымка. Дефолт ВЫКЛ = текущий мир не трогается
 function saveDepth(){ try{localStorage.setItem('cb_depth',depthNew?'1':'0');}catch(e){} }
 let _skyImg=null,_skyRdy=false; try{ const _si=new Image(); _si.onload=()=>{ const w=_si.naturalWidth,h=_si.naturalHeight,cc=document.createElement('canvas'); cc.width=w; cc.height=h; const cg=cc.getContext('2d'); cg.drawImage(_si,0,0);   // b219 LUMINANCE-KEY: у исходника нет альфы (прозрачность запечена серой шахматкой) → делаю серый-светлый прозрачным, тёмные здания+окна остаются
     try{ const id=cg.getImageData(0,0,w,h),d=id.data; for(let i=0;i<d.length;i+=4){ const r=d[i],g=d[i+1],b=d[i+2]; if(Math.min(r,g,b)>150 && Math.max(r,g,b)-Math.min(r,g,b)<40) d[i+3]=0; } cg.putImageData(id,0,0); }catch(e){}
@@ -1616,7 +1616,12 @@ function cityPass(par,baseY,near,mirror){ const fs=near?52:34, cx=cam.x*par, i0=
     let rg=(Math.sin(i*7.13)*3571.7)%1; if(rg<0)rg+=1; if(rg<0.20)continue;   // b211: просветы в застройке
     const clu=0.78+0.5*(0.5+0.5*Math.sin(i*0.31+(near?0:2.2))), land=r>0.94;   // кластеры высот (низкочастотная волна) + доминанта
     const w=fs*(0.5+0.32*((r*3.7)%1))*(land?0.74:1), x=sx+(fs-w)*0.5, th=Math.min(baseY-26,(near?58+r*160:36+r*112)*clu*(land?1.6:1)), top=baseY-th, glow=r2>0.5?'64,225,190':'255,96,150', wa=near?0.30:0.17;
-    ctx.fillStyle=depthNew?(near?'rgba(10,8,22,0.96)':'rgba(48,42,66,0.60)'):'rgba(14,11,30,0.94)'; ctx.fillRect(x,top,w,th);   // корпус-силуэт   // b221 ГЛУБИНА: golden hour → ДАЛЬ светлее+холоднее+в дымке (уходит назад), БЛИЗЬ темнее = атмосферная перспектива (объём по яркости, не только цвету)
+    if(depthNew){ const _sl=(_sunSX||W*0.5)<x+w*0.5, gr=ctx.createLinearGradient(x,0,x+w,0);   // b222 ОБЪЁМ ТОНАЛЬНОЙ ЛЕПКОЙ: градиент СВЕТ→ТЕНЬ ПОПЕРЁК здания (освещённая сторона к солнцу → собственная тень) = коробка читается объёмной, не плоский силуэт. near=контраст сильный/тёмный, far=приглушён/светлее (атмосф. перспектива)
+      const lit=near?'rgba(104,66,70,0.97)':'rgba(96,86,110,0.62)', mid=near?'rgba(30,21,40,0.97)':'rgba(60,54,78,0.60)', shad=near?'rgba(7,6,17,0.97)':'rgba(40,36,58,0.58)';
+      if(_sl){ gr.addColorStop(0,lit); gr.addColorStop(0.5,mid); gr.addColorStop(1,shad); } else { gr.addColorStop(0,shad); gr.addColorStop(0.5,mid); gr.addColorStop(1,lit); }
+      ctx.fillStyle=gr; }
+    else ctx.fillStyle='rgba(14,11,30,0.94)';
+    ctx.fillRect(x,top,w,th);   // корпус: объёмная лепка (golden) / плоский силуэт (классика)
     if(depthNew&&!mirror){ const _sl=(_sunSX||W*0.5)<x+w*0.5;   // b221 GOLDEN: тёплая освещённая кромка со стороны СОЛНЦА (даль слабее near сильнее) + холодная тень-корпус = объём, здания не плоские
       ctx.fillStyle='rgba(255,176,116,'+(near?0.55:0.30)+')'; ctx.fillRect(_sl?x:x+w-2.2, top, 2.2, th);
       ctx.fillStyle='rgba(255,150,96,'+(near?0.16:0.09)+')'; ctx.fillRect(_sl?x:x+w-5.4, top, 5.4, th); }
@@ -2313,7 +2318,10 @@ function spWheel(B,kind,R,front){ const BOX=(R+3)*2;
       g.strokeStyle='rgba(120,140,165,0.25)'; g.lineWidth=0.6; g.beginPath(); g.arc(0,0,R-2.2,0,7); g.stroke(); }
     if(kind==='slick'||kind==='street'){ g.strokeStyle='rgba(255,255,255,0.06)'; g.lineWidth=0.8; g.beginPath(); g.arc(0,0,R-1.7,0,7); g.stroke(); }
     let rimR;
-    if(kind==='mtb'){ g.fillStyle='#0a0d15'; g.beginPath(); g.arc(0,0,R-2.5,0,7); g.fill(); rimR=R-2.9; }
+    if(kind==='mtb'){ g.fillStyle='#0a0e17'; for(let k=0;k<18;k++){ const a=k/18*6.2832;   // b222 FAT KNOBBY MTB: зубастый протектор по кругу + ТОЛСТАЯ покрышка (узкий обод) = читается как горный, не road
+        g.save(); g.translate(Math.cos(a)*(R-0.5),Math.sin(a)*(R-0.5)); g.rotate(a); g.fillRect(-1.75,-1.2,3.5,2.4); g.restore(); }
+      g.strokeStyle='rgba(120,140,165,0.22)'; g.lineWidth=0.6; g.beginPath(); g.arc(0,0,R-2.5,0,7); g.stroke();
+      g.fillStyle='#0a0d15'; g.beginPath(); g.arc(0,0,R-4.7,0,7); g.fill(); rimR=R-5.1; }
     else rimR=R*0.62;
     g.lineWidth=kind==='mtb'?1.3:1.7;   // обод: машиненный металл — верх светлый, низ тёмный
     g.strokeStyle='rgba(218,230,246,0.85)'; g.beginPath(); g.arc(0,0,rimR,Math.PI*1.05,Math.PI*1.95); g.stroke();
@@ -2438,9 +2446,12 @@ function spMtb(g,B,plate){ const RIM='rgba('+B.rim+',', ACC='rgba('+B.accent+','
   spLine(g,-7.6,-9.4,11.9,-9.7,RIM+'0.9)',1.1);   // неон-акцент верхней трубы
   spDot(g,14.2,-11.4,1,ACC+'0.9)');   // head badge
   spDot(g,-8.5,-8.5,1,'rgba(160,175,196,0.5)'); spDot(g,-1,13.5,1,'rgba(160,175,196,0.5)'); spDot(g,12.8,-8.8,1,'rgba(160,175,196,0.5)');
-  spLine(g,16,-14.2,27.3,15.3,'#141a26',4.0); spLine(g,15.8,-14.4,27,15,'#2b3242',3.0);   // вилка + золотая нога
-  spLine(g,16.4,-12.6,19.4,-4.4,'#c9a54a',2.0); spLine(g,16.2,-12.8,18.8,-6,'rgba(255,241,190,0.55)',0.7);
-  spLine(g,-8.4,-8.8,-9.2,-11.6,'#39414f',2.4);   // подседельный + седло
+  // b222 MTB ВИЛКА-АМОРТИЗАТОР: толстая верхняя штанина (crown) + смещённый нижний слайдер + золотая нога = читается как suspension, не жёсткая спица
+  spLine(g,15.4,-14.6,21,0,'#10151f',5.6); spLine(g,15.7,-14.9,20.6,-0.4,'#333c4e',3.4);   // верхняя штанина (толстая)
+  spLine(g,20.6,-0.6,27.6,15.6,'#0c1119',6.4); spLine(g,20.9,-0.9,27.2,15.2,'#28303f',3.8);   // нижний слайдер (ещё толще = ход подвески)
+  spDot(g,20.7,-0.5,2.0,'#3a4356');   // корона-стык слайдера
+  spLine(g,16.3,-12.8,20,-2,'#c9a54a',2.2); spLine(g,16.1,-13,19,-4,'rgba(255,241,190,0.6)',0.8);   // золотая нога
+  spLine(g,-8.4,-8.8,-9.6,-13.2,'#39414f',2.8);   // подседельный + седло (выше = MTB-посадка)
   g.save(); g.translate(-9.4,-12.6); g.rotate(-0.06);
   spRR(g,-4.8,-1.3,9.6,2.6,1.3,spLin(g,0,-1.3,0,1.3,[[0,'#2b313f'],[1,'#0d1017']]));
   spLine(g,-4.2,-1.2,4.4,-1.2,'rgba(230,240,252,0.3)',0.6); g.restore();
