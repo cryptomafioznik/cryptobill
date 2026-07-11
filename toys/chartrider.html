@@ -64,7 +64,7 @@ function lerp(a,b,t){return a+(b-a)*t;} function clamp(v,a,b){return v<a?a:v>b?b
 // false → full game everywhere. Single switch. Systems are GATED, never deleted.
 const CORE_TEST_MODE = false;   // b70: META LIVE — building the progression spine (upgrades/bikes with teeth, career, economy) on the confirmed rigid-body core
 // build stamp — bump on every change so a phone refresh can confirm it loaded fresh code (cache!)
-const BUILD = '2026-07-11 · b235';
+const BUILD = '2026-07-11 · b236';
 
 // ---------- procedural market terrain ----------
 // height map sampled every STEP px; generated forward as we ride. Market character:
@@ -661,6 +661,14 @@ _loadSheet('street','street',false); _loadSheet('mtb','mtb',false);   // street/
 const SHEET_CROP={ dirt:{x0:42,y0:74,w:268,h:212}, street:{x0:0,y0:6,w:352,h:300}, mtb:{x0:0,y0:6,w:352,h:300} };   // где в ячейке 352×384 сам байк (dirt = внутри карточки-рамки+подиума → тесный кроп)
 const BIKE_ART=[ {s:'mtb',c:0,r:0}, {s:'street',c:0,r:0}, {s:'street',c:1,r:0}, {s:'street',c:2,r:0}, {s:'dirt',c:0,r:0}, {s:'dirt',c:1,r:0}, {s:'street',c:2,r:1} ];   // 7 байков → ячейка: ВЕЛИК→XC(MTB), МОПЕД→Moped, СКУТЕР→Commuter, ЭНДУРО→TrailEnduro, КРОСС→MotoX250F(с райдером), МОТАРД→MotoX450F, СУПЕРБАЙК→Superbike RR
 function drawBikeArt(cx,cy,dw){ const am=BIKE_ART[selBike], sh=am&&_bikeArt[am.s]; if(!sh)return false; const CW=352,CH=384, cr=SHEET_CROP[am.s]||{x0:0,y0:6,w:352,h:300}; const dh=dw*cr.h/cr.w; ctx.drawImage(sh, am.c*CW+cr.x0, am.r*CH+cr.y0, cr.w, cr.h, cx-dw/2, cy-dh/2, dw, dh); return true; }   // рисует иллюстрацию байка (кроп по SHEET_CROP — без подписи/рамки/шахматки); false = не загрузилось
+// b236 ФАЗА 1 ДИНАМИЧНОГО РИГА: иллюстрация как ИГРОВОЙ спрайт (ctx уже в центре байка + повёрнут → флипы бесплатны) + squash подвески. Колёса-спин/FMX-позы = фаза 2
+let artBike=true; try{ if(localStorage.getItem('cb_artbike')==='0')artBike=false; }catch(e){}
+function saveArtBike(){ try{localStorage.setItem('cb_artbike',artBike?'1':'0');}catch(e){} }
+const ART_FIT={ dirt:{w:132,bottomY:33,dx:2}, street:{w:118,bottomY:32,dx:0}, mtb:{w:112,bottomY:32,dx:0} };   // подгонка: ширина + низ (колёса на контакт y≈29-33) + гориз.сдвиг. КАЛИБРОВКА по скриншоту
+function drawMachineArt(){ const am=BIKE_ART[selBike], sh=am&&_bikeArt[am.s]; if(!sh)return false; const CW=352,CH=384, cr=SHEET_CROP[am.s], fit=ART_FIT[am.s]||{w:118,bottomY:32,dx:0}; const dw=fit.w, dh=dw*cr.h/cr.w;
+  const cmp=(screen==='play'&&bike)?((bike._cmpF||0)+(bike._cmpR||0))*0.5:0, sq=1-Math.min(0.14,cmp*0.022);   // подвеска = вертикальный squash к контакту
+  ctx.save(); ctx.translate(fit.dx,fit.bottomY); ctx.scale(1,sq);   // anchor у контакта → squash «садится» на колёса
+  ctx.drawImage(sh, am.c*CW+cr.x0, am.r*CH+cr.y0, cr.w, cr.h, -dw/2, -dh, dw, dh); ctx.restore(); return true; }
 // b204 РЕШЕНИЕ ФОНА (после b203-вердикта юзера «фон ужасен, не сочетается»): ФОТО-БЭКДРОПЫ УБРАНЫ ИЗ ИГРЫ НАСОВСЕМ.
 // Корень (3 захода b185-191/b203 не склеились): фото = язык иллюстрации, весь кадр полон ЯРКОГО не-данных света → структурно несовместим
 // с C-правилом «светятся только данные». Мир теперь = ОДИН код-язык: композиция Vice нашим стилем (закат-солнце + город-свечи + пальмы-силуэты
@@ -2014,7 +2022,7 @@ function draw(){
   if(screen!=='dead'){
     const _rx=lerp(bike._px===undefined?bike.x:bike._px,bike.x,slowLerp), _ry=lerp(bike._py===undefined?bike.y:bike._py,bike.y,slowLerp), _ra=lerp(bike._pa===undefined?bike.ang:bike._pa,bike.ang,slowLerp);   // b154: интерполяция позы в слоумо (slowLerp<1 только в пропущенном кадре)
     ctx.save(); ctx.translate(_rx,_ry); ctx.rotate(_ra); ctx.translate(0,-1);   // seat the TIRE CONTACT on the price line (was +12 → wheels buried ~13px "in the track"); -1 aligns wheel-bottom with the CG-implied ground (bike.y = lineY-DY)
-    drawMachine(BK(), bike.wheel, bike.rShift, lean, down&&bike.onG, boosting, riderAirB, riderSquat, trick, trickMix);   // b109: спрайт вынесен в drawMachine (реюз на экране БАЙКИ); b155: + динамика позы; b158: + FMX-трюк
+    if(!(artBike && drawMachineArt())) drawMachine(BK(), bike.wheel, bike.rShift, lean, down&&bike.onG, boosting, riderAirB, riderSquat, trick, trickMix);   // b236: иллюстрированный риг (флипы+squash), тумблер cb_artbike; фолбэк — b109 вектор-спрайт (динамика позы/FMX-трюк)
     ctx.restore();
   }
   ctx.restore(); ctx.restore();   // world translate + camera zoom   // b104: убрал красную ликв-линию (заменено плечо→скорость волны)
