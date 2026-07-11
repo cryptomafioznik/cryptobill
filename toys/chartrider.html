@@ -64,7 +64,7 @@ function lerp(a,b,t){return a+(b-a)*t;} function clamp(v,a,b){return v<a?a:v>b?b
 // false → full game everywhere. Single switch. Systems are GATED, never deleted.
 const CORE_TEST_MODE = false;   // b70: META LIVE — building the progression spine (upgrades/bikes with teeth, career, economy) on the confirmed rigid-body core
 // build stamp — bump on every change so a phone refresh can confirm it loaded fresh code (cache!)
-const BUILD = '2026-07-11 · b224';
+const BUILD = '2026-07-11 · b225';
 
 // ---------- procedural market terrain ----------
 // height map sampled every STEP px; generated forward as we ride. Market character:
@@ -1498,6 +1498,8 @@ function update(){
   camAir = lerp(camAir, clamp(_airH/280,0,1), _airH>camAir*280?0.25:0.08);   // rise fast into big air, ease out smoothly
   if(bike.onG){ trickZoom=Math.max(0,trickZoom-0.15); trickGnd++; if(trickGnd>24)trickAir=0; bike._flipCine=0; } else trickGnd=0;   // b150: на земле зум отпускает; b182: флип-синема перевзводится на посадке
   riderAirB=lerp(riderAirB, bike.onG?0:1, 0.14); riderSquat=Math.max(0,riderSquat-0.09);   // b155: поза — в полёте привстаёт, присед посадки затухает (ставится в just-landed)
+  if(trick && trickHeld && !bike.onG && bike.vy>0.4){ const _ly=terrainAt(bike.x+(bike.vx||0)*6).y;   // b224 АВТО-ШАБЛОН ТРЮКА (юзер: на мобиле не успеть отпустить до земли): свайп задал позу → она сама доигрывает и ВОЗВРАЩАЕТСЯ В СЕДЛО за ~12 кадров до контакта (спад 0.15/к → в седле к посадке). Вращение флипа + приземление контролирует ИГРОК (angV не трогаем)
+    if((_ly - bike.y) < 28 + bike.vy*12) trickHeld=false; }
   if(trick){ trickMix=clamp(trickMix + (trickHeld&&!bike.onG? 0.12 : -0.15), 0, 1);   // b158: поза перетекает (вход ~8к, возврат ~7к); держишь = держишь
     if(trickMix>0.6 && !bike.onG) trickT++;
     if(!trickHeld && trickMix<=0.01 && bike.onG) { trick=0; trickT=0; } }   // полностью вернулся на земле без посадки-резолва (страховка)
@@ -2440,18 +2442,21 @@ function spSport(g,B,plate){ const bod=B.body, ACC='rgba('+B.accent+',';
 function spMtb(g,B,plate){ const RIM='rgba('+B.rim+',', ACC='rgba('+B.accent+',';
   spAO(g,0,16,12,4,0.4);
   function tube(x0,y0,x1,y1,w,c1,c2){ spLine(g,x0,y0,x1,y1,c2,w); spLine(g,x0,y0-w*0.26,x1,y1-w*0.26,c1,w*0.42); }
-  tube(-27,15.5,-8.5,-8.5,3.0,'#7f8ba1','#2b3240'); tube(-27,15.5,-1,13.5,3.2,'#77839a','#252c3a');
-  tube(-8.5,-8.5,-1,13.5,3.4,'#828ea4','#2e3544');
-  tube(-8.5,-8.5,12.8,-8.8,3.6,'#8894aa','#333a4a'); tube(12.8,-8.8,-1,13.5,4.2,'#8894aa','#30374a'); tube(12.8,-8.8,15.8,-14.6,4.0,'#77839a','#272e3e');
-  spLine(g,-7.6,-9.4,11.9,-9.7,RIM+'0.9)',1.1);   // неон-акцент верхней трубы
-  spDot(g,14.2,-11.4,1,ACC+'0.9)');   // head badge
-  spDot(g,-8.5,-8.5,1,'rgba(160,175,196,0.5)'); spDot(g,-1,13.5,1,'rgba(160,175,196,0.5)'); spDot(g,12.8,-8.8,1,'rgba(160,175,196,0.5)');
+  // b224 СОВРЕМЕННАЯ MTB-ГЕОМЕТРИЯ (не «дедовский» треугольник): слопинг верхней трубы вниз-назад, ТОЛСТЫЙ даунтюб (hydroform), длинный подседел, слак хедтюб. Узлы: заднее(-27,15.5) BB(-1,13.5) седло-кластер(-7,-2.5) хедтюб(13,-11.5)→(15.8,-14.6)
+  tube(-27,15.5,-7,-2.5,3.0,'#7f8ba1','#2b3240'); tube(-27,15.5,-1,13.5,3.5,'#77839a','#252c3a');   // сидстей + чейнстей (компактный зад)
+  tube(-1,13.5,-7,-2.5,3.6,'#828ea4','#2e3544');   // подседельная труба BB→кластер
+  tube(13,-11.5,-7,-2.5,3.4,'#8894aa','#333a4a');   // ВЕРХНЯЯ ТРУБА слопинг вниз-назад (перёд высоко → зад низко)
+  tube(13,-11.5,-1,13.5,5.6,'#98a4bb','#30374a');   // ДАУНТЮБ — толстый гидроформ (сигнатура MTB)
+  tube(13,-11.5,15.8,-14.6,4.2,'#77839a','#272e3e');   // хедтюб (слак)
+  spLine(g,11.5,-11.9,-6,-3.2,RIM+'0.9)',1.1);   // неон-акцент по слопинг-трубе
+  spDot(g,14.4,-13,1,ACC+'0.9)');   // head badge
+  spDot(g,-7,-2.5,1,'rgba(160,175,196,0.5)'); spDot(g,-1,13.5,1,'rgba(160,175,196,0.5)'); spDot(g,13,-11.5,1,'rgba(160,175,196,0.5)');
   // b222 MTB ВИЛКА-АМОРТИЗАТОР: толстая верхняя штанина (crown) + смещённый нижний слайдер + золотая нога = читается как suspension, не жёсткая спица
   spLine(g,15.4,-14.6,21,0,'#10151f',5.6); spLine(g,15.7,-14.9,20.6,-0.4,'#333c4e',3.4);   // верхняя штанина (толстая)
   spLine(g,20.6,-0.6,27.6,15.6,'#0c1119',6.4); spLine(g,20.9,-0.9,27.2,15.2,'#28303f',3.8);   // нижний слайдер (ещё толще = ход подвески)
   spDot(g,20.7,-0.5,2.0,'#3a4356');   // корона-стык слайдера
   spLine(g,16.3,-12.8,20,-2,'#c9a54a',2.2); spLine(g,16.1,-13,19,-4,'rgba(255,241,190,0.6)',0.8);   // золотая нога
-  spLine(g,-8.4,-8.8,-9.6,-13.2,'#39414f',2.8);   // подседельный + седло (выше = MTB-посадка)
+  spLine(g,-7,-2.5,-9.4,-12.8,'#2a3140',2.7); spLine(g,-7.2,-2.8,-9.5,-12.4,'#454f63',1.0);   // b224 ДЛИННЫЙ ОТКРЫТЫЙ подседел кластер→седло (много выноса = современный MTB/дроппер)
   g.save(); g.translate(-9.4,-12.6); g.rotate(-0.06);
   spRR(g,-4.8,-1.3,9.6,2.6,1.3,spLin(g,0,-1.3,0,1.3,[[0,'#2b313f'],[1,'#0d1017']]));
   spLine(g,-4.2,-1.2,4.4,-1.2,'rgba(230,240,252,0.3)',0.6); g.restore();
