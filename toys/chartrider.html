@@ -64,7 +64,7 @@ function lerp(a,b,t){return a+(b-a)*t;} function clamp(v,a,b){return v<a?a:v>b?b
 // false → full game everywhere. Single switch. Systems are GATED, never deleted.
 const CORE_TEST_MODE = false;   // b70: META LIVE — building the progression spine (upgrades/bikes with teeth, career, economy) on the confirmed rigid-body core
 // build stamp — bump on every change so a phone refresh can confirm it loaded fresh code (cache!)
-const BUILD = '2026-07-11 · b219';
+const BUILD = '2026-07-11 · b220';
 
 // ---------- procedural market terrain ----------
 // height map sampled every STEP px; generated forward as we ride. Market character:
@@ -2828,38 +2828,39 @@ function drawMenus(){
     UI.mute=null; UI.pause=null;
   } else if(screen==='settings'){
     ctx.fillStyle='rgba(6,5,16,0.96)'; ctx.fillRect(0,0,W,H);
-    ctx.fillStyle='#eafaff'; ctx.font='800 23px ui-monospace,monospace'; ctx.fillText('⚙ НАСТРОЙКИ',W/2,H*0.12);
+    ctx.fillStyle='#eafaff'; ctx.font='800 23px ui-monospace,monospace'; ctx.fillText('⚙ НАСТРОЙКИ',W/2,H*0.065);
     const cx=W/2, cw=292;
-    let y=H*0.19; UI.setScheme={x:cx-cw/2,y:y,w:cw,h:64}; panel(UI.setScheme.x,UI.setScheme.y,cw,64,'rgba(120,255,180,0.6)');   // control scheme (tap to cycle)
+    let y=H*0.115; UI.setScheme={x:cx-cw/2,y:y,w:cw,h:64}; panel(UI.setScheme.x,UI.setScheme.y,cw,64,'rgba(120,255,180,0.6)');   // control scheme (tap to cycle)
     ctx.fillStyle='#9fb6dc'; ctx.font='700 10px ui-monospace,monospace'; ctx.fillText('СХЕМА УПРАВЛЕНИЯ  (тап = следующая)',cx,y+18);
     ctx.fillStyle='#9ff0c8'; ctx.font='800 17px ui-monospace,monospace'; ctx.fillText('‹  '+SCHEME_NAME[ctrlScheme]+'  ›',cx,y+39);
     ctx.fillStyle='rgba(150,175,205,0.7)'; ctx.font='600 9px ui-monospace,monospace'; ctx.fillText(SCHEME_DESC[ctrlScheme],cx,y+55);
-    y+=78; UI.setPump={x:cx-cw/2,y:y,w:cw,h:54}; panel(UI.setPump.x,UI.setPump.y,cw,54,'rgba(120,200,255,0.55)');   // handedness / PUMP side
+    y+=68; UI.setPump={x:cx-cw/2,y:y,w:cw,h:54}; panel(UI.setPump.x,UI.setPump.y,cw,54,'rgba(120,200,255,0.55)');   // handedness / PUMP side
     ctx.fillStyle='#9fb6dc'; ctx.font='700 10px ui-monospace,monospace'; ctx.fillText('ВЕДУЩАЯ РУКА · СТОРОНА PUMP',cx,y+19);
     ctx.fillStyle='#9ff0c8'; ctx.font='800 15px ui-monospace,monospace'; ctx.fillText(pumpSide==='left'?'ПРАВША · PUMP СЛЕВА':'ЛЕВША · PUMP СПРАВА',cx,y+41);
-    y+=66; UI.setMute={x:cx-cw/2,y:y,w:cw,h:44}; panel(UI.setMute.x,UI.setMute.y,cw,44,'rgba(150,170,210,0.45)');   // sound
+    y+=58; UI.setMute={x:cx-cw/2,y:y,w:cw,h:44}; panel(UI.setMute.x,UI.setMute.y,cw,44,'rgba(150,170,210,0.45)');   // sound
     ctx.fillStyle='#bcd0ee'; ctx.font='14px ui-monospace,monospace'; ctx.fillText(muted?'ЗВУК:   ВЫКЛ':'ЗВУК:   ВКЛ',cx,y+27);
-    y+=56; UI.setWassist={x:cx-cw/2,y:y,w:cw,h:54}; panel(UI.setWassist.x,UI.setWassist.y,cw,54,'rgba(150,220,255,0.5)');   // b147: вилли-помощник / PRO
+    y+=52; UI.setWassist={x:cx-cw/2,y:y,w:cw,h:54}; panel(UI.setWassist.x,UI.setWassist.y,cw,54,'rgba(150,220,255,0.5)');   // b147: вилли-помощник / PRO
     ctx.fillStyle='#9fb6dc'; ctx.font='700 10px ui-monospace,monospace'; ctx.fillText('ВИЛЛИ-БАЛАНС  (езда на заднем колесе)',cx,y+19);
     ctx.fillStyle=wheelieAssist?'#9ff0c8':'#ffb060'; ctx.font='800 15px ui-monospace,monospace'; ctx.fillText(wheelieAssist?'ПОДУШКА У ГРАНИ:  ВКЛ':'PRO:  ЧИСТАЯ ФИЗИКА',cx,y+41);
     ctx.fillStyle='rgba(140,160,195,0.6)'; ctx.font='600 9px ui-monospace,monospace'; ctx.fillText('жесты — для тебя · кнопки/наклон — для новичков',cx,y+68);
-    y+=80; UI.setTgrip={x:cx-cw/2,y:y,w:cw,h:54}; panel(UI.setTgrip.x,UI.setTgrip.y,cw,54,'rgba(255,214,120,0.5)');   // b171: хват FMX-поз
+    y+=72; UI.setTgrip={x:cx-cw/2,y:y,w:cw,h:54}; panel(UI.setTgrip.x,UI.setTgrip.y,cw,54,'rgba(255,214,120,0.5)');   // b171: хват FMX-поз
     ctx.fillStyle='#9fb6dc'; ctx.font='700 10px ui-monospace,monospace'; ctx.fillText('ТРЮК-ХВАТ  (FMX-позы в полёте)',cx,y+19);
     ctx.fillStyle=trickGrip==='sticky'?'#ffd678':'#9ff0c8'; ctx.font='800 13px ui-monospace,monospace';
     ctx.fillText(trickGrip==='sticky'?'ЗАЛИПАЕТ: свайп = поза · тап = отпуск':'ДЕРЖАТЬ: палец на экране = поза',cx,y+41);
-    y+=66; UI.setWorld={x:cx-cw/2,y:y,w:cw,h:54}; panel(UI.setWorld.x,UI.setWorld.y,cw,54,'rgba(150,110,255,0.55)');   // b184: премиум-мир (фон)
+    y+=58; UI.setWorld={x:cx-cw/2,y:y,w:cw,h:54}; panel(UI.setWorld.x,UI.setWorld.y,cw,54,'rgba(150,110,255,0.55)');   // b184: премиум-мир (фон)
     ctx.fillStyle='#9fb6dc'; ctx.font='700 10px ui-monospace,monospace'; ctx.fillText('МИР  (фон за графиком)',cx,y+19);
     ctx.fillStyle=worldNew?'#c9b0ff':'#9ff0c8'; ctx.font='800 14px ui-monospace,monospace'; ctx.fillText(worldNew?'НОВЫЙ: город-из-свечей + глубина':'КЛАССИКА',cx,y+41);
-    y+=66; UI.setCoin={x:cx-cw/2,y:y,w:cw,h:54}; panel(UI.setCoin.x,UI.setCoin.y,cw,54,'rgba(255,200,90,0.5)');   // b217: спрайт монеты ↔ классика
+    y+=58; UI.setCoin={x:cx-cw/2,y:y,w:cw,h:54}; panel(UI.setCoin.x,UI.setCoin.y,cw,54,'rgba(255,200,90,0.5)');   // b217: спрайт монеты ↔ классика
     ctx.fillStyle='#9fb6dc'; ctx.font='700 10px ui-monospace,monospace'; ctx.fillText('МОНЕТЫ',cx,y+19);
     ctx.fillStyle=coinAsset?'#ffd678':'#9ff0c8'; ctx.font='800 14px ui-monospace,monospace'; ctx.fillText(coinAsset?'ПРЕМИУМ-СПРАЙТ':'КЛАССИКА (кружок $)',cx,y+41);
-    y+=66; UI.setDepth={x:cx-cw/2,y:y,w:cw,h:54}; panel(UI.setDepth.x,UI.setDepth.y,cw,54,'rgba(120,150,255,0.5)');   // b219: глубина фона (дальний скайлайн)
+    y+=58; UI.setDepth={x:cx-cw/2,y:y,w:cw,h:54}; panel(UI.setDepth.x,UI.setDepth.y,cw,54,'rgba(120,150,255,0.5)');   // b219: глубина фона (дальний скайлайн)
     ctx.fillStyle='#9fb6dc'; ctx.font='700 10px ui-monospace,monospace'; ctx.fillText('ГЛУБИНА ФОНА  (дальний город-горизонт)',cx,y+19);
     ctx.fillStyle=depthNew?'#a9c8ff':'#9ff0c8'; ctx.font='800 14px ui-monospace,monospace'; ctx.fillText(depthNew?'ВКЛ: скайлайн-горизонт':'ВЫКЛ (классика)',cx,y+41);
-    y+=66; if(resetArm>0)resetArm--; UI.setReset={x:cx-cw/2,y:y,w:cw,h:46}; const armed=resetArm>0;   // b95 СБРОС ПРОГРЕССА (2-тап) — чистый старт для анализа
+    // b220 БАГФИКС: сброс+НАЗАД ЯКОРЕНЫ к низу с явным зазором — раньше setReset «утекал» вниз и налезал на НАЗАД (юзер жал Назад → попадал в обнуление → потерял прогресс). Теперь НАЗАД НИКОГДА не над сбросом.
+    if(resetArm>0)resetArm--; UI.setReset={x:cx-cw/2,y:H-150,w:cw,h:46}; const armed=resetArm>0;   // b95 СБРОС ПРОГРЕССА (2-тап)
     panel(UI.setReset.x,UI.setReset.y,cw,46, armed?'rgba(255,110,90,0.95)':'rgba(255,150,120,0.45)', armed?'rgba(60,20,16,0.66)':'rgba(30,18,16,0.4)');
-    ctx.fillStyle=armed?'#ff9a7a':'#e0a890'; ctx.font='800 14px ui-monospace,monospace'; ctx.fillText(armed?'⟲ ТОЧНО? ЖМИ ЕЩЁ РАЗ':'⟲ ОБНУЛИТЬ ПРОГРЕСС',cx,y+28);
-    UI.setBack={x:cx-90,y:H-88,w:180,h:46}; panel(UI.setBack.x,UI.setBack.y,180,46,'rgba(150,170,210,0.6)'); ctx.fillStyle='#cfe0ff'; ctx.font='700 15px ui-monospace,monospace'; ctx.fillText('←  НАЗАД',cx,UI.setBack.y+29);
+    ctx.fillStyle=armed?'#ff9a7a':'#e0a890'; ctx.font='800 14px ui-monospace,monospace'; ctx.fillText(armed?'⟲ ТОЧНО? ЖМИ ЕЩЁ РАЗ':'⟲ ОБНУЛИТЬ ПРОГРЕСС',cx,UI.setReset.y+28);
+    UI.setBack={x:cx-90,y:H-80,w:180,h:46}; panel(UI.setBack.x,UI.setBack.y,180,46,'rgba(150,170,210,0.6)'); ctx.fillStyle='#cfe0ff'; ctx.font='700 15px ui-monospace,monospace'; ctx.fillText('←  НАЗАД',cx,UI.setBack.y+29);
     UI.mute=null; UI.pause=null;
   }
   ctx.textAlign='left';
