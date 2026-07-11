@@ -64,7 +64,7 @@ function lerp(a,b,t){return a+(b-a)*t;} function clamp(v,a,b){return v<a?a:v>b?b
 // false → full game everywhere. Single switch. Systems are GATED, never deleted.
 const CORE_TEST_MODE = false;   // b70: META LIVE — building the progression spine (upgrades/bikes with teeth, career, economy) on the confirmed rigid-body core
 // build stamp — bump on every change so a phone refresh can confirm it loaded fresh code (cache!)
-const BUILD = '2026-07-11 · b225';
+const BUILD = '2026-07-11 · b226';
 
 // ---------- procedural market terrain ----------
 // height map sampled every STEP px; generated forward as we ride. Market character:
@@ -1825,6 +1825,8 @@ function draw(){
     for(let i=i0;i<=i1;i++){ const c=terr[i]; if(!c||c.gap)continue; const col=c.up?'46,230,166':'255,59,92';
       const by0=Math.min(c.open,c.close), bh=Math.max(2,Math.abs(c.close-c.open)), wlo=Math.max(0,c.lo-(by0+bh));
       const by=worldNew? c.y+TDECK*0.5+2 : by0, bo=by+bh;   // worldNew: тело свисает с НИЗА ленты (b207 лента симметрична: низ = ось+TDECK/2), классика: на линии как было
+      if(depthNew){ const _ct=by, _cb=by+120, pg=ctx.createLinearGradient(0,_ct,0,_cb); pg.addColorStop(0,'rgba(14,11,30,0.62)'); pg.addColorStop(0.55,'rgba(14,11,30,0.30)'); pg.addColorStop(1,'rgba(14,11,30,0)'); ctx.fillStyle=pg; ctx.fillRect(c.x-cw*0.5,_ct,cw,_cb-_ct);   // b225 КОЛОННА-ОПОРА ПОД ДАННЫМИ: тёмная, затухает вниз в дымку/воду = заполняет пустоту под декой, дорога СТОИТ на свечах (данные держат дорогу). Неон-грани данных рисуются ПОВЕРХ = читаются
+        ctx.fillStyle='rgba(210,225,255,0.05)'; ctx.fillRect(c.x-cw*0.5,_ct,1.2,(_cb-_ct)*0.6); }   // тонкий хайлайт-ребро колонны (объём)
       ctx.strokeStyle='rgba('+col+','+aW+')'; ctx.lineWidth=1;
       ctx.beginPath(); ctx.moveTo(c.x,c.hi); ctx.lineTo(c.x,worldNew?c.y:by0); ctx.stroke();   // фитиль ВВЕРХ: hi → линия (точка данных над дорогой)
       if(wlo>0){ ctx.strokeStyle='rgba('+col+','+(0.30*CA*0.55).toFixed(3)+')'; ctx.beginPath(); ctx.moveTo(c.x,bo); ctx.lineTo(c.x,bo+wlo); ctx.stroke(); ctx.strokeStyle='rgba('+col+','+aW+')'; }   // фитиль ВНИЗ приглушён (b212: читался «потёками» под лентой)
