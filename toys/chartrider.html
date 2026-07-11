@@ -64,7 +64,7 @@ function lerp(a,b,t){return a+(b-a)*t;} function clamp(v,a,b){return v<a?a:v>b?b
 // false → full game everywhere. Single switch. Systems are GATED, never deleted.
 const CORE_TEST_MODE = false;   // b70: META LIVE — building the progression spine (upgrades/bikes with teeth, career, economy) on the confirmed rigid-body core
 // build stamp — bump on every change so a phone refresh can confirm it loaded fresh code (cache!)
-const BUILD = '2026-07-11 · b228';
+const BUILD = '2026-07-11 · b229';
 
 // ---------- procedural market terrain ----------
 // height map sampled every STEP px; generated forward as we ride. Market character:
@@ -113,6 +113,7 @@ let ledgeRunup=0, ledgeStepsLeft=0, ledgePrevY=0, ledgeTopY=0, ledgeStepsThis=2,
 let kickRunup=0, kickRampLeft=0, kickLandLeft=0, kickBaseY=0, kickRampBot=0, kickLandY=0, nextKickX=1700;   // TRICK KICKER phases: DESCENT run-up (bomb down → build speed, logical setup) → steep ramp UP (launches you ∝ speed for flips) → flat solid landing (no chasm)
 let whoopRunup=0, whoopLeft=0, whoopBaseY=0, whoopPhase=0, nextWhoopX=2200;   // WHOOPS (b53): flat approach → a rhythm section of rollers (skim/catch air at speed, roll over slow) — dynamic flow, no death
 let mudLeft=0, mudRamp=0, mudRunup=0, mudBaseY=0, mudLipBot=0, nextMudX=2600;   // MUD (b54/b63/b66): DESCENT run-up (build speed) → LIP-ramp → boggy patch you JUMP OVER (clear it = clean; land in it = saps speed). Logical, not random
+let climbRunup=0, climbLeft=0, climbBaseY=0, climbBotY=0, nextClimbX=2400;   // b229 КРУТОЙ ПОДЪЁМ-БАЛАНСИРОВКА (GD-ядро сложности): разгон-спуск (момент) → крутой затяжной подъём КРУЧЕ кэпа (лезешь на моменте + вес вперёд, чтоб не опрокинуться назад) → гребень. Сложность = удержать баланс, не «долететь через яму». Управление плавное, вызов в рельефе
 let dropLandLeft=0, dropLandY=0, nextDropX=2000;   // DROPS/CLIFFS (b69): terrain steps DOWN one node (convex edge) → rigid body flies off as a projectile → flat lower shelf catches it. NOT the old gap-pit (close=H*0.99 = wheels rest on bottom). climbCap caps any rise after → no "pit-wall"
 let curEvType='', evBanner='', evBannerT=0, evColor='90,240,150', evGlow=0, evBonus=0, lastWarnX=-1, evWarnType=''; // bike-side event state
 function pickEvent(gz){ const z=((gz%5)+5)%5, r=Math.random();
@@ -153,12 +154,14 @@ function genSeg(){
     if(prevC - close > maxRise){ close = prevC - maxRise; walk = close - baseY - roll; }
   }
   // ---- GAPS (chasm you JUMP) + LEDGES (vertical step you LOFT the front onto): structured skill obstacles ----
-  let isGap=false, gapLip=0, isStep=false, stepTop=0, isKick=false, isWhoop=false, isMud=false, isDrop=false;
+  let isGap=false, gapLip=0, isStep=false, stepTop=0, isKick=false, isWhoop=false, isMud=false, isDrop=false, isClimb=false;
   if(!isEv){
     if(gapRunup>0){ const k=6-gapRunup; close=clamp(gapPrevY + k*13, 70, H*0.82); walk=close-baseY; gapRunup--; if(gapRunup<=0){ gapRampBot=close; gapRampLeft=4; } }   // b215 РАЗГОН-СПУСК (5 узлов ~65px вниз) → набрать скорость перед рампой
     else if(gapRampLeft>0){ const k=5-gapRampLeft; close=clamp(gapRampBot - k*TUNE.gapRampH, 70, H*0.95); walk=close-baseY; if(gapRampLeft===1)isKick=true; gapRampLeft--; if(gapRampLeft<=0){ gapLip=clamp(gapRampBot - 4*TUNE.gapRampH,70,H*0.9); gapLeft=Math.min(TUNE.gapWmax, TUNE.gapWmin+Math.floor((volK-1)*TUNE.gapWvol*4)); gapBaseY=clamp(gapRampBot + TUNE.gapDrop, 70, H*0.9); } }   // b215 РАМПА-ВОЗВЫШЕННОСТЬ UP (4 узла, last=kick lip → launch ∝ vx). Ширина пропасти ∝ волатильности; посадка НИЖЕ низа разгона (с высоты вниз)
     else if(gapLeft>0){ isGap=true; gapLip=gapBaseY; close=H*0.99; gapLeft--; if(gapLeft<=0){ walk=gapBaseY-baseY; gapLandFlat=6; } }   // b215 ПРОПАСТЬ (ширина ∝ сложности) — не долетел = падение (wipeout gap)
     else if(gapLandFlat>0){ close=gapBaseY; walk=close-baseY; gapLandFlat--; }   // b215 ПОСАДКА НИЖЕ (плоский выкат, snapped = чистое приземление с высоты)
+    else if(climbRunup>0){ const k=6-climbRunup; close=clamp(climbBaseY + k*13, 70, H*0.86); walk=close-baseY; climbRunup--; if(climbRunup<=0){ climbBotY=close; climbLeft=TUNE.climbN; } }   // b229 разгон-спуск → набрать момент под крутой подъём (логичный setup)
+    else if(climbLeft>0){ const k=TUNE.climbN-climbLeft+1; close=clamp(climbBotY - k*TUNE.climbSteep, 70, H*0.95); walk=close-baseY; isClimb=true; climbLeft--; }   // b229 КРУТОЙ ЗАТЯЖНОЙ ПОДЪЁМ (круче climbCap): лезешь на моменте разгона + держишь вес ВПЕРЁД, иначе газ+крутизна опрокидывают НАЗАД = ядро сложности GD (баланс, не гэп)
     else if(ledgeRunup>0){ close=clamp(ledgePrevY,70,H*0.92); walk=close-baseY; ledgeRunup--; if(ledgeRunup<=0){ ledgeStepsLeft=ledgeStepsThis*3; ledgeTopY=ledgePrevY; } }   // LEDGE flat run-up: set up the wheelie (fair — you can prepare)
     else if(ledgeStepsLeft>0){ const pos=(ledgeStepsThis*3-ledgeStepsLeft)%3; if(pos<2){ ledgeTopY=clamp(ledgeTopY-ledgeHThis*0.5,70,H*0.86); if(pos===0){ isStep=true; stepTop=ledgeTopY; } } close=ledgeTopY; walk=close-baseY; ledgeStepsLeft--; }   // b57: stepsThis/HThis vary per ledge → single small step or a tall multi-step staircase. step = 2-node RISER (rideable on momentum) + 1-node tread; first node tagged for ▲ УСТУП
     else if(kickRunup>0){ const k=6-kickRunup; close=clamp(kickBaseY + k*13, 70, H*0.88); walk=close-baseY; kickRunup--; if(kickRunup<=0){ kickRampBot=close; kickRampLeft=3; } }   // b51: DESCENT run-up (6 nodes, ~65px down ≥ ramp's 66px up → NET downhill into the launch) — bomb down to BUILD SPEED so the ramp always launches you well ≥ cruise (logical "necessary place", like a real moto setup), not a random flat where you arrive slow
@@ -179,6 +182,9 @@ function genSeg(){
     else if(TUNE.kickEvery>0 && genX>=nextKickX && genX>TUNE.kickStart*10 && terr.length>16 && regime!=='pump' && regime!=='crash' && lastRegime!=='bull' && close>H*0.5){   // schedule a TRICK KICKER (not mid-climb; needs room ABOVE for the ramp)
       kickBaseY=close; kickRunup=6; nextKickX=genX + TUNE.kickEvery*10*densK + Math.random()*1000*densK;   // b51: descent run-up (6 nodes); tighter spacing jitter since kickers are now the main feature
     }
+    else if(TUNE.climbEvery>0 && genX>=nextClimbX && genX>TUNE.climbStart*10 && terr.length>16 && regime!=='pump' && regime!=='crash' && lastRegime!=='bull' && close>H*0.52){   // b229 расписание КРУТОГО ПОДЪЁМА: не мид-климб, старт низкий (место расти вверх)
+      climbBaseY=close; climbRunup=6; nextClimbX=genX + TUNE.climbEvery*10*densK + Math.random()*1200*densK;
+    }
     else if(TUNE.whoopEvery>0 && genX>=nextWhoopX && genX>TUNE.whoopStart*10 && terr.length>16 && regime!=='pump' && regime!=='crash' && lastRegime!=='bull'){   // schedule a WHOOPS section (rhythm rollers on calm terrain)
       whoopBaseY=close; whoopRunup=3; nextWhoopX=genX + TUNE.whoopEvery*10*densK + Math.random()*900*densK;
     }
@@ -196,9 +202,9 @@ function genSeg(){
   const haz=(!CORE_TEST_MODE && !isEv && !isGap && genX>1200 && regime!=='pump' && regime!=='crash' && (terr.length-lastHazIdx)>=10 && Math.random()<hzRate); // CORE: no sell-walls (they just sap momentum, esp. before a gap — replaced by organic terrain obstacles like mud later). no walls in events/gaps; none in first ~120m
   if(haz) lastHazIdx=terr.length;
   const coin = isEv==='rally' ? (Math.random()<0.55) : (!haz && !isEv && !isGap && Math.random()<0.2);   // rally rains gems
-  terr.push({x:genX, y:close, open, close, hi:top-wick, lo:bot+wick*0.6, up, haz:haz, coin:coin, ev:isEv, gap:isGap, lipY:gapLip, step:isStep, topY:stepTop, kick:isKick, whoop:isWhoop, mud:isMud, drop:isDrop}); genX+=STEP;
+  terr.push({x:genX, y:close, open, close, hi:top-wick, lo:bot+wick*0.6, up, haz:haz, coin:coin, ev:isEv, gap:isGap, lipY:gapLip, step:isStep, topY:stepTop, kick:isKick, whoop:isWhoop, mud:isMud, drop:isDrop, climb:isClimb}); genX+=STEP;
   // b68: SMOOTH the RIDE LINE — the candlestick line is cornery (sharp node-to-node), so the rigid body bounces/stutters on the corners + over-launches ("странное торможение на подъёмах", too much air). Smooth ONLY .y (the line you RIDE + the ground fill); the candles' open/close/hi/lo stay sharp = chart texture. 5-tap blur on a node a few behind the front (it has neighbours; the bike reaches it already-smoothed). Skip feature/gap nodes (kept sharp for ramps/steps when re-enabled).
-  { const n=terr.length; if(n>=5){ const w0=terr[n-5],w1=terr[n-4],w2=terr[n-3],w3=terr[n-2],w4=terr[n-1]; if(!(w0.gap||w1.gap||w2.gap||w3.gap||w4.gap||w0.drop||w1.drop||w2.drop||w3.drop||w4.drop||w2.kick||w2.step)) w2.y = w0.y*0.10+w1.y*0.22+w2.y*0.36+w3.y*0.22+w4.y*0.10; } }
+  { const n=terr.length; if(n>=5){ const w0=terr[n-5],w1=terr[n-4],w2=terr[n-3],w3=terr[n-2],w4=terr[n-1]; if(!(w0.gap||w1.gap||w2.gap||w3.gap||w4.gap||w0.drop||w1.drop||w2.drop||w3.drop||w4.drop||w2.kick||w2.step||w0.climb||w1.climb||w2.climb||w3.climb||w4.climb)) w2.y = w0.y*0.10+w1.y*0.22+w2.y*0.36+w3.y*0.22+w4.y*0.10; } }   // b229: крутой подъём НЕ сглаживать (склон должен остаться крутым = вызов балансу)
 }
 function terrainAt(x){ // interpolated height + slope at world x
   const i=Math.floor(x/STEP); if(i<0||i+1>=terr.length) return {y:baseY,ang:0};
@@ -531,7 +537,11 @@ const TUNE = {
   balanceGrav:  0.0007,  // 33. сила, с которой гравитация клонит нос ВНИЗ на балансе (маятник вокруг заднего). БОЛЬШЕ = труднее удержать (>0.0010 уже неудержимо — валит носом вниз); держи вилли активным наклоном НАЗАД. Равновесие (ЦТ над осью) ≈ −0.76рад
   wheelR:       13,      // 34. радиус колеса (px) для ЗАЦЕПА КРАЯ: заднее стоит на ВЫСШЕЙ точке в пределах ±R → край колеса цепляет кромку, не падаешь пока центр колеса не ушёл за край дальше R
   // ---- ТРЮК-КИКЕР (b42): рампа-трамплин, подбрасывает в воздух ∝ скорости → крутишь САЛЬТО наклоном (флипы уже в очках). НЕТ пропасти — летишь прямо = безопасно, крутишь = риск/награда ----
-  kickEvery:    270,     // 35. b228: 340→270 ЧАЩЕ трамплины (флипы+драйв плотнее). b68: вернул, но ПОЛОГИМ kickH под новую физику (твёрдое тело вылетает соразмерно скорости с пологой рампы, не на пол-экрана). 35-OLD:230 ср. дистанция между трамплинами (м); 0 = выкл. b51: 340→230 ЧАЩЕ — трамплины теперь ГЛАВНАЯ фича (заменили обрывы). Чистая награда/драйв + флипы
+  kickEvery:    270,     // 35. b228: 340→270 ЧАЩЕ трамплины (флипы+драйв плотнее). b68: вернул, но ПОЛОГИМ kickH под новую физику
+  climbEvery:   420,     // 35b. b229 КРУТОЙ ПОДЪЁМ-БАЛАНСИРОВКА (GD-ядро) ср. дистанция (м); 0=выкл. Фича = разгон-спуск→крутой затяжной подъём→гребень
+  climbStart:   360,     // 35c. первый крутой подъём после (м) — после онбординга
+  climbSteep:   25,      // 35d. крутизна подъёма px/узел (норм.кэп ~18 = ~34°; 25 ≈ ~44° = КРУЧЕ кэпа, лезешь моментом). ВЫШЕ = злее/нужно больше разгона. КАЛИБРОВКА руками по телефону
+  climbN:       6,       // 35e. длина крутого склона (узлов). ДЛИННЕЕ = момента может не хватить (заглохнешь) = сложнее. Держать так, чтоб хороший разгон вывозил (твёрдое тело вылетает соразмерно скорости с пологой рампы, не на пол-экрана). 35-OLD:230 ср. дистанция между трамплинами (м); 0 = выкл. b51: 340→230 ЧАЩЕ — трамплины теперь ГЛАВНАЯ фича (заменили обрывы). Чистая награда/драйв + флипы
   kickStart:    170,     // 36. первый трамплин после (м)
   kickH:        13,      // 37. b68: 22→13 — ПОЛОГАЯ рампа кикера под твёрдое тело (вылет ∝ скорости, соразмерный). 3 узла × 13 = 39px рампа. Взлёт чисто эмерджентный (поп kickPop ниже больше не пуляет — твёрдое тело само летит с геометрии)
   kickPop:      2.4,     // 38. ПОП кикера: vy = −(vx×это + 4), кап −20 (b49: 0.7→2.4 — теперь поп ПРОПОРЦИОНАЛЕН скорости, не фикс −14. Медленно = мягкий хоп (всегда launch, не «не подпрыгнул»), круиз ~5.6 ≈ −17 (флип-фил тот же), быстро = кап −20 (естественно). БОЛЬШЕ = круче зависимость от скорости
@@ -948,6 +958,7 @@ function reset(){
   gapLeft=0; nextGapX=TUNE.gapStart*10; gapLandFlat=0; overGap=false; gapLipNow=0; gapFarX=0; gapFxT=0; gapRunup=0; gapRampLeft=0;   // GAPS: first chasm after gapStart
   ledgeRunup=0; ledgeStepsLeft=0; ledgeTopY=0; nextLedgeX=TUNE.ledgeStart*10;   // LEDGES: first step after ledgeStart
   kickRunup=0; kickRampLeft=0; kickLandLeft=0; nextKickX=TUNE.kickStart*10;   // KICKERS: first trick ramp after kickStart
+  climbRunup=0; climbLeft=0; nextClimbX=TUNE.climbStart*10;   // b229 КРУТОЙ ПОДЪЁМ: первый после climbStart
   whoopRunup=0; whoopLeft=0; whoopPhase=0; nextWhoopX=TUNE.whoopStart*10;   // WHOOPS: first rhythm section after whoopStart
   mudLeft=0; mudRamp=0; mudRunup=0; nextMudX=TUNE.mudStart*10;   // MUD: first boggy section after mudStart
   dropLandLeft=0; nextDropX=TUNE.dropStart*10;   // DROPS/CLIFFS: first cliff after dropStart
