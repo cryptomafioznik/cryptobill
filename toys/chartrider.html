@@ -64,7 +64,7 @@ function lerp(a,b,t){return a+(b-a)*t;} function clamp(v,a,b){return v<a?a:v>b?b
 // false → full game everywhere. Single switch. Systems are GATED, never deleted.
 const CORE_TEST_MODE = false;   // b70: META LIVE — building the progression spine (upgrades/bikes with teeth, career, economy) on the confirmed rigid-body core
 // build stamp — bump on every change so a phone refresh can confirm it loaded fresh code (cache!)
-const BUILD = '2026-07-11 · b234';
+const BUILD = '2026-07-11 · b235';
 
 // ---------- procedural market terrain ----------
 // height map sampled every STEP px; generated forward as we ride. Market character:
@@ -653,6 +653,14 @@ let _skyImg=null,_skyRdy=false; try{ const _si=new Image(); _si.onload=()=>{ con
 let _coinImg=null,_coinRdy=false; try{ const _im=new Image(); _im.onload=()=>{ const S=_im.naturalWidth||256, cc=document.createElement('canvas'); cc.width=S; cc.height=S; const cg=cc.getContext('2d'); cg.drawImage(_im,0,0);   // b217: РАДИАЛЬНАЯ АЛЬФА-МАСКА при загрузке — у исходника углы не совсем прозрачны (заваленный глоу = тёмный квадрат на светлом фоне). destination-in радиалом убивает углы (r>S/2), диск+ореол живут с мягким краем
     cg.globalCompositeOperation='destination-in'; const rg=cg.createRadialGradient(S/2,S/2,S*0.40,S/2,S/2,S*0.44); rg.addColorStop(0,'rgba(0,0,0,1)'); rg.addColorStop(1,'rgba(0,0,0,0)'); cg.fillStyle=rg; cg.fillRect(0,0,S,S); _coinImg=cc; _coinRdy=true; };   // .40/.44: режем ровно у золотого обода — тёмный глоу-ореол убран (на тёмном мире чисто; белого фона в игре нет)
   _im.src=(location.pathname.indexOf('/toys/')>=0?'':'toys/')+'assets/coin.png'; }catch(e){}   // путь как у moto1.glb (корневой URL vs /toys/)
+// b235 ИЛЛЮСТРИРОВАННЫЕ БАЙКИ (арты юзера): спрайт-сетки 4×2 (352×384) → карточки гаража/выбора. Динамичный риг — отдельный заход; тут статичные hi-res превью
+let _bikeArt={}, _bikeArtRdy={};
+function _loadSheet(k, file, key){ try{ const im=new Image(); im.onload=()=>{ if(key){ const cc=document.createElement('canvas'); cc.width=im.naturalWidth; cc.height=im.naturalHeight; const g=cc.getContext('2d'); g.drawImage(im,0,0); const d=g.getImageData(0,0,cc.width,cc.height), p=d.data; for(let i=0;i<p.length;i+=4){ const r=p[i],gg=p[i+1],b=p[i+2], mx=Math.max(r,gg,b), mn=Math.min(r,gg,b), sat=mx===0?0:(mx-mn)/mx; if(mx>150 && sat<0.16) p[i+3]=0; } g.putImageData(d,0,0); _bikeArt[k]=cc; } else _bikeArt[k]=im; _bikeArtRdy[k]=true; }; im.src=(location.pathname.indexOf('/toys/')>=0?'':'toys/')+'assets/lineup/'+file+'.png'; }catch(e){} }
+_loadSheet('dirt','dirt_riders',true);   // dirt = карточки с ЗАПЕЧЁННОЙ шахматкой → ключуем светло-нейтральные пиксели в прозрачность (байк насыщенный = сохраняется)
+_loadSheet('street','street',false); _loadSheet('mtb','mtb',false);   // street/mtb = настоящая альфа
+const SHEET_CROP={ dirt:{x0:42,y0:74,w:268,h:212}, street:{x0:0,y0:6,w:352,h:300}, mtb:{x0:0,y0:6,w:352,h:300} };   // где в ячейке 352×384 сам байк (dirt = внутри карточки-рамки+подиума → тесный кроп)
+const BIKE_ART=[ {s:'mtb',c:0,r:0}, {s:'street',c:0,r:0}, {s:'street',c:1,r:0}, {s:'street',c:2,r:0}, {s:'dirt',c:0,r:0}, {s:'dirt',c:1,r:0}, {s:'street',c:2,r:1} ];   // 7 байков → ячейка: ВЕЛИК→XC(MTB), МОПЕД→Moped, СКУТЕР→Commuter, ЭНДУРО→TrailEnduro, КРОСС→MotoX250F(с райдером), МОТАРД→MotoX450F, СУПЕРБАЙК→Superbike RR
+function drawBikeArt(cx,cy,dw){ const am=BIKE_ART[selBike], sh=am&&_bikeArt[am.s]; if(!sh)return false; const CW=352,CH=384, cr=SHEET_CROP[am.s]||{x0:0,y0:6,w:352,h:300}; const dh=dw*cr.h/cr.w; ctx.drawImage(sh, am.c*CW+cr.x0, am.r*CH+cr.y0, cr.w, cr.h, cx-dw/2, cy-dh/2, dw, dh); return true; }   // рисует иллюстрацию байка (кроп по SHEET_CROP — без подписи/рамки/шахматки); false = не загрузилось
 // b204 РЕШЕНИЕ ФОНА (после b203-вердикта юзера «фон ужасен, не сочетается»): ФОТО-БЭКДРОПЫ УБРАНЫ ИЗ ИГРЫ НАСОВСЕМ.
 // Корень (3 захода b185-191/b203 не склеились): фото = язык иллюстрации, весь кадр полон ЯРКОГО не-данных света → структурно несовместим
 // с C-правилом «светятся только данные». Мир теперь = ОДИН код-язык: композиция Vice нашим стилем (закат-солнце + город-свечи + пальмы-силуэты
@@ -2745,7 +2753,7 @@ function drawMenus(){
     ctx.fillStyle='#eafaff'; ctx.font='800 24px ui-monospace,monospace'; ctx.fillText('🏍 БАЙКИ',W/2,46);
     ctx.fillStyle='#ffd678'; ctx.font='800 16px ui-monospace,monospace'; ctx.fillText('$ '+bank,W/2,76);
     UI.bkBack={x:14,y:18,w:78,h:34}; panel(UI.bkBack.x,UI.bkBack.y,78,34,'rgba(150,180,220,0.6)','rgba(30,40,62,0.5)'); ctx.fillStyle='#cfe0ff'; ctx.font='700 13px ui-monospace,monospace'; ctx.fillText('‹ НАЗАД',UI.bkBack.x+39,UI.bkBack.y+22);
-    ctx.save(); ctx.translate(W/2,H*0.27); ctx.scale(1.8,1.8); drawMachine(BK(),0,0,0,false,0); ctx.restore();   // b109: живой спрайт байка; b176: со скином
+    if(!drawBikeArt(W/2, H*0.225, Math.min(300,W*0.78))){ ctx.save(); ctx.translate(W/2,H*0.27); ctx.scale(1.8,1.8); drawMachine(BK(),0,0,0,false,0); ctx.restore(); }   // b235 иллюстрированное превью байка (арт юзера); фолбэк — b109 живой вектор-спрайт
     const b=BIKES[selBike], own=owned.indexOf(selBike)>=0, ay=H*0.40;
     UI.bkL={x:W/2-150,y:ay-30,w:50,h:64}; UI.bkR={x:W/2+100,y:ay-30,w:50,h:64};
     ctx.fillStyle='rgba(190,215,245,0.85)'; ctx.font='800 34px ui-monospace,monospace'; ctx.fillText('‹',UI.bkL.x+25,ay+12); ctx.fillText('›',UI.bkR.x+25,ay+12);
