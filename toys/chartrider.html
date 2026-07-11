@@ -64,7 +64,7 @@ function lerp(a,b,t){return a+(b-a)*t;} function clamp(v,a,b){return v<a?a:v>b?b
 // false → full game everywhere. Single switch. Systems are GATED, never deleted.
 const CORE_TEST_MODE = false;   // b70: META LIVE — building the progression spine (upgrades/bikes with teeth, career, economy) on the confirmed rigid-body core
 // build stamp — bump on every change so a phone refresh can confirm it loaded fresh code (cache!)
-const BUILD = '2026-07-11 · b233';
+const BUILD = '2026-07-11 · b234';
 
 // ---------- procedural market terrain ----------
 // height map sampled every STEP px; generated forward as we ride. Market character:
@@ -113,6 +113,7 @@ let ledgeRunup=0, ledgeStepsLeft=0, ledgePrevY=0, ledgeTopY=0, ledgeStepsThis=2,
 let kickRunup=0, kickRampLeft=0, kickLandLeft=0, kickBaseY=0, kickRampBot=0, kickLandY=0, nextKickX=1700;   // TRICK KICKER phases: DESCENT run-up (bomb down → build speed, logical setup) → steep ramp UP (launches you ∝ speed for flips) → flat solid landing (no chasm)
 let whoopRunup=0, whoopLeft=0, whoopBaseY=0, whoopPhase=0, nextWhoopX=2200;   // WHOOPS (b53): flat approach → a rhythm section of rollers (skim/catch air at speed, roll over slow) — dynamic flow, no death
 let mudLeft=0, mudRamp=0, mudRunup=0, mudBaseY=0, mudLipBot=0, nextMudX=2600;   // MUD (b54/b63/b66): DESCENT run-up (build speed) → LIP-ramp → boggy patch you JUMP OVER (clear it = clean; land in it = saps speed). Logical, not random
+let megaRunup=0, megaRampLeft=0, megaLandLeft=0, megaBaseY=0, megaRampBot=0, megaLandY=0, nextMegaX=3000;   // b234 МЕГА-РАМПА (только Отрыв): длинный разгон-спуск → высокая крутая рампа → мощный вылет с высоты → посадочная полка ниже. Кинематографично, под мульти-флипы + вирал-клипы
 let climbRunup=0, climbLeft=0, climbBaseY=0, climbBotY=0, nextClimbX=2400;   // b229 КРУТОЙ ПОДЪЁМ-БАЛАНСИРОВКА (GD-ядро сложности): разгон-спуск (момент) → крутой затяжной подъём КРУЧЕ кэпа (лезешь на моменте + вес вперёд, чтоб не опрокинуться назад) → гребень. Сложность = удержать баланс, не «долететь через яму». Управление плавное, вызов в рельефе
 let dropLandLeft=0, dropLandY=0, nextDropX=2000;   // DROPS/CLIFFS (b69): terrain steps DOWN one node (convex edge) → rigid body flies off as a projectile → flat lower shelf catches it. NOT the old gap-pit (close=H*0.99 = wheels rest on bottom). climbCap caps any rise after → no "pit-wall"
 let curEvType='', evBanner='', evBannerT=0, evColor='90,240,150', evGlow=0, evBonus=0, lastWarnX=-1, evWarnType=''; // bike-side event state
@@ -154,10 +155,10 @@ function genSeg(){
     if(prevC - close > maxRise){ close = prevC - maxRise; walk = close - baseY - roll; }
   }
   // ---- GAPS (chasm you JUMP) + LEDGES (vertical step you LOFT the front onto): structured skill obstacles ----
-  let isGap=false, gapLip=0, isStep=false, stepTop=0, isKick=false, isWhoop=false, isMud=false, isDrop=false, isClimb=false;
+  let isGap=false, gapLip=0, isStep=false, stepTop=0, isKick=false, isWhoop=false, isMud=false, isDrop=false, isClimb=false, isMega=false;
   if(!isEv){
     if(gapRunup>0){ const k=6-gapRunup; close=clamp(gapPrevY + k*13, 70, H*0.82); walk=close-baseY; gapRunup--; if(gapRunup<=0){ gapRampBot=close; gapRampLeft=4; } }   // b215 РАЗГОН-СПУСК (5 узлов ~65px вниз) → набрать скорость перед рампой
-    else if(gapRampLeft>0){ const k=5-gapRampLeft; close=clamp(gapRampBot - k*TUNE.gapRampH, 70, H*0.95); walk=close-baseY; if(gapRampLeft===1)isKick=true; gapRampLeft--; if(gapRampLeft<=0){ gapLip=clamp(gapRampBot - 4*TUNE.gapRampH,70,H*0.9); gapLeft=Math.min(TUNE.gapWmax, TUNE.gapWmin+Math.floor((volK-1)*TUNE.gapWvol*4)); gapBaseY=clamp(gapRampBot + TUNE.gapDrop, 70, H*0.9); } }   // b215 РАМПА-ВОЗВЫШЕННОСТЬ UP (4 узла, last=kick lip → launch ∝ vx). Ширина пропасти ∝ волатильности; посадка НИЖЕ низа разгона (с высоты вниз)
+    else if(gapRampLeft>0){ const k=5-gapRampLeft; close=clamp(gapRampBot - k*TUNE.gapRampH, 70, H*0.95); walk=close-baseY; if(gapRampLeft===1)isKick=true; gapRampLeft--; if(gapRampLeft<=0){ gapLip=clamp(gapRampBot - 4*TUNE.gapRampH,70,H*0.9); gapLeft=Math.min(TUNE.gapWmax, TUNE.gapWmin+Math.floor(clamp(((dist||0)+diffOffset)/1400,0,1)*0.65*TUNE.gapWvol*4)); gapBaseY=clamp(gapRampBot + TUNE.gapDrop, 70, H*0.9); } }   // b234 ФИКС: volK был undefined в genSeg (жил только в pickRegime) → ReferenceError ронял генерацию гэпа (~260м, тихо: гэпы не формировались). Инлайн формулы (volK-1)=clamp·0.65. b215 РАМПА-ВОЗВЫШЕННОСТЬ UP (4 узла, last=kick lip → launch ∝ vx). Ширина пропасти ∝ волатильности; посадка НИЖЕ низа разгона (с высоты вниз)
     else if(gapLeft>0){ isGap=true; gapLip=gapBaseY; close=H*0.99; gapLeft--; if(gapLeft<=0){ walk=gapBaseY-baseY; gapLandFlat=6; } }   // b215 ПРОПАСТЬ (ширина ∝ сложности) — не долетел = падение (wipeout gap)
     else if(gapLandFlat>0){ close=gapBaseY; walk=close-baseY; gapLandFlat--; }   // b215 ПОСАДКА НИЖЕ (плоский выкат, snapped = чистое приземление с высоты)
     else if(climbRunup>0){ const k=6-climbRunup; close=clamp(climbBaseY + k*13, 70, H*0.86); walk=close-baseY; climbRunup--; if(climbRunup<=0){ climbBotY=close; climbLeft=TUNE.climbN; } }   // b229 разгон-спуск → набрать момент под крутой подъём (логичный setup)
@@ -167,6 +168,9 @@ function genSeg(){
     else if(kickRunup>0){ const k=6-kickRunup; close=clamp(kickBaseY + k*13, 70, H*0.88); walk=close-baseY; kickRunup--; if(kickRunup<=0){ kickRampBot=close; kickRampLeft=3; } }   // b51: DESCENT run-up (6 nodes, ~65px down ≥ ramp's 66px up → NET downhill into the launch) — bomb down to BUILD SPEED so the ramp always launches you well ≥ cruise (logical "necessary place", like a real moto setup), not a random flat where you arrive slow
     else if(kickRampLeft>0){ const k=4-kickRampLeft; close=clamp(kickRampBot - k*TUNE.kickH,70,H*0.95); walk=close-baseY; if(kickRampLeft===1)isKick=true; kickRampLeft--; if(kickRampLeft<=0){ kickLandLeft=6; kickLandY=clamp(kickRampBot,70,H*0.9); } }   // ramp UP from the run-up bottom — launches you airborne ∝ speed (do a FLIP!); last node = lip (tagged for the telegraph)
     else if(kickLandLeft>0){ close=clamp(kickLandY,70,H*0.9); walk=close-baseY; kickLandLeft--; }   // flat SOLID landing at the run-up level (no chasm — pure reward feature) → land the flip
+    else if(megaRunup>0){ close=clamp(megaBaseY + (TUNE.megaRunupN-megaRunup)*18, 70, H*0.92); walk=close-baseY; megaRunup--; if(megaRunup<=0){ megaRampBot=close; megaRampLeft=TUNE.megaRampN; } }   // b234 МЕГА разгон-СПУСК (9 узлов ~160px вниз) → набрать БОЛЬШУЮ скорость под мощный вылет
+    else if(megaRampLeft>0){ const k=TUNE.megaRampN-megaRampLeft; close=clamp(megaRampBot - (k+1)*TUNE.megaKickH, 70, H*0.95); walk=close-baseY; isMega=true; if(megaRampLeft===1)isKick=true; megaRampLeft--; if(megaRampLeft<=0){ megaLandLeft=TUNE.megaLandN; megaLandY=clamp(megaBaseY + TUNE.megaDrop, 70, H*0.9); } }   // b234 ВЫСОКАЯ РАМПА ВВЕРХ (5 узлов, last=мега-лип .kick+.mega → большой вылет ∝ скорости)
+    else if(megaLandLeft>0){ close=clamp(megaLandY,70,H*0.9); walk=close-baseY; megaLandLeft--; }   // b234 ПОСАДОЧНАЯ ПОЛКА ниже базы (щедрая, ловит дугу мульти-флипа; НЕ пропасть = зрелище без дешёвой смерти)
     else if(whoopRunup>0){ close=clamp(whoopBaseY,70,H*0.86); walk=close-baseY; whoopRunup--; if(whoopRunup<=0){ whoopLeft=TUNE.whoopN; whoopPhase=0; } }   // WHOOPS flat approach (read the rhythm)
     else if(whoopLeft>0){ whoopPhase+=2.3; close=clamp(whoopBaseY - Math.sin(whoopPhase)*TUNE.whoopAmp, 70, H*0.88); walk=close-baseY; if(whoopLeft===TUNE.whoopN)isWhoop=true; whoopLeft--; }   // BUMPS: a rhythm section of rollers — at speed you skim/catch small air off each crest (un-glued physics), slow = roll over. No chasm = no death; dynamic flow
     else if(mudRunup>0){ const k=6-mudRunup; close=clamp(mudBaseY + k*12, 70, H*0.86); walk=close-baseY; mudRunup--; if(mudRunup<=0){ mudLipBot=close; mudRamp=2; } }   // b66: DESCENT run-up (6 nodes, ~60px down) → BUILD SPEED so the lip actually LAUNCHES you over the bog (was: hit the lip at ambient ~2vx → weak pop → landed in the mud → "не перепрыгнуть")
@@ -185,6 +189,9 @@ function genSeg(){
     else if(TUNE.climbEvery>0 && genX>=nextClimbX && genX>TUNE.climbStart*10 && terr.length>16 && regime!=='pump' && regime!=='crash' && lastRegime!=='bull' && close>H*0.52){   // b229 расписание КРУТОГО ПОДЪЁМА: не мид-климб, старт низкий (место расти вверх)
       climbBaseY=close; climbRunup=6; nextClimbX=genX + TUNE.climbEvery*10*densK + Math.random()*1200*densK;
     }
+    else if(TUNE.megaEvery>0 && gameMode==='endless' && trackSource!=='ticker' && genX>=nextMegaX && genX>TUNE.megaStart*10 && terr.length>16 && regime!=='pump' && regime!=='crash' && lastRegime!=='bull' && close>H*0.44){   // b234 МЕГА-РАМПА только в ОТРЫВЕ (proc endless); нужно место сверху под высокую рампу
+      megaBaseY=close; megaRunup=TUNE.megaRunupN; nextMegaX=genX + TUNE.megaEvery*10 + Math.random()*1800;
+    }
     else if(TUNE.whoopEvery>0 && genX>=nextWhoopX && genX>TUNE.whoopStart*10 && terr.length>16 && regime!=='pump' && regime!=='crash' && lastRegime!=='bull'){   // schedule a WHOOPS section (rhythm rollers on calm terrain)
       whoopBaseY=close; whoopRunup=3; nextWhoopX=genX + TUNE.whoopEvery*10*densK + Math.random()*900*densK;
     }
@@ -202,9 +209,9 @@ function genSeg(){
   const haz=(!CORE_TEST_MODE && !isEv && !isGap && genX>1200 && regime!=='pump' && regime!=='crash' && (terr.length-lastHazIdx)>=10 && Math.random()<hzRate); // CORE: no sell-walls (they just sap momentum, esp. before a gap — replaced by organic terrain obstacles like mud later). no walls in events/gaps; none in first ~120m
   if(haz) lastHazIdx=terr.length;
   const coin = isEv==='rally' ? (Math.random()<0.55) : (!haz && !isEv && !isGap && Math.random()<0.2);   // rally rains gems
-  terr.push({x:genX, y:close, open, close, hi:top-wick, lo:bot+wick*0.6, up, haz:haz, coin:coin, ev:isEv, gap:isGap, lipY:gapLip, step:isStep, topY:stepTop, kick:isKick, whoop:isWhoop, mud:isMud, drop:isDrop, climb:isClimb}); genX+=STEP;
+  terr.push({x:genX, y:close, open, close, hi:top-wick, lo:bot+wick*0.6, up, haz:haz, coin:coin, ev:isEv, gap:isGap, lipY:gapLip, step:isStep, topY:stepTop, kick:isKick, whoop:isWhoop, mud:isMud, drop:isDrop, climb:isClimb, mega:isMega}); genX+=STEP;
   // b68: SMOOTH the RIDE LINE — the candlestick line is cornery (sharp node-to-node), so the rigid body bounces/stutters on the corners + over-launches ("странное торможение на подъёмах", too much air). Smooth ONLY .y (the line you RIDE + the ground fill); the candles' open/close/hi/lo stay sharp = chart texture. 5-tap blur on a node a few behind the front (it has neighbours; the bike reaches it already-smoothed). Skip feature/gap nodes (kept sharp for ramps/steps when re-enabled).
-  { const n=terr.length; if(n>=5){ const w0=terr[n-5],w1=terr[n-4],w2=terr[n-3],w3=terr[n-2],w4=terr[n-1]; if(!(w0.gap||w1.gap||w2.gap||w3.gap||w4.gap||w0.drop||w1.drop||w2.drop||w3.drop||w4.drop||w2.kick||w2.step||w0.climb||w1.climb||w2.climb||w3.climb||w4.climb)) w2.y = w0.y*0.10+w1.y*0.22+w2.y*0.36+w3.y*0.22+w4.y*0.10; } }   // b229: крутой подъём НЕ сглаживать (склон должен остаться крутым = вызов балансу)
+  { const n=terr.length; if(n>=5){ const w0=terr[n-5],w1=terr[n-4],w2=terr[n-3],w3=terr[n-2],w4=terr[n-1]; if(!(w0.gap||w1.gap||w2.gap||w3.gap||w4.gap||w0.drop||w1.drop||w2.drop||w3.drop||w4.drop||w2.kick||w2.step||w0.climb||w1.climb||w2.climb||w3.climb||w4.climb||w0.mega||w1.mega||w2.mega||w3.mega||w4.mega)) w2.y = w0.y*0.10+w1.y*0.22+w2.y*0.36+w3.y*0.22+w4.y*0.10; } }   // b229: крутой подъём НЕ сглаживать (склон должен остаться крутым = вызов балансу)
 }
 function terrainAt(x){ // interpolated height + slope at world x
   const i=Math.floor(x/STEP); if(i<0||i+1>=terr.length) return {y:baseY,ang:0};
@@ -459,7 +466,7 @@ function drawSpark(arr,sx,sy,sw,sh,col){ let mn=Infinity,mx=-Infinity; for(const
 
 // ---------- bike ----------
 let bike, cam, t, coins, dist, best, screen, wipe, parts, stars, dust, shake, flash, daycycle, trail, streaks, mult, bestPnl, airT, nearMissed, hitstop, gflash, floats, multPulse, maxMult, lean, rush, prevVx, wave, waveSpd, deathBy, boost, boosting, zone, biomeBanner, biomeBannerT, BSKY, BLINE, BRIDGE, lastMile, newDepth, camAir=0, wheelieT=0;
-let posPulse=0,_posPrev=0,_dangBuzz=0,prMax=0,prMin=0,slowmo=0,menuFx=0,menuFxAmt=0,wheelieAim=0,wheelieI=0,trickAir=0,trickZoom=0,trickGnd=0,slowLerp=1,riderAirB=0,riderSquat=0,nearKickX=-1,flowBoost=0;
+let posPulse=0,_posPrev=0,_dangBuzz=0,prMax=0,prMin=0,slowmo=0,menuFx=0,menuFxAmt=0,wheelieAim=0,wheelieI=0,trickAir=0,trickZoom=0,trickGnd=0,slowLerp=1,riderAirB=0,riderSquat=0,nearKickX=-1,flowBoost=0,megaAir=0;
 function flow(a){ flowBoost=Math.min(TUNE.flowMax,(flowBoost||0)+a); }   // b233 копилка ФЛОУ-инерции: чистые скилл-события кормят → авто-разгон впереди волны (см. flowPush в update)
 let physAcc=0, slowTS=1;   // b216 ФЛИП-СЛОУМО-РЕДИЗАЙН: physAcc=аккумулятор дробных физ-шагов, slowTS=текущий масштаб времени (плавно едет к цели). Заменяет бинарный «пропуск каждого 2-го кадра» (b154) на fixed-timestep+интерполяцию — физика идёт дробным темпом, рендер интерполирует slowLerp∈[0,1) между двумя последними состояниями (не только 0.5) = плавно, без статтера
 const SLOWMO_SCALE=0.4;   // масштаб времени в слоумо (0.4 = 2.5× медленнее). Длительности slowmo (20/28 кадров) не тронуты → та же ~0.47с реального времени покрывает меньше движения = драматичнее   // b155: riderAirB 0..1 = стойка райдера в полёте, riderSquat 0..1 = присед-амортизация посадки (∝ высоте). b156: nearKickX = ближайший трамплин впереди (HUD-указатель)
@@ -549,6 +556,15 @@ const TUNE = {
   climbN:       6,       // 35e. длина крутого склона (узлов). ДЛИННЕЕ = момента может не хватить (заглохнешь) = сложнее. Держать так, чтоб хороший разгон вывозил (твёрдое тело вылетает соразмерно скорости с пологой рампы, не на пол-экрана). 35-OLD:230 ср. дистанция между трамплинами (м); 0 = выкл. b51: 340→230 ЧАЩЕ — трамплины теперь ГЛАВНАЯ фича (заменили обрывы). Чистая награда/драйв + флипы
   kickStart:    170,     // 36. первый трамплин после (м)
   kickH:        13,      // 37. b68: 22→13 — ПОЛОГАЯ рампа кикера под твёрдое тело (вылет ∝ скорости, соразмерный). 3 узла × 13 = 39px рампа. Взлёт чисто эмерджентный (поп kickPop ниже больше не пуляет — твёрдое тело само летит с геометрии)
+  megaEvery:    560,     // 38a. b234 МЕГА-РАМПА (Отрыв) ср.дистанция (м); 0=выкл. Периодический кинематографичный мега-трамплин
+  megaStart:    280,     // 38b. первая мега-рампа после (м)
+  megaRunupN:   6,       // 38c. узлов разгон-спуска (мягкий — держит скорость; вылет даёт скриптовый пуск, не разгон)
+  megaRampN:    5,       // 38d. узлов рампы вверх (видимая высокая рампа)
+  megaKickH:    16,      // 38e. px/узел рампы (5×16=80px, ~31° = байк держит скорость к липу, лип поднимается к базе = видно рампу)
+  megaPop:      1.9,     // 38f. коэф скриптового мега-вылета: vy=−min(cap, vx×это). ~6.5vx→vy−12. Как гига-памп. ВЫШЕ = выше/дольше воздух (больше флипов)
+  megaVyCap:    11,      // 38f2. кап vy вылета (px/кадр) — держит на экране + мягче посадка. ВЫШЕ = выше/дольше воздух, но жёстче приземление. КАЛИБРОВКА руками (посадочный фил = телефон)
+  megaDrop:     72,      // 38g. насколько НИЖЕ базы садишься (с высоты вниз = больше air-time + мягкий спад)
+  megaLandN:    14,      // 38h. длина посадочной полки (узлов, щедрая — ловит дугу мульти-флипа)
   kickPop:      2.4,     // 38. ПОП кикера: vy = −(vx×это + 4), кап −20 (b49: 0.7→2.4 — теперь поп ПРОПОРЦИОНАЛЕН скорости, не фикс −14. Медленно = мягкий хоп (всегда launch, не «не подпрыгнул»), круиз ~5.6 ≈ −17 (флип-фил тот же), быстро = кап −20 (естественно). БОЛЬШЕ = круче зависимость от скорости
   // ---- РАЙДЕР КАК ВТОРАЯ МАССА (b47): драг = СДВИГ ВЕСА ТЕЛА (не прямой торк). Прототип в изоляции (PASS): райдер 0.65 массы байка, сдвиг двигает общий ЦТ → трекшн + момент тангажа. Два колеса стабильны; вес сам = прощающий shallow-вилли/нос-вниз; глубокий вилли/стоппи (скилл-зона) — позже ----
   riderSmooth:  0.25,    // 39. (b147: НЕ используется — заменён leanRampGnd/Air ниже) инерция переноса веса: rShift лерпится к драгу с этим
@@ -964,6 +980,7 @@ function reset(){
   gapLeft=0; nextGapX=TUNE.gapStart*10; gapLandFlat=0; overGap=false; gapLipNow=0; gapFarX=0; gapFxT=0; gapRunup=0; gapRampLeft=0;   // GAPS: first chasm after gapStart
   ledgeRunup=0; ledgeStepsLeft=0; ledgeTopY=0; nextLedgeX=TUNE.ledgeStart*10;   // LEDGES: first step after ledgeStart
   kickRunup=0; kickRampLeft=0; kickLandLeft=0; nextKickX=TUNE.kickStart*10;   // KICKERS: first trick ramp after kickStart
+  megaRunup=0; megaRampLeft=0; megaLandLeft=0; nextMegaX=TUNE.megaStart*10; megaAir=0;   // b234 МЕГА-РАМПА первая после megaStart
   climbRunup=0; climbLeft=0; nextClimbX=TUNE.climbStart*10;   // b229 КРУТОЙ ПОДЪЁМ: первый после climbStart
   whoopRunup=0; whoopLeft=0; whoopPhase=0; nextWhoopX=TUNE.whoopStart*10;   // WHOOPS: first rhythm section after whoopStart
   mudLeft=0; mudRamp=0; mudRunup=0; nextMudX=TUNE.mudStart*10;   // MUD: first boggy section after mudStart
@@ -1408,8 +1425,8 @@ function update(){
     if(airT===10 && terr[ci0-2] && (terr[ci0-2].ramp||terr[ci0-1]&&terr[ci0-1].ramp)) tut('flip3','🔄 В ПОЛЁТЕ: НАЖМИ НОС↑ = бросок в БЭКФЛИП · ОТПУСТИ = стоп-вращение');   // b153: импульсная модель — бросок в полёте задаёт вращение, отпускание гасит
     if(airT===20 && trickAir && !trick) tut('trick1', trickGrip==='sticky'?'🤸 СВАЙП в полёте = ТРЮК (сам держится) · ТАП = отпустить до земли!':'🤸 СВАЙП свободным пальцем В ПОЛЁТЕ = ТРЮК · ДЕРЖИ! отпусти до земли');   // b158/b171: учим трюкам на большом полёте
     if(trickAir){ const _th=terrainAt(bike.x).y-(bike.y+DY);   // b150 ТРИК-КАМЕРА: взлёт/апекс с трамплина = зум К БАЙКУ (флип читается кинематографично), к земле — плавный отъезд (посадка в кадре)
-      if(airT>6 && (bike.vy<2 || _th>130)) trickZoom=Math.min(1,trickZoom+0.09); else trickZoom=Math.max(0,trickZoom-0.09);   // b214: нарастание/спад зума мягче (0.14/0.12→0.09) → плавный наезд камеры, без рывка
-      if(trickAir===1 && airT>8 && Math.abs(bike.vy)<1.6 && Math.abs(bike.angV)>0.13){ slowmo=Math.max(slowmo,20); trickAir=2; } }   // b214: слоумо апекса 14→20. b216: airT>12→8 (раньше ловим апекс, пол сохранён от подскоков). Только реальный полёт + реально крутишь, раз за полёт
+      if(airT>6 && (bike.vy<2 || _th>130)) trickZoom=Math.min(1,trickZoom+(megaAir?0.13:0.09)); else trickZoom=Math.max(0,trickZoom-0.09);   // b234 мега = быстрее наезд. b214: нарастание/спад зума мягче (0.14/0.12→0.09) → плавный наезд камеры, без рывка
+      if(trickAir===1 && airT>8 && Math.abs(bike.vy)<1.6 && Math.abs(bike.angV)>0.13){ slowmo=Math.max(slowmo,megaAir?30:20); trickAir=2; } }   // b234 мега-апекс = глубже слоумо. b214: слоумо апекса 14→20. b216: airT>12→8 (раньше ловим апекс, пол сохранён от подскоков). Только реальный полёт + реально крутишь, раз за полёт
     const skim=terrainAt(bike.x).y-(bike.y+DY);                        // gap of lower wheel above surface
     if(airT>16 && skim>0 && skim<16 && bike.vx>6 && !nearMissed){ nearMissed=true; mult+=0.5; boost=Math.min(1,(boost||0)+0.15); multPulse=1; const g2=1.5*mult; coins+=g2; floatPop(bike.x,bike.y-22,'NEAR MISS +$'+Math.round(g2),'#9ff0ff'); shake=4; hitstop=2; gflash=0.4; sfxNear(); flow(0.35); }
     flipAcc+=Math.abs(bike.angV); if(flipAcc>6.283){flipAcc-=6.283;flipCount++; blip(150+flipCount*40,0.18,'sawtooth',0.13); buzz(10);}   // b152: «вжух» на каждом ПОЛНОМ обороте В ВОЗДУХЕ (тон растёт с витками) — флип слышен в момент, не только при посадке
@@ -1417,9 +1434,11 @@ function update(){
   }
   if(wasG && !grounded){ airT=0; nearMissed=false;
     if(Math.abs(bike.rShift)>0.4) bike.angV=clamp(bike.angV,-0.03,0.03);   // b153: отрыв с ЗАЖАТЫМ весом (вилли через кочку/кикер) НЕ уносит наземное вращение в полёт (остаток капа крутил 2-3 оборота за длинный полёт = случайные перевороты, сим). Намеренное вращение = РЫВОК в воздухе или кромка ↓
-    if(terr[ci0]&&(terr[ci0].kick||(terr[ci0-1]&&terr[ci0-1].kick)||(terr[ci0+1]&&terr[ci0+1].kick))) bike.angV -= clamp(bike.vx*RB.lipKick, 0.14, RB.lipKickMax); }   // b153 КИК КРОМКИ (физика закруглённой деки, реф «рампа съедает полвитка»): нос-ВВЕРХ ∝ скорости с ПОЛОМ 0.14 (резкий кончик даёт нос-вниз ~+0.21, съедавший кик на медленном заходе — пол компенсирует)
+    if(terr[ci0]&&(terr[ci0].kick||(terr[ci0-1]&&terr[ci0-1].kick)||(terr[ci0+1]&&terr[ci0+1].kick))) bike.angV -= clamp(bike.vx*RB.lipKick, 0.14, RB.lipKickMax);
+    if(terr[ci0]&&(terr[ci0].mega||(terr[ci0-1]&&terr[ci0-1].mega)||(terr[ci0-2]&&terr[ci0-2].mega))){ bike.vy=Math.min(bike.vy, -Math.min(TUNE.megaVyCap, bike.vx*TUNE.megaPop)); megaAir=1; trickAir=1; slowmo=Math.max(slowmo,16); gflash=Math.max(gflash,0.72); shake=Math.max(shake,10); popText('🎬 МЕГА-ВЫЛЕТ — КРУТИ САЛЬТО!'); boost=Math.min(1,(boost||0)+0.2); flow(0.5); for(let e=0;e<22;e++)parts.push({x:bike.x-16-Math.random()*14,y:bike.y+6+Math.random()*12,vx:-2-Math.random()*6,vy:0.3+Math.random()*3.6,life:1,r:Math.random()*3+1.6,gold:Math.random()<0.45}); } }   // b234 МЕГА-ВЫЛЕТ: скриптовый пуск ∝ скорости (как гига-памп «НА ЛУНУ») — vy=−min(cap, vx×megaPop) → БОЛЬШОЙ вылет для мульти-флипов; + флаг megaAir (камера/слоумо/juice). Ставится в МОМЕНТ отрыва с мега-рампы (физика закруглённой деки, реф «рампа съедает полвитка»): нос-ВВЕРХ ∝ скорости с ПОЛОМ 0.14 (резкий кончик даёт нос-вниз ~+0.21, съедавший кик на медленном заходе — пол компенсирует)
   else if(!wasG && grounded){                                          // just landed
     jumpGrace=0; trickAir=0; riderSquat=Math.min(1, airT/26);          // jump arc over; b150: трик-камера завершена; b155: присед-амортизация ∝ высоте полёта
+    if(megaAir){ slowmo=Math.max(slowmo,24); shake=Math.max(shake,13); gflash=Math.max(gflash,0.7); megaAir=0; }   // b234 МЕГА-ПОСАДКА: пунч камеры (слоумо+тряска) — кинематографичное завершение, клип-момент
     if(airT>10){ const nB=Math.min(16,3+airT*0.3)|0; for(let e=0;e<nB;e++)dust.push({x:bike.x-16+Math.random()*32,y:bike.y+22,vx:(Math.random()-0.5)*(2+airT*0.06),vy:-Math.random()*(1.2+airT*0.05),life:1,r:Math.random()*2.8+1.2}); }   // b160: бурст пыли на посадке ∝ высоте (вес удара виден)
     let diff=Math.abs(rel); lastLandDiff=diff;
     if(airT>14 && (diff > RB.crashAngle + 0.12*upgLvl('grip') + 0.10*upgLvl('susp') + Math.max(0,(BK().grip-1.40))*0.4 || Math.abs(bike.angV) > RB.spinCrash + 0.03*upgLvl('grip') || (trick&&trickMix>0.5))){ wipeout('crash'); if(trick&&trickMix>0.5)popText('💥 В ПОЗЕ ОБ ЗЕМЛЮ'); }   // b158: посадка НЕ в седле (trickMix>0.5) = краш — отпускай трюк заранее (real-but-forgiving: частичный возврат ниже = лишь «коряво»)   // b88: ПОДВЕСКА расширяет конус прощения посадки (большие полёты приземляются мягче/безопаснее)   // b72 СКИЛЛ-БИТ (Trials): land too far off wheels-down OR still SPINNING fast = CRASH (botched/over-rotated flip costs). СЦЕПЛЕНИЕ upgrade + grippy bike widen tolerance (interconnected). Tune RB.crashAngle/spinCrash by hand
@@ -1471,6 +1490,7 @@ function update(){
   // ---- WHOOPS telegraph: a rhythm section ahead — keep speed to skim the crests ----
   for(let k=ci0+1;k<=ci0+4;k++){ if(terr[k]&&terr[k].whoop){ if(bike.onG) tut('whoop','〰 БУГРЫ — держи СКОРОСТЬ, скользи по верхам (медленно = переваливаешь)'); break; } }
   for(let k=ci0+1;k<=ci0+5;k++){ if(terr[k]&&terr[k].mud){ if(bike.onG) tut('mud','🟤 ГРЯЗЬ — РАЗГОНИСЬ и ПЕРЕПРЫГНИ с трамплина (упал в неё = вязнешь)'); break; } }
+  for(let k=ci0+1;k<=ci0+13;k++){ if(terr[k]&&terr[k].mega){ if(bike.onG){ tut('mega','🎬 МЕГА-РАМПА ВПЕРЕДИ — РАЗГОНИСЬ на спуске = МОЩНЫЙ вылет, КРУТИ САЛЬТО в полёте!'); if(k<=ci0+3)popText('🎬 МЕГА-РАМПА!'); } break; } }   // b234 телеграф во время разгон-спуска (up to 13 узлов — вся длина фичи)
   // hazards: on the ground they wreck your momentum; clear them in the air to DODGE
   for(let k=ci-1;k<=ci+1;k++){ const c=terr[k]; if(c&&c.haz&&!c.hazHit&&Math.abs(c.x-bike.x)<15){ c.hazHit=true;
     if(bike.onG){ bike.vx*=0.4; shake=9; hitstop=3; mult=Math.max(1,mult-0.8); flash=0.45; popText('REKT!'); floatPop(bike.x,bike.y-28,'-темп','#ff6a86'); sfxCrash(); buzz(45); }
@@ -1516,7 +1536,7 @@ function update(){
   // camera — on BIG AIR (trick kicker) frame higher + follow faster + zoom out (draw) so the high launch AND the landing stay on-screen
   const _airH = bike.onG ? 0 : Math.max(0, terrainAt(bike.x).y-(bike.y+DY));
   camAir = lerp(camAir, clamp(_airH/280,0,1), _airH>camAir*280?0.25:0.08);   // rise fast into big air, ease out smoothly
-  if(bike.onG){ trickZoom=Math.max(0,trickZoom-0.15); trickGnd++; if(trickGnd>24)trickAir=0; bike._flipCine=0; } else trickGnd=0;   // b150: на земле зум отпускает; b182: флип-синема перевзводится на посадке
+  if(bike.onG){ trickZoom=Math.max(0,trickZoom-0.15); trickGnd++; if(trickGnd>24)trickAir=0; bike._flipCine=0; megaAir=0; } else trickGnd=0;   // b234 страховка: megaAir гаснет на земле   // b150: на земле зум отпускает; b182: флип-синема перевзводится на посадке
   riderAirB=lerp(riderAirB, bike.onG?0:1, 0.14); riderSquat=Math.max(0,riderSquat-0.09);   // b155: поза — в полёте привстаёт, присед посадки затухает (ставится в just-landed)
   if(trick && trickHeld && !bike.onG && bike.vy>0.4){ const _ly=terrainAt(bike.x+(bike.vx||0)*6).y;   // b224 АВТО-ШАБЛОН ТРЮКА (юзер: на мобиле не успеть отпустить до земли): свайп задал позу → она сама доигрывает и ВОЗВРАЩАЕТСЯ В СЕДЛО за ~12 кадров до контакта (спад 0.15/к → в седле к посадке). Вращение флипа + приземление контролирует ИГРОК (angV не трогаем)
     if((_ly - bike.y) < 28 + bike.vy*12) trickHeld=false; }
@@ -1825,7 +1845,7 @@ function draw(){
   }
 
   // ---- the track: a real CANDLESTICK chart the bike rides across ----
-  const zoomT=1-(rush||0)*0.04-(camAir||0)*0.40*(1-(trickZoom||0))+(trickZoom||0)*0.48+(boosting>0?0.045:0);   // b150 ТРИК-КАМЕРА: зум К БАЙКУ на полёте; b223 вклад 0.34→0.48 = ЕЩЁ БЛИЖЕ на сальто (юзер «больше зума, флипы круче»); b183: +зум-пульс буста
+  const zoomT=1-(rush||0)*0.04-(camAir||0)*0.40*(1-(trickZoom||0))+(trickZoom||0)*0.48+(boosting>0?0.045:0)+((megaAir&&bike&&!bike.onG)?0.12:0);   // b234 мега-вылет = ещё ближе камера (кинематограф). b150 ТРИК-КАМЕРА: зум К БАЙКУ на полёте; b223 вклад 0.34→0.48 = ЕЩЁ БЛИЖЕ на сальто (юзер «больше зума, флипы круче»); b183: +зум-пульс буста
   _zoomD+=(zoomT-_zoomD)*0.14; const zoom=_zoomD;   // b214 ПЛАВНОСТЬ: сглаживание зума 0.42→0.14 (мягче наезд/отъезд камеры, кинематографично — юзер «сглажено и плавно»). b206: зум доезжает на КАЖДОМ кадре 60Гц (не ступеньками в слоумо 30Гц)
   ctx.save(); ctx.translate(W/2,H/2); ctx.scale(zoom,zoom); ctx.translate(-W/2,-H/2);
   ctx.save(); ctx.translate(-cam.x,-cam.y);
