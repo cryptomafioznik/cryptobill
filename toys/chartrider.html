@@ -64,7 +64,7 @@ function lerp(a,b,t){return a+(b-a)*t;} function clamp(v,a,b){return v<a?a:v>b?b
 // false → full game everywhere. Single switch. Systems are GATED, never deleted.
 const CORE_TEST_MODE = false;   // b70: META LIVE — building the progression spine (upgrades/bikes with teeth, career, economy) on the confirmed rigid-body core
 // build stamp — bump on every change so a phone refresh can confirm it loaded fresh code (cache!)
-const BUILD = '2026-07-11 · b230';
+const BUILD = '2026-07-11 · b231';
 
 // ---------- procedural market terrain ----------
 // height map sampled every STEP px; generated forward as we ride. Market character:
@@ -709,12 +709,12 @@ function posValue(){ if(trackSource!=='ticker') return Math.max(0,Math.round((co
   if(!bike||!entryPrice||dcaCost<=0) return 0;
   const cur=Math.max(1e-9,tkPrice(bike.x));
   const pl=_shortRun? (dcaCost-dcaQty*cur) : (dcaQty*cur-dcaCost);   // b177: шорт зарабатывает на падении (продал по средней — откупаешь дешевле)
-  return Math.max(0, Math.round((dcaCost + leverage*pl)*DCA.PAY)); }   // маржа + плечо×PnL по средней; пол 0
+  return Math.max(0, Math.round((dcaCost + 2.2*Math.sqrt(leverage)*pl)*DCA.PAY)); }   // b231: плечо в ВЫПЛАТЕ УБЫВАЮЩЕЕ (2.2·√lev): 2x→3.1 · 25x→11 · 100x→22 (не 100) — риск ликвидации полный, а джекпота за 1 заезд НЕТ = прогрессия ~20 заездов/байк. Позиция dcaCost растёт с дистанцией (база и так тянется). Калибровка множителя — по телефону
 function posPnl(){ if(dcaCost<=0||!bike)return 0; const cur=Math.max(1e-9,tkPrice(bike.x)); const raw=dcaQty*cur/dcaCost-1; return _shortRun? -raw : raw; }   // PnL% позиции (шорт = минус движения)
 function posFactor(){   // b106 множитель к размеру позиции (coins×COIN_GEM) при выплате/показе — b173: живёт только для PROC-ветки и миссий
   if(trackSource==='ticker'){ if(!bike||!entryPrice)return tkStake();
     return tkStake()*Math.max(0,1+leverage*tickerChg()); }   // b113 размер = маржа от $-стека × реальный курс × плечо   // РЕАЛЬНЫЙ курс × плечо; пол 0 — цена НЕ ликвидирует капитал (только волна/краш, b104). Плечо живёт ТОЛЬКО здесь (без дубля)
-  return leverage*priceMul(); }   // proc endless/карьера: плоское плечо × sell-the-top (флайвил без изменений)
+  return (1 + clamp((dist||0)/9000,0,3)) * (0.9 + 0.15*clamp((priceMul()-0.6)/0.9,0,1)); }   // b231 ОТРЫВ/proc: множитель РАСТЁТ С ДИСТАНЦИЕЙ на ВЕСЬ заезд (1→4 к ~2700м), БЕЗ плеча (изоляция), + лёгкая волатильность ±~7% (не «продай на вершине» с провалом на спуске). Юзер: чем дальше едешь — тем больше, плечо только в Забеге
 function rankFor(c){ let r=RANKS[0]; for(const x of RANKS)if(c>=x.at)r=x; return r; }
 function nextRank(c){ for(const x of RANKS)if(c<x.at)return x; return null; }
 function saveProg(){ try{localStorage.setItem('cipher_allupg',JSON.stringify(allUpg));localStorage.setItem('cipher_career2',career);}catch(e){} }   // b143 сохраняем per-bike прокачку
