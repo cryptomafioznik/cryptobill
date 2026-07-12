@@ -64,7 +64,7 @@ function lerp(a,b,t){return a+(b-a)*t;} function clamp(v,a,b){return v<a?a:v>b?b
 // false → full game everywhere. Single switch. Systems are GATED, never deleted.
 const CORE_TEST_MODE = false;   // b70: META LIVE — building the progression spine (upgrades/bikes with teeth, career, economy) on the confirmed rigid-body core
 // build stamp — bump on every change so a phone refresh can confirm it loaded fresh code (cache!)
-const BUILD = '2026-07-11 · b237';
+const BUILD = '2026-07-12 · b238';
 
 // ---------- procedural market terrain ----------
 // height map sampled every STEP px; generated forward as we ride. Market character:
@@ -653,22 +653,33 @@ let _skyImg=null,_skyRdy=false; try{ const _si=new Image(); _si.onload=()=>{ con
 let _coinImg=null,_coinRdy=false; try{ const _im=new Image(); _im.onload=()=>{ const S=_im.naturalWidth||256, cc=document.createElement('canvas'); cc.width=S; cc.height=S; const cg=cc.getContext('2d'); cg.drawImage(_im,0,0);   // b217: РАДИАЛЬНАЯ АЛЬФА-МАСКА при загрузке — у исходника углы не совсем прозрачны (заваленный глоу = тёмный квадрат на светлом фоне). destination-in радиалом убивает углы (r>S/2), диск+ореол живут с мягким краем
     cg.globalCompositeOperation='destination-in'; const rg=cg.createRadialGradient(S/2,S/2,S*0.40,S/2,S/2,S*0.44); rg.addColorStop(0,'rgba(0,0,0,1)'); rg.addColorStop(1,'rgba(0,0,0,0)'); cg.fillStyle=rg; cg.fillRect(0,0,S,S); _coinImg=cc; _coinRdy=true; };   // .40/.44: режем ровно у золотого обода — тёмный глоу-ореол убран (на тёмном мире чисто; белого фона в игре нет)
   _im.src=(location.pathname.indexOf('/toys/')>=0?'':'toys/')+'assets/coin.png'; }catch(e){}   // путь как у moto1.glb (корневой URL vs /toys/)
-// b235 ИЛЛЮСТРИРОВАННЫЕ БАЙКИ (арты юзера): спрайт-сетки 4×2 (352×384) → карточки гаража/выбора. Динамичный риг — отдельный заход; тут статичные hi-res превью
-let _bikeArt={}, _bikeArtRdy={};
-function _loadSheet(k, file, key){ try{ const im=new Image(); im.onload=()=>{ if(key){ const cc=document.createElement('canvas'); cc.width=im.naturalWidth; cc.height=im.naturalHeight; const g=cc.getContext('2d'); g.drawImage(im,0,0); const d=g.getImageData(0,0,cc.width,cc.height), p=d.data; for(let i=0;i<p.length;i+=4){ const r=p[i],gg=p[i+1],b=p[i+2], mx=Math.max(r,gg,b), mn=Math.min(r,gg,b), sat=mx===0?0:(mx-mn)/mx; if(mx>150 && sat<0.16) p[i+3]=0; } g.putImageData(d,0,0); _bikeArt[k]=cc; } else _bikeArt[k]=im; _bikeArtRdy[k]=true; }; im.src=(location.pathname.indexOf('/toys/')>=0?'':'toys/')+'assets/lineup/'+file+'.png'; }catch(e){} }
-_loadSheet('dirt','dirt_riders',true);   // dirt = карточки с ЗАПЕЧЁННОЙ шахматкой → ключуем светло-нейтральные пиксели в прозрачность (байк насыщенный = сохраняется)
-_loadSheet('street','street',false); _loadSheet('mtb','mtb',false);   // street/mtb = настоящая альфа
-const SHEET_CROP={ dirt:{x0:42,y0:74,w:268,h:212}, street:{x0:0,y0:6,w:352,h:300}, mtb:{x0:0,y0:6,w:352,h:300} };   // где в ячейке 352×384 сам байк (dirt = внутри карточки-рамки+подиума → тесный кроп)
-const BIKE_ART=[ {s:'mtb',c:0,r:0}, {s:'street',c:0,r:0}, {s:'street',c:1,r:0}, {s:'street',c:2,r:0}, {s:'dirt',c:0,r:0}, {s:'dirt',c:1,r:0}, {s:'street',c:2,r:1} ];   // 7 байков → ячейка: ВЕЛИК→XC(MTB), МОПЕД→Moped, СКУТЕР→Commuter, ЭНДУРО→TrailEnduro, КРОСС→MotoX250F(с райдером), МОТАРД→MotoX450F, СУПЕРБАЙК→Superbike RR
-function drawBikeArt(cx,cy,dw){ const am=BIKE_ART[selBike], sh=am&&_bikeArt[am.s]; if(!sh)return false; const CW=352,CH=384, cr=SHEET_CROP[am.s]||{x0:0,y0:6,w:352,h:300}; const dh=dw*cr.h/cr.w; ctx.drawImage(sh, am.c*CW+cr.x0, am.r*CH+cr.y0, cr.w, cr.h, cx-dw/2, cy-dh/2, dw, dh); return true; }   // рисует иллюстрацию байка (кроп по SHEET_CROP — без подписи/рамки/шахматки); false = не загрузилось
-// b236 ФАЗА 1 ДИНАМИЧНОГО РИГА: иллюстрация как ИГРОВОЙ спрайт (ctx уже в центре байка + повёрнут → флипы бесплатны) + squash подвески. Колёса-спин/FMX-позы = фаза 2
-let artBike=true; try{ if(localStorage.getItem('cb_artbike')==='0')artBike=false; }catch(e){}
-function saveArtBike(){ try{localStorage.setItem('cb_artbike',artBike?'1':'0');}catch(e){} }
-const ART_FIT={ dirt:{w:132,bottomY:33,dx:2}, street:{w:118,bottomY:32,dx:0}, mtb:{w:112,bottomY:32,dx:0} };   // подгонка: ширина + низ (колёса на контакт y≈29-33) + гориз.сдвиг. КАЛИБРОВКА по скриншоту
-function drawMachineArt(){ const am=BIKE_ART[selBike], sh=am&&_bikeArt[am.s]; if(!sh)return false; const CW=352,CH=384, cr=SHEET_CROP[am.s], fit=ART_FIT[am.s]||{w:118,bottomY:32,dx:0}; const dw=fit.w, dh=dw*cr.h/cr.w;
-  const cmp=(screen==='play'&&bike)?((bike._cmpF||0)+(bike._cmpR||0))*0.5:0, sq=1-Math.min(0.14,cmp*0.022);   // подвеска = вертикальный squash к контакту
-  ctx.save(); ctx.translate(fit.dx,fit.bottomY); ctx.scale(1,sq);   // anchor у контакта → squash «садится» на колёса
-  ctx.drawImage(sh, am.c*CW+cr.x0, am.r*CH+cr.y0, cr.w, cr.h, -dw/2, -dh, dw, dh); ctx.restore(); return true; }
+// b238 РИГ ИЗ РАЗДЕЛЬНЫХ ЧАСТЕЙ (арты юзера, сгенерённые по промтам): рама+колёса+позы-райдера — отдельные PNG, у всех запечён серый фон → убираю ЗАЛИВКОЙ ОТ КРАЁВ (region-grow, стоп на контуре — надёжнее цвето-ключа). Собираю в живой байк: колёса крутятся, поза меняется. КРОСС 250 = эталон
+function _rigBg(im, targetW, tol){ const s=targetW/im.naturalWidth, W=Math.max(1,Math.round(im.naturalWidth*s)), H=Math.max(1,Math.round(im.naturalHeight*s));
+  const cc=document.createElement('canvas'); cc.width=W; cc.height=H; const g=cc.getContext('2d'); g.drawImage(im,0,0,W,H);
+  const d=g.getImageData(0,0,W,H), p=d.data, N=W*H, bg=new Uint8Array(N), qx=new Int32Array(N), qy=new Int32Array(N); let qh=0,qt=0;
+  const push=(x,y)=>{ const i=y*W+x; if(!bg[i]){bg[i]=1;qx[qt]=x;qy[qt]=y;qt++;} };
+  for(let x=0;x<W;x++){push(x,0);push(x,H-1);} for(let y=0;y<H;y++){push(0,y);push(W-1,y);}
+  while(qh<qt){ const x=qx[qh],y=qy[qh];qh++; const i4=(y*W+x)*4,r=p[i4],gg=p[i4+1],b=p[i4+2], ax=[x-1,x+1,x,x],ay=[y,y,y-1,y+1];
+    for(let k=0;k<4;k++){ const bx=ax[k],by=ay[k]; if(bx<0||by<0||bx>=W||by>=H)continue; const j=by*W+bx; if(bg[j])continue; const j4=j*4;
+      if(Math.abs(p[j4]-r)+Math.abs(p[j4+1]-gg)+Math.abs(p[j4+2]-b)<tol){bg[j]=1;qx[qt]=bx;qy[qt]=by;qt++;} } }
+  for(let i=0;i<N;i++)if(bg[i])p[i*4+3]=0; g.putImageData(d,0,0); return {cv:cc,W,H}; }
+let _krossRig=null;
+(function(){ const base=(location.pathname.indexOf('/toys/')>=0?'':'toys/')+'assets/rig/kross/';
+  const names={frame:'frame',wf:'wheel_front',wr:'wheel_rear',seat:'rider_seat',attack:'rider_attack',lean:'rider_lean',superman:'rider_superman',super2:'rider_super2'};
+  const out={}, keys=Object.keys(names); let done=0;
+  const fin=()=>{ if(out.frame) _krossRig=out; };
+  keys.forEach(k=>{ try{ const im=new Image(); im.onload=()=>{ try{ out[k]=_rigBg(im, k==='frame'?460:(k==='wf'||k==='wr'?300:460), 34); }catch(e){} if(++done===keys.length)fin(); };
+    im.onerror=()=>{ if(++done===keys.length)fin(); }; im.src=base+names[k]+'.png'; }catch(e){ if(++done===keys.length)fin(); } }); })();
+// риг-локальные координаты (левый-верх рамы = 0,0, canvas рамы 460 шир.); anchor = визуальный центр для масштаба/поворота
+const KROSS_L={ raxle:[150,198], faxle:[374,190], D:188, anchor:[262,150],
+  poses:{ seat:{dx:-6,dy:-34,s:0.92}, attack:{dx:-6,dy:-34,s:0.92}, lean:{dx:-6,dy:-30,s:0.92}, superman:{dx:6,dy:-24,s:0.94}, super2:{dx:6,dy:-24,s:0.94} } };
+function drawKrossRig(cx,cy,scale,wheelAng,poseKey){ const R=_krossRig; if(!R||!R.frame)return false; const L=KROSS_L,D=L.D;
+  ctx.save(); ctx.translate(cx,cy); ctx.scale(scale,scale); ctx.translate(-L.anchor[0],-L.anchor[1]);
+  if(R.wr){ctx.save();ctx.translate(L.raxle[0],L.raxle[1]);ctx.rotate(wheelAng||0);ctx.drawImage(R.wr.cv,-D/2,-D/2,D,D);ctx.restore();}
+  ctx.drawImage(R.frame.cv,0,0);
+  if(R.wf){ctx.save();ctx.translate(L.faxle[0],L.faxle[1]);ctx.rotate((wheelAng||0)*1.02);ctx.drawImage(R.wf.cv,-D/2,-D/2,D,D);ctx.restore();}
+  const P=R[poseKey]||R.seat, pl=L.poses[poseKey]||L.poses.seat; if(P)ctx.drawImage(P.cv, pl.dx, pl.dy, P.W*pl.s, P.H*pl.s);
+  ctx.restore(); return true; }
 // b204 РЕШЕНИЕ ФОНА (после b203-вердикта юзера «фон ужасен, не сочетается»): ФОТО-БЭКДРОПЫ УБРАНЫ ИЗ ИГРЫ НАСОВСЕМ.
 // Корень (3 захода b185-191/b203 не склеились): фото = язык иллюстрации, весь кадр полон ЯРКОГО не-данных света → структурно несовместим
 // с C-правилом «светятся только данные». Мир теперь = ОДИН код-язык: композиция Vice нашим стилем (закат-солнце + город-свечи + пальмы-силуэты
@@ -2761,7 +2772,8 @@ function drawMenus(){
     ctx.fillStyle='#eafaff'; ctx.font='800 24px ui-monospace,monospace'; ctx.fillText('🏍 БАЙКИ',W/2,46);
     ctx.fillStyle='#ffd678'; ctx.font='800 16px ui-monospace,monospace'; ctx.fillText('$ '+bank,W/2,76);
     UI.bkBack={x:14,y:18,w:78,h:34}; panel(UI.bkBack.x,UI.bkBack.y,78,34,'rgba(150,180,220,0.6)','rgba(30,40,62,0.5)'); ctx.fillStyle='#cfe0ff'; ctx.font='700 13px ui-monospace,monospace'; ctx.fillText('‹ НАЗАД',UI.bkBack.x+39,UI.bkBack.y+22);
-    ctx.save(); ctx.translate(W/2,H*0.27); ctx.scale(1.8,1.8); drawMachine(BK(),0,0,0,false,0); ctx.restore();   // b237 ОТКАТ b235: копипаст-превью убрано (шахматка/рамка = плохо). Вектор до правильного рига
+    if(selBike===4 && drawKrossRig(W/2, H*0.235, Math.min(0.62, W*0.85/500), t*0.4, 'seat')){}   // b238 РИГ из раздельных частей (КРОСС эталон): колёса крутятся в превью
+    else { ctx.save(); ctx.translate(W/2,H*0.27); ctx.scale(1.8,1.8); drawMachine(BK(),0,0,0,false,0); ctx.restore(); }   // вектор для остальных / пока риг грузится
     const b=BIKES[selBike], own=owned.indexOf(selBike)>=0, ay=H*0.40;
     UI.bkL={x:W/2-150,y:ay-30,w:50,h:64}; UI.bkR={x:W/2+100,y:ay-30,w:50,h:64};
     ctx.fillStyle='rgba(190,215,245,0.85)'; ctx.font='800 34px ui-monospace,monospace'; ctx.fillText('‹',UI.bkL.x+25,ay+12); ctx.fillText('›',UI.bkR.x+25,ay+12);
