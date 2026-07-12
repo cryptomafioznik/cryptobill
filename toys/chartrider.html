@@ -64,7 +64,7 @@ function lerp(a,b,t){return a+(b-a)*t;} function clamp(v,a,b){return v<a?a:v>b?b
 // false → full game everywhere. Single switch. Systems are GATED, never deleted.
 const CORE_TEST_MODE = false;   // b70: META LIVE — building the progression spine (upgrades/bikes with teeth, career, economy) on the confirmed rigid-body core
 // build stamp — bump on every change so a phone refresh can confirm it loaded fresh code (cache!)
-const BUILD = '2026-07-12 · b247';
+const BUILD = '2026-07-12 · b248';
 
 // ---------- procedural market terrain ----------
 // height map sampled every STEP px; generated forward as we ride. Market character:
@@ -108,7 +108,7 @@ const EVENTS={
 };
 let evGenType='', evGenLeft=0, nextEvGenX=2600;                 // terrain-generation scheduler
 let gapLeft=0, nextGapX=1800, gapBaseY=0, gapLandFlat=0, overGap=false, gapLipNow=0, gapFarX=0, gapFxT=0, gapFxMsg='';   // GAPS: gen + fair-landing + clear state; gapLipNow/gapFarX = lip level & far-edge x of the gap being crossed
-let gapRunup=0, gapRampLeft=0, gapPrevY=0, gapRampBot=0;   // gap FEATURE phases: descent run-up (build speed) → kicker ramp (launch) → chasm → land below the lip
+let gapRunup=0, gapRampLeft=0, gapPrevY=0, gapRampBot=0, gapLipY=0, gapLandTopY=0;   // b247/ph3 gap FEATURE: разгон-спуск (скорость) → ВОГНУТЫЙ лип → чистый провал (death если медленно) → посадка на УРОВНЕ старта (не ниже), встречный довнслоп, опц. step-up ВВЕРХ
 let ledgeRunup=0, ledgeStepsLeft=0, ledgePrevY=0, ledgeTopY=0, ledgeStepsThis=2, ledgeHThis=38, nextLedgeX=1400;   // LEDGE phases: flat run-up (set up the wheelie) → riser/tread steps you must LOFT the front to mount. b57: stepsThis/HThis randomize each ledge (variety: single small step ↔ tall 3-step staircase)
 let kickRunup=0, kickRampLeft=0, kickLandLeft=0, kickBaseY=0, kickRampBot=0, kickLipY=0, kickLandTopY=0, nextKickX=1700;   // b247 KICKER: разгон-спуск (набрать скорость) → ВОГНУТЫЙ лип (эмерджентный вылет ∝ скорости) → ВСТРЕЧНЫЙ довнслоп-посадка (тангенц. катч, та же анатомия что мега)
 let whoopRunup=0, whoopLeft=0, whoopBaseY=0, whoopPhase=0, nextWhoopX=2200;   // WHOOPS (b53): flat approach → a rhythm section of rollers (skim/catch air at speed, roll over slow) — dynamic flow, no death
@@ -157,10 +157,10 @@ function genSeg(){
   // ---- GAPS (chasm you JUMP) + LEDGES (vertical step you LOFT the front onto): structured skill obstacles ----
   let isGap=false, gapLip=0, isStep=false, stepTop=0, isKick=false, isWhoop=false, isMud=false, isDrop=false, isClimb=false, isMega=false;
   if(!isEv){
-    if(gapRunup>0){ const k=6-gapRunup; close=clamp(gapPrevY + k*13, 70, H*0.82); walk=close-baseY; gapRunup--; if(gapRunup<=0){ gapRampBot=close; gapRampLeft=4; } }   // b215 РАЗГОН-СПУСК (5 узлов ~65px вниз) → набрать скорость перед рампой
-    else if(gapRampLeft>0){ const k=5-gapRampLeft; close=clamp(gapRampBot - k*TUNE.gapRampH, 70, H*0.95); walk=close-baseY; if(gapRampLeft===1)isKick=true; gapRampLeft--; if(gapRampLeft<=0){ gapLip=clamp(gapRampBot - 4*TUNE.gapRampH,70,H*0.9); gapLeft=Math.min(TUNE.gapWmax, TUNE.gapWmin+Math.floor(clamp(((dist||0)+diffOffset)/1400,0,1)*0.65*TUNE.gapWvol*4)); gapBaseY=clamp(gapRampBot + TUNE.gapDrop, 70, H*0.9); } }   // b234 ФИКС: volK был undefined в genSeg (жил только в pickRegime) → ReferenceError ронял генерацию гэпа (~260м, тихо: гэпы не формировались). Инлайн формулы (volK-1)=clamp·0.65. b215 РАМПА-ВОЗВЫШЕННОСТЬ UP (4 узла, last=kick lip → launch ∝ vx). Ширина пропасти ∝ волатильности; посадка НИЖЕ низа разгона (с высоты вниз)
-    else if(gapLeft>0){ isGap=true; gapLip=gapBaseY; close=H*0.99; gapLeft--; if(gapLeft<=0){ walk=gapBaseY-baseY; gapLandFlat=6; } }   // b215 ПРОПАСТЬ (ширина ∝ сложности) — не долетел = падение (wipeout gap)
-    else if(gapLandFlat>0){ close=gapBaseY; walk=close-baseY; gapLandFlat--; }   // b215 ПОСАДКА НИЖЕ (плоский выкат, snapped = чистое приземление с высоты)
+    if(gapRunup>0){ const k=TUNE.gapRunupN-gapRunup; close=clamp(gapPrevY + k*TUNE.gapRunupH, 70, H*0.82); walk=close-baseY; gapRunup--; if(gapRunup<=0){ gapRampBot=close; gapRampLeft=TUNE.gapRampN; } }   // ph3 РАЗГОН-СПУСК → набрать скорость перед рампой
+    else if(gapRampLeft>0){ const k=TUNE.gapRampN-gapRampLeft; const off=TUNE.gapTotalH*Math.pow((k+1)/TUNE.gapRampN, TUNE.gapCurve); close=clamp(gapRampBot - off, 70, H*0.9); walk=close-baseY; if(gapRampLeft===1){ isKick=true; gapLipY=close; } gapRampLeft--; if(gapRampLeft<=0){ gapLeft=Math.min(TUNE.gapWmax, TUNE.gapWmin+Math.floor(clamp(((dist||0)+diffOffset)/1400,0,1)*0.65*TUNE.gapWvol*4)); gapLandTopY=clamp(gapPrevY - TUNE.gapStepUp, 70, H*0.9); gapBaseY=gapLandTopY; } }   // ph3 ВОГНУТЫЙ ЛИП off=totalH·((k+1)/N)^curve (гладкая база→лип) → ЭМЕРДЖЕНТНЫЙ вылет; ширина провала ∝ сложности (клиренс на разгоне); ПОСАДКА на уровне СТАРТА (gapPrevY − step-up), НЕ ниже
+    else if(gapLeft>0){ isGap=true; gapLip=gapBaseY; close=H*0.99; gapLeft--; if(gapLeft<=0){ walk=gapBaseY-baseY; gapLandFlat=TUNE.gapLandN; } }   // ph3 ЧИСТЫЙ ПРОВАЛ — не долетел (медленно) = падение (честный риск, но клиренс на норм.скорости)
+    else if(gapLandFlat>0){ const k=TUNE.gapLandN-gapLandFlat; close=clamp(gapLandTopY + k*TUNE.gapLandSlope, 70, H*0.9); walk=close-baseY; gapLandFlat--; }   // ph3 ВСТРЕЧНЫЙ ДОВНСЛОП на дальней стороне (тангенц. катч, не плоский слэм; выкат вперёд)
     else if(climbRunup>0){ const k=6-climbRunup; close=clamp(climbBaseY + k*13, 70, H*0.86); walk=close-baseY; climbRunup--; if(climbRunup<=0){ climbBotY=close; climbLeft=TUNE.climbN; } }   // b229 разгон-спуск → набрать момент под крутой подъём (логичный setup)
     else if(climbLeft>0){ const p=(TUNE.climbN-climbLeft+1)/TUNE.climbN, e=p*p*(3-2*p); close=clamp(climbBotY - e*TUNE.climbN*TUNE.climbSteep, 70, H*0.95); walk=close-baseY; isClimb=true; climbLeft--; }   // b230 ЕСТЕСТВЕННЫЙ ХОЛМ (smoothstep S-кривая, НЕ угловатый линейный): пологий вход → крутая середина (≈1.5× = ещё круче) → пологий гребень. Убирает резкие углы низа/гребня, но склон остаётся крутым. Лезешь моментом+вес вперёд = баланс GD
     else if(ledgeRunup>0){ close=clamp(ledgePrevY,70,H*0.92); walk=close-baseY; ledgeRunup--; if(ledgeRunup<=0){ ledgeStepsLeft=ledgeStepsThis*3; ledgeTopY=ledgePrevY; } }   // LEDGE flat run-up: set up the wheelie (fair — you can prepare)
@@ -178,7 +178,7 @@ function genSeg(){
     else if(mudLeft>0){ close=clamp(mudLipBot,70,H*0.9); walk=close-baseY; isMud=true; mudLeft--; }   // MUD patch at the run-up bottom (a dip below the lip) — jump it from the lip, or land in & bog. No death
     else if(dropLandLeft>0){ close=clamp(dropLandY,70,H*0.9); walk=close-baseY; if(dropLandLeft===TUNE.dropLandN)isDrop=true; dropLandLeft--; }   // CLIFF: ride line SNAPPED down to the lower shelf — the one-STEP plunge from the lip IS the convex edge (fly off ∝ speed); flat shelf = forgiving landing + pit-wall guard. first node tagged .drop (telegraph + keep edge sharp)
     else if(TUNE.gapEvery>0 && genX>=nextGapX && genX>TUNE.gapStart*10 && terr.length>20 && regime!=='pump' && regime!=='crash' && lastRegime!=='bull'){   // schedule a gap FEATURE (not mid-climb); the run-up handles the takeoff
-      gapPrevY=close; gapRunup=5; nextGapX=genX + TUNE.gapEvery*10 + Math.random()*1400;   // start: descent run-up first
+      gapPrevY=close; gapRunup=TUNE.gapRunupN; nextGapX=genX + TUNE.gapEvery*10 + Math.random()*1400;   // start: descent run-up first
     }
     else if(TUNE.ledgeEvery>0 && genX>=nextLedgeX && genX>TUNE.ledgeStart*10 && terr.length>16 && regime!=='pump' && regime!=='crash' && lastRegime!=='bull' && close>H*0.45){   // schedule a LEDGE (not mid-climb, and only when low enough to have room to step up)
       ledgePrevY=close; ledgeStepsThis=1+Math.floor(Math.random()*2); ledgeHThis=TUNE.ledgeH*(0.7+Math.random()*0.5); ledgeRunup=4; nextLedgeX=genX + TUNE.ledgeEvery*10*densK + Math.random()*1100*densK;   // b57: 1-2 steps, height 0.7-1.2× → variety (small kerb ↔ 2-step staircase) but stays climbable (taller 3-step staircases looped the loft)
@@ -516,11 +516,20 @@ const TUNE = {
   gapEvery:     300,     // 15. b228: 360→300 ЧАЩЕ (дизайн-обстакл-курс плотнее). b215 ВКЛ (юзер хочет обрывы-связку): ПРОПАСТИ ср. дистанция (м). Связка = разгон-спуск → рампа-возвышенность → ПРОПАСТЬ → посадка НИЖЕ (с высоты вниз). Не рандом-яма — логичный скилл (разогнался=перелетел). 0 = выкл
   gapStart:     260,     // 16. первая пропасть после этой дистанции (м)
   gapKick:      0.45,    // 16b. КРОМКА-РАМПА: launch вверх = vx×это (физика рампы). При ровной скорости НЕ перелетает → нужен разгон/прыжок. БОЛЬШЕ = легче перелёт
-  gapRampH:     23,      // b215 высота РАМПЫ-ВОЗВЫШЕННОСТИ за узел (4 узла ×23 = 92px вверх) — прыгаешь С ВЫСОТЫ. ВЫШЕ = драматичнее/страшнее
-  gapWmin:      2,       // b215 мин. ширина пропасти (узлов ×26px)
-  gapWvol:      1.1,     // b215 +ширина ∝ волатильности монеты (дикие мемы = шире провал = нужен больший разгон). Сложность из ДАННЫХ
-  gapWmax:      5,       // b215 кап ширины (узлов) — чтобы даже дикая монета оставалась перелетаемой на разгоне
-  gapDrop:      52,      // b215 посадка НИЖЕ низа разгона (px) = «перепрыгиваешь обрыв с высоты ВНИЗ» (юзер). БОЛЬШЕ = глубже падение на той стороне
+  gapRampH:     23,      // (legacy, не используется — заменён вогнутым липом ph3)
+  gapRunupN:    5,       // ph3 узлов разгон-спуска гэпа
+  gapRunupH:    13,      // ph3 px/узел спуска
+  gapRampN:     5,       // ph3 узлов ВОГНУТОГО липа (та же анатомия)
+  gapTotalH:    80,      // ph3 высота липа (px); off=totalH·((k+1)/N)^curve → форвард-несущий лип (~44°, клиренс провала)
+  gapCurve:     2.0,     // ph3 вогнутость (гладкая база, без острого угла)
+  gapWmin:      2,       // ph3 мин. ширина провала (узлов ×26px)
+  gapWvol:      1.1,     // ph3 +ширина ∝ сложности/волатильности (шире = больше разгона). Сложность из данных
+  gapWmax:      3,       // ph3 кап ширины (узлов ×26=78px) — СИМ: 3/3 чистых перелёта на норм.скорости (5=клипал дальнюю стену). Death только если реально медленно
+
+  gapStepUp:    0,       // ph3 посадка ВЫШЕ старта (px, step-up «залететь на верх»); 0 = НА УРОВНЕ старта (НЕ ниже). Отриц. = ниже
+  gapLandSlope: 10,      // ph3 px/узел ВСТРЕЧНОГО довнслопа дальней стороны (~21° тангенц.катч)
+  gapLandN:     10,      // ph3 длина посадочного склона (щедрый)
+  gapDrop:      52,      // (legacy, не используется — посадка теперь на уровне старта, не ниже)
   // ---- ОБРЫВЫ/СЪЕЗДЫ (b69): ступень террейна ВНИЗ за 1 узел = выпуклая кромка → ТВЁРДОЕ ТЕЛО слетает СНАРЯДОМ (колесо за кромкой не достаёт землю → гравитация уносит в дугу) → нижняя ПОЛКА ловит. НЕ старая gap-яма. Защита от «ямы-стены»: climbCap и так капает подъём (~13.6px/узел) → стены сразу за обрывом быть не может ----
   dropEvery:    0,       // X1. b215 ВЫКЛ: старый drop (ступень-на-полку) юзер забраковал — «всё проезжается, не обрыв». Заменён связкой gap (возвышенность→рампа→ПРОПАСТЬ→посадка ниже). Код цел, вернуть = >0
   dropStart:    200,     // X2. первый обрыв после (м) — после онбординга
