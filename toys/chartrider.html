@@ -64,7 +64,7 @@ function lerp(a,b,t){return a+(b-a)*t;} function clamp(v,a,b){return v<a?a:v>b?b
 // false → full game everywhere. Single switch. Systems are GATED, never deleted.
 const CORE_TEST_MODE = false;   // b70: META LIVE — building the progression spine (upgrades/bikes with teeth, career, economy) on the confirmed rigid-body core
 // build stamp — bump on every change so a phone refresh can confirm it loaded fresh code (cache!)
-const BUILD = '2026-07-12 · b240';
+const BUILD = '2026-07-12 · b241';
 
 // ---------- procedural market terrain ----------
 // height map sampled every STEP px; generated forward as we ride. Market character:
@@ -2645,32 +2645,49 @@ function drawMachine(B,wheelv,rShiftv,leanv,roost,boostv,dynAir,dynSquat,tkId,tk
     const shx=px+Math.sin(ta)*13, shy=py-Math.cos(ta)*13;
     const L1=ik2(px,py,f1[0],f1[1],PS.l1,PS.l2,-1), L2=ik2(px-1.5,py,f2[0]-1.5,f2[1],PS.l1,PS.l2,-1);
     const A1=ik2(shx,shy,hbx,hby,7.6,8.2,1), A2=ik2(shx-1.5,shy,hbx-2.5,hby,7.6,8.2,1);
-    ctx.lineCap='round';
-    ctx.strokeStyle='rgba(6,7,12,0.85)'; ctx.lineWidth=5.8; ctx.beginPath(); ctx.moveTo(px-1.5,py); ctx.lineTo(L2[0],L2[1]); ctx.stroke();   // дальняя нога: бедро толще
-    ctx.lineWidth=3.8; ctx.beginPath(); ctx.moveTo(L2[0],L2[1]); ctx.lineTo(L2[2],L2[3]); ctx.stroke();   // голень тоньше
-    ctx.strokeStyle='rgba('+B.rider+',0.4)'; ctx.lineWidth=4.0; ctx.beginPath(); ctx.moveTo(shx-1.5,shy); ctx.lineTo(A2[0],A2[1]); ctx.stroke(); ctx.lineWidth=2.8; ctx.beginPath(); ctx.moveTo(A2[0],A2[1]); ctx.lineTo(A2[2],A2[3]); ctx.stroke();   // дальняя рука: плечо толще, предплечье тоньше
-    ctx.save(); ctx.translate(px,py); ctx.rotate(ta);   // торс-капсула — b208: КОМБЕЗ = сплошной цвет райдера (был тёмный силуэт с тонкой обводкой = «каша»; GD-принцип: у каждого элемента своя заливка)
-    const tg=ctx.createLinearGradient(0,-16,0,2); tg.addColorStop(0,'rgba('+B.rider+',1)'); tg.addColorStop(1,'rgba('+B.rider+',0.5)');
-    ctx.beginPath(); ctx.arc(0,-13,3.7,Math.PI,0); ctx.arc(0,-0.5,4.6,0,Math.PI); ctx.closePath(); ctx.fillStyle=tg; ctx.fill();
-    ctx.strokeStyle='rgba(8,10,18,0.8)'; ctx.lineWidth=1.2; ctx.stroke();   // тёмный контур вокруг светлого тела (инверсия)
+    // ==== RIDER RENDER b241: MX-ЭКИП по рефам (фулфейс-шлем + джерси цвето-блок + наколенник/ботинок/перчатки), объём светом. СКЕЛЕТ/IK/позы НЕ тронуты ====
+    ctx.lineCap='round'; ctx.lineJoin='round';
+    const JER='rgba('+B.accent+',1)', JERD='rgba('+B.accent+',0.34)', PANT='#1a1f2b', PANTF='#0e121b', GEAR='#e6ecf6', GEARD='#9dabc2', GLV='#232a38';
+    // helper: рисует «конечность» с объёмом (тень-обводка + заливка)
+    const limb=(a,b,c,d,w1,w2,fill)=>{ ctx.strokeStyle='rgba(6,8,14,0.9)'; ctx.lineWidth=w1+1.6; ctx.beginPath(); ctx.moveTo(a,b); ctx.lineTo(c,d); ctx.stroke(); ctx.strokeStyle=fill; ctx.lineWidth=w1; ctx.beginPath(); ctx.moveTo(a,b); ctx.lineTo(c,d); ctx.stroke(); };
+    // --- ДАЛЬНЯЯ сторона (притемнена): нога + рука ---
+    ctx.globalAlpha=0.62;
+    limb(px-1.5,py,L2[0],L2[1],5.8,0,PANTF); limb(L2[0],L2[1],L2[2],L2[3],4.0,0,PANTF);
+    limb(shx-1.5,shy,A2[0],A2[1],4.2,0,JERD); limb(A2[0],A2[1],A2[2],A2[3],2.8,0,JERD);
+    ctx.globalAlpha=1;
+    // --- ТОРС: джерси (цвет байка) + грудь-протектор + воротник ---
+    ctx.save(); ctx.translate(px,py); ctx.rotate(ta);
+    const tg=ctx.createLinearGradient(-5,-15,5,3); tg.addColorStop(0,JER); tg.addColorStop(0.62,JER); tg.addColorStop(1,'rgba('+B.accent+',0.45)');
+    ctx.beginPath(); ctx.moveTo(-4.4,2); ctx.quadraticCurveTo(-5.4,-8,-3.6,-13.5); ctx.quadraticCurveTo(0,-16.5,3.6,-13.5); ctx.quadraticCurveTo(5.4,-8,4.4,2); ctx.quadraticCurveTo(0,3.4,-4.4,2); ctx.closePath();
+    ctx.fillStyle=tg; ctx.fill(); ctx.strokeStyle='rgba(6,8,14,0.9)'; ctx.lineWidth=1.5; ctx.stroke();
+    ctx.strokeStyle='rgba(8,10,16,0.55)'; ctx.lineWidth=1.1; ctx.beginPath(); ctx.moveTo(-2.4,-11); ctx.lineTo(-2.4,0.5); ctx.stroke();   // шов грудь-протектора
+    ctx.fillStyle=GEARD; ctx.beginPath(); ctx.moveTo(-3.8,-13.2); ctx.lineTo(3.8,-13.2); ctx.lineTo(3.0,-11.2); ctx.lineTo(-3.0,-11.2); ctx.closePath(); ctx.fill();   // воротник-нек-брейс
     ctx.restore();
-    ctx.strokeStyle='#10131d'; ctx.lineWidth=7.0; ctx.beginPath(); ctx.moveTo(px,py); ctx.lineTo(L1[0],L1[1]); ctx.stroke();   // b223 ОБЪЁМ: бедро ТОЛСТОЕ
-    ctx.lineWidth=4.6; ctx.beginPath(); ctx.moveTo(L1[0],L1[1]); ctx.lineTo(L1[2],L1[3]); ctx.stroke();   // голень тоньше = мышечное сужение, не палка
-    ctx.fillStyle='#191d2a'; ctx.beginPath(); ctx.arc(L1[0],L1[1],2.5,0,7); ctx.fill();   // наколенник (MTB-защита)
-    { const bdx=L1[2]-L1[0], bdy=L1[3]-L1[1], bl=Math.hypot(bdx,bdy)||1;
-      ctx.strokeStyle='#161a26'; ctx.lineWidth=4.8; ctx.beginPath(); ctx.moveTo(L1[2]-bdx/bl*1.2,L1[3]-bdy/bl*1.2); ctx.lineTo(L1[2]+bdx/bl*2.6,L1[3]+bdy/bl*2.6); ctx.stroke();
-      ctx.strokeStyle=RIM+'0.5)'; ctx.lineWidth=1.2; ctx.beginPath(); ctx.moveTo(L1[2]-1.5,L1[3]+2.4); ctx.lineTo(L1[2]+3.2,L1[3]+2.4); ctx.stroke(); }   // ботинок + подошва
-    const hcx=px+Math.sin(ta)*18.6, hcy=py-Math.cos(ta)*18.6;   // шлем
-    const hg2=ctx.createRadialGradient(hcx-1.6,hcy-2.2,1,hcx,hcy,6.2); hg2.addColorStop(0,'#f3f7ff'); hg2.addColorStop(1,'#a9b6d0');   // b208: БЕЛЫЙ шлем — райдер читается мгновенно (GD-разделение элементов; тёмный визор на белом = контраст)
-    ctx.fillStyle=hg2; ctx.beginPath(); ctx.arc(hcx,hcy,5.9,0,7); ctx.fill();
-    ctx.strokeStyle='#0e1420'; ctx.lineWidth=2.6; ctx.lineCap='round'; ctx.beginPath(); ctx.moveTo(hcx+2.6,hcy-3.6); ctx.lineTo(hcx+8.4,hcy-4.4); ctx.stroke(); ctx.lineCap='butt';   // b223 КОЗЫРЁК full-face MTB-шлема (вынос вперёд) = не просто круг-голова
-    ctx.strokeStyle='rgba('+B.rim+',0.75)'; ctx.lineWidth=1.3; ctx.beginPath(); ctx.arc(hcx,hcy,5.9,Math.PI*0.95,Math.PI*1.9); ctx.stroke();   // полоса-акцент
-    ctx.strokeStyle='#0a1520'; ctx.lineWidth=3.1; ctx.beginPath(); ctx.arc(hcx,hcy,4.3,ta-0.62,ta+0.72); ctx.stroke();   // визор по ходу движения
-    ctx.strokeStyle='rgba(190,235,255,0.75)'; ctx.lineWidth=1.1; ctx.beginPath(); ctx.arc(hcx,hcy,4.3,ta-0.5,ta+0.05); ctx.stroke();   // блик визора
-    ctx.strokeStyle='rgba('+B.rider+',0.9)'; ctx.lineWidth=5.0; ctx.beginPath(); ctx.moveTo(shx,shy); ctx.lineTo(A1[0],A1[1]); ctx.stroke();   // ближняя рука: плечо толще
-    ctx.fillStyle='#1a1e2b'; ctx.beginPath(); ctx.arc(A1[0],A1[1],1.8,0,7); ctx.fill();   // налокотник
-    ctx.lineWidth=3.4; ctx.beginPath(); ctx.moveTo(A1[0],A1[1]); ctx.lineTo(A1[2],A1[3]); ctx.stroke();   // предплечье тоньше
-    ctx.fillStyle='#171b28'; ctx.beginPath(); ctx.arc(A1[2],A1[3],2,0,7); ctx.fill();   // перчатка
+    // --- БЛИЖНЯЯ нога: штаны + наколенник + ботинок ---
+    limb(px,py,L1[0],L1[1],7.0,0,PANT); limb(L1[0],L1[1],L1[2],L1[3],4.6,0,PANT);
+    ctx.fillStyle=GEAR; ctx.strokeStyle='rgba(6,8,14,0.8)'; ctx.lineWidth=0.9; ctx.beginPath(); ctx.ellipse(L1[0],L1[1],3.0,3.6,ta,0,7); ctx.fill(); ctx.stroke();   // белый наколенник (объёмный)
+    ctx.fillStyle=GEARD; ctx.beginPath(); ctx.arc(L1[0],L1[1],1.3,0,7); ctx.fill();
+    { const bdx=L1[2]-L1[0], bdy=L1[3]-L1[1], bl=Math.hypot(bdx,bdy)||1, ux=bdx/bl, uy=bdy/bl, nx=-uy, ny=ux;   // MX-ботинок: клин по направлению голени
+      const tx=L1[2]+ux*1.5, ty=L1[3]+uy*1.5;
+      ctx.fillStyle='#20252f'; ctx.strokeStyle='rgba(6,8,14,0.9)'; ctx.lineWidth=1.1;
+      ctx.beginPath(); ctx.moveTo(tx-nx*2.6,ty-ny*2.6); ctx.lineTo(tx+ux*4.6-nx*2.2,ty+uy*4.6-ny*2.2); ctx.lineTo(tx+ux*5.2+nx*1.6,ty+uy*5.2+ny*1.6); ctx.lineTo(tx+nx*3.0,ty+ny*3.0); ctx.closePath(); ctx.fill(); ctx.stroke();
+      ctx.strokeStyle=GEAR; ctx.lineWidth=1.4; ctx.beginPath(); ctx.moveTo(tx-nx*1.2,ty-ny*1.2); ctx.lineTo(tx+ux*3.4-nx*0.8,ty+uy*3.4-ny*0.8); ctx.stroke(); }   // белая пряжка/полоса
+    // --- ШЛЕМ: фулфейс MX (оболочка + чин-бар + козырёк + очки), в повёрнутом фрейме ---
+    const hcx=px+Math.sin(ta)*18.6, hcy=py-Math.cos(ta)*18.6;
+    ctx.save(); ctx.translate(hcx,hcy); ctx.rotate(ta*0.55);   // «лицо» вперёд (+x)
+    ctx.beginPath(); ctx.moveTo(-3.4,-5.4); ctx.quadraticCurveTo(4.2,-7.0,6.2,-2.2); ctx.quadraticCurveTo(7.4,1.2,4.6,3.2); ctx.quadraticCurveTo(3.0,5.4,0.6,5.4); ctx.quadraticCurveTo(-4.8,4.8,-5.6,-0.4); ctx.quadraticCurveTo(-5.8,-4.0,-3.4,-5.4); ctx.closePath();   // силуэт фулфейса (чин-бар вправо-вниз)
+    const hg=ctx.createLinearGradient(-4,-6,4,5); hg.addColorStop(0,JER); hg.addColorStop(0.55,'rgba('+B.accent+',0.8)'); hg.addColorStop(1,'#12161e');
+    ctx.fillStyle=hg; ctx.fill(); ctx.strokeStyle='rgba(6,8,14,0.95)'; ctx.lineWidth=1.4; ctx.stroke();
+    ctx.fillStyle='#0c1018'; ctx.beginPath(); ctx.moveTo(1.4,-2.8); ctx.quadraticCurveTo(6.2,-3.0,6.0,0.4); ctx.quadraticCurveTo(3.4,1.0,1.6,0.4); ctx.closePath(); ctx.fill();   // очки/визор (тёмное поле)
+    ctx.strokeStyle='rgba(190,235,255,0.8)'; ctx.lineWidth=0.9; ctx.beginPath(); ctx.moveTo(2.2,-2.0); ctx.quadraticCurveTo(4.4,-2.2,5.2,-0.8); ctx.stroke();   // блик очков
+    ctx.fillStyle=GEAR; ctx.beginPath(); ctx.moveTo(-2.2,-5.6); ctx.lineTo(7.4,-4.2); ctx.lineTo(6.8,-2.6); ctx.lineTo(-2.4,-4.0); ctx.closePath(); ctx.fill();   // КОЗЫРЁК (белый вынос вперёд)
+    ctx.strokeStyle='rgba(6,8,14,0.8)'; ctx.lineWidth=0.8; ctx.stroke();
+    ctx.restore();
+    // --- БЛИЖНЯЯ рука: рукав джерси + налокотник + перчатка ---
+    limb(shx,shy,A1[0],A1[1],4.8,0,JER);
+    ctx.fillStyle=GEARD; ctx.strokeStyle='rgba(6,8,14,0.8)'; ctx.lineWidth=0.8; ctx.beginPath(); ctx.arc(A1[0],A1[1],2.0,0,7); ctx.fill(); ctx.stroke();   // налокотник
+    limb(A1[0],A1[1],A1[2],A1[3],3.2,0,JER);
+    ctx.fillStyle=GLV; ctx.strokeStyle='rgba(6,8,14,0.85)'; ctx.lineWidth=0.9; ctx.beginPath(); ctx.arc(A1[2],A1[3],2.2,0,7); ctx.fill(); ctx.stroke();   // перчатка
     ctx.lineCap='butt';
     // lights — b166: позиции ПО ТИПУ (на носу/щите/руле/хвосте, не в воздухе)
     { const hl = TY==='sport'?[25.4,-12.1] : (TY==='scooter'||TY==='moped')?[19.8,-9.4] : TY==='bike'?[17.8,-16.7] : [31,-4];
