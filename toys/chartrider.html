@@ -64,7 +64,7 @@ function lerp(a,b,t){return a+(b-a)*t;} function clamp(v,a,b){return v<a?a:v>b?b
 // false → full game everywhere. Single switch. Systems are GATED, never deleted.
 const CORE_TEST_MODE = false;   // b70: META LIVE — building the progression spine (upgrades/bikes with teeth, career, economy) on the confirmed rigid-body core
 // build stamp — bump on every change so a phone refresh can confirm it loaded fresh code (cache!)
-const BUILD = '2026-07-12 · b243';
+const BUILD = '2026-07-12 · b244';
 
 // ---------- procedural market terrain ----------
 // height map sampled every STEP px; generated forward as we ride. Market character:
@@ -868,9 +868,9 @@ const BIKES=[
   {name:'ВЕЛИК',     type:'bike',   body:['#3a3f4c','#22262f','#0c0e13'], rim:'170,185,205', accent:'150,200,230', rider:'255,190,130', cost:0,    accel:0.30, grip:1.30, tag:'учебка · медленный, лёгкий'},
   {name:'МОПЕД',     type:'moped',  body:['#2f4436','#1a281e','#0a1210'], rim:'150,230,180', accent:'110,235,160', rider:'255,200,140', cost:150,  accel:0.34, grip:1.38, tag:'дворовый · цепкий, шустрее'},
   {name:'СКУТЕР',    type:'scooter',body:['#3a3826','#26210e','#100c04'], rim:'255,228,150', accent:'255,205,90',  rider:'150,235,255', cost:400,  accel:0.38, grip:1.50, tag:'стабильный · прощает посадки'},
-  {name:'ЭНДУРО 125',type:'dirt',   body:['#323b50','#1b2030','#0a0c14'], rim:'150,225,255', accent:'60,210,255',  rider:'255,178,120', cost:900,  accel:0.42, grip:1.46, tag:'резвый универсал'},
-  {name:'КРОСС 250', type:'dirt',   body:['#1f3a30','#0e261c','#04120c'], rim:'130,255,196', accent:'80,255,170',  rider:'255,200,140', cost:1800, accel:0.46, grip:1.54, tag:'сбалансированный зверь'},
-  {name:'МОТАРД 450',type:'dirt',   body:['#48243f','#2a1230','#120612'], rim:'255,130,180', accent:'255,90,150',  rider:'150,235,255', cost:3400, accel:0.49, grip:1.44, tag:'тяга-монстр · нервный'},
+  {name:'ЭНДУРО 125',type:'dirt',   frame:'enduro', body:['#323b50','#1b2030','#0a0c14'], rim:'150,225,255', accent:'60,210,255',  rider:'255,178,120', cost:900,  accel:0.42, grip:1.46, tag:'резвый универсал'},
+  {name:'КРОСС 250', type:'dirt',   frame:'cross',  body:['#1f3a30','#0e261c','#04120c'], rim:'130,255,196', accent:'80,255,170',  rider:'255,200,140', cost:1800, accel:0.46, grip:1.54, tag:'сбалансированный зверь'},
+  {name:'МОТАРД 450',type:'dirt',   frame:'motard', wheel:'street', body:['#48243f','#2a1230','#120612'], rim:'255,130,180', accent:'255,90,150',  rider:'150,235,255', cost:3400, accel:0.49, grip:1.44, tag:'тяга-монстр · нервный'},
   {name:'СУПЕРБАЙК 650',type:'sport',body:['#1c3a4a','#0e2230','#04121c'], rim:'150,240,255', accent:'200,255,255', rider:'255,225,160', cost:6500, accel:0.52, grip:1.60, tag:'быстрый + вкопанный', reqRank:3},   // b144: accel сжат 0.30-0.52; b145: type = силуэт (велосипед/скутер/дёрт/спорт)
 ];
 // ---- b176 СКИНЫ: палитры за $ (пререндер b166 делает их дёшево — кэш спрайтов ключуется по скину). Физика НЕ меняется — только материал ----
@@ -2410,7 +2410,7 @@ function spWheel(B,kind,R,front){ const BOX=(R+3)*2;
       g.strokeStyle='rgba(200,215,240,0.2)'; g.lineWidth=0.6; g.beginPath(); g.arc(0,0,rimR-0.6,-2.4,-0.9); g.stroke(); }
     else { const n=kind==='mtb'?20:18; g.strokeStyle='rgba(205,222,244,'+(kind==='mtb'?0.5:0.38)+')'; g.lineWidth=0.55; g.beginPath();
       for(let s=0;s<n;s++){ const a=s/n*6.2832; g.moveTo(Math.cos(a+0.5)*2.2,Math.sin(a+0.5)*2.2); g.lineTo(Math.cos(a)*(rimR-0.6),Math.sin(a)*(rimR-0.6)); } g.stroke(); }
-    if(front){ const dr=kind==='mtb'?3.6:kind==='sport'?R*0.48:kind==='street'?R*0.36:R*0.4;   // тормозной ДИСК (крутится с колесом — честно)
+    if(front){ const dr=kind==='mtb'?3.6:kind==='sport'?R*0.48:kind==='street'?(B&&B.frame==='motard'?R*0.58:R*0.36):R*0.4;   // тормозной ДИСК (крутится с колесом — честно; мотард = большой супермото-диск)
       g.strokeStyle='rgba(175,188,206,0.55)'; g.lineWidth=kind==='sport'?2.6:2.1; g.beginPath(); g.arc(0,0,dr,0,7); g.stroke();
       for(let k=0;k<10;k++){ const a=k/10*6.2832; spDot(g,Math.cos(a)*dr,Math.sin(a)*dr,0.5,'#0b0e15'); }
       g.strokeStyle='rgba(230,240,252,0.30)'; g.lineWidth=0.7; g.beginPath(); g.arc(0,0,dr,-2.4,-0.9); g.stroke(); }
@@ -2423,6 +2423,7 @@ function spWheel(B,kind,R,front){ const BOX=(R+3)*2;
     for(let k=0;k<4;k++){ const a=k/4*6.2832+0.4; spDot(g,Math.cos(a)*1.5,Math.sin(a)*1.5,0.28,'rgba(220,232,250,0.7)'); }
   }); }
 function spDirt(g,B,plate){ const bod=B.body, ACC='rgba('+B.accent+',';
+  const F=B.frame||'cross', isCross=F==='cross', isEnduro=F==='enduro', isMotard=F==='motard';   // b244 РАЗНЫЕ РАМЫ: кросс=клюв+плейт+без фары, эндуро=фара+бак+защита, мотард=низкое крыло+уличный акцент
   spAO(g,0,9,14,5,0.5); spAO(g,-17,12,8,3.5,0.4); spAO(g,9,-2,7,3,0.3);
   spPoly(g,[[-27.5,13.6],[-7,5],[-4.4,10],[-25.2,18.4]], spLin(g,0,5,0,18.5,[[0,'#333b4d'],[0.5,'#1a2030'],[1,'#0a0d15']]));   // маятник
   spLine(g,-27.2,13.9,-7.4,5.4,'rgba(215,232,255,0.26)',0.9);
@@ -2454,6 +2455,9 @@ function spDirt(g,B,plate){ const bod=B.body, ACC='rgba('+B.accent+',';
   spRR(g,16.2,-15,6.8,2.8,1.2,'#2e3546'); spBolt(g,17.6,-13.6); spBolt(g,21.4,-13.6);
   spPoly(g,[[-3.2,-3],[-2.2,-7.6],[3,-12.2],[10,-11.9],[16.6,-11],[18,-6],[14.2,1.4],[5,3.4]],
     spLin(g,0,-12.5,0,4,[[0,bod[0]],[0.55,bod[1]],[1,bod[2]]]));   // бак + шрауды
+  if(isEnduro){ spPoly(g,[[-2.4,-7.2],[3,-13.6],[11,-13.5],[17.4,-12.1],[16.6,-11],[10,-11.9],[3,-12.2],[-2.2,-7.6]],
+      spLin(g,0,-13.6,0,-7,[[0,spSh(bod[0],0.14)],[1,bod[1]]]));   // b244 увеличенный бак дуал-спорта (запас хода)
+    g.strokeStyle='rgba(240,248,255,0.28)'; g.lineWidth=0.8; g.beginPath(); g.moveTo(-0.8,-9.6); g.quadraticCurveTo(6,-13.4,14,-12.4); g.stroke(); }
   g.save(); g.globalCompositeOperation='lighter';
   spPoly(g,[[-0.5,-9.2],[5.5,-11.8],[11.5,-11.5],[5.5,-8.4]],'rgba(190,222,255,0.10)'); g.restore();
   g.strokeStyle='rgba(240,248,255,0.35)'; g.lineWidth=0.9; g.beginPath(); g.moveTo(-1.8,-7.8); g.quadraticCurveTo(4,-12,10.4,-11.7); g.stroke();
@@ -2466,15 +2470,29 @@ function spDirt(g,B,plate){ const bod=B.body, ACC='rgba('+B.accent+',';
   spPoly(g,[[-2.4,-6.9],[-9.6,-6.3],[-16.8,-5.2],[-16.2,-3.3],[-8.2,-3.9],[-2.6,-4.1]],'#12161f');   // седло
   g.strokeStyle=ACC+'0.8)'; g.lineWidth=1; g.beginPath(); g.moveTo(-16.2,-4.3); g.lineTo(-3.4,-5.2); g.stroke();
   g.setLineDash([0.9,1.1]); spLine(g,-13.8,-4.7,-3.4,-5.4,'rgba(190,205,228,0.30)',0.5); g.setLineDash([]);
-  spPoly(g,[[18.6,-11.8],[25,-14.8],[32.8,-11],[34.6,-8.7],[28.4,-9.9],[21.6,-8.2]],
-    spLin(g,20,-15,33,-8,[[0,bod[0]],[0.6,bod[1]],[1,bod[2]]]));   // переднее крыло-клюв
-  spLine(g,19.4,-12.2,32.6,-10.7,'rgba(235,246,255,0.30)',0.8);
+  if(isMotard){   // b244 НИЗКОЕ крыло-хаггер над колесом (супермото/дорога) — не задранный клюв
+    spPoly(g,[[20.6,-0.8],[26,-4.2],[32.4,-1.4],[33.2,1.6],[27.4,-0.8],[21.4,2.4]],
+      spLin(g,20,-4,33,2,[[0,bod[0]],[0.6,bod[1]],[1,bod[2]]]));
+    spLine(g,21,-1.4,32.2,-1.2,'rgba(235,246,255,0.28)',0.8);
+  } else {   // кросс/эндуро: высокий клюв
+    spPoly(g,[[18.6,-11.8],[25,-14.8],[32.8,-11],[34.6,-8.7],[28.4,-9.9],[21.6,-8.2]],
+      spLin(g,20,-15,33,-8,[[0,bod[0]],[0.6,bod[1]],[1,bod[2]]]));
+    spLine(g,19.4,-12.2,32.6,-10.7,'rgba(235,246,255,0.30)',0.8);
+  }
   spLine(g,17.8,-13,21.8,-19.2,'#1c2230',3.0);   // руль
   spRR(g,18.9,-20.6,5.2,1.8,0.9,ACC+'0.9)');
   spLine(g,20.2,-19,25.8,-17.4,'#0d1017',2.8); spLine(g,24.4,-17.8,26,-17.3,'#04060b',3.1);
   spLine(g,25,-18.6,27.7,-19.6,'rgba(205,220,240,0.7)',0.8);
-  g.save(); g.translate(19.9,-16); g.rotate(-1.15);   // передний номер-плейт
-  spRR(g,-2.5,-3.3,5,6.6,1.3,'#0d1119',ACC+'0.8)',0.9); g.restore();
+  if(isCross){   // чистый MX — передний номер-плейт (фар нет, гейт в drawMachine)
+    g.save(); g.translate(19.9,-16); g.rotate(-1.15);
+    spRR(g,-2.5,-3.3,5,6.6,1.3,'#0d1119',ACC+'0.8)',0.9); g.restore();
+  } else {   // b244 эндуро/мотард — корпус фары (дорога): эндуро крупнее, мотард компактнее
+    const hr=isEnduro?1:0.82; g.save(); g.translate(20.2,-15.8); g.scale(hr,hr);
+    spRR(g,-3,-3.6,6,7.2,2.6, spLin(g,0,-3.6,0,3.6,[[0,spSh(bod[0],0.12)],[1,bod[2]]]));   // корпус
+    g.fillStyle='rgba(206,234,255,0.92)'; g.beginPath(); g.ellipse(0.7,0,2,2.9,0,0,7); g.fill();   // линза
+    spDot(g,0.7,-0.4,0.95,'rgba(255,250,222,0.95)'); g.restore();
+  }
+  if(isEnduro) spPoly(g,[[18.4,-20.4],[24.2,-19.6],[24.6,-16.4],[19.2,-17.2]], ACC+'0.42)');   // защита рук (эндуро)
   g.save(); g.translate(-17,-1.2); g.rotate(-0.13);   // боковая табличка с ТИКЕРОМ
   spRR(g,-4.6,-3.3,9.2,6.6,1.6,'#e9edf4'); spRR(g,-4.6,-3.3,9.2,6.6,1.6,null,'rgba(10,14,24,0.5)',0.7);
   g.fillStyle='#0b0f18'; g.font='900 4px ui-monospace,Menlo,monospace'; g.textAlign='center'; g.fillText(plate,0,1.5); g.textAlign='left';
@@ -2553,15 +2571,20 @@ function spScoot(g,B,plate,moped){ const bod=B.body, RIM='rgba('+B.rim+',', ACC=
   g.save(); g.translate(-19.5,13.4); g.rotate(0.12);   // глушитель-бочонок
   spRR(g,-3.4,-1.9,6.8,3.8,1.9, spLin(g,0,-2,0,2,[[0,'#97a2b5'],[1,'#333a4a']]));
   g.fillStyle='#10131c'; g.beginPath(); g.ellipse(3.3,0,0.9,1.6,0,0,7); g.fill(); g.restore();
-  spRR(g,-13.5,5.6,17,3,1.2,'#141926');   // дека-пол с рифлением
-  for(let e=0;e<4;e++) spLine(g,-11.5+e*3.6,6.2,-11.5+e*3.6,8,'rgba(160,175,196,0.25)',0.7);
-  spPoly(g,[[-12.5,6.2],[-6.5,-3.4],[-2.5,-3.8],[-1,6.2]], spLin(g,0,-4,0,6.5,[[0,bod[0]],[0.6,bod[1]],[1,bod[2]]]));   // юбка под седлом
-  if(moped){
-    spLine(g,16.4,-12.6,3,5.8,'#2b3242',3.4); spLine(g,16.1,-13,2.7,5.4,'rgba(205,220,242,0.2)',1);   // хребет рамы
-    spPoly(g,[[3.5,-6],[5,-9.8],[11.5,-10.6],[14.5,-8.4],[13,-5.2],[7,-4.6]], spLin(g,0,-11,0,-4,[[0,bod[0]],[0.55,bod[1]],[1,bod[2]]]));   // бак
+  if(moped){   // b244 МОПЕД = моторизованный велосипед: ОТКРЫТАЯ рама + багажник (НЕ пол-платформа/щит скутера)
+    spLine(g,16.4,-12.6,3,5.8,'#2b3242',3.0); spLine(g,16.1,-13,2.7,5.4,'rgba(205,220,242,0.2)',0.9);   // тонкий хребет рамы
+    spLine(g,3,5.8,-12,6.6,'#232a38',2.0);   // нижняя труба к мотору — рама на виду
+    spPoly(g,[[3.5,-6],[5,-9.8],[11.5,-10.6],[14.5,-8.4],[13,-5.2],[7,-4.6]], spLin(g,0,-11,0,-4,[[0,bod[0]],[0.55,bod[1]],[1,bod[2]]]));   // малый бак
     g.strokeStyle='rgba(240,248,255,0.32)'; g.lineWidth=0.8; g.beginPath(); g.moveTo(5.4,-9.4); g.quadraticCurveTo(9,-10.8,13.6,-8.8); g.stroke();
     spPoly(g,[[6.6,-8.6],[11,-9.4],[12.6,-7.6],[8,-6.6]], ACC+'0.35)');
-  } else {
+    spLine(g,-15.5,-8.6,-25,-9,'#3a4354',1.6); spLine(g,-15.8,-7.2,-15.5,-8.6,'#3a4354',1.1); spLine(g,-24.6,-7.6,-25,-9,'#3a4354',1.1);   // задний багажник
+    g.strokeStyle='rgba(200,215,235,0.22)'; g.lineWidth=0.6; g.beginPath(); g.moveTo(-15.8,-8.9); g.lineTo(-24.6,-9.3); g.stroke();
+  } else {   // СКУТЕР = ЗАКРЫТЫЙ корпус: пол-платформа + юбка + задняя боковая панель + передний щит
+    spRR(g,-13.5,5.6,17,3,1.2,'#141926');   // дека-пол с рифлением
+    for(let e=0;e<4;e++) spLine(g,-11.5+e*3.6,6.2,-11.5+e*3.6,8,'rgba(160,175,196,0.25)',0.7);
+    spPoly(g,[[-12.5,6.2],[-6.5,-3.4],[-2.5,-3.8],[-1,6.2]], spLin(g,0,-4,0,6.5,[[0,bod[0]],[0.6,bod[1]],[1,bod[2]]]));   // юбка под седлом
+    spPoly(g,[[-19,-5.8],[-17.6,1.4],[-2.6,2.6],[-0.6,-4.2],[-7,-5.4]], spLin(g,-14,-6,-8,3,[[0,spSh(bod[0],0.16)],[1,bod[2]]]));   // задняя боковая панель — закрытый корпус
+    spLine(g,-17.4,-4,-2.8,-2.4,'rgba(230,240,252,0.22)',0.7);
     spPoly(g,[[0.5,6.6],[11.5,-3.6],[15.5,-13],[20.6,-11.8],[18.6,-1.2],[9,7.2]], spLin(g,4,-13,18,7,[[0,spSh(bod[0],0.22)],[0.5,bod[1]],[1,bod[2]]]));   // передний щит — широкая панель
     spPoly(g,[[3,5.4],[12.4,-3.4],[15.9,-11.6],[17.9,-11.1],[15.9,-2.2],[8.2,5.9]],'rgba(6,8,14,0.35)');   // внутренняя тень щита (объём)
     g.strokeStyle='rgba(240,248,255,0.35)'; g.lineWidth=1; g.beginPath(); g.moveTo(15.9,-12.6); g.quadraticCurveTo(13.5,-4,3.5,6); g.stroke();
@@ -2585,7 +2608,7 @@ function bikeSprites(B){ const plate=bikePlate(), key=B.name+'|'+(B._skin||'')+'
   let s=sprCache[key]; if(s)return s;
   const TY=B.type||'dirt';
   const R = TY==='scooter'?10 : TY==='moped'?11.5 : 13;
-  const kind = TY==='dirt'?'knob' : TY==='sport'?'slick' : TY==='bike'?'mtb' : 'street';
+  const kind = B.wheel || (TY==='dirt'?'knob' : TY==='sport'?'slick' : TY==='bike'?'mtb' : 'street');
   const paint = TY==='dirt'?spDirt : TY==='sport'?spSport : TY==='bike'?spMtb : spScoot;
   const oOff=Math.max(2,Math.round(SPR_S*DPR*0.4));   // b210: контур ~0.4 мир-px — байк/колёса не тонут в графите трассы
   s={ wb:R+3, wf:spOutline(spWheel(B,kind,R,true),'rgba(212,228,252,0.6)',oOff), wr:spOutline(spWheel(B,kind,R,false),'rgba(212,228,252,0.6)',oOff),
@@ -2699,14 +2722,15 @@ function drawMachine(B,wheelv,rShiftv,leanv,roost,boostv,dynAir,dynSquat,tkId,tk
     ctx.fillStyle=GLV; ctx.strokeStyle='rgba(6,8,14,0.85)'; ctx.lineWidth=0.9; ctx.beginPath(); ctx.arc(A1[2],A1[3],2.2,0,7); ctx.fill(); ctx.stroke();   // перчатка
     ctx.lineCap='butt';
     // lights — b166: позиции ПО ТИПУ (на носу/щите/руле/хвосте, не в воздухе)
-    { const hl = TY==='sport'?[25.4,-12.1] : (TY==='scooter'||TY==='moped')?[19.8,-9.4] : TY==='bike'?[17.8,-16.7] : [31,-4];
+    { const hl = TY==='sport'?[25.4,-12.1] : (TY==='scooter'||TY==='moped')?[19.8,-9.4] : TY==='bike'?[17.8,-16.7] : [20.9,-15.4];   // b244 dirt: свечение в линзу корпуса фары (эндуро/мотард); кросс = noLt
       const rl = TY==='sport'?[-25.6,-3.6] : (TY==='scooter'||TY==='moped')?[-16.7,-4.4] : TY==='bike'?[-13.8,-12.1] : [-24.4,-1.2];
-      ctx.fillStyle='rgba(255,236,185,0.95)'; ctx.shadowColor='#ffd678'; ctx.shadowBlur=12; ctx.beginPath(); ctx.arc(hl[0],hl[1],TY==='bike'?1.6:2.4,0,7); ctx.fill(); ctx.shadowBlur=0;
-      ctx.fillStyle='rgba(255,80,100,0.9)'; ctx.shadowColor='#ff5060'; ctx.shadowBlur=8; ctx.beginPath(); ctx.arc(rl[0],rl[1],TY==='bike'?1.4:2,0,7); ctx.fill(); ctx.shadowBlur=0;
+      const noLt=(TY==='dirt'&&(B.frame||'cross')==='cross');   // b244 чистый MX-кросс = без фар/фонарей
+      if(!noLt){ ctx.fillStyle='rgba(255,236,185,0.95)'; ctx.shadowColor='#ffd678'; ctx.shadowBlur=12; ctx.beginPath(); ctx.arc(hl[0],hl[1],TY==='bike'?1.6:2.4,0,7); ctx.fill(); ctx.shadowBlur=0;
+        ctx.fillStyle='rgba(255,80,100,0.9)'; ctx.shadowColor='#ff5060'; ctx.shadowBlur=8; ctx.beginPath(); ctx.arc(rl[0],rl[1],TY==='bike'?1.4:2,0,7); ctx.fill(); ctx.shadowBlur=0; }
       if(screen==='play'||screen==='clip'){ ctx.save(); ctx.globalCompositeOperation='lighter';   // b183: ФАРА-КОНУС — свет имеет источник (Этап A)
-        const cg=ctx.createLinearGradient(hl[0],hl[1],hl[0]+118,hl[1]);
+        if(!noLt){ const cg=ctx.createLinearGradient(hl[0],hl[1],hl[0]+118,hl[1]);
         cg.addColorStop(0,'rgba(255,240,190,0.15)'); cg.addColorStop(1,'rgba(255,240,190,0)');
-        ctx.fillStyle=cg; ctx.beginPath(); ctx.moveTo(hl[0]+2,hl[1]-3); ctx.lineTo(hl[0]+120,hl[1]-24); ctx.lineTo(hl[0]+120,hl[1]+20); ctx.lineTo(hl[0]+2,hl[1]+3); ctx.closePath(); ctx.fill();
+        ctx.fillStyle=cg; ctx.beginPath(); ctx.moveTo(hl[0]+2,hl[1]-3); ctx.lineTo(hl[0]+120,hl[1]-24); ctx.lineTo(hl[0]+120,hl[1]+20); ctx.lineTo(hl[0]+2,hl[1]+3); ctx.closePath(); ctx.fill(); }
         if(down&&bike&&bike.onG){ for(let e=0;e<2;e++){ ctx.fillStyle='rgba(255,'+((150+Math.random()*80)|0)+',60,'+(0.22+0.3*Math.random()).toFixed(3)+')';   // искры выхлопа под газом
           ctx.beginPath(); ctx.arc(-22-Math.random()*16,8+Math.random()*8,0.8+Math.random()*1.3,0,7); ctx.fill(); } }
         ctx.restore(); } }
