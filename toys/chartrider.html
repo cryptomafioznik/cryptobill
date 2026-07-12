@@ -64,7 +64,7 @@ function lerp(a,b,t){return a+(b-a)*t;} function clamp(v,a,b){return v<a?a:v>b?b
 // false → full game everywhere. Single switch. Systems are GATED, never deleted.
 const CORE_TEST_MODE = false;   // b70: META LIVE — building the progression spine (upgrades/bikes with teeth, career, economy) on the confirmed rigid-body core
 // build stamp — bump on every change so a phone refresh can confirm it loaded fresh code (cache!)
-const BUILD = '2026-07-12 · b241';
+const BUILD = '2026-07-12 · b242';
 
 // ---------- procedural market terrain ----------
 // height map sampled every STEP px; generated forward as we ride. Market character:
@@ -2626,8 +2626,8 @@ function drawMachine(B,wheelv,rShiftv,leanv,roost,boostv,dynAir,dynSquat,tkId,tk
     // ===== RIDER b155: АРТИКУЛИРОВАННЫЙ СКЕЛЕТ (таз/торс/шлем + 2 руки/2 ноги через ik2; b148: жёстко в системе рамы). Поза = ПАРАМЕТРЫ per type → твинится → готово под FMX-трюки (Супермен = другие цели рук/ног). dynAir = привстаёт в полёте, dynSquat = присед-амортизация посадки (колени сгибает IK сам). Велосипед ПЕДАЛИРУЕТ (стопы на кривошипах ∝ wheelv) =====
     const dA=dynAir||0, dS=dynSquat||0;
     const PS = TY==='bike' ? {px:-8,py:-11,ta:0.30,bx:16,by:-15,pedal:1,l1:10,l2:10.6}
-      : (TY==='scooter'||TY==='moped') ? {px:-9,py:-9,ta:0.06,bx:19,by:-15,f1:[-7,7],f2:[-3.5,7],l1:8.6,l2:9.2}
-      : TY==='sport' ? {px:-6,py:-6.5,ta:0.78,bx:22,by:-11,f1:[-7,8],f2:[-3.5,8],l1:8.6,l2:9.2}
+      : (TY==='scooter'||TY==='moped') ? {px:-4,py:-8,ta:0.10,bx:10,by:-15,f1:[-6,8],f2:[-2.5,8],l1:8.6,l2:9.2}   // b242 руль БЛИЖЕ + таз вперёд → руки достают; городская посадка прямее
+      : TY==='sport' ? {px:-5,py:-6.5,ta:0.86,bx:15,by:-11,f1:[-7,8],f2:[-3.5,8],l1:8.6,l2:9.2}   // b242 спорт: глубже тук, руки достают до низкого руля
       : {px:-6,py:-8.5,ta:0.34,bx:21,by:-18,f1:[-2,8],f2:[1.5,8],l1:9,l2:9.6};   // dirt: MX-стойка, колено гнётся (таз↓/подножка↑ — расстояние < длины ног, иначе IK тянет струну)
     let px=PS.px+(rShiftv||0)*TUNE.riderShiftPx-2*dA, py=PS.py-4*dA+4.2*dS, ta=PS.ta-0.10*dA+0.07*dS, hbx=PS.bx, hby=PS.by;
     let f1,f2; if(PS.pedal){ f1=[Math.cos(wheelv)*4.6, 15+Math.sin(wheelv)*4.6]; f2=[Math.cos(wheelv+3.14)*4.6, 15+Math.sin(wheelv+3.14)*4.6]; } else { f1=PS.f1; f2=PS.f2; }
@@ -2647,7 +2647,8 @@ function drawMachine(B,wheelv,rShiftv,leanv,roost,boostv,dynAir,dynSquat,tkId,tk
     const A1=ik2(shx,shy,hbx,hby,7.6,8.2,1), A2=ik2(shx-1.5,shy,hbx-2.5,hby,7.6,8.2,1);
     // ==== RIDER RENDER b241: MX-ЭКИП по рефам (фулфейс-шлем + джерси цвето-блок + наколенник/ботинок/перчатки), объём светом. СКЕЛЕТ/IK/позы НЕ тронуты ====
     ctx.lineCap='round'; ctx.lineJoin='round';
-    const JER='rgba('+B.accent+',1)', JERD='rgba('+B.accent+',0.34)', PANT='#1a1f2b', PANTF='#0e121b', GEAR='#e6ecf6', GEARD='#9dabc2', GLV='#232a38';
+    const JER='rgba('+B.accent+',1)', JERD='rgba('+B.accent+',0.34)', PANT='#1a1f2b', PANTF='#0e121b', GEAR='#e6ecf6', GEARD='#9dabc2', GLV='#232a38', DARK='#171c25';
+    const isMX=(TY==='dirt'||TY==='bike'), isSport=(TY==='sport');   // b242 экип ПО ТИПУ: MX (козырёк+наколенник) vs спорт (гладкий шлем, кожа) vs город
     // helper: рисует «конечность» с объёмом (тень-обводка + заливка)
     const limb=(a,b,c,d,w1,w2,fill)=>{ ctx.strokeStyle='rgba(6,8,14,0.9)'; ctx.lineWidth=w1+1.6; ctx.beginPath(); ctx.moveTo(a,b); ctx.lineTo(c,d); ctx.stroke(); ctx.strokeStyle=fill; ctx.lineWidth=w1; ctx.beginPath(); ctx.moveTo(a,b); ctx.lineTo(c,d); ctx.stroke(); };
     // --- ДАЛЬНЯЯ сторона (притемнена): нога + рука ---
@@ -2657,16 +2658,22 @@ function drawMachine(B,wheelv,rShiftv,leanv,roost,boostv,dynAir,dynSquat,tkId,tk
     ctx.globalAlpha=1;
     // --- ТОРС: джерси (цвет байка) + грудь-протектор + воротник ---
     ctx.save(); ctx.translate(px,py); ctx.rotate(ta);
+    const torso=()=>{ ctx.beginPath(); ctx.moveTo(-4.4,2); ctx.quadraticCurveTo(-5.4,-8,-3.6,-13.5); ctx.quadraticCurveTo(0,-16.5,3.6,-13.5); ctx.quadraticCurveTo(5.4,-8,4.4,2); ctx.quadraticCurveTo(0,3.4,-4.4,2); ctx.closePath(); };
     const tg=ctx.createLinearGradient(-5,-15,5,3); tg.addColorStop(0,JER); tg.addColorStop(0.62,JER); tg.addColorStop(1,'rgba('+B.accent+',0.45)');
-    ctx.beginPath(); ctx.moveTo(-4.4,2); ctx.quadraticCurveTo(-5.4,-8,-3.6,-13.5); ctx.quadraticCurveTo(0,-16.5,3.6,-13.5); ctx.quadraticCurveTo(5.4,-8,4.4,2); ctx.quadraticCurveTo(0,3.4,-4.4,2); ctx.closePath();
-    ctx.fillStyle=tg; ctx.fill(); ctx.strokeStyle='rgba(6,8,14,0.9)'; ctx.lineWidth=1.5; ctx.stroke();
-    ctx.strokeStyle='rgba(8,10,16,0.55)'; ctx.lineWidth=1.1; ctx.beginPath(); ctx.moveTo(-2.4,-11); ctx.lineTo(-2.4,0.5); ctx.stroke();   // шов грудь-протектора
-    ctx.fillStyle=GEARD; ctx.beginPath(); ctx.moveTo(-3.8,-13.2); ctx.lineTo(3.8,-13.2); ctx.lineTo(3.0,-11.2); ctx.lineTo(-3.0,-11.2); ctx.closePath(); ctx.fill();   // воротник-нек-брейс
+    torso(); ctx.fillStyle=tg; ctx.fill();   // база = цвет байка
+    ctx.save(); torso(); ctx.clip();   // b242 ДВА ТОНА: чёрные панели + белый акцент внутри джерси (как на рефе — не сливается)
+      ctx.fillStyle=DARK; ctx.beginPath(); ctx.moveTo(-6,-16); ctx.lineTo(-0.6,-16); ctx.lineTo(-2.6,4); ctx.lineTo(-6,4); ctx.closePath(); ctx.fill();   // чёрная диагональ (спина/бок)
+      ctx.fillStyle=DARK; ctx.fillRect(-6,-1.5,12,6);   // чёрный низ (пояс)
+      ctx.strokeStyle=GEAR; ctx.lineWidth=1.0; ctx.beginPath(); ctx.moveTo(-0.6,-16); ctx.lineTo(-2.6,4); ctx.stroke();   // белая диагональ-акцент
+      ctx.strokeStyle=isSport?GEAR:'rgba('+B.accent+',0.9)'; ctx.lineWidth=0.9; ctx.beginPath(); ctx.moveTo(-6,-1.5); ctx.lineTo(6,-2.6); ctx.stroke();
+    ctx.restore();
+    torso(); ctx.strokeStyle='rgba(6,8,14,0.92)'; ctx.lineWidth=1.5; ctx.stroke();   // контур
+    ctx.fillStyle=GEARD; ctx.beginPath(); ctx.moveTo(-3.4,-13.4); ctx.lineTo(3.4,-13.4); ctx.lineTo(2.6,-11.4); ctx.lineTo(-2.6,-11.4); ctx.closePath(); ctx.fill();   // воротник/нек-брейс (белый)
     ctx.restore();
     // --- БЛИЖНЯЯ нога: штаны + наколенник + ботинок ---
     limb(px,py,L1[0],L1[1],7.0,0,PANT); limb(L1[0],L1[1],L1[2],L1[3],4.6,0,PANT);
-    ctx.fillStyle=GEAR; ctx.strokeStyle='rgba(6,8,14,0.8)'; ctx.lineWidth=0.9; ctx.beginPath(); ctx.ellipse(L1[0],L1[1],3.0,3.6,ta,0,7); ctx.fill(); ctx.stroke();   // белый наколенник (объёмный)
-    ctx.fillStyle=GEARD; ctx.beginPath(); ctx.arc(L1[0],L1[1],1.3,0,7); ctx.fill();
+    if(isMX){ ctx.fillStyle=GEAR; ctx.strokeStyle='rgba(6,8,14,0.8)'; ctx.lineWidth=0.9; ctx.beginPath(); ctx.ellipse(L1[0],L1[1],3.0,3.6,ta,0,7); ctx.fill(); ctx.stroke(); ctx.fillStyle=GEARD; ctx.beginPath(); ctx.arc(L1[0],L1[1],1.3,0,7); ctx.fill(); }   // белый наколенник — только MX
+    else { ctx.fillStyle=DARK; ctx.strokeStyle='rgba(6,8,14,0.8)'; ctx.lineWidth=0.8; ctx.beginPath(); ctx.arc(L1[0],L1[1],2.2,0,7); ctx.fill(); ctx.stroke(); }   // спорт/город: тёмный наколенник скромнее
     { const bdx=L1[2]-L1[0], bdy=L1[3]-L1[1], bl=Math.hypot(bdx,bdy)||1, ux=bdx/bl, uy=bdy/bl, nx=-uy, ny=ux;   // MX-ботинок: клин по направлению голени
       const tx=L1[2]+ux*1.5, ty=L1[3]+uy*1.5;
       ctx.fillStyle='#20252f'; ctx.strokeStyle='rgba(6,8,14,0.9)'; ctx.lineWidth=1.1;
@@ -2680,8 +2687,8 @@ function drawMachine(B,wheelv,rShiftv,leanv,roost,boostv,dynAir,dynSquat,tkId,tk
     ctx.fillStyle=hg; ctx.fill(); ctx.strokeStyle='rgba(6,8,14,0.95)'; ctx.lineWidth=1.4; ctx.stroke();
     ctx.fillStyle='#0c1018'; ctx.beginPath(); ctx.moveTo(1.4,-2.8); ctx.quadraticCurveTo(6.2,-3.0,6.0,0.4); ctx.quadraticCurveTo(3.4,1.0,1.6,0.4); ctx.closePath(); ctx.fill();   // очки/визор (тёмное поле)
     ctx.strokeStyle='rgba(190,235,255,0.8)'; ctx.lineWidth=0.9; ctx.beginPath(); ctx.moveTo(2.2,-2.0); ctx.quadraticCurveTo(4.4,-2.2,5.2,-0.8); ctx.stroke();   // блик очков
-    ctx.fillStyle=GEAR; ctx.beginPath(); ctx.moveTo(-2.2,-5.6); ctx.lineTo(7.4,-4.2); ctx.lineTo(6.8,-2.6); ctx.lineTo(-2.4,-4.0); ctx.closePath(); ctx.fill();   // КОЗЫРЁК (белый вынос вперёд)
-    ctx.strokeStyle='rgba(6,8,14,0.8)'; ctx.lineWidth=0.8; ctx.stroke();
+    if(isMX){ ctx.fillStyle=GEAR; ctx.beginPath(); ctx.moveTo(-2.2,-5.6); ctx.lineTo(7.4,-4.2); ctx.lineTo(6.8,-2.6); ctx.lineTo(-2.4,-4.0); ctx.closePath(); ctx.fill(); ctx.strokeStyle='rgba(6,8,14,0.8)'; ctx.lineWidth=0.8; ctx.stroke(); }   // КОЗЫРЁК — только MX
+    else if(isSport){ ctx.strokeStyle=GEAR; ctx.lineWidth=1.5; ctx.lineCap='round'; ctx.beginPath(); ctx.moveTo(-4.4,-3.2); ctx.quadraticCurveTo(0.6,-6.8,5.6,-2.4); ctx.stroke(); ctx.lineCap='butt'; }   // спорт: гладкий шлем с белой полосой (без козырька)
     ctx.restore();
     // --- БЛИЖНЯЯ рука: рукав джерси + налокотник + перчатка ---
     limb(shx,shy,A1[0],A1[1],4.8,0,JER);
