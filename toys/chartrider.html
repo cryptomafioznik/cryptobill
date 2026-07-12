@@ -64,7 +64,7 @@ function lerp(a,b,t){return a+(b-a)*t;} function clamp(v,a,b){return v<a?a:v>b?b
 // false → full game everywhere. Single switch. Systems are GATED, never deleted.
 const CORE_TEST_MODE = false;   // b70: META LIVE — building the progression spine (upgrades/bikes with teeth, career, economy) on the confirmed rigid-body core
 // build stamp — bump on every change so a phone refresh can confirm it loaded fresh code (cache!)
-const BUILD = '2026-07-12 · b239';
+const BUILD = '2026-07-12 · b240';
 
 // ---------- procedural market terrain ----------
 // height map sampled every STEP px; generated forward as we ride. Market character:
@@ -2040,8 +2040,7 @@ function draw(){
   if(screen!=='dead'){
     const _rx=lerp(bike._px===undefined?bike.x:bike._px,bike.x,slowLerp), _ry=lerp(bike._py===undefined?bike.y:bike._py,bike.y,slowLerp), _ra=lerp(bike._pa===undefined?bike.ang:bike._pa,bike.ang,slowLerp);   // b154: интерполяция позы в слоумо (slowLerp<1 только в пропущенном кадре)
     ctx.save(); ctx.translate(_rx,_ry); ctx.rotate(_ra); ctx.translate(0,-1);   // seat the TIRE CONTACT on the price line (was +12 → wheels buried ~13px "in the track"); -1 aligns wheel-bottom with the CG-implied ground (bike.y = lineY-DY)
-    if(!(selBike===4 && _krossRig && drawKrossRigLocal(bike.wheel, krossPose())))   // b239 РИГ КРОСС в заезде (колёса на ±27 по построению, флипы = поворот ctx, поза по состоянию); фолбэк — вектор
-      drawMachine(BK(), bike.wheel, bike.rShift, lean, down&&bike.onG, boosting, riderAirB, riderSquat, trick, trickMix);
+    drawMachine(BK(), bike.wheel, bike.rShift, lean, down&&bike.onG, boosting, riderAirB, riderSquat, trick, trickMix);   // b240 ОТКАТ рига: детальная иллюстрация НЕ склеивается с неон-вектор миром (стилевой конфликт, как фото-фоны ×3). Вектор назад
     ctx.restore();
   }
   ctx.restore(); ctx.restore();   // world translate + camera zoom   // b104: убрал красную ликв-линию (заменено плечо→скорость волны)
@@ -2780,8 +2779,7 @@ function drawMenus(){
     ctx.fillStyle='#eafaff'; ctx.font='800 24px ui-monospace,monospace'; ctx.fillText('🏍 БАЙКИ',W/2,46);
     ctx.fillStyle='#ffd678'; ctx.font='800 16px ui-monospace,monospace'; ctx.fillText('$ '+bank,W/2,76);
     UI.bkBack={x:14,y:18,w:78,h:34}; panel(UI.bkBack.x,UI.bkBack.y,78,34,'rgba(150,180,220,0.6)','rgba(30,40,62,0.5)'); ctx.fillStyle='#cfe0ff'; ctx.font='700 13px ui-monospace,monospace'; ctx.fillText('‹ НАЗАД',UI.bkBack.x+39,UI.bkBack.y+22);
-    if(selBike===4 && _krossRig && drawKrossPreview(W/2, H*0.30, 2.7, t*0.4, 'seat')){}   // b239 РИГ (КРОСС): колёса на месте по построению, вращаются в превью
-    else { ctx.save(); ctx.translate(W/2,H*0.27); ctx.scale(1.8,1.8); drawMachine(BK(),0,0,0,false,0); ctx.restore(); }   // вектор для остальных / пока риг грузится
+    ctx.save(); ctx.translate(W/2,H*0.27); ctx.scale(1.8,1.8); drawMachine(BK(),0,0,0,false,0); ctx.restore();   // b240 ОТКАТ рига: вектор назад (иллюстрация не склеивается со стилем мира)
     const b=BIKES[selBike], own=owned.indexOf(selBike)>=0, ay=H*0.40;
     UI.bkL={x:W/2-150,y:ay-30,w:50,h:64}; UI.bkR={x:W/2+100,y:ay-30,w:50,h:64};
     ctx.fillStyle='rgba(190,215,245,0.85)'; ctx.font='800 34px ui-monospace,monospace'; ctx.fillText('‹',UI.bkL.x+25,ay+12); ctx.fillText('›',UI.bkR.x+25,ay+12);
