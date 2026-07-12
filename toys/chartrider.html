@@ -64,7 +64,7 @@ function lerp(a,b,t){return a+(b-a)*t;} function clamp(v,a,b){return v<a?a:v>b?b
 // false → full game everywhere. Single switch. Systems are GATED, never deleted.
 const CORE_TEST_MODE = false;   // b70: META LIVE — building the progression spine (upgrades/bikes with teeth, career, economy) on the confirmed rigid-body core
 // build stamp — bump on every change so a phone refresh can confirm it loaded fresh code (cache!)
-const BUILD = '2026-07-12 · b246';
+const BUILD = '2026-07-12 · b247';
 
 // ---------- procedural market terrain ----------
 // height map sampled every STEP px; generated forward as we ride. Market character:
@@ -110,7 +110,7 @@ let evGenType='', evGenLeft=0, nextEvGenX=2600;                 // terrain-gener
 let gapLeft=0, nextGapX=1800, gapBaseY=0, gapLandFlat=0, overGap=false, gapLipNow=0, gapFarX=0, gapFxT=0, gapFxMsg='';   // GAPS: gen + fair-landing + clear state; gapLipNow/gapFarX = lip level & far-edge x of the gap being crossed
 let gapRunup=0, gapRampLeft=0, gapPrevY=0, gapRampBot=0;   // gap FEATURE phases: descent run-up (build speed) → kicker ramp (launch) → chasm → land below the lip
 let ledgeRunup=0, ledgeStepsLeft=0, ledgePrevY=0, ledgeTopY=0, ledgeStepsThis=2, ledgeHThis=38, nextLedgeX=1400;   // LEDGE phases: flat run-up (set up the wheelie) → riser/tread steps you must LOFT the front to mount. b57: stepsThis/HThis randomize each ledge (variety: single small step ↔ tall 3-step staircase)
-let kickRunup=0, kickRampLeft=0, kickLandLeft=0, kickBaseY=0, kickRampBot=0, kickLandY=0, nextKickX=1700;   // TRICK KICKER phases: DESCENT run-up (bomb down → build speed, logical setup) → steep ramp UP (launches you ∝ speed for flips) → flat solid landing (no chasm)
+let kickRunup=0, kickRampLeft=0, kickLandLeft=0, kickBaseY=0, kickRampBot=0, kickLipY=0, kickLandTopY=0, nextKickX=1700;   // b247 KICKER: разгон-спуск (набрать скорость) → ВОГНУТЫЙ лип (эмерджентный вылет ∝ скорости) → ВСТРЕЧНЫЙ довнслоп-посадка (тангенц. катч, та же анатомия что мега)
 let whoopRunup=0, whoopLeft=0, whoopBaseY=0, whoopPhase=0, nextWhoopX=2200;   // WHOOPS (b53): flat approach → a rhythm section of rollers (skim/catch air at speed, roll over slow) — dynamic flow, no death
 let mudLeft=0, mudRamp=0, mudRunup=0, mudBaseY=0, mudLipBot=0, nextMudX=2600;   // MUD (b54/b63/b66): DESCENT run-up (build speed) → LIP-ramp → boggy patch you JUMP OVER (clear it = clean; land in it = saps speed). Logical, not random
 let megaRunup=0, megaRampLeft=0, megaLandLeft=0, megaBaseY=0, megaRampBot=0, megaLipY=0, megaLandTopY=0, nextMegaX=3000;   // b246 МЕГА-РАМПА (только Отрыв): разгон-спуск → ВОГНУТЫЙ лип (крутой, гладкий) → ЭМЕРДЖЕНТНЫЙ вылет ∝ скорости → ВСТРЕЧНЫЙ довнслоп-посадка под угол параболы. Честная физика (не скрипт-пуск), à la FMX-реф
@@ -165,9 +165,9 @@ function genSeg(){
     else if(climbLeft>0){ const p=(TUNE.climbN-climbLeft+1)/TUNE.climbN, e=p*p*(3-2*p); close=clamp(climbBotY - e*TUNE.climbN*TUNE.climbSteep, 70, H*0.95); walk=close-baseY; isClimb=true; climbLeft--; }   // b230 ЕСТЕСТВЕННЫЙ ХОЛМ (smoothstep S-кривая, НЕ угловатый линейный): пологий вход → крутая середина (≈1.5× = ещё круче) → пологий гребень. Убирает резкие углы низа/гребня, но склон остаётся крутым. Лезешь моментом+вес вперёд = баланс GD
     else if(ledgeRunup>0){ close=clamp(ledgePrevY,70,H*0.92); walk=close-baseY; ledgeRunup--; if(ledgeRunup<=0){ ledgeStepsLeft=ledgeStepsThis*3; ledgeTopY=ledgePrevY; } }   // LEDGE flat run-up: set up the wheelie (fair — you can prepare)
     else if(ledgeStepsLeft>0){ const pos=(ledgeStepsThis*3-ledgeStepsLeft)%3; if(pos<2){ ledgeTopY=clamp(ledgeTopY-ledgeHThis*0.5,70,H*0.86); if(pos===0){ isStep=true; stepTop=ledgeTopY; } } close=ledgeTopY; walk=close-baseY; ledgeStepsLeft--; }   // b57: stepsThis/HThis vary per ledge → single small step or a tall multi-step staircase. step = 2-node RISER (rideable on momentum) + 1-node tread; first node tagged for ▲ УСТУП
-    else if(kickRunup>0){ const k=6-kickRunup; close=clamp(kickBaseY + k*13, 70, H*0.88); walk=close-baseY; kickRunup--; if(kickRunup<=0){ kickRampBot=close; kickRampLeft=3; } }   // b51: DESCENT run-up (6 nodes, ~65px down ≥ ramp's 66px up → NET downhill into the launch) — bomb down to BUILD SPEED so the ramp always launches you well ≥ cruise (logical "necessary place", like a real moto setup), not a random flat where you arrive slow
-    else if(kickRampLeft>0){ const k=4-kickRampLeft; close=clamp(kickRampBot - k*TUNE.kickH,70,H*0.95); walk=close-baseY; if(kickRampLeft===1)isKick=true; kickRampLeft--; if(kickRampLeft<=0){ kickLandLeft=6; kickLandY=clamp(kickRampBot,70,H*0.9); } }   // ramp UP from the run-up bottom — launches you airborne ∝ speed (do a FLIP!); last node = lip (tagged for the telegraph)
-    else if(kickLandLeft>0){ close=clamp(kickLandY,70,H*0.9); walk=close-baseY; kickLandLeft--; }   // flat SOLID landing at the run-up level (no chasm — pure reward feature) → land the flip
+    else if(kickRunup>0){ const k=TUNE.kickRunupN-kickRunup; close=clamp(kickBaseY + k*TUNE.kickRunupH, 70, H*0.88); walk=close-baseY; kickRunup--; if(kickRunup<=0){ kickRampBot=close; kickRampLeft=TUNE.kickRampN; } }   // b51 DESCENT разгон-спуск → набрать скорость под вылет (логичное «место», не случайный плоский заход)
+    else if(kickRampLeft>0){ const k=TUNE.kickRampN-kickRampLeft; const off=TUNE.kickTotalH*Math.pow((k+1)/TUNE.kickRampN, TUNE.kickCurve); close=clamp(kickRampBot - off, 70, H*0.95); walk=close-baseY; if(kickRampLeft===1){ isKick=true; kickLipY=close; } kickRampLeft--; if(kickRampLeft<=0){ kickLandLeft=TUNE.kickLandN; kickLandTopY=clamp(kickLipY + TUNE.kickGapDrop, 70, H*0.9); } }   // b247 ВОГНУТЫЙ ЛИП off=totalH·((k+1)/N)^curve (пологая база→лип ~42°) → ЭМЕРДЖЕНТНЫЙ вылет ∝ скорости (сделай ФЛИП!); last=лип
+    else if(kickLandLeft>0){ const k=TUNE.kickLandN-kickLandLeft; close=clamp(kickLandTopY + k*TUNE.kickLandSlope, 70, H*0.9); walk=close-baseY; kickLandLeft--; }   // b247 ВСТРЕЧНЫЙ ДОВНСЛОП (мягкий ~17°) — ловит падающую дугу тангенциально (не плоский слэм), щедрый = прощает
     else if(megaRunup>0){ close=clamp(megaBaseY + (TUNE.megaRunupN-megaRunup)*TUNE.megaRunupH, 70, H*0.92); walk=close-baseY; megaRunup--; if(megaRunup<=0){ megaRampBot=close; megaRampLeft=TUNE.megaRampN; } }   // b234 МЕГА разгон-СПУСК → набрать БОЛЬШУЮ скорость под мощный вылет
     else if(megaRampLeft>0){ const k=TUNE.megaRampN-megaRampLeft; const off=TUNE.megaTotalH*Math.pow((k+1)/TUNE.megaRampN, TUNE.megaCurve); close=clamp(megaRampBot - off, 70, H*0.95); walk=close-baseY; isMega=true; if(megaRampLeft===1){ isKick=true; megaLipY=close; } megaRampLeft--; if(megaRampLeft<=0){ megaLandLeft=TUNE.megaLandN; megaLandTopY=clamp(megaLipY + TUNE.megaGapDrop, 70, H*0.9); } }   // b246 ВОГНУТЫЙ ЛИП: off=totalH·((k+1)/N)^curve (пологая база→крутой лип ~48°). last=мега-лип .kick+.mega → ЭМЕРДЖЕНТНЫЙ вылет со схода (rigidStep), не скрипт
     else if(megaLandLeft>0){ const k=TUNE.megaLandN-megaLandLeft; close=clamp(megaLandTopY + k*TUNE.megaLandSlope, 70, H*0.95); walk=close-baseY; megaLandLeft--; }   // b246 ВСТРЕЧНЫЙ ДОВНСЛОП: спускается от (лип+gapDrop) под ~25° — ловит падающую параболу тангенциально (мягкий выкат, не плоский слэм); длинный = прощает разброс скорости
@@ -184,7 +184,7 @@ function genSeg(){
       ledgePrevY=close; ledgeStepsThis=1+Math.floor(Math.random()*2); ledgeHThis=TUNE.ledgeH*(0.7+Math.random()*0.5); ledgeRunup=4; nextLedgeX=genX + TUNE.ledgeEvery*10*densK + Math.random()*1100*densK;   // b57: 1-2 steps, height 0.7-1.2× → variety (small kerb ↔ 2-step staircase) but stays climbable (taller 3-step staircases looped the loft)
     }
     else if(TUNE.kickEvery>0 && genX>=nextKickX && genX>TUNE.kickStart*10 && terr.length>16 && regime!=='pump' && regime!=='crash' && lastRegime!=='bull' && close>H*0.5){   // schedule a TRICK KICKER (not mid-climb; needs room ABOVE for the ramp)
-      kickBaseY=close; kickRunup=6; nextKickX=genX + TUNE.kickEvery*10*densK + Math.random()*1000*densK;   // b51: descent run-up (6 nodes); tighter spacing jitter since kickers are now the main feature
+      kickBaseY=close; kickRunup=TUNE.kickRunupN; nextKickX=genX + TUNE.kickEvery*10*densK + Math.random()*1000*densK;   // b247 descent run-up (kickRunupN узлов); tighter spacing jitter since kickers are now the main feature
     }
     else if(TUNE.climbEvery>0 && genX>=nextClimbX && genX>TUNE.climbStart*10 && terr.length>16 && regime!=='pump' && regime!=='crash' && lastRegime!=='bull' && close>H*0.52){   // b229 расписание КРУТОГО ПОДЪЁМА: не мид-климб, старт низкий (место расти вверх)
       climbBaseY=close; climbRunup=6; nextClimbX=genX + TUNE.climbEvery*10*densK + Math.random()*1200*densK;
@@ -555,7 +555,15 @@ const TUNE = {
   climbSteep:   15,      // 35d. b233: 25→15 — climbSteep 25 (пик ~54°) = НЕПРОЕЗЖАЕМАЯ СТЕНА (сток вязнет/катится назад даже с разгоном, climbGrip не тянет; сим-подтверждено). 15 (пик ~41°, ср ~30°) = сток ЕДВА вылезает (крукс: надо ВЕЗТИ скорость → синергия с волной-давлением) + вес-назад всё ещё ЛУПИТ (b232-ставка цела) + апгрейды расширяют запас. ВЫШЕ = ближе к стене. КАЛИБРОВКА руками
   climbN:       6,       // 35e. длина крутого склона (узлов). ДЛИННЕЕ = момента может не хватить (заглохнешь) = сложнее. Держать так, чтоб хороший разгон вывозил (твёрдое тело вылетает соразмерно скорости с пологой рампы, не на пол-экрана). 35-OLD:230 ср. дистанция между трамплинами (м); 0 = выкл. b51: 340→230 ЧАЩЕ — трамплины теперь ГЛАВНАЯ фича (заменили обрывы). Чистая награда/драйв + флипы
   kickStart:    170,     // 36. первый трамплин после (м)
-  kickH:        13,      // 37. b68: 22→13 — ПОЛОГАЯ рампа кикера под твёрдое тело (вылет ∝ скорости, соразмерный). 3 узла × 13 = 39px рампа. Взлёт чисто эмерджентный (поп kickPop ниже больше не пуляет — твёрдое тело само летит с геометрии)
+  kickH:        13,      // 37. (legacy, не используется — заменён вогнутым профилем b247)
+  kickRunupN:   6,       // 37a. b247 узлов разгон-спуска кикера (набрать скорость)
+  kickRunupH:   12,      // 37b. b247 px/узел спуска (6×12=72px вниз)
+  kickRampN:    5,       // 37c. b247 узлов ВОГНУТОГО липа (та же анатомия что мега, меньше)
+  kickTotalH:   62,      // 37d. b247 высота липа (px); off=totalH·((k+1)/N)^curve → пологая база (нет острого угла) → лип
+  kickCurve:    2.2,     // 37e. b247 вогнутость (лип ~42° при 62/5/2.2) — эмерджентный вылет ∝ скорости
+  kickGapDrop:  20,      // 37f. b247 провал ниже липа до посадки (маленький — кикер прощающий)
+  kickLandSlope:8,       // 37g. b247 px/узел ВСТРЕЧНОГО довнслопа (~17° — мягкий тангенц. катч, не плоский слэм)
+  kickLandN:    9,       // 37h. b247 длина посадочного склона (щедрая, прощает разброс скорости)
   megaEvery:    560,     // 38a. b234 МЕГА-РАМПА (Отрыв) ср.дистанция (м); 0=выкл. Периодический кинематографичный мега-трамплин
   megaStart:    280,     // 38b. первая мега-рампа после (м)
   megaRunupN:   7,       // 38c. узлов разгон-спуска (набрать скорость под вылет)
