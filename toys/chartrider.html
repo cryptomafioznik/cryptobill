@@ -64,7 +64,7 @@ function lerp(a,b,t){return a+(b-a)*t;} function clamp(v,a,b){return v<a?a:v>b?b
 // false → full game everywhere. Single switch. Systems are GATED, never deleted.
 const CORE_TEST_MODE = false;   // b70: META LIVE — building the progression spine (upgrades/bikes with teeth, career, economy) on the confirmed rigid-body core
 // build stamp — bump on every change so a phone refresh can confirm it loaded fresh code (cache!)
-const BUILD = '2026-07-12 · b242';
+const BUILD = '2026-07-12 · b243';
 
 // ---------- procedural market terrain ----------
 // height map sampled every STEP px; generated forward as we ride. Market character:
@@ -2647,7 +2647,8 @@ function drawMachine(B,wheelv,rShiftv,leanv,roost,boostv,dynAir,dynSquat,tkId,tk
     const A1=ik2(shx,shy,hbx,hby,7.6,8.2,1), A2=ik2(shx-1.5,shy,hbx-2.5,hby,7.6,8.2,1);
     // ==== RIDER RENDER b241: MX-ЭКИП по рефам (фулфейс-шлем + джерси цвето-блок + наколенник/ботинок/перчатки), объём светом. СКЕЛЕТ/IK/позы НЕ тронуты ====
     ctx.lineCap='round'; ctx.lineJoin='round';
-    const JER='rgba('+B.accent+',1)', JERD='rgba('+B.accent+',0.34)', PANT='#1a1f2b', PANTF='#0e121b', GEAR='#e6ecf6', GEARD='#9dabc2', GLV='#232a38', DARK='#171c25';
+    // b243 КОНТРАСТ райдер↔байк: райдер СВЕТЛЫЙ-доминантный (пробивается на тёмных байках, не сливается) + цвет байка = АКЦЕНТ + тёмные панели. Раньше райдер=цвет байка → сливался (особ. супербайк)
+    const JER='#eef2f7', JERD='rgba(196,205,220,0.6)', PANT='#252b37', PANTF='#161b24', GEAR='#ffffff', GEARD='#c2ccdb', GLV='#2a3140', DARK='#1a1f2a', ACC='rgba('+B.accent+',1)';
     const isMX=(TY==='dirt'||TY==='bike'), isSport=(TY==='sport');   // b242 экип ПО ТИПУ: MX (козырёк+наколенник) vs спорт (гладкий шлем, кожа) vs город
     // helper: рисует «конечность» с объёмом (тень-обводка + заливка)
     const limb=(a,b,c,d,w1,w2,fill)=>{ ctx.strokeStyle='rgba(6,8,14,0.9)'; ctx.lineWidth=w1+1.6; ctx.beginPath(); ctx.moveTo(a,b); ctx.lineTo(c,d); ctx.stroke(); ctx.strokeStyle=fill; ctx.lineWidth=w1; ctx.beginPath(); ctx.moveTo(a,b); ctx.lineTo(c,d); ctx.stroke(); };
@@ -2659,13 +2660,13 @@ function drawMachine(B,wheelv,rShiftv,leanv,roost,boostv,dynAir,dynSquat,tkId,tk
     // --- ТОРС: джерси (цвет байка) + грудь-протектор + воротник ---
     ctx.save(); ctx.translate(px,py); ctx.rotate(ta);
     const torso=()=>{ ctx.beginPath(); ctx.moveTo(-4.4,2); ctx.quadraticCurveTo(-5.4,-8,-3.6,-13.5); ctx.quadraticCurveTo(0,-16.5,3.6,-13.5); ctx.quadraticCurveTo(5.4,-8,4.4,2); ctx.quadraticCurveTo(0,3.4,-4.4,2); ctx.closePath(); };
-    const tg=ctx.createLinearGradient(-5,-15,5,3); tg.addColorStop(0,JER); tg.addColorStop(0.62,JER); tg.addColorStop(1,'rgba('+B.accent+',0.45)');
-    torso(); ctx.fillStyle=tg; ctx.fill();   // база = цвет байка
-    ctx.save(); torso(); ctx.clip();   // b242 ДВА ТОНА: чёрные панели + белый акцент внутри джерси (как на рефе — не сливается)
-      ctx.fillStyle=DARK; ctx.beginPath(); ctx.moveTo(-6,-16); ctx.lineTo(-0.6,-16); ctx.lineTo(-2.6,4); ctx.lineTo(-6,4); ctx.closePath(); ctx.fill();   // чёрная диагональ (спина/бок)
-      ctx.fillStyle=DARK; ctx.fillRect(-6,-1.5,12,6);   // чёрный низ (пояс)
-      ctx.strokeStyle=GEAR; ctx.lineWidth=1.0; ctx.beginPath(); ctx.moveTo(-0.6,-16); ctx.lineTo(-2.6,4); ctx.stroke();   // белая диагональ-акцент
-      ctx.strokeStyle=isSport?GEAR:'rgba('+B.accent+',0.9)'; ctx.lineWidth=0.9; ctx.beginPath(); ctx.moveTo(-6,-1.5); ctx.lineTo(6,-2.6); ctx.stroke();
+    const tg=ctx.createLinearGradient(-5,-15,5,3); tg.addColorStop(0,JER); tg.addColorStop(0.7,JER); tg.addColorStop(1,JERD);
+    torso(); ctx.fillStyle=tg; ctx.fill();   // база = СВЕТЛАЯ (контраст с байком)
+    ctx.save(); torso(); ctx.clip();   // b243 ДВА ТОНА + идентичность: тёмная панель + БЛОК цвета байка (акцент) + белая линия
+      ctx.fillStyle=DARK; ctx.beginPath(); ctx.moveTo(-6,-16); ctx.lineTo(-1.4,-16); ctx.lineTo(-3.2,4); ctx.lineTo(-6,4); ctx.closePath(); ctx.fill();   // тёмная диагональ (спина/бок)
+      ctx.fillStyle=DARK; ctx.fillRect(-6,-1.5,12,6);   // тёмный низ (пояс)
+      ctx.fillStyle=ACC; ctx.beginPath(); ctx.moveTo(-1.0,-15.5); ctx.lineTo(4.6,-14); ctx.lineTo(2.8,-3); ctx.lineTo(-2.6,-3.4); ctx.closePath(); ctx.fill();   // БЛОК цвета байка = идентичность (грудь/плечо)
+      ctx.strokeStyle=GEAR; ctx.lineWidth=0.9; ctx.beginPath(); ctx.moveTo(-1.0,-15.5); ctx.lineTo(-2.6,-3.4); ctx.stroke();   // белая линия-акцент
     ctx.restore();
     torso(); ctx.strokeStyle='rgba(6,8,14,0.92)'; ctx.lineWidth=1.5; ctx.stroke();   // контур
     ctx.fillStyle=GEARD; ctx.beginPath(); ctx.moveTo(-3.4,-13.4); ctx.lineTo(3.4,-13.4); ctx.lineTo(2.6,-11.4); ctx.lineTo(-2.6,-11.4); ctx.closePath(); ctx.fill();   // воротник/нек-брейс (белый)
@@ -2683,8 +2684,9 @@ function drawMachine(B,wheelv,rShiftv,leanv,roost,boostv,dynAir,dynSquat,tkId,tk
     const hcx=px+Math.sin(ta)*18.6, hcy=py-Math.cos(ta)*18.6;
     ctx.save(); ctx.translate(hcx,hcy); ctx.rotate(ta*0.55);   // «лицо» вперёд (+x)
     ctx.beginPath(); ctx.moveTo(-3.4,-5.4); ctx.quadraticCurveTo(4.2,-7.0,6.2,-2.2); ctx.quadraticCurveTo(7.4,1.2,4.6,3.2); ctx.quadraticCurveTo(3.0,5.4,0.6,5.4); ctx.quadraticCurveTo(-4.8,4.8,-5.6,-0.4); ctx.quadraticCurveTo(-5.8,-4.0,-3.4,-5.4); ctx.closePath();   // силуэт фулфейса (чин-бар вправо-вниз)
-    const hg=ctx.createLinearGradient(-4,-6,4,5); hg.addColorStop(0,JER); hg.addColorStop(0.55,'rgba('+B.accent+',0.8)'); hg.addColorStop(1,'#12161e');
+    const hg=ctx.createLinearGradient(-4,-6,4,5); hg.addColorStop(0,JER); hg.addColorStop(0.6,'#dbe3ee'); hg.addColorStop(1,'#2b3341');
     ctx.fillStyle=hg; ctx.fill(); ctx.strokeStyle='rgba(6,8,14,0.95)'; ctx.lineWidth=1.4; ctx.stroke();
+    ctx.save(); ctx.clip(); ctx.fillStyle=ACC; ctx.beginPath(); ctx.moveTo(-3.4,-4.4); ctx.quadraticCurveTo(2,-6.6,5.8,-2.8); ctx.lineTo(5.0,-1.0); ctx.quadraticCurveTo(1.4,-4.4,-3.6,-2.6); ctx.closePath(); ctx.fill(); ctx.restore();   // b243 акцент-полоса цвета байка на белом шлеме = идентичность
     ctx.fillStyle='#0c1018'; ctx.beginPath(); ctx.moveTo(1.4,-2.8); ctx.quadraticCurveTo(6.2,-3.0,6.0,0.4); ctx.quadraticCurveTo(3.4,1.0,1.6,0.4); ctx.closePath(); ctx.fill();   // очки/визор (тёмное поле)
     ctx.strokeStyle='rgba(190,235,255,0.8)'; ctx.lineWidth=0.9; ctx.beginPath(); ctx.moveTo(2.2,-2.0); ctx.quadraticCurveTo(4.4,-2.2,5.2,-0.8); ctx.stroke();   // блик очков
     if(isMX){ ctx.fillStyle=GEAR; ctx.beginPath(); ctx.moveTo(-2.2,-5.6); ctx.lineTo(7.4,-4.2); ctx.lineTo(6.8,-2.6); ctx.lineTo(-2.4,-4.0); ctx.closePath(); ctx.fill(); ctx.strokeStyle='rgba(6,8,14,0.8)'; ctx.lineWidth=0.8; ctx.stroke(); }   // КОЗЫРЁК — только MX
