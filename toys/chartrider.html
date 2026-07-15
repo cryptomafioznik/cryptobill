@@ -11,12 +11,7 @@
   html,body{margin:0;height:100%;background:#0a0a1a;overflow:hidden;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;
     cursor:pointer;touch-action:none;-webkit-user-select:none;user-select:none;-webkit-tap-highlight-color:transparent;}
   canvas{display:block;}
-  #c3d{position:fixed;inset:0;width:100%;height:100%;display:none;z-index:0;}   /* b192: WebGL-слой (3D-мир) ПОД 2D-канвасом */
   #c{position:fixed;inset:0;z-index:1;}   /* 2D-канвас сверху: HUD/контролы/FX; в 3D-режиме мир на нём не рисуется (прозрачно) */
-  #b3d{position:fixed;right:10px;top:104px;z-index:62;padding:11px 18px;min-width:56px;text-align:center;background:rgba(30,22,54,.9);color:#d9c8ff;
-    font:800 15px ui-monospace,monospace;border:1px solid rgba(150,110,230,.6);border-radius:11px;cursor:pointer;letter-spacing:.08em;
-    -webkit-user-select:none;user-select:none;touch-action:none;}
-  #b3d.on{background:linear-gradient(150deg,rgba(53,224,255,.3),rgba(255,45,149,.24));border-color:rgba(120,180,255,.6);color:#eafcff;}
   #hud{position:fixed;top:18px;left:12px;color:#cdbef0;font-size:12px;letter-spacing:.14em;line-height:1.5;pointer-events:none;text-shadow:0 1px 6px rgba(0,0,0,.5);
     background:rgba(9,14,28,.48);border:1px solid rgba(150,180,230,.16);border-radius:12px;padding:7px 12px 8px;
     -webkit-backdrop-filter:blur(9px);backdrop-filter:blur(9px);box-shadow:inset 0 1px 0 rgba(255,255,255,.06);}   /* b169: стекло (курс C) */
@@ -43,9 +38,7 @@
 </style>
 </head>
 <body>
-<canvas id="c3d"></canvas>
 <canvas id="c"></canvas>
-<button id="b3d">2D</button>
 <div id="hud"><div class="tk" id="ticker">BTC / SIGNAL</div><div class="pnl" id="pnl">$0</div><div class="sub">dist <b id="dist">0</b>m · <span id="coins" class="up">◆ 0</span></div></div>
 <div id="spd"><div id="mood">— bull run —</div><div><b id="kmh">0</b> km/h</div></div>
 <div id="hint"></div>
@@ -64,7 +57,7 @@ function lerp(a,b,t){return a+(b-a)*t;} function clamp(v,a,b){return v<a?a:v>b?b
 // false → full game everywhere. Single switch. Systems are GATED, never deleted.
 const CORE_TEST_MODE = false;   // b70: META LIVE — building the progression spine (upgrades/bikes with teeth, career, economy) on the confirmed rigid-body core
 // build stamp — bump on every change so a phone refresh can confirm it loaded fresh code (cache!)
-const BUILD = '2026-07-12 · b250';
+const BUILD = '2026-07-12 · b251';
 
 // ---------- procedural market terrain ----------
 // height map sampled every STEP px; generated forward as we ride. Market character:
@@ -517,8 +510,6 @@ const TUNE = {
   slopePull:    0.20,    // 14. импульс по склону (НИЖЕ = склон меньше гасит → байк ЛЕЗЕТ в горку за счёт тяги/сцепления, не глохнет; выше = надо нести momentum)
   gapEvery:     300,     // 15. b228: 360→300 ЧАЩЕ (дизайн-обстакл-курс плотнее). b215 ВКЛ (юзер хочет обрывы-связку): ПРОПАСТИ ср. дистанция (м). Связка = разгон-спуск → рампа-возвышенность → ПРОПАСТЬ → посадка НИЖЕ (с высоты вниз). Не рандом-яма — логичный скилл (разогнался=перелетел). 0 = выкл
   gapStart:     260,     // 16. первая пропасть после этой дистанции (м)
-  gapKick:      0.45,    // 16b. КРОМКА-РАМПА: launch вверх = vx×это (физика рампы). При ровной скорости НЕ перелетает → нужен разгон/прыжок. БОЛЬШЕ = легче перелёт
-  gapRampH:     23,      // (legacy, не используется — заменён вогнутым липом ph3)
   gapRunupN:    5,       // ph3 узлов разгон-спуска гэпа
   gapRunupH:    13,      // ph3 px/узел спуска
   gapRampN:     5,       // ph3 узлов ВОГНУТОГО липа (та же анатомия)
@@ -534,7 +525,6 @@ const TUNE = {
   gapStepDip:   50,      // ph4 глубина ДИПА step-up (px ниже верхней посадки) — недолёт падает сюда и заезжает (прощающе, не клип глубокой стены/не death)
   gapLandSlope: 10,      // ph3 px/узел ВСТРЕЧНОГО довнслопа дальней стороны (~21° тангенц.катч)
   gapLandN:     10,      // ph3 длина посадочного склона (щедрый)
-  gapDrop:      52,      // (legacy, не используется — посадка теперь на уровне старта, не ниже)
   // ---- ОБРЫВЫ/СЪЕЗДЫ (b69): ступень террейна ВНИЗ за 1 узел = выпуклая кромка → ТВЁРДОЕ ТЕЛО слетает СНАРЯДОМ (колесо за кромкой не достаёт землю → гравитация уносит в дугу) → нижняя ПОЛКА ловит. НЕ старая gap-яма. Защита от «ямы-стены»: climbCap и так капает подъём (~13.6px/узел) → стены сразу за обрывом быть не может ----
   dropEvery:    0,       // X1. b215 ВЫКЛ: старый drop (ступень-на-полку) юзер забраковал — «всё проезжается, не обрыв». Заменён связкой gap (возвышенность→рампа→ПРОПАСТЬ→посадка ниже). Код цел, вернуть = >0
   dropStart:    200,     // X2. первый обрыв после (м) — после онбординга
@@ -556,12 +546,8 @@ const TUNE = {
   ledgeSlam:    9.0,     // 28. влетел в стенку БЕЗ лофта быстрее этого = ЭНДО через руль (реал: слэм без подъёма = кувырок). Медленнее = ЗАГЛОХ у стенки (подними перед или дамп догонит). Высоко (>круиз 7.2) → обычная скорость = заглох, не смерть
   // ---- ПРОЩЕНИЕ ПРЫЖКА У ОБРЫВА (b37): окно прыжка на кромке слишком узкое для рук (сим: чисто только в −40..+20px ≈ 10 кадров) → расширяем, чтобы решал СКИЛЛ-тайминг, не кадр-перфект ----
   jumpBuf:      14,      // 29. буфер прыжка (кадров): нажал в воздухе — помним столько и стреляем при касании. 8→14 = терпит лаг свайпа
-  gapCoyote:    16,      // 30. coyote У ОБРЫВА (кадров): на кромке держим окно — прыжок стреляет даже если нажал ПОЗЖЕ кромки (расширяет поздний край окна). Обычный coyote = 8
   swipeJump:    32,      // 31. порог свайпа-вверх для прыжка (px): 45→32 = жест регистрируется быстрее (меньше лаг до прыжка). Ниже = чувствительнее (но риск случайного прыжка от наклона)
   // ---- ДВУХКОЛЁСНЫЙ БАЛАНС (b40): медленно у кромки обрыва → не отрыв, а ТЕЛЕЖКА на заднем колесе (Trials/GD: переднее повисло над пропастью, держишь вилли наклоном; край колеса цепляет кромку) ----
-  balanceV:     3.4,     // 32. порог скорости: НИЖЕ → у кромки балансируешь на заднем; ВЫШЕ → отрыв/полёт (как раньше). Регулирует «медленно подъехал»
-  balanceGrav:  0.0007,  // 33. сила, с которой гравитация клонит нос ВНИЗ на балансе (маятник вокруг заднего). БОЛЬШЕ = труднее удержать (>0.0010 уже неудержимо — валит носом вниз); держи вилли активным наклоном НАЗАД. Равновесие (ЦТ над осью) ≈ −0.76рад
-  wheelR:       13,      // 34. радиус колеса (px) для ЗАЦЕПА КРАЯ: заднее стоит на ВЫСШЕЙ точке в пределах ±R → край колеса цепляет кромку, не падаешь пока центр колеса не ушёл за край дальше R
   // ---- ТРЮК-КИКЕР (b42): рампа-трамплин, подбрасывает в воздух ∝ скорости → крутишь САЛЬТО наклоном (флипы уже в очках). НЕТ пропасти — летишь прямо = безопасно, крутишь = риск/награда ----
   kickEvery:    270,     // 35. b228: 340→270 ЧАЩЕ трамплины (флипы+драйв плотнее). b68: вернул, но ПОЛОГИМ kickH под новую физику
   climbEvery:   420,     // 35b. b229 КРУТОЙ ПОДЪЁМ-БАЛАНСИРОВКА (GD-ядро) ср. дистанция (м); 0=выкл. Фича = разгон-спуск→крутой затяжной подъём→гребень
@@ -569,7 +555,6 @@ const TUNE = {
   climbSteep:   15,      // 35d. b233: 25→15 — climbSteep 25 (пик ~54°) = НЕПРОЕЗЖАЕМАЯ СТЕНА (сток вязнет/катится назад даже с разгоном, climbGrip не тянет; сим-подтверждено). 15 (пик ~41°, ср ~30°) = сток ЕДВА вылезает (крукс: надо ВЕЗТИ скорость → синергия с волной-давлением) + вес-назад всё ещё ЛУПИТ (b232-ставка цела) + апгрейды расширяют запас. ВЫШЕ = ближе к стене. КАЛИБРОВКА руками
   climbN:       6,       // 35e. длина крутого склона (узлов). ДЛИННЕЕ = момента может не хватить (заглохнешь) = сложнее. Держать так, чтоб хороший разгон вывозил (твёрдое тело вылетает соразмерно скорости с пологой рампы, не на пол-экрана). 35-OLD:230 ср. дистанция между трамплинами (м); 0 = выкл. b51: 340→230 ЧАЩЕ — трамплины теперь ГЛАВНАЯ фича (заменили обрывы). Чистая награда/драйв + флипы
   kickStart:    170,     // 36. первый трамплин после (м)
-  kickH:        13,      // 37. (legacy, не используется — заменён вогнутым профилем b247)
   kickRunupN:   6,       // 37a. b247 узлов разгон-спуска кикера (набрать скорость)
   kickRunupH:   12,      // 37b. b247 px/узел спуска (6×12=72px вниз)
   kickRampN:    5,       // 37c. b247 узлов ВОГНУТОГО липа (та же анатомия что мега, меньше)
@@ -590,17 +575,13 @@ const TUNE = {
   megaGapDrop:  44,      // 38g. b246 насколько НИЖЕ ЛИПА начинается посадка (чистый провал-void над посадкой = байк в воздухе)
   megaLandSlope:12,      // 38g2. b246 px/узел ВСТРЕЧНОГО ДОВНСЛОПА посадки (~25° — ловит падающую параболу под углом, мягкий выкат; НЕ плоский слэм)
   megaLandN:    16,      // 38h. длина посадочного склона (узлов, щедрый — ловит дугу мульти-флипа при разной скорости)
-  kickPop:      2.4,     // 38. ПОП кикера: vy = −(vx×это + 4), кап −20 (b49: 0.7→2.4 — теперь поп ПРОПОРЦИОНАЛЕН скорости, не фикс −14. Медленно = мягкий хоп (всегда launch, не «не подпрыгнул»), круиз ~5.6 ≈ −17 (флип-фил тот же), быстро = кап −20 (естественно). БОЛЬШЕ = круче зависимость от скорости
   // ---- РАЙДЕР КАК ВТОРАЯ МАССА (b47): драг = СДВИГ ВЕСА ТЕЛА (не прямой торк). Прототип в изоляции (PASS): райдер 0.65 массы байка, сдвиг двигает общий ЦТ → трекшн + момент тангажа. Два колеса стабильны; вес сам = прощающий shallow-вилли/нос-вниз; глубокий вилли/стоппи (скилл-зона) — позже ----
-  riderSmooth:  0.25,    // 39. (b147: НЕ используется — заменён leanRampGnd/Air ниже) инерция переноса веса: rShift лерпится к драгу с этим
   leanRampGnd:  0.08,    // 39a. b153: 0.10→0.08 ещё мягче (юзер: «бывает ещё резкое») — полный наклон ~0.55с, тапами дозируешь угол вилли (аналоговый выбор). НИЖЕ = мягче/ленивее, ВЫШЕ = резче
   leanRampAir:  0.30,    // 39b. b147 В ВОЗДУХЕ рампа БЫСТРАЯ — флипы остаются резвыми (даже чуть резче старого 0.25). РУКИ
   weightAuth:   0.030,   // 40. АВТОРИТЕТ ВЕСА на тангаж (≈старый leanGround 0.028, чуть выше — компенсирует лаг сглаживания). Перенос веса вперёд = нос вниз/перед загружен, назад = нос вверх/вилли
   driveTrade:   0.20,    // 41. ТРЕКШН-ТРЕЙДОФФ: вес НАЗАД грузит заднее → +тяга/сцепление в горку; вес ВПЕРЁД разгружает → −тяга (но держит перед от опрокида). Реальный эндуро-компромисс. 0 = выкл
   riderShiftPx: 2.5,     // 42. b148: 6→2.5 и БЕЗ вращения торса — райдер жёстко связан с байком (фикс «отрыва» на вилли); микро-сдвиг = намёк на перенос веса. 0 = полностью статичен
   // ---- ФАЗА-2 (b50): глубокий вилли/стоппи = СКИЛЛ-БАЛАНС. (Баланс уже эмерджентно есть: weightAuth>GP → вилли неустойчив, держишь весом. Здесь — заострить глубокую зону + награда за удержание.) ----
-  skillZone:    0.55,    // 43. порог |тангаж−склон| (рад), за которым включается доп. неустойчивость скилл-зоны (глубокий вилли/стоппи). НИЖЕ норм-дрейфа вилли (~−0.6). Норм-езда (|dev|<это) НЕ тронута
-  skillDestab:  0.025,   // 44. сила инвертир.-маятника в скилл-зоне: глубже за порог = сильнее тянет дальше → держи переносом веса (вес 0.03 пересиливает). БОЛЬШЕ = резче/труднее
   wheelieRew:   0.5,     // 45. награда за удержание вилли/стоппи: буст/кадр × это (как флипы — делает скилл-баланс осмысленным + даёт фидбэк-текст). 0 = выкл
   // ---- БУГРЫ / WHOOPS (b53): ритмичная серия гребней — на скорости скипуешь по верхам (мелкий воздух/поток), медленно переваливаешь. Динамика без обрывов, БЕЗ смерти ----
   whoopEvery:   380,     // 46. b228: ВЕРНУЛ (rigid-body держит бугры) — ритм-секция даёт flow/вариативность (эндуро). ср. дистанция серий бугров (м). Тест: если фил плох — обратно 0
@@ -611,9 +592,7 @@ const TUNE = {
   mudEvery:     0,       // 50. b68: ВРЕМЕННО выкл (грязь под старую модель). 50-OLD:320 ср. дистанция между грязевыми участками (м); 0 = выкл
   mudStart:     250,     // 51. первый участок после (м)
   mudN:         2,       // 52. длина грязевого участка (узлы). b63: 6→2 — перепрыгиваемо за кикер-воздух (рампа-лип перед ней кидает). Длиннее = труднее перепрыгнуть
-  mudDrag:      0.95,    // 53. сап скорости/кадр на грязи (НИЖЕ = сильнее засасывает; 0.93→0.95 чтоб не до стопа). Чистый момент-челлендж: нести скорость + газ
   // ---- ПОСАДОЧНЫЙ АССИСТ (b55): у земли на снижении доворачиваем к склону + гасим спин → флипы приземляются (скилл = сделать флип, не пиксель-перфект). Юзер: «помогать приземляться» ----
-  landAssist:   95,      // 54. окно высоты над землёй (px), в котором включается ассист; ближе к земле = сильнее. БОЛЬШЕ = раньше/прощающе ловит флип, МЕНЬШЕ = жёстче (нужна точность)
 };
 // ---- физика байка (двухколёсная: тангаж → вилли / loop-out / endo + импульс); ключевые крутилки тянет из TUNE ----
 const PHYS={ GRAV:TUNE.gravity, DX:26, DY:27.5,           // гравитация(↑TUNE), полубаза, высота ЦТ над колёсами
@@ -638,7 +617,7 @@ const RB={
   climbCalm:0.45,                             // b213 ГАШЕНИЕ ЗАКРУТКИ на крутом подъёме: доля, на которую момент тяги/наклона задирающий нос ослабляется (наклон пальцем на крутизне больше НЕ швыряет в loop). 0 = выкл, 1 = полностью гасит вилли на крутом
   designHard:0.6, dhLevel:1.0, dhGuard:1.0, loopCommit:1.5,   // b232 СЛОЖНОСТЬ ДИЗАЙН-ТРАСС (Отрыв/Путь-proc, НЕ тикер/USP-графики): на крутом подъёме прощение УПРАВЛЕНИЯ снимается ∝ крутизне (climbFrom→climbSpan) × designHard — стабилизатор переда (dhLevel), подушка-у-грани (dhGuard) и anti-loop гаснут → газ-и-держи = реальный power-loop назад; контр-приём = вес ВПЕРЁД (его авторитет сохранён). loopCommit = rel носом вверх (рад ≈86°), после которого при валящемся назад вращении = ОПРОКИД. climbGrip НЕ трогаем (заезжаемость = тяга, вызов = баланс). БОЛЬШЕ designHard = злее (→1). КАЛИБРОВКА руками по телефону
   reverse:5.5, reverseV:1.6,                  // b214 ЗАДНИЙ ХОД (РУКИ): reverse = сила заднего хода (×engScale, байк-зависимо) когда тормоз на почти-стоящем байке; reverseV = порог скорости, ниже которого тормоз = реверс (выше = обычный тормоз). БОЛЬШЕ reverse = резвее назад
-  thrRamp:0.11, spinGrip:0.97,                // b68: АНАЛОГ.ГАЗ (рампа 0→1 → вилли/тяга ∝ сколько газу) + БУКС ПОЧТИ КОСМЕТИЧЕСКИЙ (spinGrip 0.86→0.97 — почти не режет тягу, чтобы НЕ ощущалось «торможением» на подъёме; видно роост/прокрут, но байк замедляется только от гравитации = логично). Хочешь жёстче букс позже — опусти spinGrip
+  thrRamp:0.11,                // b68: АНАЛОГ.ГАЗ (рампа 0→1 → вилли/тяга ∝ сколько газу) + БУКС ПОЧТИ КОСМЕТИЧЕСКИЙ (spinGrip 0.86→0.97 — почти не режет тягу, чтобы НЕ ощущалось «торможением» на подъёме; видно роост/прокрут, но байк замедляется только от гравитации = логично). Хочешь жёстче букс позже — опусти spinGrip
   jump:9.0,                                    // импульс хопа (свайп вверх)
   airDrag:0.992, rollDrag:0.997,              // аэро / качение (потолок скорости). b83: вернул АРКАДНУЮ (живую) скорость, что нравилась (b81-замедление под баланс снято)
   leanGround:0.016, leanAir:0.050,            // авторитет веса: тангаж на земле / вращение сальто в воздухе. b68: leanAir 0.075→0.050 — МЕДЛЕННЕЕ/УПРАВЛЯЕМЕЕ сальто (фидбэк «крутит слишком быстро»), откроет разные флипы
@@ -678,40 +657,7 @@ let _skyImg=null,_skyRdy=false; try{ const _si=new Image(); _si.onload=()=>{ con
 let _coinImg=null,_coinRdy=false; try{ const _im=new Image(); _im.onload=()=>{ const S=_im.naturalWidth||256, cc=document.createElement('canvas'); cc.width=S; cc.height=S; const cg=cc.getContext('2d'); cg.drawImage(_im,0,0);   // b217: РАДИАЛЬНАЯ АЛЬФА-МАСКА при загрузке — у исходника углы не совсем прозрачны (заваленный глоу = тёмный квадрат на светлом фоне). destination-in радиалом убивает углы (r>S/2), диск+ореол живут с мягким краем
     cg.globalCompositeOperation='destination-in'; const rg=cg.createRadialGradient(S/2,S/2,S*0.40,S/2,S/2,S*0.44); rg.addColorStop(0,'rgba(0,0,0,1)'); rg.addColorStop(1,'rgba(0,0,0,0)'); cg.fillStyle=rg; cg.fillRect(0,0,S,S); _coinImg=cc; _coinRdy=true; };   // .40/.44: режем ровно у золотого обода — тёмный глоу-ореол убран (на тёмном мире чисто; белого фона в игре нет)
   _im.src=(location.pathname.indexOf('/toys/')>=0?'':'toys/')+'assets/coin.png'; }catch(e){}   // путь как у moto1.glb (корневой URL vs /toys/)
-// b238 РИГ ИЗ РАЗДЕЛЬНЫХ ЧАСТЕЙ (арты юзера, сгенерённые по промтам): рама+колёса+позы-райдера — отдельные PNG, у всех запечён серый фон → убираю ЗАЛИВКОЙ ОТ КРАЁВ (region-grow, стоп на контуре — надёжнее цвето-ключа). Собираю в живой байк: колёса крутятся, поза меняется. КРОСС 250 = эталон
-function _rigBg(im, targetW, tol){ const s=targetW/im.naturalWidth, W=Math.max(1,Math.round(im.naturalWidth*s)), H=Math.max(1,Math.round(im.naturalHeight*s));
-  const cc=document.createElement('canvas'); cc.width=W; cc.height=H; const g=cc.getContext('2d'); g.drawImage(im,0,0,W,H);
-  const d=g.getImageData(0,0,W,H), p=d.data, N=W*H, bg=new Uint8Array(N), qx=new Int32Array(N), qy=new Int32Array(N); let qh=0,qt=0;
-  const push=(x,y)=>{ const i=y*W+x; if(!bg[i]){bg[i]=1;qx[qt]=x;qy[qt]=y;qt++;} };
-  for(let x=0;x<W;x++){push(x,0);push(x,H-1);} for(let y=0;y<H;y++){push(0,y);push(W-1,y);}
-  while(qh<qt){ const x=qx[qh],y=qy[qh];qh++; const i4=(y*W+x)*4,r=p[i4],gg=p[i4+1],b=p[i4+2], ax=[x-1,x+1,x,x],ay=[y,y,y-1,y+1];
-    for(let k=0;k<4;k++){ const bx=ax[k],by=ay[k]; if(bx<0||by<0||bx>=W||by>=H)continue; const j=by*W+bx; if(bg[j])continue; const j4=j*4;
-      if(Math.abs(p[j4]-r)+Math.abs(p[j4+1]-gg)+Math.abs(p[j4+2]-b)<tol){bg[j]=1;qx[qt]=bx;qy[qt]=by;qt++;} } }
-  for(let i=0;i<N;i++)if(bg[i])p[i*4+3]=0; g.putImageData(d,0,0); return {cv:cc,W,H}; }
-let _krossRig=null;
-(function(){ const base=(location.pathname.indexOf('/toys/')>=0?'':'toys/')+'assets/rig/kross/';
-  const names={frame:'frame',wf:'wheel_front',wr:'wheel_rear',seat:'rider_seat',attack:'rider_attack',lean:'rider_lean',superman:'rider_superman',super2:'rider_super2'};
-  const out={}, keys=Object.keys(names); let done=0;
-  const fin=()=>{ if(out.frame) _krossRig=out; };
-  keys.forEach(k=>{ try{ const im=new Image(); im.onload=()=>{ try{ out[k]=_rigBg(im, k==='frame'?460:(k==='wf'||k==='wr'?300:460), 34); }catch(e){} if(++done===keys.length)fin(); };
-    im.onerror=()=>{ if(++done===keys.length)fin(); }; im.src=base+names[k]+'.png'; }catch(e){ if(++done===keys.length)fin(); } }); })();
-// риг-локальные координаты (левый-верх рамы = 0,0, canvas рамы 460 шир.); осевые точки колёс замерены визуально
-const KROSS_L={ raxle:[150,198], faxle:[374,190], D:188,
-  poses:{ seat:{dx:-6,dy:-34,s:0.92}, attack:{dx:-6,dy:-34,s:0.92}, lean:{dx:-6,dy:-30,s:0.92}, superman:{dx:6,dy:-24,s:0.94}, super2:{dx:6,dy:-24,s:0.94} } };
-const KROSS_CONTACT=6.5;   // bike-local y оси колёс (радиус ~22.7 в игр.ед. → низ колеса ≈29 = контакт с трассой, как у drawMachine)
-// b239 РИГ в СИСТЕМЕ drawMachine: ctx уже в центре байка (+повёрнут в игре) → колёса на ±27 ПО ПОСТРОЕНИЮ (не съедут), флипы бесплатны. Рисует в bike-local.
-function drawKrossRigLocal(wheelAng, poseKey, shadow){ const R=_krossRig; if(!R||!R.frame)return false; const L=KROSS_L, D=L.D;
-  const s=54/(L.faxle[0]-L.raxle[0]);   // база рига → 54 (±27), как у всех байков
-  const midx=(L.raxle[0]+L.faxle[0])/2, midy=(L.raxle[1]+L.faxle[1])/2;
-  if(shadow!==false){ ctx.save(); ctx.fillStyle='rgba(0,0,0,0.34)'; ctx.beginPath(); ctx.ellipse(0,29,31,4.6,0,0,7); ctx.fill(); ctx.restore(); }   // контакт-тень (не в превью)
-  ctx.save(); ctx.translate(0,KROSS_CONTACT); ctx.scale(s,s); ctx.translate(-midx,-midy);
-  if(R.wr){ctx.save();ctx.translate(L.raxle[0],L.raxle[1]);ctx.rotate(wheelAng||0);ctx.drawImage(R.wr.cv,-D/2,-D/2,D,D);ctx.restore();}
-  ctx.drawImage(R.frame.cv,0,0);
-  if(R.wf){ctx.save();ctx.translate(L.faxle[0],L.faxle[1]);ctx.rotate((wheelAng||0)*1.02);ctx.drawImage(R.wf.cv,-D/2,-D/2,D,D);ctx.restore();}
-  const P=R[poseKey]||R.seat, pl=L.poses[poseKey]||L.poses.seat; if(P)ctx.drawImage(P.cv, pl.dx, pl.dy, P.W*pl.s, P.H*pl.s);
-  ctx.restore(); return true; }
-function drawKrossPreview(cx,cy,pscale,wheelAng,poseKey){ ctx.save(); ctx.translate(cx,cy); ctx.scale(pscale,pscale); const r=drawKrossRigLocal(wheelAng,poseKey,false); ctx.restore(); return r; }
-function krossPose(){ if(!bike)return 'seat'; if(!bike.onG && ((typeof megaAir!=='undefined'&&megaAir)||airT>14))return 'superman'; if(bike.onG){ if(bike.rShift<-0.28)return 'lean'; if(down&&bike.vx>1)return 'attack'; } return 'seat'; }
+// (b238-240 риг-из-частей УДАЛЁН в b251 — откачен ещё в b241, история в git)
 // b204 РЕШЕНИЕ ФОНА (после b203-вердикта юзера «фон ужасен, не сочетается»): ФОТО-БЭКДРОПЫ УБРАНЫ ИЗ ИГРЫ НАСОВСЕМ.
 // Корень (3 захода b185-191/b203 не склеились): фото = язык иллюстрации, весь кадр полон ЯРКОГО не-данных света → структурно несовместим
 // с C-правилом «светятся только данные». Мир теперь = ОДИН код-язык: композиция Vice нашим стилем (закат-солнце + город-свечи + пальмы-силуэты
@@ -720,8 +666,7 @@ const TDECK=34;   // b208: ВЕРТИКАЛЬНЫЙ размах ленты (к�
 const TRV_X=-9;   // b208: горизонтальный сдвиг проекции (наклон рёбер — «смотрим чуть сверху-справа», как GD); 0 = рёбра вертикальны
 const TSTEEL='208,224,248';   // b208: СТАЛЬ структуры трассы (константа во всех эпохах — идентичность элемента; цвет остаётся только у ДАННЫХ: зелёный/красный склоны)
 let _zoomD=1;   // b206: отображаемый зум — сглаживается в draw на каждом кадре (60Гц), лечит ступеньки зума при 30Гц-слоумо (сальто-синема)
-let R3D_ON=false; try{ R3D_ON=localStorage.getItem('cb_r3d')==='1'; }catch(e){}   // b192 ФАЗА 2: тумблер 3D-РЕНДЕР (весь мир в Three.js читает мою физику) ↔ 2D-эталон. Физика/190 билдов НЕ трогаются — меняется только слой отрисовки
-function saveR3D(){ try{localStorage.setItem('cb_r3d',R3D_ON?'1':'0');}catch(e){} }
+// (b192-3D УДАЛЁН в b251: Three.js-слой/тумблер/GLB — 3D заморожен 2026-07-09, история в git)
 // (b185-189 фото-пайплайн VICE/depth-слои/передний план УДАЛЁН в b204 — история в git)
 const TRICK_BASE={1:1,2:2,3:3,4:4,5:1,6:2,7:4};   // жёсткая вариация → её базовое направление (для «тот же свайп = отпустить»)
 let ctrlScheme='btn4'; try{ctrlScheme=localStorage.getItem('cipher_ctrlscheme')||'btn4'; if(SCHEMES.indexOf(ctrlScheme)<0)ctrlScheme='btn4';}catch(e){}   // b56: 4 КНОПКИ = ДЕФОЛТ (юзер выбрал — удобнее). btn2 переделан в АВТО-ГАЗ
@@ -1407,64 +1352,8 @@ function update(){
   // EMERGENT PHYSICS: the bike is a projectile, the ground a floor it LEAVES naturally. FRONT WHEEL OVER A SHARP DROP (chasm / cliff edge) = no front support → ride/pivot on the REAR and fly off the edge KEEPING its ramp momentum (don't read the void as a down-ramp & dive in; don't glue to the line).
   const frontDrop = gapNear && (gyf - gyr > STEP*1.6);   // b61: gate on gapNear — frontDrop = a real CHASM edge (its whole purpose). On a CONTINUOUS steep descent (no gap) it wrongly forced the airborne branch (no forward propulsion) + flattened the slope → the bike couldn't accelerate down and FROZE mid-slope (vy ballooned, vx→0). With gaps off this never fires → steep descents are real slopes: grounded, gravity-propelled down, and the bike still LAUNCHES off convex crests via the grounded condition (the "fly off bumps" feel)
   if(frontDrop) gyf=gyr;
-  const supA=Math.atan2(gyf-gyr, 2*DX), targetY=(gyr+gyf)*0.5 - DY;   // wheel slope + seated CG height
-  // CG height resting on the BINDING (lower) wheel given the actual pitch — equals targetY when pitch matches the slope, but never lets a wheel sink INTO the track on a steep slope + pitch mismatch (anti-clip)
-  const _ca=Math.cos(bike.ang), _sa=Math.sin(bike.ang);
-  const restY = Math.min(terrainAt(bike.x-DX*_ca-DY*_sa).y - (-DX*_sa+DY*_ca), terrainAt(bike.x+DX*_ca-DY*_sa).y - (DX*_sa+DY*_ca));
-  if(0){ bike.vy += P.GRAV;   // === b68: OLD glued-model physics DISABLED (if(0)). Replaced by rigidStep() below. Kept for reference/rollback; cleaned up next pass. ===
-  const _aheadA=terrainAt(bike.x+Math.max(28,bike.vx*5)).ang, _conv=_aheadA-supA;   // b66: look FURTHER ahead (vx*5, ≥1 STEP) → catch a convex crest/bump/drop while still on the up-ramp (upward momentum), not at the peak where the tangent is already flat & vy≈0
-  const flyOff = _conv>0.04 && bike.vx*bike.vx*_conv > P.LAUNCH;   // CENTRIFUGAL LAUNCH — over a convex crest/bump/drop AT SPEED the bike can't hug the curve → it flies off (real life: hit a bump fast = you launch)
-  let grounded = !frontDrop && !flyOff && (bike.y + bike.vy >= restY - P.STICK);   // on the floor unless flyOff lifts you off a crest/drop / the ground drops away (frontDrop) — un-glues the bike
-  if(flyOff && wasG){ bike.vy = bike.vx*Math.tan(clamp(supA,-1.35,1.35)); }   // b67: REAL PROJECTILE LAUNCH — leave the crest/lip/drop carrying the TRUE TANGENTIAL velocity (vx, vx·tanθ at the takeoff angle), NOT a scripted pop. The arc = your speed × takeoff angle (steep lip at speed = big arc; gentle hill = long shallow arc; slow = just roll over). "Байк не прыгает — летит соразмерно тому, как едет"; gravity does the rest in the air
-  if(grounded) coyote=gapNear?TUNE.gapCoyote:8; else if(coyote>0) coyote--;   // coyote grace, wider at gap lips
-  if(jumpCd>0)jumpCd--;
-  if(jumpReq>0){ if((grounded||coyote>0) && jumpCd<=0){ bike.vy=-P.JUMP; grounded=false; coyote=0; jumpReq=0; jumpCd=16; airT=0; nearMissed=false; bike.angV*=0.3; jumpGrace=1; shake=Math.max(shake,3); for(let e=0;e<7;e++)dust.push({x:bike.x-10+Math.random()*20,y:bike.y+24,vx:(Math.random()-0.5)*2.4,vy:-Math.random()*2,life:1,r:Math.random()*2.4+1}); sfxAir(); } else jumpReq--; }   // on-demand hop (buffered + coyote) — adds height when momentum alone won't clear
-  // ---- TWO-WHEEL BALANCE: slow at an edge → don't launch, TEETER on the rear wheel (front over the void, balance the wheelie by lean; the wheel edge catches the lip). Pendulum about the rear contact → can't fly up, real balance. ----
-  let rearBal=false, balSR=0;
-  if(gapNear && frontDrop && wasG && Math.abs(bike.vx)<TUNE.balanceV){   // b55: teeter ONLY at a real chasm edge (gapNear). With gaps OFF this never fires → slow approach to a regular steep step no longer flips you over (bug: nose dived over the edge = endo) or freezes you (the 0.80 roll-arrest stuck you on slopes). Re-enables at real gaps if they return
-    const rwx=bike.x - DX*Math.cos(bike.ang) - DY*Math.sin(bike.ang);   // rear wheel world x
-    let sR=1e9; for(let d=-TUNE.wheelR; d<=TUNE.wheelR+0.1; d+=TUNE.wheelR){ const ty=terrainAt(rwx+d).y; if(ty<sR)sR=ty; }   // footprint-max: rest on the HIGHEST point within ±R → the wheel edge catches the lip
-    if(sR < bike.y+150){ rearBal=true; balSR=sR; grounded=true; }       // rear still has a lip under it → balance; else it's over the void → fall (airborne path)
-  }
-  if(rearBal){
-    if(down) bike.vx += P.POW*BK().accel*0.5;                           // gas rolls you forward → off the edge
-    else bike.vx *= 0.80;                                               // coasting = roll-arrest: you can't freely roll off a cliff → you stop & teeter
-    const hl=DX*Math.cos(bike.ang) + DY*Math.sin(bike.ang);             // CG horizontal offset from the rear contact
-    bike.angV += TUNE.balanceGrav*hl + rShift*P.WEIGHTAUTH;             // gravity tips the nose DOWN over the edge; shift WEIGHT BACK to hold the wheelie — modulate to balance (CG over the rear axle ≈ -0.76)
-    bike.wheel += bike.vx*0.08;
-  } else if(grounded){
-    bike.y = restY; bike.vy = bike.vx*Math.tan(clamp(supA,-1.3,1.3));   // rest on the binding wheel (anti-clip). the LAUNCH is EMERGENT: when the slope eases at a crest / the ground drops, the carried vy lifts the bike off. Faster = bigger launch. No scripted kick.
-    bike.vx += P.GACC*Math.sin(supA);                                     // gravity along slope (climb bleeds speed, descent builds) — speed is situational, like real life
-    if(down) bike.vx += P.POW*BK().accel*driveMul;   // throttle — weight back (driveMul>1) loads the rear for more drive/climb grip; weight forward unweights it (real enduro traction tradeoff)
-    if(brake) bike.vx *= P.BRK;
-    if(terr[ci0] && terr[ci0].mud){ bike.vx *= TUNE.mudDrag; }   // b54: MUD saps speed — pure momentum/throttle challenge (carry speed in + keep gas; if you bog, the WAVE is the stake). No weight mechanic (weight-back-for-traction conflicted with the wheelie skill-zone → loops); skill-zone stays suppressed on mud so leaning back here never loops
-    bike.angV += -P.GP*Math.sin(bike.ang-supA) + rShift*P.WEIGHTAUTH + bike.vx*Math.sin(supA)*P.DESTAB;   // pitch = slope self-stabilize + RIDER WEIGHT-SHIFT torque (two-body: the shifted body mass tips the bike — replaces the old direct leanX torque) + speed×slope destabilize
-    { const dev=bike.ang-supA; if(dev < -TUNE.skillZone && !(terr[ci0]&&terr[ci0].mud)) bike.angV += -TUNE.skillDestab*(-dev-TUNE.skillZone); }   // ФАЗА-2 СКИЛЛ-ЗОНА (ВИЛЛИ): за порогом подъёма переднего колеса инвертир.-маятник тянет нос ВЫШЕ → держишь переносом веса, лупишь без модуляции (Trials/GD). Только вилли (стоппи-destab конфликтовал с вес-вперёд на подъёме = эндо); ОТКЛ на грязи (там вес-назад = трекшн-грайнд, не вилли-баланс → не луп). Норм-езда (dev>−skillZone) не тронута
-    if(down && supA<-0.22) bike.angV += -P.ENGTQ*P.CLIMB*(-supA-0.22)*clamp(bike.vx/7,0.4,1.4)*(1-0.5*clamp(rShift,0,1));   // gas pops the front on a steep climb → shift WEIGHT FORWARD (rShift>0) to plant it (less loop), weight back lofts it more (the climb skill, now physical via weight)
-    bike.wheel += bike.vx*0.08;
-    if(bike.vx>3&&t%2===0)dust.push({x:bike.x-14,y:bike.y+18,vx:-bike.vx*0.18-Math.random(),vy:-Math.random()*1.2,life:1,r:Math.random()*2+1});
-  } else {
-    bike.y += bike.vy;                                                 // airborne projectile (off ramps, crests, cliffs, gaps — all the SAME emergent launch)
-    if(bike.vy>0 && bike.y>restY && !(terr[ci0]&&terr[ci0].gap)) bike.y=restY;   // ANTI-CLIP: never sink THROUGH solid ground — even a steep frontDrop DESCENT rests on the binding (rear) wheel. Only a real chasm node (.gap) lets you fall. Upward launches (vy<0) are untouched, so flying off ramps/edges still works (b46: was gated by !frontDrop → steep slopes plunged the bike through the track & it crawled back out)
-    if(Math.abs(rShift)>0.06){ bike.angV += rShift*P.LEANAIR; }                                       // hold weight-shift = flip / aim the landing (rider mass rotates the bike in air)
-    else { const la=terrainAt(bike.x+Math.max(20,bike.vx*6)).ang; bike.angV += (clamp(la,-0.6,0.6)-bike.ang)*0.03; }   // no input → auto-level to the landing slope (clamped so a chasm sample can't spin you) — lands on its wheels
-    { const skimG=terrainAt(bike.x).y-(bike.y+DY); if(bike.vy>0 && skimG>-4 && skimG<TUNE.landAssist){ const la=terrainAt(bike.x+Math.max(14,bike.vx*4)).ang; const k=clamp((TUNE.landAssist-Math.max(skimG,0))/TUNE.landAssist,0,1); const holding=Math.abs(rShift)>0.4 && Math.sign(rShift)===Math.sign(bike.angV) && Math.abs(bike.angV)>0.08; const bias=holding?0.4*Math.sign(bike.angV):0; const target=Math.round((bike.ang-la)/6.2832 + bias)*6.2832 + la; bike.angV += (target-bike.ang)*0.18*k; bike.angV*=(1-0.11*k*k); } }   // b61: LANDING ASSIST → nearest wheels-down. The "complete the flip" bias fires ONLY when the player is HOLDING the flip (|rShift|>0.4 in the spin direction) → an intentional flip COMPLETES & counts, while incidental air-rotation just LEVELS (no over-rotation loop). Spin-damp ramps with k² (settles only at the very ground, doesn't choke the flip) — if you're actively flipping (|angV|>0.08) it COMPLETES the flip (rounds up the turn you're committed to, so it counts), a small tilt just levels. No spin-damping (b55 damped rotation → "always under-rotate"). Skill = commit the flip; touchdown is forgiven
-    bike.wheel += 0.3;
-  }
-  // ---- TRICK KICKER lip: POP up ∝ speed (the ramp throws you — reward launch for flips; fly straight = safe, flip = risk/reward; NO chasm = no fall) ----
-  if(!rearBal && terr[ci0] && terr[ci0].kick && !terr[ci0].kicked && bike.vx>1.0){ terr[ci0].kicked=true; const _pm=(terr[ci0].pumpMag>0)?terr[ci0].pumpMag:1; bike.vy=Math.min(bike.vy, Math.max(-22*_pm, -bike.vx*TUNE.kickPop*_pm)); grounded=false; airT=0; nearMissed=false; gflash=Math.max(gflash,0.4); shake=Math.max(shake,5); sfxAir(); for(let e=0;e<8;e++)dust.push({x:bike.x-8+Math.random()*16,y:bike.y+22,vx:(Math.random()-0.5)*3.2,vy:-Math.random()*2.8,life:1,r:Math.random()*2.6+1.2}); if(terr[ci0].pump){ const _big=_pm>=1.5; popText(_big?'🚀 ГИГА-ПАМП — НА ЛУНУ!':'🚀 ПАМП — ВЗЛЁТ!'); gflash=Math.max(gflash,_big?0.9:0.6); boost=Math.min(1,(boost||0)+0.25); shake=Math.max(shake,_big?14:9); if(_big)slowmo=Math.max(slowmo,12); for(let e=0;e<(_big?22:14);e++)parts.push({x:bike.x-18-Math.random()*12,y:bike.y+8+Math.random()*10,vx:-2-Math.random()*5,vy:0.4+Math.random()*3,life:1,r:Math.random()*3+1.6,gold:true}); } }   // b120: взлёт ∝ силе пампа (эпик-трамплин) + слоумо «на луну» на гига-пампах   // b67: kicker ∝ speed; b116: памп=трамплин; b119: золотой рокет-выхлоп на пампе (dropped the +4 fixed impulse = the "jump even when slow" the rider flagged). Steep ramp hit FAST = big air, slow = small hop — real, not a scripted pop. kickPop = the ramp's launch coefficient (effective takeoff angle). Camera zooms OUT to keep big air on-screen
-  bike.vx*=P.DRAG; if(bike.vx<0)bike.vx*=0.95;                          // drag (emergent top speed, no hard cap) + roll-back resistance
-  bike.angV*=P.ANGD;                                                   // angular damping — CONTROLLABLE rotation (b42's free-spin in air span the bike chaotically per playtest → reverted)
-  if(bike.angV>P.AVMAX)bike.angV=P.AVMAX; else if(bike.angV<-P.AVMAX)bike.angV=-P.AVMAX;
-  bike.x+=bike.vx; bike.ang+=bike.angV;
-  if(rearBal){ const cc=Math.cos(bike.ang),ss=Math.sin(bike.ang); const rbY=balSR + DX*ss - DY*cc;
-    const noPen=Math.min(terrainAt(bike.x-DX*cc-DY*ss).y-(-DX*ss+DY*cc), terrainAt(bike.x+DX*cc-DY*ss).y-(DX*ss+DY*cc));   // b49: anti-clip in the BALANCE state too — frontDrop can't tell a cliff edge from a steep slope, so the rear-teeter engages on slopes; a nose-down teeter then sank a wheel 15-30px. Clamp y so no wheel penetrates (teeter kept; not a fight = no jitter)
-    bike.y=Math.min(rbY, noPen); bike.vy=0; }   // CG pinned to the rear contact (pendulum) — teeters on the wheel, can't fly up, can't sink in
-  bike.onG=grounded;
-  if(!rearBal && !gapNear){ const cc=Math.cos(bike.ang),ss=Math.sin(bike.ang);   // b52: UNIVERSAL anti-clip — runs EVERY frame except over a real chasm. Lifts any wheel that's under the surface, in ANY state (grounded, frontDrop-descent, OR airborne-in-a-wheelie). Fixes the user's "fall through on a long descent while on the rear wheel". Flying high = wheels above terrain = deep<0 = no lift, so launches/air are untouched. (gaps OFF now → gapNear always false → always on; gate keeps it correct if gaps return)
-    const deep=Math.max(bike.y-DX*ss+DY*cc-terrainAt(bike.x-DX*cc-DY*ss).y, bike.y+DX*ss+DY*cc-terrainAt(bike.x+DX*cc-DY*ss).y);
-    if(deep>1){ bike.y-=deep-1; if(bike.vy>0)bike.vy=0; } }
-  } // === end disabled old block ===
+  const supA=Math.atan2(gyf-gyr, 2*DX);   // wheel slope (наклон опоры для rel/смертей/телеграфов ниже)
+  // (b68 старая glued-физика if(0) УДАЛЕНА в b251 — rigidStep() единственная модель, история в git)
   // === RIGID BODY (b68): the real bike physics over the price line. supA (above) = ground slope for downstream scoring/death/telegraphs. ===
   rigidStep();
   // b149: ТРАМПЛИН = ГЕОМЕТРИЯ, НЕ СКРИПТ. vy-импульс b135/b144 УДАЛЁН (юзер: «вылетаешь непонятно откуда = нелогично») — теперь взлёт целиком из формы трассы (закруглённый лип на вершине памп-горы + ступень-вырез, см. buildTickerTrack): rigid body слетает сам, дуга ∝ СКОРОСТЬ × угол липа = движок/прокачка решают полёт. АВТО-САЛЬТО (pumpSpin/pumpAir) тоже удалено — флип как в реальном мотокроссе: лип сам даёт лёгкое вращение (заднее колесо позже переднего покидает рампу), а ДЕРЖИШЬ НОС↑ в полёте = докручиваешь бэкфлип (leanAir, качается ВОЗД.КОНТРОЛЕМ). Этот блок = только FX/читаемость на кромке.
@@ -1878,9 +1767,7 @@ function draw(){
   if(depthNew){   // b221 GOLDEN-HOUR: перезаписываю палитру на СОЧНЫЙ ЗАКАТ (обходит SKY_UNIFY, что душит все биомы к тёмной базе = корень «однотонности»). Тёплое небо + тёплый свет (BLINE) + ХОЛОДНАЯ даль (BRIDGE) = свет/тень + контраст температуры
     BSKY=['rgb(60,36,96)','rgb(140,58,128)','rgb(248,122,98)','rgb(255,200,124)'];   // b223: ЯРЧЕ+СОЧНЕЕ закат (юзер «всё ещё тёмная тема, хочу закатную») — зенит поднят из почти-чёрного, магента/коралл насыщеннее, золото у горизонта
     BLINE='255,230,196'; BRIDGE='58,52,104'; }   // BLINE тёплый (солнце/лучи/горизонт-глоу греются) · BRIDGE холодный сине-фиолет (дальний скайлайн/гряда уходят в холод = глубина)
-  const _skip3D = (R3D_ON && screen==='play' && window.R3D && window.R3D._ready);   // b192: в 3D-режиме мир рисует Three.js; на 2D-канвасе остаются только контролы/HUD (звук идёт всегда)
-  if(_skip3D){ ctx.clearRect(0,0,W,H); try{ window.R3D.frame(); }catch(e){ if(!window.R3D._e){window.R3D._e=1; console.error('R3D frame:',e&&e.stack||e);} } }
-  if(!_skip3D){
+  {   // 2D-мир (b251: 3D-ветка удалена, блок сохранён для минимального диффа)
   skyGrad();
   // sun/halo on horizon — b216: ТОЛЬКО классика. В worldNew есть свой диск drawSun (цвет/позиция по эпохе, день/ночь) — фикс-тёплый ореол ломал ночь (грел воду когда луна холодная) = один из 3 конкурирующих свечений
   if(!worldNew){ ctx.globalCompositeOperation='lighter';
@@ -2266,7 +2153,7 @@ function draw(){
       ctx.save(); ctx.textAlign='center'; ctx.shadowColor='#ff3050'; ctx.shadowBlur=8*dn;
       ctx.fillStyle='rgba(255,'+Math.round(150-110*dn)+',80,'+(0.45+0.55*dn*pul)+')'; ctx.font='800 '+(16+10*dn)+'px ui-monospace,monospace';
       ctx.fillText(rl<0?'⟲':'⟳',sxx,syy); ctx.shadowBlur=0; ctx.restore(); ctx.textAlign='left'; } }
-  }   // b192: /конец 2D-мира+FX (в 3D-режиме этот блок пропущен, его рисует Three.js)
+  }   // /конец 2D-мира+FX
   // pause button (top-right) while playing
   if(screen==='play'){ UI.pause={x:W-40,y:14,w:26,h:26}; ctx.fillStyle='rgba(20,22,40,0.45)'; ctx.fillRect(W-40,14,26,26); ctx.strokeStyle='rgba(150,180,220,0.5)'; ctx.lineWidth=1; ctx.strokeRect(W-40,14,26,26); ctx.fillStyle='rgba(200,220,245,0.85)'; ctx.fillRect(W-32,20,4,14); ctx.fillRect(W-24,20,4,14); } else UI.pause=null;
   // ---- on-screen controls: HOLD anywhere = gas · drag L/R = lean · swipe up = jump ----
@@ -3109,22 +2996,13 @@ window.CRS = {
   get terr(){ return terr; }, get bike(){ return bike; }, get cam(){ return cam; },
   get baseY(){ return baseY; }, get STEP(){ return STEP; }, get slowLerp(){ return slowLerp; },
   get screen(){ return screen; }, get t(){ return t; }, get W(){ return W; }, get H(){ return H; },
-  get r3dOn(){ return R3D_ON; }, terrainAt: terrainAt,
+  terrainAt: terrainAt,
   get dust(){ return dust; }, get parts(){ return parts; },   // живые частицы физики (пыль/выхлоп) → рисуем в 3D-мире
   get bikeVX(){ return bike?bike.vx:0; }, get down(){ return typeof down!=='undefined'?down:false; }, get onG(){ return bike?bike.onG:false; },
   get biome(){ return BIOMES[(((zone||0)%BIOMES.length)+BIOMES.length)%BIOMES.length]; },   // текущая рыночная эпоха (sky/ridge/line-палитра) → тинт 3D-неба/тумана
   // недавний тренд рынка у байка: 0=всё падение(красный) .. 1=всё рост(зелёный) → цвет города «дышит» рынком
   marketBias(){ if(!terr||terr.length<6)return 0.5; const i1=Math.min(terr.length-1,Math.floor(bike.x/STEP)+2), i0=Math.max(1,i1-26); let up=0,n=0; for(let i=i0;i<=i1;i++){ if(terr[i]&&!terr[i].gap){ n++; if(terr[i].up)up++; } } return n?up/n:0.5; }
 };
-// применить сохранённое состояние тумблера, когда 3D-модуль загрузится (модуль дёргает этот колбэк на .ready)
-const _b3d=document.getElementById('b3d');
-window.__applyR3D=function(){ if(window.R3D){ window.R3D.setActive(R3D_ON); } _b3d.classList.toggle('on',R3D_ON); _b3d.textContent=R3D_ON?'3D':'2D'; };
-function _toggle3D(){ R3D_ON=!R3D_ON; saveR3D(); if(typeof sfxClick==='function')sfxClick(); window.__applyR3D(); }
-// b196 FIX: игра делает preventDefault на window-touchstart → на телефоне click НЕ генерится. Ловим сам тач на кнопке + stopPropagation (игра не перехватывает тап).
-_b3d.addEventListener('touchstart',function(e){ e.stopPropagation(); e.preventDefault(); },{passive:false});
-_b3d.addEventListener('touchend',function(e){ e.stopPropagation(); e.preventDefault(); _toggle3D(); },{passive:false});
-_b3d.addEventListener('click',function(e){ e.stopPropagation(); _toggle3D(); });   // десктоп (мышь)
-window.__applyR3D();
 toTitle();
 // apply shake in draw by jittering before skyGrad
 const _draw=draw; draw=function(){ if(screen!=='play'){ if(shake>0.01)shake*=0.8; if(flash>0.01)flash*=0.85; if(gflash>0.01)gflash*=0.85; }   // b74 FIX «трясучка»: shake/flash/gflash затухали только в update() (а он не идёт вне игры) → на dead/garage тряслось вечно. Теперь гасим и вне игры
@@ -3132,265 +3010,5 @@ const _draw=draw; draw=function(){ if(screen!=='play'){ if(shake>0.01)shake*=0.8
 requestAnimationFrame(loop);
 </script>
 
-<!-- ===================== b192 ФАЗА 2: 3D-РЕНДЕР МИРА (Three.js) ===================== -->
-<!-- Отдельный WebGL-слой (#c3d) ПОД 2D-канвасом. Читает ЖИВОЕ состояние физики через window.CRS -->
-<!-- и рендерит его как настоящий 3D-мир: дорога = мой терраин, свечи = 3D-рельеф, байк = реальные x/y/угол. -->
-<!-- Физика/экономика/190 билдов не тронуты — это только слой отрисовки (тумблер 2D↔3D). -->
-<script type="importmap">
-{"imports":{"three":"https://cdn.jsdelivr.net/npm/three@0.160.0/build/three.module.js","three/addons/":"https://cdn.jsdelivr.net/npm/three@0.160.0/examples/jsm/"}}
-</script>
-<script type="module">
-import * as THREE from 'three';
-import {EffectComposer} from 'three/addons/postprocessing/EffectComposer.js';
-import {RenderPass} from 'three/addons/postprocessing/RenderPass.js';
-import {UnrealBloomPass} from 'three/addons/postprocessing/UnrealBloomPass.js';
-import {Reflector} from 'three/addons/objects/Reflector.js';
-import {GLTFLoader} from 'three/addons/loaders/GLTFLoader.js';
-import {RoomEnvironment} from 'three/addons/environments/RoomEnvironment.js';
-
-const cv3=document.getElementById('c3d');
-const lerp=(a,b,t)=>a+(b-a)*t;
-const SC=1.6/26;                 // мир-пиксели игры → 3D-юниты (узел STEP=26px → 1.6 юнита, как в прото)
-let SW=innerWidth, SH=innerHeight;
-
-const renderer=new THREE.WebGLRenderer({canvas:cv3,antialias:true});
-renderer.setClearColor(0x08040f,1);
-renderer.setPixelRatio(Math.min(2,devicePixelRatio||1));
-renderer.setSize(SW,SH,false);
-renderer.toneMapping=THREE.ACESFilmicToneMapping; renderer.toneMappingExposure=1.0;
-
-const scene=new THREE.Scene();
-const FOGC=new THREE.Color(0x2a0d3a); scene.fog=new THREE.FogExp2(FOGC.getHex(),0.010);
-const camera=new THREE.PerspectiveCamera(52,SW/SH,0.1,900);
-const composer=new EffectComposer(renderer); composer.addPass(new RenderPass(scene,camera));
-const bloom=new UnrealBloomPass(new THREE.Vector2(SW,SH),0.7,0.6,0.6); composer.addPass(bloom);   // управляемый глоу: неон-элементы ГОРЯТ, тёмное остаётся тёмным (не пересвет в белое)
-
-// ---------- sky / sun / stars (атмосфера-база, дёшево) ----------
-function skyTex(){ const c=document.createElement('canvas'); c.width=8; c.height=256; const g=c.getContext('2d'); const gr=g.createLinearGradient(0,0,0,256);
-  gr.addColorStop(0,'#0c0620'); gr.addColorStop(0.38,'#3a1160'); gr.addColorStop(0.6,'#8a1f7a'); gr.addColorStop(0.78,'#ff5a7a'); gr.addColorStop(0.9,'#ff9a4a'); gr.addColorStop(1,'#ffd85a');   // глубже/сочнее синтвейв-градиент
-  g.fillStyle=gr; g.fillRect(0,0,8,256); return new THREE.CanvasTexture(c); }
-let skyMat;
-{ skyMat=new THREE.MeshBasicMaterial({map:skyTex(),depthWrite:false,fog:false}); const sky=new THREE.Mesh(new THREE.PlaneGeometry(1400,700), skyMat);
-  sky.position.set(0,120,-360); scene.add(sky); }
-function sunTex(){ const S=256,c=document.createElement('canvas'); c.width=c.height=S; const g=c.getContext('2d');
-  const gr=g.createRadialGradient(S/2,S/2,0,S/2,S/2,S/2); gr.addColorStop(0,'rgba(255,240,180,1)'); gr.addColorStop(0.5,'rgba(255,120,90,1)'); gr.addColorStop(0.8,'rgba(255,60,120,0.85)'); gr.addColorStop(1,'rgba(255,60,120,0)');
-  g.fillStyle=gr; g.beginPath(); g.arc(S/2,S/2,S/2,0,7); g.fill();
-  g.globalCompositeOperation='destination-out'; for(let y=S*0.55;y<S;y+=14){ const h=(y-S*0.5)/S*10; g.fillRect(0,y,S,Math.max(2,h)); }
-  return new THREE.CanvasTexture(c); }
-{ const sun=new THREE.Sprite(new THREE.SpriteMaterial({map:sunTex(),transparent:true,depthWrite:false,fog:false,blending:THREE.AdditiveBlending}));
-  sun.scale.set(215,215,1); sun.position.set(0,34,-230); scene.add(sun); }   // большое ретро-солнце ВПЕРЕДИ (не загорожено дальним городом), низко на горизонте = синтвейв-подпись
-{ const N=340,sg=new THREE.BufferGeometry(),sp=new Float32Array(N*3); let s=99991;
-  const rnd=()=>{ s=(s*1103515245+12345)&0x7fffffff; return s/0x7fffffff; };
-  for(let i=0;i<N;i++){ sp[i*3]=(rnd()-0.5)*680; sp[i*3+1]=55+rnd()*140; sp[i*3+2]=-90-rnd()*250; }
-  sg.setAttribute('position',new THREE.BufferAttribute(sp,3));
-  scene.add(new THREE.Points(sg,new THREE.PointsMaterial({color:0xd6e2ff,size:0.9,sizeAttenuation:true,transparent:true,opacity:0.85,fog:false,depthWrite:false}))); }
-// неон-сетка пола (глубина; отражения-Reflector = итерация 2)
-function gridTex(){ const S=256,c=document.createElement('canvas'); c.width=c.height=S; const g=c.getContext('2d'); g.fillStyle='#0a0618'; g.fillRect(0,0,S,S);
-  g.strokeStyle='rgba(120,60,200,0.5)'; g.lineWidth=2; for(let i=0;i<=S;i+=32){ g.beginPath();g.moveTo(i,0);g.lineTo(i,S);g.stroke(); g.beginPath();g.moveTo(0,i);g.lineTo(S,i);g.stroke(); }
-  const t=new THREE.CanvasTexture(c); t.wrapS=t.wrapT=THREE.RepeatWrapping; t.repeat.set(60,30); return t; }
-const gridT=gridTex();
-const W2=0.72, ROADT=0.4, ROAD_N=64;   // W2=тонкая лента-кромка (едешь по ВЕРХУ чарта), тело даёт свеча-стена; объявлено выше, т.к. пальмы/город ссылаются на W2
-const FLOOR_Y=-11;   // уровень мокрого асфальта (у основания террейна-графика)
-// ---------- FLOOR (чистый тёмный мокрый асфальт + неон-сетка; БЕЗ зеркала — оно давало хаос отражённых зданий/байка) ----------
-const floorMesh=new THREE.Mesh(new THREE.PlaneGeometry(2600,1500), new THREE.MeshBasicMaterial({color:0x0b0918,fog:true}));
-floorMesh.rotation.x=-Math.PI/2; floorMesh.position.set(0,FLOOR_Y-0.03,-70); scene.add(floorMesh);
-let gridMesh;
-{ gridMesh=new THREE.Mesh(new THREE.PlaneGeometry(1600,700), new THREE.MeshBasicMaterial({map:gridT,transparent:true,opacity:0.22,fog:true,blending:THREE.AdditiveBlending,depthWrite:false}));
-  gridMesh.rotation.x=-Math.PI/2; gridMesh.position.set(0,FLOOR_Y+0.04,-70); scene.add(gridMesh); gridMesh.material.opacity=0.34; }   // неон-сетка на полу (ярче = глоу)
-
-// ---------- MARKET-DRIVEN CANDLE-CITY (дальний рынок; цвет башен = недавний тренд) ----------
-let cseed=20260709; const crnd=()=>{ cseed=(cseed*1103515245+12345)&0x7fffffff; return cseed/0x7fffffff; };
-function winTex(rgb){ const W=64,H=128,cn=document.createElement('canvas'); cn.width=W;cn.height=H; const g=cn.getContext('2d'); g.fillStyle='#0b0715'; g.fillRect(0,0,W,H);
-  for(let y=8;y<H-6;y+=11){ for(let x=7;x<W-6;x+=11){ if(crnd()>0.42){ g.fillStyle='rgba('+rgb+','+(0.35+crnd()*0.6).toFixed(2)+')'; g.fillRect(x,y,5.5,6.5); } } }
-  const t=new THREE.CanvasTexture(cn); t.wrapS=t.wrapT=THREE.RepeatWrapping; t.repeat.set(2,4); return t; }
-const bullMat=new THREE.MeshBasicMaterial({map:winTex('70,245,175'),fog:true}), bearMat=new THREE.MeshBasicMaterial({map:winTex('255,80,120'),fog:true});
-const GRN=new THREE.Color(0x24e69a), REDC=new THREE.Color(0xff3b6e);
-const CITY_PERIOD=560, cityGroup=new THREE.Group(), cityTowers=[]; scene.add(cityGroup);
-cityGroup.position.y=FLOOR_Y;   // город стоит на полу
-for(let i=0;i<46;i++){ const depth=120+crnd()*340, w=5+crnd()*10, h=18+crnd()*44*Math.max(0.3,1-depth/480), x=crnd()*CITY_PERIOD-CITY_PERIOD/2;   // МЕНЬШЕ и ДАЛЬШЕ = тихий скайлайн в дымке, не лес башен перед носом
-  const body=new THREE.Mesh(new THREE.BoxGeometry(w,h,w),bullMat); body.position.set(x,h/2,-depth); cityGroup.add(body);
-  const edge=new THREE.LineSegments(new THREE.EdgesGeometry(body.geometry), new THREE.LineBasicMaterial({color:0x24e69a,transparent:true,opacity:0.8,fog:true})); edge.position.copy(body.position); cityGroup.add(edge);
-  const wick=new THREE.Mesh(new THREE.CylinderGeometry(0.05,0.05,1.6+crnd()*3,5), new THREE.MeshBasicMaterial({color:0x24e69a})); wick.position.set(x,h+1.2+crnd()*1.6,-depth); cityGroup.add(wick);
-  cityTowers.push({body,edge,wick,thr:crnd(),x0:x}); }
-function updateCity(camX3,bias){ for(const T of cityTowers){ const x=T.x0-Math.floor((T.x0-camX3+CITY_PERIOD/2)/CITY_PERIOD)*CITY_PERIOD;
-  const green=T.thr<bias; T.body.position.x=x; T.edge.position.x=x; T.wick.position.x=x;
-  T.body.material=green?bullMat:bearMat; T.edge.material.color.copy(green?GRN:REDC); T.wick.material.color.copy(green?GRN:REDC); } }
-
-// ---------- PALMS (Vice-передний план = глубина; неон-ободок) ----------
-function palmTex(){ const W=220,H=300,c=document.createElement('canvas'); c.width=W;c.height=H; const g=c.getContext('2d'); const cx=W*0.5, ty=H*0.30; g.lineJoin='round';
-  g.fillStyle='#150a24'; g.beginPath(); g.moveTo(cx-8,H); g.quadraticCurveTo(cx-14,H*0.55,cx-4,ty+8); g.lineTo(cx+4,ty+8); g.quadraticCurveTo(cx+6,H*0.55,cx+10,H); g.closePath(); g.fill();
-  g.strokeStyle='rgba(255,70,205,0.45)'; g.lineWidth=1.5; g.stroke();
-  for(let k=0;k<9;k++){ const a=-Math.PI/2+(k-4)*0.40, L=80+((k===4)?16:0);
-    const tx=cx+Math.cos(a)*L, tyy=ty+Math.sin(a)*L*0.72+22, mx=cx+Math.cos(a)*L*0.5, my=ty+Math.sin(a)*L*0.36;
-    g.fillStyle=k%2?'#1e1035':'#251442'; g.beginPath(); g.moveTo(cx,ty); g.quadraticCurveTo(mx-5,my-3,tx,tyy); g.quadraticCurveTo(mx+6,my+7,cx,ty+5); g.closePath(); g.fill();
-    g.strokeStyle=k%2?'rgba(150,70,255,0.55)':'rgba(255,95,215,0.65)'; g.lineWidth=1.2; g.stroke(); }
-  g.fillStyle='#2a1545'; g.beginPath(); g.arc(cx,ty,6,0,7); g.fill(); return new THREE.CanvasTexture(c); }
-const palmT=palmTex(), palms=[], PALM_PERIOD=340, PALM_N=6;
-for(let i=0;i<PALM_N;i++){ const s=new THREE.Sprite(new THREE.SpriteMaterial({map:palmT,transparent:true,depthTest:true,depthWrite:false,fog:true}));
-  const size=5.5+crnd()*3; s.scale.set(size*0.66,size,1); s.userData={x0:(i/PALM_N)*PALM_PERIOD-PALM_PERIOD/2, z:-16-crnd()*30, size}; scene.add(s); palms.push(s); }   // мало/дальше = редкие дальние силуэты, не занавес по центру
-function updatePalms(camX3){ for(const s of palms){ const x=s.userData.x0-Math.floor((s.userData.x0-camX3+PALM_PERIOD/2)/PALM_PERIOD)*PALM_PERIOD; s.position.set(x, FLOOR_Y+s.userData.size*0.42, s.userData.z); } }
-
-// ---------- ROAD ribbon (моя ride-линия терраина = поверхность, по которой едет байк) ----------
-let roadMesh, lineTop, lineBot;
-function buildRoad(){
-  const geo=new THREE.BufferGeometry(); geo.setAttribute('position',new THREE.BufferAttribute(new Float32Array(ROAD_N*3*3),3));
-  const idx=[]; for(let i=0;i<ROAD_N-1;i++){ const A=i*3,B=i*3+1,C=i*3+2,A2=(i+1)*3,B2=(i+1)*3+1,C2=(i+1)*3+2;
-    idx.push(A,B,A2, B,B2,A2); idx.push(A,C,A2, C,C2,A2); }
-  geo.setIndex(idx);
-  roadMesh=new THREE.Mesh(geo,new THREE.MeshBasicMaterial({color:0x37dcff,fog:true,side:THREE.DoubleSide})); roadMesh.frustumCulled=false; scene.add(roadMesh);   // ЯРКАЯ неон-лента-дорога (глоу) = чёткая ездовая кромка. frustumCulled=false: геометрия двигается по x байка
-  function mkLine(color,op){ const g=new THREE.BufferGeometry(); g.setAttribute('position',new THREE.BufferAttribute(new Float32Array(ROAD_N*3),3));
-    const l=new THREE.Line(g,new THREE.LineBasicMaterial({color,transparent:true,opacity:op,fog:true})); l.frustumCulled=false; return l; }
-  lineTop=mkLine(0x6ff2ff,1.0); scene.add(lineTop);   // неон-рельс у камеры
-  lineBot=mkLine(0xff5be0,0.95); scene.add(lineBot);
-}
-buildRoad();
-function updateRoad(bx,baseY){ const S=window.CRS, STEP=S.STEP, vp=roadMesh.geometry.attributes.position.array;
-  const tp=lineTop.geometry.attributes.position.array, bp=lineBot.geometry.attributes.position.array;
-  const x0=bx-14*STEP;
-  for(let i=0;i<ROAD_N;i++){ const wx=x0+i*STEP, g=S.terrainAt(wx); const X=wx*SC, Y=-(g.y-baseY)*SC;
-    vp[i*9+0]=X; vp[i*9+1]=Y;        vp[i*9+2]=W2;
-    vp[i*9+3]=X; vp[i*9+4]=Y;        vp[i*9+5]=-W2;
-    vp[i*9+6]=X; vp[i*9+7]=Y-ROADT;  vp[i*9+8]=W2;
-    tp[i*3]=X; tp[i*3+1]=Y+0.02; tp[i*3+2]=W2+0.02;
-    bp[i*3]=X; bp[i*3+1]=Y-ROADT; bp[i*3+2]=W2+0.02;
-  }
-  roadMesh.geometry.attributes.position.needsUpdate=true; roadMesh.geometry.computeVertexNormals();
-  lineTop.geometry.attributes.position.needsUpdate=true; lineBot.geometry.attributes.position.needsUpdate=true;
-}
-
-// ---------- CANDLESTICK CHART = 3D-ТЕРРЕЙН: тёмная земля-масса + ЯРКИЕ свечи-тела рельефом ----------
-const CAND_N=84, dummy=new THREE.Object3D();
-const cGreen=new THREE.Color(0x2bf0a4), cRed=new THREE.Color(0xff4468);   // светятся, но не пересвет в белое
-// тёмная солидная земля под ride-линией (масса террейна; тёмная — светящиеся свечи выступают на ней)
-const groundMat=new THREE.MeshBasicMaterial({color:0x201a3a,fog:true});
-const groundMesh=new THREE.InstancedMesh(new THREE.BoxGeometry(1,1,1), groundMat, CAND_N);
-groundMesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage); groundMesh.frustumCulled=false; scene.add(groundMesh);   // frustumCulled=false: инстансы двигаются далеко по x, иначе весь меш куллится = террейн пропадает
-// яркие тела свечей (open→close, с зазорами = ОТДЕЛЬНЫЕ свечи) выступают на лице земли
-const candMesh=new THREE.InstancedMesh(new THREE.BoxGeometry(1,1,1), new THREE.MeshBasicMaterial({fog:true}), CAND_N);
-candMesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage); candMesh.frustumCulled=false; scene.add(candMesh);
-for(let i=0;i<CAND_N;i++) candMesh.setColorAt(i,cGreen);
-// тонкие фитили (hi→lo) = точки данных
-const wickMesh=new THREE.InstancedMesh(new THREE.BoxGeometry(1,1,1), new THREE.MeshBasicMaterial({fog:true}), CAND_N);
-wickMesh.instanceMatrix.setUsage(THREE.DynamicDrawUsage); wickMesh.frustumCulled=false; scene.add(wickMesh);
-for(let i=0;i<CAND_N;i++) wickMesh.setColorAt(i,cGreen);
-// СВЕЧА = ЧАСТЬ ТРАССЫ: светящийся бар висит ОТ линии-езды ВНИЗ (высота = тело open-close), снизу тёмная земля до пола,
-// сверху яркая неон-лента-дорога (roadMesh), тонкий фитиль вверх к максимуму. Едешь по верхней кромке своего свечного чарта.
-function updateCandles(bx,baseY){ const S=window.CRS, terr=S.terr, STEP=S.STEP; const i0=Math.max(0,Math.floor(bx/STEP)-16);
-  const GW=STEP*SC*1.02, CW=STEP*SC*0.9, WW=STEP*SC*0.13, botY=FLOOR_Y+0.25; let k=0;
-  for(let i=i0;i<i0+CAND_N && i<terr.length;i++,k++){ const c=terr[i];
-    if(!c||c.gap){ dummy.scale.set(0,0,0); dummy.updateMatrix(); groundMesh.setMatrixAt(k,dummy.matrix); candMesh.setMatrixAt(k,dummy.matrix); wickMesh.setMatrixAt(k,dummy.matrix); continue; }
-    const X=c.x*SC, col=c.up?cGreen:cRed;
-    const lineY=-(c.y-baseY)*SC, gh=Math.max(0.2,lineY-botY);                       // тёмная твёрдая земля: линия → пол
-    dummy.position.set(X,(lineY+botY)/2,-0.15); dummy.rotation.set(0,0,0); dummy.scale.set(GW,gh,1.6); dummy.updateMatrix(); groundMesh.setMatrixAt(k,dummy.matrix);
-    const bodyH=Math.min(2.6,Math.max(0.5,Math.abs(c.close-c.open)*SC));            // светящийся бар свечи ВНИЗ от линии (мин 0.5 = всегда виден, кап 2.6 = гига-краш не столб)
-    dummy.position.set(X,lineY-bodyH/2,W2+0.1); dummy.scale.set(CW,bodyH,0.5); dummy.updateMatrix(); candMesh.setMatrixAt(k,dummy.matrix); candMesh.setColorAt(k,col);
-    const wickUp=Math.min(1.8,Math.max(0.15,(-(c.hi-baseY)*SC)-lineY));             // тонкий фитиль ВВЕРХ к максимуму (hi)
-    dummy.position.set(X,lineY+wickUp/2,W2+0.05); dummy.scale.set(WW,wickUp,0.3); dummy.updateMatrix(); wickMesh.setMatrixAt(k,dummy.matrix); wickMesh.setColorAt(k,col);
-  }
-  for(; k<CAND_N; k++){ dummy.scale.set(0,0,0); dummy.updateMatrix(); groundMesh.setMatrixAt(k,dummy.matrix); candMesh.setMatrixAt(k,dummy.matrix); wickMesh.setMatrixAt(k,dummy.matrix); }
-  groundMesh.instanceMatrix.needsUpdate=true; candMesh.instanceMatrix.needsUpdate=true; wickMesh.instanceMatrix.needsUpdate=true;
-  if(candMesh.instanceColor)candMesh.instanceColor.needsUpdate=true; if(wickMesh.instanceColor)wickMesh.instanceColor.needsUpdate=true;
-}
-
-// ---------- BIKE — РЕАЛЬНАЯ 3D-МОДЕЛЬ (GLB) + премиум-финиш: env-отражения, металл, неон-подсветка ----------
-scene.add(new THREE.AmbientLight(0x8a92cc,0.9));
-{ const keyL=new THREE.DirectionalLight(0xfff0e0,1.8); keyL.position.set(4,7,8); scene.add(keyL);
-  const rimL=new THREE.DirectionalLight(0xff4fb0,1.3); rimL.position.set(-6,3,-3); scene.add(rimL);
-  const fillL=new THREE.DirectionalLight(0x3ce0ff,0.9); fillL.position.set(7,1,4); scene.add(fillL);
-  const frontL=new THREE.DirectionalLight(0xffffff,1.1); frontL.position.set(0,3,12); scene.add(frontL); }   // фронт-свет со стороны камеры
-// env-map = отражения на металле байка (город/свечи на MeshBasic не трогает — только PBR-байк)
-try{ const _pm=new THREE.PMREMGenerator(renderer); scene.environment=_pm.fromScene(new RoomEnvironment(),0.04).texture; }catch(e){}
-const bikeGroup=new THREE.Group(); scene.add(bikeGroup);
-let BIKE_YOFF=-1.55, BIKE_FLIP=-Math.PI/2;   // разворот: байк едет ВПЕРЁД (+X), не задом. калибруется визуально
-{ const glow=new THREE.Mesh(new THREE.BoxGeometry(2.2,0.05,0.34), new THREE.MeshBasicMaterial({color:0xff6be8})); glow.position.set(0,0.06,0); bikeGroup.add(glow); }   // неон-подсветка снизу
-const bikeModel=new THREE.Group(); bikeGroup.add(bikeModel);
-new GLTFLoader().load((location.pathname.indexOf('/toys/')>=0?'':'toys/')+'assets/models/moto1.glb',(g)=>{ const o=g.scene;   // b203 FIX: с корневого URL (symlink index.html — так играет юзер!) относительный путь 404-ил → в 3D байк был БЕЗ модели на проде. Часть «байк пропадает» с телефона
-  let box=new THREE.Box3().setFromObject(o); const sz=box.getSize(new THREE.Vector3()); const s=2.5/(Math.max(sz.x,sz.z)||1); o.scale.setScalar(s);
-  box=new THREE.Box3().setFromObject(o); const ctr=box.getCenter(new THREE.Vector3());
-  o.position.set(-ctr.x,-box.min.y,-ctr.z);   // центр по X/Z, низ (колёса) на y=0
-  bikeModel.rotation.y=BIKE_FLIP;              // длина модели → вдоль X игры
-  o.traverse(m=>{ if(m.isMesh){ m.frustumCulled=false; if(m.material&&m.material.isMeshStandardMaterial){ const mt=m.material; mt.metalness=Math.max(mt.metalness,0.6); mt.roughness=Math.min(Math.max(mt.roughness,0.18),0.55); mt.envMapIntensity=1.5; mt.needsUpdate=true; } } });
-  bikeModel.add(o);
-},undefined,(e)=>{ if(!window.__bikeErr){window.__bikeErr=String(e&&e.message||e);console.error('bike GLB',e);} });
-const BIKE_Z=W2+0.55;
-
-// ---------- PARTICLES (пыль/выхлоп из физики → 3D-точки, per-point size/alpha/color) ----------
-const P_VS=`attribute float aSize; attribute float aAlpha; attribute vec3 aColor; varying float vA; varying vec3 vC;
-void main(){ vA=aAlpha; vC=aColor; vec4 mv=modelViewMatrix*vec4(position,1.0); gl_PointSize=aSize*(300.0/max(1.0,-mv.z)); gl_Position=projectionMatrix*mv; }`;
-const P_FS=`varying float vA; varying vec3 vC; void main(){ float d=length(gl_PointCoord-vec2(0.5)); float a=smoothstep(0.5,0.06,d)*vA; if(a<0.01)discard; gl_FragColor=vec4(vC,a); }`;
-function makePoints(max,additive){ const g=new THREE.BufferGeometry();
-  const pos=new Float32Array(max*3), sz=new Float32Array(max), al=new Float32Array(max), col=new Float32Array(max*3);
-  g.setAttribute('position',new THREE.BufferAttribute(pos,3)); g.setAttribute('aSize',new THREE.BufferAttribute(sz,1));
-  g.setAttribute('aAlpha',new THREE.BufferAttribute(al,1)); g.setAttribute('aColor',new THREE.BufferAttribute(col,3));
-  const pts=new THREE.Points(g,new THREE.ShaderMaterial({vertexShader:P_VS,fragmentShader:P_FS,transparent:true,depthWrite:false,blending:additive?THREE.AdditiveBlending:THREE.NormalBlending})); pts.frustumCulled=false; scene.add(pts);
-  return {geo:g,pos,sz,al,col}; }
-const dustPts=makePoints(280,false), glowPts=makePoints(360,true);
-function fillPts(P,arr,colFn,zBase,baseY,sizeK,alphaK){ let k=0; const M=P.sz.length;
-  for(let i=0;i<arr.length && k<M;i++){ const p=arr[i]; if(!p||p.life<=0)continue;
-    P.pos[k*3]=p.x*SC; P.pos[k*3+1]=-(p.y-baseY)*SC; P.pos[k*3+2]=zBase;
-    P.sz[k]=Math.max(1,p.r||2)*SC*sizeK; P.al[k]=Math.min(1,p.life)*alphaK; const c=colFn(p); P.col[k*3]=c[0]; P.col[k*3+1]=c[1]; P.col[k*3+2]=c[2]; k++; }
-  P.geo.setDrawRange(0,k);
-  P.geo.attributes.position.needsUpdate=true; P.geo.attributes.aSize.needsUpdate=true; P.geo.attributes.aAlpha.needsUpdate=true; P.geo.attributes.aColor.needsUpdate=true; }
-function updateParticles(baseY){ const S=window.CRS;
-  fillPts(dustPts, S.dust||[], ()=>[0.42,0.39,0.36], BIKE_Z+0.1, baseY, 20, 0.4);                  // тонкий мягкий дым (мелкий+полупрозрачный, не облако-занавес)
-  fillPts(glowPts, S.parts||[], p=>p.gold?[0.85,0.66,0.22]:[0.42,0.66,0.72], BIKE_Z+0.15, baseY, 11, 0.8); }  // мелкие искры (аддитив приглушён — не белые блобы)
-
-// ---------- TELEGRAPHS (мировые метки препятствий, лицом к камере) ----------
-function labelTex(txt,rgb){ const c=document.createElement('canvas'); c.width=300;c.height=84; const g=c.getContext('2d');
-  function rr(x,y,w,h,r){ g.beginPath(); g.moveTo(x+r,y); g.arcTo(x+w,y,x+w,y+h,r); g.arcTo(x+w,y+h,x,y+h,r); g.arcTo(x,y+h,x,y,r); g.arcTo(x,y,x+w,y,r); g.closePath(); }
-  rr(10,14,280,56,15); g.fillStyle='rgba(16,12,30,0.9)'; g.fill();                       // тёмная читаемая заливка
-  g.strokeStyle='rgba('+rgb+',1)'; g.lineWidth=4; g.stroke();                              // ЯРКАЯ цветная рамка (тонкая = чуть светится, не блоб)
-  g.font='800 30px ui-monospace,Menlo,monospace'; g.textAlign='center'; g.textBaseline='middle';
-  g.fillStyle='rgba(235,240,250,1)'; g.fillText(txt,150,43);                               // светлый текст = читается на тёмном
-  return new THREE.CanvasTexture(c); }
-const TELE={ kick:labelTex('ТРАМПЛИН','90,240,150'), step:labelTex('УСТУП','120,200,255'), drop:labelTex('ОБРЫВ','255,110,80'), mud:labelTex('МУД','220,190,120') };   // яркая рамка-код типа, светлый текст
-const teleScene=new THREE.Scene();   // отдельная сцена — рендерим ПОСЛЕ bloom (телеграфы чёткие, не разносит в блоб)
-const telePool=[]; for(let i=0;i<2;i++){ const s=new THREE.Sprite(new THREE.SpriteMaterial({transparent:true,depthTest:false,depthWrite:false,opacity:0.97})); s.center.set(0.5,0); s.visible=false; teleScene.add(s); telePool.push(s); }
-function featKey(c){ return c?(c.kick?'kick':c.step?'step':c.drop?'drop':c.mud?'mud':null):null; }
-function updateTelegraphs(bx,baseY,t){ const S=window.CRS, terr=S.terr, STEP=S.STEP; const i0=Math.max(1,Math.floor(bx/STEP)+2); let k=0;
-  const pul=0.94+0.06*Math.sin(t*0.16);
-  for(let i=i0;i<i0+26 && i<terr.length && k<telePool.length;i++){ const c=terr[i], key=featKey(c);
-    if(!key || featKey(terr[i-1])===key) continue;   // только СТАРТ фичи (не каждый узел прогона) → нет спама
-    const s=telePool[k++]; s.material.map=TELE[key]; s.material.needsUpdate=true;
-    s.position.set(c.x*SC, -(c.y-baseY)*SC+3.0, W2+0.4); s.scale.set(3.4*pul,0.95*pul,1); s.visible=true; }
-  for(; k<telePool.length; k++) telePool[k].visible=false;
-  window.__teleN=k; }
-
-// ---------- loop ----------
-const CAM_ANG=0.16;   // ниже = более сбоку (лицо свеча-стены видно), выше = более сверху
-const _fog=new THREE.Color(0x2a0d3a), _skyTint=new THREE.Color(1,1,1);
-let camFocusY=0;   // сглаженная высота фокуса камеры — следит за байком (в прыжке держит в кадре), с уклоном к земле чтобы график был виден
-function frame(){ const S=window.CRS; const terr=S.terr;
-  if(!terr||terr.length<4){ composer.render(); return; }
-  const bike=S.bike, sl=S.slowLerp, baseY=S.baseY;
-  const bx=lerp(bike._px===undefined?bike.x:bike._px, bike.x, sl);
-  const by=lerp(bike._py===undefined?bike.y:bike._py, bike.y, sl);
-  const ba=lerp(bike._pa===undefined?bike.ang:bike._pa, bike.ang, sl);
-  const BX=bx*SC, gY=-(S.terrainAt(bx).y-baseY)*SC;
-  updateRoad(bx,baseY); updateCandles(bx,baseY);
-  updateCity(BX,S.marketBias()); updatePalms(BX);
-  updateParticles(baseY); updateTelegraphs(bx,baseY,S.t);
-  floorMesh.position.x=BX; gridMesh.position.x=BX;
-  // тинт тумана/фона по рыночной эпохе (биом) — плавно
-  const bm=S.biome; if(bm){ const dp=bm.sky[1]; _fog.setRGB(dp[0]/255,dp[1]/255,dp[2]/255); scene.fog.color.lerp(_fog,0.04); renderer.setClearColor(scene.fog.color,1);
-    const hz=bm.sky[2], mx=Math.max(hz[0],hz[1],hz[2],1); _skyTint.setRGB(hz[0]/mx,hz[1]/mx,hz[2]/mx); skyMat.color.lerp(_skyTint,0.04); }   // тинт неба под рыночную эпоху (медвежий краснит, капитуляция сереет)
-  const bikeY3=-(by-baseY)*SC;
-  bikeGroup.position.set(BX, bikeY3 + BIKE_YOFF, BIKE_Z);
-  bikeGroup.rotation.z=-ba;   // ЗНАК проверить визуально (canvas y-вниз ↔ 3D y-вверх)
-  // фокус следит за байком (быстрее+ближе к байку = не отстаёт, не роняет вниз кадра)
-  const targetFocus=gY + (bikeY3-gY)*0.72; camFocusY += (targetFocus-camFocusY)*0.14;
-  // БОЛЕЕ СБОКУ, меньше наклон вниз → байк ПО ЦЕНТРУ, чарт+город заполняют кадр, минимум мёртвой сетки-пола
-  camera.position.set(BX-4.2, camFocusY+2.1, 13.6);
-  camera.lookAt(BX+3.6, camFocusY-1.1, -9);
-  composer.render();
-  renderer.autoClear=false; renderer.clearDepth(); renderer.render(teleScene,camera); renderer.autoClear=true;   // телеграфы поверх bloom = чёткие
-}
-function onResize(){ SW=innerWidth; SH=innerHeight; renderer.setPixelRatio(Math.min(2,devicePixelRatio||1));
-  renderer.setSize(SW,SH,false); composer.setSize(SW,SH); bloom.setSize(SW,SH); camera.aspect=SW/SH; camera.updateProjectionMatrix(); }
-addEventListener('resize',onResize);
-
-window.R3D={ _ready:true, frame, setActive(on){ cv3.style.display=on?'block':'none'; if(on)onResize(); } };
-if(window.__applyR3D) window.__applyR3D();   // применить сохранённый тумблер теперь, когда движок готов
-</script>
 </body>
 </html>
