@@ -57,7 +57,7 @@ function lerp(a,b,t){return a+(b-a)*t;} function clamp(v,a,b){return v<a?a:v>b?b
 // false → full game everywhere. Single switch. Systems are GATED, never deleted.
 const CORE_TEST_MODE = false;   // b70: META LIVE — building the progression spine (upgrades/bikes with teeth, career, economy) on the confirmed rigid-body core
 // build stamp — bump on every change so a phone refresh can confirm it loaded fresh code (cache!)
-const BUILD = '2026-07-12 · b251';
+const BUILD = '2026-07-12 · b252';
 
 // ---------- procedural market terrain ----------
 // height map sampled every STEP px; generated forward as we ride. Market character:
@@ -1072,8 +1072,8 @@ function pointerDown(p){
     if(hit(p,UI.settings)){ settingsRet='title'; screen='settings'; sfxClick(); return; }
     if(UI.garage && hit(p,UI.garage)){ garageRet='title'; screen='garage'; sfxClick(); return; }
     if(UI.bankChip && hit(p,UI.bankChip)){ garageRet='title'; screen='garage'; sfxClick(); return; }
-    if(UI.replay && hit(p,UI.replay)){ startTicker(lastTk); sfxClick(); return; }   // продолжить последний заезд
-    if(UI.coinBtn && hit(p,UI.coinBtn)){ setupSel=Math.min(lastTk,TICKERS.length-1); loadAllPreviews(); screen='setup'; sfxClick(); return; }   // → терминал ЗАЕЗД
+    if(UI.coinSel && hit(p,UI.coinSel)){ setupSel=Math.min(lastTk,TICKERS.length-1); loadAllPreviews(); screen='setup'; sfxClick(); return; }   // b252: нижняя полоса карточки → терминал (монета/плечо)
+    if(UI.coinBtn && hit(p,UI.coinBtn)){ startTicker(Math.min(lastTk,TICKERS.length-1)); sfxClick(); return; }   // b252 ▶ ИГРАТЬ: тап = СРАЗУ в заезд (последняя монета/BTC) — один тап до игры
     if(UI.careerBtn && hit(p,UI.careerBtn)){ screen='path'; sfxClick(); return; }   // b118: Путь трейдера
     if(UI.tEvents && hit(p,UI.tEvents)){ eventsRet='title'; screen='events'; sfxClick(); return; }   // b137: боссы — парадная дверь с титула
     if(UI.tDaily && hit(p,UI.tDaily)){ startDaily(); sfxClick(); return; }   // b161: дейли «Рынок сегодня»
@@ -1168,8 +1168,8 @@ function pointerDown(p){
     if(UI.dclip && hit(p,UI.dclip)){ startClip(); return; }   // b163: записать клип (b170: сам берёт лучший момент)
     if(UI.dsave && hit(p,UI.dsave) && clipBlob){ shareClip(clipBlob.blob,clipBlob.ext); sfxClick(); return; }   // b170: повторный share-шит — «Сохранить видео»
     if(UI.dre && hit(p,UI.dre)){ clipBlob=null; startClip(); return; }   // b170: перезаписать
-    if(gameMode==='career'){ sfxClick(); return; }   // career: only the explicit buttons act (no tap-anywhere-retry → avoids mis-taps near ГАРАЖ)
-    if(hit(p,UI.menu)) toTitle(); else reset(); sfxClick(); return; }
+    if(UI.menu && hit(p,UI.menu)){ toTitle(); sfxClick(); }   // b252 аудит: тап-мимо-рестарт УБРАН (случайные рестарты) — рестарт только явной кнопкой ЕЩЁ РАЗ (или клавиши R/газ)
+    return; }
   if(hit(p,UI.pause)){ screen='paused'; sfxClick(); return null; }
   if(UI.cashBtn && hit(p,UI.cashBtn)){ cashOut(); return 'tap'; }                 // b71: tap TAKE-PROFIT button
   if(UI.pumpBtn && hit(p,UI.pumpBtn)){ activateBoost(); return 'tap'; }          // tap PUMP button
@@ -1474,6 +1474,7 @@ function update(){
   wave += waveSpd;
   const leadCap = W*lerp(0.92, (gameMode==='endless'&&trackSource!=='ticker')?TUNE.endlessLead:0.36, clamp((dist||0)/320,0,1));   // b233: фора Отрыва = TUNE.endlessLead (0.52→0.40, волна ближе/давит). b126 dump closes in over ~320m
   if(bike.x - wave > leadCap) wave = bike.x - leadCap;
+  if(screen==='play' && t===70 && ctrlScheme!=='btn2') tut('gas0', ctrlScheme==='gestures'?'▶ ДЕРЖИ ПАЛЕЦ НА ЭКРАНЕ = ГАЗ · тяни для наклона':'▶ ДЕРЖИ КНОПКУ «ГАЗ» — байк едет');   // b252 аудит: новичок тапал и стоял — учим газу ДО того как волна съест (btn2 = автогаз, не нужно)
   if(screen==='play' && (bike.x-wave)<W*0.45 && dist>140) tut('wave','◀ ДАМП НАСТИГАЕТ — ГАЗУЙ, НЕ ГЛОХНИ');
   if(gameMode==='endless' && screen==='play'){   // b92 ОНБОРДИНГ DEGEN-ЯДРА (уникальный хук — раньше не объяснялся)
     if((coins||0)>=12 && !cashedOut) tut('cashout','💰 $ ПОЗИЦИЯ РАСТЁТ — Жми «ЗАФИКСИТЬ» вверху: банкуй профит, пока ДАМП не догнал');
@@ -2801,9 +2802,11 @@ function drawMenus(){
     step('1','ОСЕДЛАЙ РЕАЛЬНЫЙ ГРАФИК','едешь по живому графику крипто-монеты','#9ff0c8');
     step('2','ПЛЕЧО МНОЖИТ ДВИЖЕНИЕ','цена вверх × плечо = позиция растёт','#ffd678');
     step('3','ЗАФИКСЬ ДО ВОЛНЫ','фиксь на пампе, пока волна не догнала','#ff9a7a');
+    step('4','УПРАВЛЕНИЕ','держи ГАЗ · прыжок · НОС↑ = сальто','#9fd0ff');   // b252 аудит: управление не объяснялось до заезда
     ctx.fillStyle='rgba(150,170,200,0.7)'; ctx.font='600 10px ui-monospace,monospace'; ctx.fillText('теряешь — только от волны/краша, не от цены',W/2,cy+4);
-    UI.howGo={x:W/2-130,y:cy+18,w:260,h:50}; panel(UI.howGo.x,UI.howGo.y,260,50,'rgba(120,255,180,0.9)','rgba(18,58,40,0.55)'); ctx.fillStyle='#9ff0c8'; ctx.font='800 16px ui-monospace,monospace'; ctx.fillText('▶  ВЫБРАТЬ МОНЕТУ',W/2,UI.howGo.y+31);
-    UI.howSkip={x:W/2-70,y:cy+78,w:140,h:28}; ctx.fillStyle='rgba(160,175,205,0.6)'; ctx.font='600 11px ui-monospace,monospace'; ctx.fillText('позже',W/2,cy+96);
+    ctx.fillStyle='rgba(140,160,195,0.62)'; ctx.font='600 9px ui-monospace,monospace'; ctx.fillText('$ — деньги заезда (риск)   ·   ◆ — гемы навсегда (ранг)',W/2,cy+19);   // b252 словарик жаргона
+    UI.howGo={x:W/2-130,y:cy+30,w:260,h:50}; panel(UI.howGo.x,UI.howGo.y,260,50,'rgba(120,255,180,0.9)','rgba(18,58,40,0.55)'); ctx.fillStyle='#9ff0c8'; ctx.font='800 16px ui-monospace,monospace'; ctx.fillText('▶  ВЫБРАТЬ МОНЕТУ',W/2,UI.howGo.y+31);
+    UI.howSkip={x:W/2-70,y:cy+88,w:140,h:28}; ctx.fillStyle='rgba(160,175,205,0.6)'; ctx.font='600 11px ui-monospace,monospace'; ctx.fillText('позже',W/2,cy+106);
     ctx.textAlign='left'; return;
   }
   if(screen==='title'){
@@ -2839,16 +2842,16 @@ function drawMenus(){
     // ---- 3 РЕЖИМА (явная структура) + боссы ----
     const cx0=18, cw=W-36; let my=hbY+hbH+14;
     const lc=TICKERS[lastTk]||TICKERS[0], pv=tkPrev[lc.k];
-    // 🏃 ЗАБЕГ (основной) — тап по карточке = терминал монет; кнопка ПОГНАЛИ = продолжить последний
-    const zh=hasLast?80:60; UI.coinBtn={x:cx0,y:my,w:cw,h:zh};
-    ctx.fillStyle='rgba(20,46,72,0.7)'; ctx.beginPath();ctx.roundRect(cx0,my,cw,zh,14);ctx.fill(); ctx.strokeStyle='rgba(120,200,255,0.9)';ctx.lineWidth=2;ctx.stroke();
-    ctx.textAlign='left'; ctx.fillStyle='#cfeaff'; ctx.font='800 18px ui-monospace,monospace'; ctx.fillText('🏃 ЗАБЕГ',cx0+16,my+27);
-    ctx.fillStyle='rgba(180,205,235,0.8)'; ctx.font='600 10px ui-monospace,monospace'; ctx.fillText('реальные монеты · риск ×плечо',cx0+16,my+(hasLast?46:48));
-    if(hasLast){ if(pv){ drawSpark(pv.spark,cx0+cw-114,my+11,98,19,pv.up?'#7fe6a8':'#ff7a6a'); }
-      UI.replay={x:cx0+cw-120,y:my+zh-30,w:104,h:22}; ctx.fillStyle='rgba(40,120,90,0.9)'; ctx.beginPath();ctx.roundRect(UI.replay.x,UI.replay.y,104,22,7);ctx.fill(); ctx.textAlign='center'; ctx.fillStyle='#9ff0c8'; ctx.font='800 12px ui-monospace,monospace'; ctx.fillText('▸ ПОГНАЛИ '+lc.name,UI.replay.x+52,UI.replay.y+15);
-      ctx.textAlign='left'; ctx.fillStyle='rgba(150,180,210,0.7)'; ctx.font='600 9px ui-monospace,monospace'; ctx.fillText('▾ сменить монету',cx0+16,my+zh-12); }
-    else { ctx.textAlign='right'; ctx.fillStyle='#9ff0c8'; ctx.font='800 13px ui-monospace,monospace'; ctx.fillText('ВЫБРАТЬ ▸',cx0+cw-18,my+37); UI.replay=null; }
-    ctx.textAlign='left'; my+=zh+10;
+    // b252 ГЛАВНАЯ КНОПКА (аудит: «4 равнозначных режима = паралич выбора») — карточка ЗАБЕГ = доминирующий ▶ ИГРАТЬ: тап = СРАЗУ в заезд (последняя/BTC монета); нижняя полоса = терминал (монета/плечо)
+    const zh=80; UI.coinBtn={x:cx0,y:my,w:cw,h:zh};
+    { const gp2=0.55+0.45*Math.sin(t*0.07);   // мягкий пульс = «жми сюда»
+      ctx.fillStyle='rgba(16,58,40,0.85)'; ctx.beginPath();ctx.roundRect(cx0,my,cw,zh,14);ctx.fill(); ctx.strokeStyle='rgba(120,255,180,'+(0.55+0.4*gp2)+')';ctx.lineWidth=2.6;ctx.stroke(); }
+    ctx.textAlign='left'; ctx.fillStyle='#9ff0c8'; ctx.font='800 22px ui-monospace,monospace'; ctx.fillText('▶ ИГРАТЬ',cx0+16,my+31);
+    ctx.fillStyle='rgba(190,240,215,0.85)'; ctx.font='600 10px ui-monospace,monospace'; ctx.fillText('ЗАБЕГ · '+lc.name+' ×'+leverage+(shortMode?' ШОРТ':'')+' · реальный график',cx0+16,my+48);
+    if(pv) drawSpark(pv.spark,cx0+cw-114,my+12,98,20,pv.up?'#7fe6a8':'#ff7a6a');
+    UI.coinSel={x:cx0,y:my+zh-22,w:cw,h:22};   // нижняя полоса = сменить монету/плечо
+    ctx.fillStyle='rgba(150,210,180,0.75)'; ctx.font='600 9px ui-monospace,monospace'; ctx.fillText('▾ сменить монету · плечо · лонг/шорт',cx0+16,my+zh-8);
+    UI.replay=null; ctx.textAlign='left'; my+=zh+10;
     // 📅 РЫНОК СЕГОДНЯ (b161: ОДНА трасса дня у всех, 3 попытки, Wordle-механика)
     { const dc=dailyCoin(), dtr=dailyTries(), db=dailyBestOf(); UI.tDaily={x:cx0,y:my,w:cw,h:38};
       ctx.fillStyle='rgba(46,30,62,0.68)'; ctx.beginPath();ctx.roundRect(cx0,my,cw,38,11);ctx.fill(); ctx.strokeStyle='rgba(212,150,255,0.8)';ctx.lineWidth=1.5;ctx.stroke();
@@ -2890,9 +2893,11 @@ function drawMenus(){
       UI.dtracks={x:W/2+56,y:yb,w:94,h:44}; panel(UI.dtracks.x,UI.dtracks.y,94,44,'rgba(150,180,220,0.6)','rgba(30,40,62,0.5)'); ctx.fillStyle='#bcd0ee'; ctx.font='700 13px ui-monospace,monospace'; ctx.fillText('☰ ЭТАПЫ',UI.dtracks.x+47,yb+27); }
     else if(CORE_TEST_MODE){ UI.dgarage=null; UI.dretry=null; UI.dtracks=null; UI.menu={x:W/2-90,y:H*0.34+198,w:180,h:44}; panel(UI.menu.x,UI.menu.y,180,44,'rgba(150,170,210,0.5)'); ctx.fillStyle='#bcd0ee'; ctx.font='13px ui-monospace,monospace'; ctx.fillText('≡  МЕНЮ',W/2,UI.menu.y+27); }
     else {
-    UI.dretry=null; UI.dtracks=null;
-    UI.menu={x:W/2-150,y:H*0.34+214,w:140,h:44}; panel(UI.menu.x,UI.menu.y,140,44,'rgba(150,170,210,0.5)'); ctx.fillStyle='#bcd0ee'; ctx.font='13px ui-monospace,monospace'; ctx.fillText('≡  МЕНЮ',UI.menu.x+70,UI.menu.y+27);   // b101: +198→+214 — под кнопкой ПОХВАСТАТЬСЯ (не слипается)
-    UI.dgarage={x:W/2+10,y:H*0.34+214,w:140,h:44}; panel(UI.dgarage.x,UI.dgarage.y,140,44,'rgba(120,255,180,0.7)','rgba(34,54,46,0.5)'); ctx.fillStyle='#9ff0c8'; ctx.font='800 13px ui-monospace,monospace'; ctx.fillText('🔧 ГАРАЖ',UI.dgarage.x+70,UI.dgarage.y+27); }
+    UI.dtracks=null;   // b252 аудит: рестарт был «тап мимо» (ловушка) → явная ГЛАВНАЯ кнопка ЕЩЁ РАЗ по центру, тап-мимо больше не рестартит
+    { const yb=H*0.34+214, rp=0.55+0.45*Math.sin(t*0.12);
+      UI.menu={x:W/2-150,y:yb,w:86,h:44}; panel(UI.menu.x,UI.menu.y,86,44,'rgba(150,170,210,0.5)'); ctx.fillStyle='#bcd0ee'; ctx.font='12px ui-monospace,monospace'; ctx.fillText('≡ МЕНЮ',UI.menu.x+43,UI.menu.y+27);
+      UI.dretry={x:W/2-58,y:yb,w:116,h:44}; ctx.fillStyle='rgba(18,58,40,0.9)'; ctx.beginPath();ctx.roundRect(UI.dretry.x,yb,116,44,11);ctx.fill(); ctx.strokeStyle='rgba(120,255,180,'+(0.5+0.45*rp)+')'; ctx.lineWidth=2.4; ctx.stroke(); ctx.fillStyle='#9ff0c8'; ctx.font='800 15px ui-monospace,monospace'; ctx.fillText('🔁 ЕЩЁ РАЗ',UI.dretry.x+58,yb+27);
+      UI.dgarage={x:W/2+64,y:yb,w:86,h:44}; panel(UI.dgarage.x,UI.dgarage.y,86,44,'rgba(120,255,180,0.6)','rgba(34,54,46,0.5)'); ctx.fillStyle='#9ff0c8'; ctx.font='800 12px ui-monospace,monospace'; ctx.fillText('🔧 ГАРАЖ',UI.dgarage.x+43,yb+27); } }
   } else if(screen==='garage'){
     ctx.fillStyle='rgba(6,5,16,0.94)'; ctx.fillRect(0,0,W,H);
     ctx.fillStyle='#eafaff'; ctx.font='800 24px ui-monospace,monospace'; ctx.fillText('🔧 ГАРАЖ',W/2,46);
