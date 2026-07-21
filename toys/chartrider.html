@@ -1,12 +1,31 @@
 <!DOCTYPE html>
-<html lang="en">
+<html lang="ru">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
 <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
 <meta http-equiv="Pragma" content="no-cache">
 <meta http-equiv="Expires" content="0">
-<title>CHART RUNNER</title>
+<title>CHART RUNNER — гоняй по реальному крипто-графику</title>
+<!-- b253 продукт-обёртка: PWA + красивый шеринг ссылки (OG) + иконки -->
+<meta name="description" content="Крипто-мото-раннер: реальные графики монет становятся трассой. Волатильность = сложность, плечо = риск ликвидации. Играй в браузере, без установки.">
+<meta name="theme-color" content="#0b0716">
+<link rel="icon" type="image/png" href="/cryptobill/toys/assets/favicon.png">
+<link rel="apple-touch-icon" href="/cryptobill/toys/assets/apple-touch-icon.png">
+<link rel="manifest" href="/cryptobill/manifest.webmanifest">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="CHART RUNNER">
+<meta property="og:type" content="website">
+<meta property="og:title" content="CHART RUNNER — гоняй по реальному крипто-графику 📈🏍">
+<meta property="og:description" content="Реальные графики монет = трасса. Волатильность = сложность, плечо = риск. Браузер, без установки.">
+<meta property="og:url" content="https://cryptomafioznik.github.io/cryptobill/">
+<meta property="og:image" content="https://cryptomafioznik.github.io/cryptobill/toys/assets/og.png">
+<meta property="og:image:width" content="1200">
+<meta property="og:image:height" content="630">
+<meta name="twitter:card" content="summary_large_image">
+<meta name="twitter:title" content="CHART RUNNER — гоняй по реальному крипто-графику 📈🏍">
+<meta name="twitter:image" content="https://cryptomafioznik.github.io/cryptobill/toys/assets/og.png">
 <style>
   html,body{margin:0;height:100%;background:#0a0a1a;overflow:hidden;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;
     cursor:pointer;touch-action:none;-webkit-user-select:none;user-select:none;-webkit-tap-highlight-color:transparent;}
@@ -57,7 +76,7 @@ function lerp(a,b,t){return a+(b-a)*t;} function clamp(v,a,b){return v<a?a:v>b?b
 // false → full game everywhere. Single switch. Systems are GATED, never deleted.
 const CORE_TEST_MODE = false;   // b70: META LIVE — building the progression spine (upgrades/bikes with teeth, career, economy) on the confirmed rigid-body core
 // build stamp — bump on every change so a phone refresh can confirm it loaded fresh code (cache!)
-const BUILD = '2026-07-12 · b252';
+const BUILD = '2026-07-12 · b253';
 
 // ---------- procedural market terrain ----------
 // height map sampled every STEP px; generated forward as we ride. Market character:
@@ -1578,10 +1597,11 @@ function diamondHand(){   // b112: ВЫВЕСТИ В ХОЛОД — $ (банк,
   saveProg(); saveMeta(); gflash=0.85; flash=0.3; menuFx=1; menuFxAmt=amt; popText('💎 ЗАКРЕПЛЕНО ◆+'+amt+' (навсегда)'); }   // b123: menuFx → вспышка-флёр на Главной
 
 // ---------- render (Alto-style dusk, layered) ----------
-function skyGrad(){
-  const g=ctx.createLinearGradient(0,0,0,H);
-  g.addColorStop(0,BSKY[0]); g.addColorStop(0.45,BSKY[1]); g.addColorStop(0.72,BSKY[2]); g.addColorStop(1,BSKY[3]);
-  ctx.fillStyle=g; ctx.fillRect(0,0,W,H);
+let _skyG=null,_skyKey='';
+function skyGrad(){   // b253 ПЕРФ: градиент неба кэшируется по палитре+высоте (строился каждый кадр; в биом-переходах ключ меняется → честно перестраивается)
+  const key=BSKY[0]+BSKY[1]+BSKY[2]+BSKY[3]+'|'+H;
+  if(key!==_skyKey){ _skyG=ctx.createLinearGradient(0,0,0,H); _skyG.addColorStop(0,BSKY[0]); _skyG.addColorStop(0.45,BSKY[1]); _skyG.addColorStop(0.72,BSKY[2]); _skyG.addColorStop(1,BSKY[3]); _skyKey=key; }
+  ctx.fillStyle=_skyG; ctx.fillRect(0,0,W,H);
 }
 function mix(a,b,t){return 'rgb('+Math.round(lerp(a[0],b[0],t))+','+Math.round(lerp(a[1],b[1],t))+','+Math.round(lerp(a[2],b[2],t))+')';}
 function ridgeLayer(par,amp,yoff,col){ // parallax silhouette ridge made of a market-ish line
@@ -1904,9 +1924,10 @@ function draw(){
     const wx0=cam.x-STEP-60;
     if(wave>wx0){ ctx.fillStyle='rgba(18,2,8,0.84)'; ctx.fillRect(wx0,cam.y-60,wave-wx0,H+120); }
     const wgd=ctx.createLinearGradient(wave-150,0,wave,0); wgd.addColorStop(0,'rgba(150,16,36,0)'); wgd.addColorStop(1,'rgba(220,34,58,0.55)'); ctx.fillStyle=wgd; ctx.fillRect(wave-150,cam.y-60,150,H+120);
-    ctx.strokeStyle='rgba(255,74,96,0.95)'; ctx.lineWidth=3; ctx.shadowColor='#ff3050'; ctx.shadowBlur=16; ctx.beginPath();
+    ctx.beginPath();   // b253 ПЕРФ: shadowBlur 16 на длинной кривой каждый кадр → двойной штрих (глоу-подложка + ядро) БЕЗ blur
     for(let yy=cam.y-50; yy<cam.y+H+50; yy+=15){ const jx=wave+Math.sin(yy*0.06+t*0.3)*11+Math.sin(yy*0.14+t*0.2)*6; (yy<cam.y-49)?ctx.moveTo(jx,yy):ctx.lineTo(jx,yy); }
-    ctx.stroke(); ctx.shadowBlur=0;
+    ctx.strokeStyle='rgba(255,48,80,0.30)'; ctx.lineWidth=9; ctx.stroke();
+    ctx.strokeStyle='rgba(255,74,96,0.95)'; ctx.lineWidth=3; ctx.stroke();
     for(let e=0;e<4;e++){ ctx.fillStyle='rgba(255,'+((90+Math.random()*60)|0)+',70,'+(0.3*Math.random()+0.1)+')'; ctx.beginPath(); ctx.arc(wave-Math.random()*34, cam.y+Math.random()*H, 1+Math.random()*2.4,0,7); ctx.fill(); }
     // ---- b155 МЕДВЕДЬ (медвежий рынок — буквально): силуэт в фронте волны на высоте байка, дышит + выпадает лапой ∝ близости ----
     if(bike){ const _dg=(typeof dang==='number')?dang:0;
@@ -1929,7 +1950,14 @@ function draw(){
   if(skids.length){ ctx.lineCap='round'; for(const s of skids){ ctx.strokeStyle='rgba(8,6,12,'+(s.life*0.5)+')'; ctx.lineWidth=3.4;
     ctx.beginPath(); ctx.moveTo(s.x-Math.cos(s.a)*5,s.y+1.6-Math.sin(s.a)*5); ctx.lineTo(s.x+Math.cos(s.a)*5,s.y+1.6+Math.sin(s.a)*5); ctx.stroke(); } ctx.lineCap='butt'; }
   // ---- neon speed-ribbon trail behind the bike ----
-  if(trail.length>1){ for(let i=1;i<trail.length;i++){ const a=i/trail.length; ctx.strokeStyle='rgba(47,230,255,'+(a*0.5)+')'; ctx.lineWidth=a*5; ctx.shadowColor='#2fe6ff'; ctx.shadowBlur=a*10; ctx.beginPath(); ctx.moveTo(trail[i-1].x,trail[i-1].y); ctx.lineTo(trail[i].x,trail[i].y); ctx.stroke(); } ctx.shadowBlur=0; }
+  if(trail.length>1){ ctx.lineCap='round';   // b253 ПЕРФ (аудит P0): было ~25 shadowBlur-штрихов/КАЖДЫЙ кадр (крупнейший тормоз) → 3 бакета хвост/середина/голова × 2 прохода (широкий глоу + узкое ядро) БЕЗ blur. Fade сохранён бакетами
+    const B=[[0,0.33,0.10],[0.33,0.66,0.24],[0.66,1,0.42]];
+    for(const [f0,f1,al] of B){ const i0=Math.max(1,Math.round(trail.length*f0)), i1=Math.round(trail.length*f1);
+      if(i1<=i0) continue;
+      ctx.beginPath(); ctx.moveTo(trail[i0-1].x,trail[i0-1].y); for(let i=i0;i<i1;i++) ctx.lineTo(trail[i].x,trail[i].y);
+      ctx.strokeStyle='rgba(47,230,255,'+(al*0.45)+')'; ctx.lineWidth=7; ctx.stroke();   // глоу-подложка
+      ctx.strokeStyle='rgba(150,245,255,'+al+')'; ctx.lineWidth=2.4; ctx.stroke(); }   // яркое ядро
+    ctx.lineCap='butt'; }
   // ---- b174 ПРИЗРАК ДЕЙЛИ: лучшая попытка дня едет своей записью (гонка с собой по времени) ----
   if(dailyMode && ghost && screen==='play'){ const gi=Math.floor(t/3);
     if(gi<ghost.log.length-1){ const a=ghost.log[gi], b2=ghost.log[gi+1], f=(t%3)/3;
@@ -2805,8 +2833,9 @@ function drawMenus(){
     step('4','УПРАВЛЕНИЕ','держи ГАЗ · прыжок · НОС↑ = сальто','#9fd0ff');   // b252 аудит: управление не объяснялось до заезда
     ctx.fillStyle='rgba(150,170,200,0.7)'; ctx.font='600 10px ui-monospace,monospace'; ctx.fillText('теряешь — только от волны/краша, не от цены',W/2,cy+4);
     ctx.fillStyle='rgba(140,160,195,0.62)'; ctx.font='600 9px ui-monospace,monospace'; ctx.fillText('$ — деньги заезда (риск)   ·   ◆ — гемы навсегда (ранг)',W/2,cy+19);   // b252 словарик жаргона
-    UI.howGo={x:W/2-130,y:cy+30,w:260,h:50}; panel(UI.howGo.x,UI.howGo.y,260,50,'rgba(120,255,180,0.9)','rgba(18,58,40,0.55)'); ctx.fillStyle='#9ff0c8'; ctx.font='800 16px ui-monospace,monospace'; ctx.fillText('▶  ВЫБРАТЬ МОНЕТУ',W/2,UI.howGo.y+31);
-    UI.howSkip={x:W/2-70,y:cy+88,w:140,h:28}; ctx.fillStyle='rgba(160,175,205,0.6)'; ctx.font='600 11px ui-monospace,monospace'; ctx.fillText('позже',W/2,cy+106);
+    ctx.fillStyle='rgba(120,132,160,0.5)'; ctx.font='600 8px ui-monospace,monospace'; ctx.fillText('игра · вся валюта виртуальная · не финансовый совет',W/2,cy+33);   // b253 крипто-дисклеймер (комплаенс 3.1.5)
+    UI.howGo={x:W/2-130,y:cy+44,w:260,h:50}; panel(UI.howGo.x,UI.howGo.y,260,50,'rgba(120,255,180,0.9)','rgba(18,58,40,0.55)'); ctx.fillStyle='#9ff0c8'; ctx.font='800 16px ui-monospace,monospace'; ctx.fillText('▶  ВЫБРАТЬ МОНЕТУ',W/2,UI.howGo.y+31);
+    UI.howSkip={x:W/2-70,y:cy+102,w:140,h:28}; ctx.fillStyle='rgba(160,175,205,0.6)'; ctx.font='600 11px ui-monospace,monospace'; ctx.fillText('позже',W/2,cy+120);
     ctx.textAlign='left'; return;
   }
   if(screen==='title'){

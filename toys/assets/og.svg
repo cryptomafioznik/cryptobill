@@ -1,0 +1,49 @@
+<svg xmlns="http://www.w3.org/2000/svg" width="1200" height="630" viewBox="0 0 1200 630">
+  <defs>
+    <linearGradient id="bg" x1="0" y1="0" x2="0" y2="1">
+      <stop offset="0" stop-color="#0b0716"/>
+      <stop offset="0.55" stop-color="#241238"/>
+      <stop offset="0.85" stop-color="#6b2a52"/>
+      <stop offset="1" stop-color="#d06040"/>
+    </linearGradient>
+    <radialGradient id="sun" cx="0.5" cy="1.05" r="0.7">
+      <stop offset="0" stop-color="#ffd682" stop-opacity="0.85"/>
+      <stop offset="1" stop-color="#ff8c5a" stop-opacity="0"/>
+    </radialGradient>
+    <filter id="glow" x="-40%" y="-40%" width="180%" height="180%">
+      <feGaussianBlur stdDeviation="8" result="b"/>
+      <feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge>
+    </filter>
+  </defs>
+  <rect width="1200" height="630" fill="url(#bg)"/>
+  <rect y="250" width="1200" height="380" fill="url(#sun)"/>
+  <g fill="#1a1230" opacity="0.92">
+    <rect x="48"   y="466" width="66" height="164"/>
+    <rect x="144"  y="512" width="66" height="118"/>
+    <rect x="240"  y="442" width="66" height="188"/>
+    <rect x="360"  y="532" width="66" height="98"/>
+    <rect x="480"  y="458" width="66" height="172"/>
+    <rect x="624"  y="520" width="66" height="110"/>
+    <rect x="744"  y="450" width="66" height="180"/>
+    <rect x="864"  y="504" width="66" height="126"/>
+    <rect x="984"  y="434" width="66" height="196"/>
+    <rect x="1104" y="490" width="66" height="140"/>
+  </g>
+  <polyline points="0,491 168,454 336,479 504,378 660,410 840,290 1008,328 1200,214"
+    fill="none" stroke="#2fe6ff" stroke-opacity="0.30" stroke-width="30" stroke-linecap="round" stroke-linejoin="round"/>
+  <polyline points="0,491 168,454 336,479 504,378 660,410 840,290 1008,328 1200,214"
+    fill="none" stroke="#5cf0ff" stroke-width="11" stroke-linecap="round" stroke-linejoin="round"/>
+  <g transform="translate(1000,300) rotate(-9) scale(1.5)" filter="url(#glow)"
+     stroke="#ffffff" stroke-width="8" fill="none" stroke-linecap="round" stroke-linejoin="round">
+    <circle cx="-30" cy="18" r="18"/>
+    <circle cx="30"  cy="18" r="18"/>
+    <path d="M-30,18 L-7,-5 L18,-5 L30,18 M18,-5 L27,-20"/>
+    <path d="M-5,-5 L2,-30"/>
+    <circle cx="5" cy="-41" r="10" fill="#ffffff" stroke="none"/>
+  </g>
+  <g font-family="Menlo, monospace">
+    <text x="64" y="150" font-size="84" font-weight="800" fill="#eafaff" filter="url(#glow)">CHART RUNNER</text>
+    <text x="64" y="208" font-size="34" font-weight="700" fill="#ffd678">гоняй по РЕАЛЬНОМУ крипто-графику</text>
+    <text x="64" y="258" font-size="26" font-weight="600" fill="#c8dcf5" opacity="0.85">волатильность = трасса · плечо = риск · браузер, без установки</text>
+  </g>
+</svg>

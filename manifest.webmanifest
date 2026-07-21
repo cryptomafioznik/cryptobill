@@ -1,0 +1,15 @@
+{
+  "name": "CHART RUNNER — гоняй по реальному крипто-графику",
+  "short_name": "CHART RUNNER",
+  "description": "Крипто-мото-раннер: реальные графики монет становятся трассой. Волатильность = сложность, плечо = риск.",
+  "start_url": "/cryptobill/",
+  "scope": "/cryptobill/",
+  "display": "standalone",
+  "orientation": "landscape",
+  "background_color": "#0b0716",
+  "theme_color": "#0b0716",
+  "icons": [
+    { "src": "/cryptobill/toys/assets/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "/cryptobill/toys/assets/apple-touch-icon.png", "sizes": "180x180", "type": "image/png" }
+  ]
+}
