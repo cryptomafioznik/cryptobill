@@ -2193,6 +2193,8 @@ function drawArticulatedBike(dbg){ if(!A25V2ready||!A25V2.body)return false; con
   _rigPoseT--; if(want!==_rigPose && _rigPoseT<=0){ _rigPose=want; _rigPoseT=7; }
   if(_t25wasAir && B.onG){ _rigRearComp=1; _rigFrontComp=0.7; } _t25wasAir=!B.onG;   // посадка = сжатие подвески
   _rigFrontComp*=0.86; _rigRearComp*=0.86;
+  if(window.__forcePose!=null){ _rigPose=window.__forcePose; }   // demo-хуки (rigDebug)
+  if(window.__forceSusp){ _rigFrontComp=window.__forceSusp.f; _rigRearComp=window.__forceSusp.r; }
   const cell=RIG.cell, S=RIG.scale;
   const steer=jLoc(RIG.steeringPivot), swingP=jLoc(RIG.swingarmPivot);
   const frontAx=compressToward(jLoc(RIG.frontAxle),steer,_rigFrontComp*RIG.travel), rearAx=compressToward(jLoc(RIG.rearAxle),swingP,_rigRearComp*RIG.travel);
