@@ -76,7 +76,7 @@ function lerp(a,b,t){return a+(b-a)*t;} function clamp(v,a,b){return v<a?a:v>b?b
 // false → full game everywhere. Single switch. Systems are GATED, never deleted.
 const CORE_TEST_MODE = false;   // b70: META LIVE — building the progression spine (upgrades/bikes with teeth, career, economy) on the confirmed rigid-body core
 // build stamp — bump on every change so a phone refresh can confirm it loaded fresh code (cache!)
-const BUILD = '2026-07-22 · b262';
+const BUILD = '2026-07-22 · b263';
 
 // ---------- procedural market terrain ----------
 // height map sampled every STEP px; generated forward as we ride. Market character:
@@ -1975,7 +1975,11 @@ function f2(v){ return (v==null)?'—':v.toFixed(2); }
 // Трасса = тонкая неон-лента графика со слабой косой глубиной (не дорога, не
 // точка схода). Гейт ?render=trials25d. Этап 2: статичная calibration scene.
 // ============================================================================
-let TRIALS25=false; try{ TRIALS25=/[?&]render=trials25d/.test(location.search); }catch(e){}
+let TRIALS25=false; try{
+  if(/[?&]render=trials25d/.test(location.search)){ TRIALS25=true; try{localStorage.setItem('cb_render','trials25d');}catch(e){} }
+  else if(/[?&]render=(game|off|normal)/.test(location.search)){ try{localStorage.removeItem('cb_render');}catch(e){} }
+  else { try{ if(localStorage.getItem('cb_render')==='trials25d')TRIALS25=true; }catch(e){} }
+}catch(e){ TRIALS25=/[?&]render=trials25d/.test(location.search); }   // b263: режим «липкий» (localStorage) — PWA/иконка сбрасывает query-параметр, поэтому запоминаем. Выход: ?render=game
 const OB={ scaleX:18, scaleY:18, anchorX:0.33, anchorY:0.52, depthVX:24, depthVY:-12, tilt:-0.05, perspFade:0.12, uFar:20,
   roadVisW:1.15, sideFacePx:5, beamThick:24, pillarEvery:4, depthAmp:0.4, depthFreq:0.12, depthPhase:0, cameraS:7, cameraHeight:2.5, bikeS:7 };
 function visualDepth(s){ return OB.depthAmp*Math.sin(s*OB.depthFreq+OB.depthPhase); }   // декоративная низкочастотная глубина — НЕ в физике
