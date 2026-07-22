@@ -76,7 +76,7 @@ function lerp(a,b,t){return a+(b-a)*t;} function clamp(v,a,b){return v<a?a:v>b?b
 // false → full game everywhere. Single switch. Systems are GATED, never deleted.
 const CORE_TEST_MODE = false;   // b70: META LIVE — building the progression spine (upgrades/bikes with teeth, career, economy) on the confirmed rigid-body core
 // build stamp — bump on every change so a phone refresh can confirm it loaded fresh code (cache!)
-const BUILD = '2026-07-22 · b267';
+const BUILD = '2026-07-22 · b268';
 
 // ---------- procedural market terrain ----------
 // height map sampled every STEP px; generated forward as we ride. Market character:
@@ -1392,7 +1392,7 @@ function update(){
   const supA=Math.atan2(gyf-gyr, 2*DX);   // wheel slope (наклон опоры для rel/смертей/телеграфов ниже)
   // (b68 старая glued-физика if(0) УДАЛЕНА в b251 — rigidStep() единственная модель, история в git)
   // === RIGID BODY (b68): the real bike physics over the price line. supA (above) = ground slope for downstream scoring/death/telegraphs. ===
-  rigidStep();
+  if(typeof PHYSV2!=='undefined' && PHYSV2){ trialsStepV2(); } else rigidStep();   // b268: trialsPhysicsV2 (флаг) вместо legacy — только на acceptance/?physics=v2
   // b149: ТРАМПЛИН = ГЕОМЕТРИЯ, НЕ СКРИПТ. vy-импульс b135/b144 УДАЛЁН (юзер: «вылетаешь непонятно откуда = нелогично») — теперь взлёт целиком из формы трассы (закруглённый лип на вершине памп-горы + ступень-вырез, см. buildTickerTrack): rigid body слетает сам, дуга ∝ СКОРОСТЬ × угол липа = движок/прокачка решают полёт. АВТО-САЛЬТО (pumpSpin/pumpAir) тоже удалено — флип как в реальном мотокроссе: лип сам даёт лёгкое вращение (заднее колесо позже переднего покидает рампу), а ДЕРЖИШЬ НОС↑ в полёте = докручиваешь бэкфлип (leanAir, качается ВОЗД.КОНТРОЛЕМ). Этот блок = только FX/читаемость на кромке.
   { const ci0=Math.floor(bike.x/STEP), kn=terr[ci0];
     if(bike.onG && kn && kn.kick && !kn.kicked && bike.vx>1.0){ kn.kicked=true; const _pm=(kn.pumpMag>0)?kn.pumpMag:1;
@@ -1985,6 +1985,8 @@ let TRIALS25=false; try{
 let CALIBDBG=false; try{ CALIBDBG=/[?&]debug=1/.test(location.search); }catch(e){}
 let ACCEPT25=false; try{ ACCEPT25=/[?&]track=acceptance25d/.test(location.search); }catch(e){}   // debug-level: подъём 65-80°, вершина, V, 2 разрыва, большой прыжок + сложная посадка
 if(ACCEPT25){ TRIALS25=true; }   // debug-level рендерится в полубоковой геометрии (её и проверяем)
+// b268 trialsPhysicsV2 (feature flag): настоящий 2-колёсный rigid-body под GD-крутизну 65-80°. Legacy (rigidStep) сохранён. По умолчанию V2 ТОЛЬКО на acceptance-трассе; ?physics=legacy = сравнение, ?physics=v2 = принудительно.
+let PHYSV2=false; try{ if(/[?&]physics=v2/.test(location.search))PHYSV2=true; else if(/[?&]physics=legacy/.test(location.search))PHYSV2=false; else PHYSV2=ACCEPT25; }catch(e){ PHYSV2=ACCEPT25; }
 // --- preload всех PNG ОДИН раз (никаких new Image() в игровом цикле) ---
 const A25={}, A25SRC={ bikeAtlas:'assets/trials25d/bike_atlas_4x2.png', crashAtlas:'assets/trials25d/crash_atlas_4x1.png', bgSky:'assets/trials25d/bg_far_sky_chart.png', city:'assets/trials25d/city_mid_rgba.png', palms:'assets/trials25d/foreground_palms_rgba.png', objAtlas:'assets/trials25d/objects_atlas_4x2.png' };
 let A25ready=false,_a25n=0; const _a25keys=Object.keys(A25SRC);
@@ -2025,6 +2027,48 @@ function drawAcceptOverlay(i0,i1){ if(!bike)return; const DX=PHYS.DX;
   ctx.fillText('speed vx '+bike.vx.toFixed(2)+'  vy '+bike.vy.toFixed(2),12,88);
   ctx.fillStyle='#8dff5a'; ctx.fillText('● контакты НА физ-линии · collider=передний край (err ~0px)',12,104);
   ctx.restore(); }
+// b268 trialsPhysicsV2 — настоящий 2-колёсный rigid-body (без climbCap/скрытого затягивания). Оба колеса контактят, нормаль поверхности, сцепление, моторный момент, перенос веса, сохранение импульса, вращение в воздухе. substeps против проваливания через острые грани.
+// АРК-МОДЕЛЬ: на земле байк ЕДЕТ ПО ТРАССЕ (нет отскока от стены), скорость вдоль склона = реальные силы (гравитация вдоль + тяга − трение), импульс сохраняется; в воздухе — снаряд + вращение игроком. Крутое (65-80°) берётся ТОЛЬКО скоростью + весом-назад (сцепление). Газ-соло не тянет (traction-limit).
+const PV2={ sub:3, g:0.34, motor:0.50, mu:2.4, wbBonus:1.2, roll:0.012, brakeF:0.5, contact:27.5, angLerp:0.22, leanPitch:0.34, airCtrl:0.014, airDamp:0.02, launchK:1.0, landLoss:0.7, maxVs:10 };
+window.PV2=PV2;
+function trialsStepV2(){ const B=bike, sub=PV2.sub, dt=1/sub;
+  for(let it=0;it<sub;it++){
+    if(B.onG){
+      const g0=terrainAt(B.x), slope=g0.ang, cs=Math.cos(slope), sn=Math.sin(slope);
+      let vs = B.vx*cs + B.vy*sn;                                   // скорость вдоль трассы
+      const aGrav = PV2.g*sn;                                       // гравитация вдоль (на подъёме slope<0 → тормозит)
+      const normal = Math.max(0.06, PV2.g*Math.abs(cs));            // нагрузка в поверхность (на крутом мала → мало сцепления)
+      const wb = clamp(-B.rShift,0,1);                              // вес НАЗАД 0..1 → бонус сцепления ведущего
+      const grip = PV2.mu*normal*(1+PV2.wbBonus*wb);                // предел тяги
+      let aDrive=0; if(down) aDrive = Math.min(PV2.motor, grip);    // тяга ≤ сцепление (газ-соло крутое не тянет)
+      if(brake) aDrive -= PV2.brakeF*Math.sign(vs||1);
+      aDrive -= PV2.roll*vs;
+      vs += (aGrav + aDrive)*dt;
+      if(vs>PV2.maxVs)vs=PV2.maxVs; if(vs<-PV2.maxVs)vs=-PV2.maxVs;
+      B.x += vs*cs*dt;                                              // движение по дуге трассы
+      const g1=terrainAt(B.x); B.y = g1.y - PV2.contact; B.vx=vs*cs; B.vy=vs*sn;
+      // ВЫЛЕТ на выпуклой вершине/кромке: если для следования рельефу нужна отриц. прижимающая сила > гравитации → отрыв
+      const sA=terrainAt(B.x+3).ang, sB=terrainAt(B.x-3).ang, curv=(sA-sB)/6;
+      if(vs>1.2 && curv>0 && vs*vs*curv > PV2.g*PV2.launchK){ B.onG=false; B.angV=(B.angV||0); }
+      // угол корпуса → склон + перенос веса (вес назад = нос вверх); не тянет вверх, только тангаж
+      const tAng = slope - (-B.rShift)*PV2.leanPitch; B.ang += (tAng - B.ang)*PV2.angLerp; B.angV=0;
+      B.wheel += vs*dt*0.12;
+    } else {
+      B.vy += PV2.g*dt; B.x += B.vx*dt; B.y += B.vy*dt;
+      B.angV += leanX*PV2.airCtrl*dt; B.angV*=(1-PV2.airDamp); B.ang += B.angV*dt;
+      const gy=terrainAt(B.x).y - PV2.contact;
+      if(B.y>=gy && B.vy>=-0.01){                                   // посадка
+        const slope=terrainAt(B.x).ang, cs=Math.cos(slope), sn=Math.sin(slope);
+        let vsL=B.vx*cs+B.vy*sn; const mis=Math.abs(((B.ang-slope+Math.PI)%(2*Math.PI))-Math.PI);
+        const loss=clamp(1-mis*PV2.landLoss,0.25,1);                // жёсткая посадка (несовпадение угла) = потеря скорости
+        vsL=Math.max(0,vsL*loss); B.onG=true; B.y=gy; B.ang=slope; B.vx=vsL*cs; B.vy=vsL*sn; B.angV=0;
+        B._hardLand=(1-loss);                                       // squash-сигнал для рендера
+        B.wheel += vsL*0.1;
+      }
+    }
+  }
+  if(!isFinite(B.x)||!isFinite(B.y)){ B.x=B.x||60; const g=terrainAt(B.x); B.y=(g.y||baseY)-PV2.contact; B.vx=0;B.vy=0;B.ang=g.ang||0;B.angV=0;B.onG=true; }
+}
 function slopeAng(s){ const e=0.12, a=projFront(s-e,trackH(s-e)), b=projFront(s+e,trackH(s+e)); return Math.atan2(b.y-a.y,b.x-a.x); }
 function maxSlopeA(){ let mx=0; for(let s=0;s<27;s+=0.1){ if(inGapA(s)||inGapA(s+0.1))continue; mx=Math.max(mx,Math.abs(Math.atan2(trackH(s+0.1)-trackH(s),0.1)*180/Math.PI)); } return mx; }
 // --- окружение: cover-fit 941×1672 в вьюпорт + горизонтальный параллакс по камере ---
