@@ -76,7 +76,7 @@ function lerp(a,b,t){return a+(b-a)*t;} function clamp(v,a,b){return v<a?a:v>b?b
 // false → full game everywhere. Single switch. Systems are GATED, never deleted.
 const CORE_TEST_MODE = false;   // b70: META LIVE — building the progression spine (upgrades/bikes with teeth, career, economy) on the confirmed rigid-body core
 // build stamp — bump on every change so a phone refresh can confirm it loaded fresh code (cache!)
-const BUILD = '2026-07-22 · b274';
+const BUILD = '2026-07-23 · b275';
 
 // ---------- procedural market terrain ----------
 // height map sampled every STEP px; generated forward as we ride. Market character:
@@ -2002,6 +2002,7 @@ let RIGDEBUG=false; try{ RIGDEBUG=/[?&]rigDebug=1/.test(location.search); }catch
 let RIG_ART=false; try{ RIG_ART=/[?&]rig=articulated/.test(location.search); }catch(e){}
 // b273: cutout-райдер v3 (rider-only PNG-части + неизменная рама). Гейт: ?render=game&camera=side&rig=cutout
 let RIG_CUT=false; try{ RIG_CUT=/[?&]rig=cutout/.test(location.search); }catch(e){}
+let RIG_SIL=false; try{ RIG_SIL=/[?&]rigSilhouette=1/.test(location.search); }catch(e){}   // b275: серый байк + чёрный райдер (сравнение поз)
 const A25V2={}, A25V2SRC={ body:'assets/trials25d_v2/bike/body_poses_atlas_3x2.png', wf:'assets/trials25d_v2/bike/wheel_front_384.png', wr:'assets/trials25d_v2/bike/wheel_rear_384.png', fork:'assets/trials25d_v2/bike/fork_front_512.png', swing:'assets/trials25d_v2/bike/swingarm_rear_512.png' };
 let A25V2ready=false,_v2n=0; const _v2keys=Object.keys(A25V2SRC);
 function preloadA25V2(){ for(const k of _v2keys){ const im=new Image(); im.onload=()=>{ A25V2[k]=im; if(++_v2n>=_v2keys.length)A25V2ready=true; }; im.onerror=()=>{ A25V2[k]=null; if(++_v2n>=_v2keys.length)A25V2ready=true; }; im.src=A25V2SRC[k]; } }
@@ -2356,10 +2357,19 @@ const RIDP={
 window.RIGC=RIGC;
 let _rgcVisAng=0,_rgcAngV=0,_rgcDrop=0,_rgcDropV=0,_rgcFC=0,_rgcRC=0,_rgcWasAir=false,_rgcInit=false;
 // b274: pose-controller state (пружины с ИНЕРЦИЕЙ по частям; таз = зона, не пин)
-let _pcPx=0,_pcPy=0,_pcPvx=0,_pcPvy=0, _pcTor=0.26,_pcTorV=0, _pcHead=0, _pcPrevVx=0,_pcLongAcc=0, _pcAir=0, _pcLandE=0, _pcState='neutral';
+let _pcPx=0,_pcPy=0,_pcPvx=0,_pcPvy=0, _pcTor=0.26,_pcTorV=0, _pcHead=0, _pcPrevVx=0,_pcLongAcc=0, _pcLandE=0, _pcState='neutral';
 let _rgcErr={pelvis:0,handN:0,handF:0,bootN:0,bootF:0,pelvisOff:0};   // ошибки эффекторов + смещение таза (px)
 let _rgcJ={elbowN:0,elbowF:0,kneeN:0,kneeF:0};                        // углы суставов (град) для debug
-let _rgcSig={pitch:0,slope:0,angV:0,vertV:0,longAcc:0,fc:false,rc:false,air:0,landImp:0,lean:0};
+// b275: ПРАВИЛЬНЫЕ per-wheel контакты + фаза-машина с hysteresis
+const _CT={ F:{raw:false,filt:false,on:0,off:0,gap:0,pen:0,since:999}, R:{raw:false,filt:false,on:0,off:0,gap:0,pen:0,since:999} };
+let _ph={ state:'neutral', prevAir:false, airFrames:0, sinceFirst:999, landImp:0, compPhase:'', compMinY:0, sincePhase:0 };
+function _updContact(w, raw){ // hysteresis: on 2 кадра, off 3 кадра
+  w.raw=raw;
+  if(raw){ w.on++; w.off=0; if(w.on>=2 && !w.filt){ w.filt=true; w.since=0; } }
+  else { w.off++; w.on=0; if(w.off>=3 && w.filt){ w.filt=false; w.since=0; } }
+  w.since++; return w.filt; }
+function _rgcSig_(){ return _rgcSig; }
+let _rgcSig={pitch:0,slope:0,angV:0,vertV:0,longAcc:0,fc:false,rc:false,air:0,landImp:0,lean:0,gapF:0,gapR:0};
 function _cd(a,b){ return Math.hypot(a[0]-b[0],a[1]-b[1]); }
 // 2-звенный IK с анатомическим лимитом: кость НЕ тянется, сустав не выворачивается/не выпрямляется.
 // dMinF/dMaxF — доля (l1+l2): dMax<1 → всегда согнут; если цель дальше — эффектор НЕ дотягивает (err), кость целая.
@@ -2374,46 +2384,69 @@ function drawRigCutout(dbg){
   const B=bike; if(!B||!isFinite(B.ang)||!isFinite(B.wheel)) return false;
   const S=RIGC.scale, RS=RIGC.riderScale, O=RIGC.origin, DX=(typeof PHYS!=='undefined'?PHYS.DX:26), onG=B.onG;
   const C=(pt)=>({x:(pt[0]-O[0])*S, y:(pt[1]-O[1])*S});         // cell-px → local (pre-delta), chassis scale
-  // ---- physicsState + contact + springs (как в b272) ----
-  const fyT=terrainAt(B.x+DX).y, ryT=terrainAt(B.x-DX).y, hubAng=Math.atan2(fyT-ryT,2*DX);
-  const justLanded = _rgcWasAir && onG; if(justLanded){ _rgcDropV += Math.min(6.0, Math.abs(B.vy||0)*0.7); }   // firstTouch → просадка РАМЫ
-  const targetAng = onG ? hubAng : B.ang; if(!_rgcInit){ _rgcVisAng=B.ang; _rgcInit=true; }
-  const kA=onG?0.30:0.65, capV=(onG?5:14)*Math.PI/180;
+  // ---- b275: ПРАВИЛЬНЫЕ per-wheel КОНТАКТЫ (геометрия физ.колёс) + фаза-машина с hysteresis ----
+  const DY=(typeof PHYS!=='undefined'?PHYS.DY:27.5);
+  const fwx=Math.cos(B.ang),fwy=Math.sin(B.ang),dnx=-Math.sin(B.ang),dny=Math.cos(B.ang);
+  const cFx=B.x+DX*fwx+DY*dnx, cFy=B.y+DX*fwy+DY*dny, cRx=B.x-DX*fwx+DY*dnx, cRy=B.y-DX*fwy+DY*dny;   // контакт-точки колёс (world)
+  const gapF=cFy-terrainAt(cFx).y, gapR=cRy-terrainAt(cRx).y;                                          // >0 penetration, <0 над поверхностью
+  _CT.F.gap=gapF; _CT.F.pen=Math.max(0,gapF); _CT.R.gap=gapR; _CT.R.pen=Math.max(0,gapR);
+  const filtF=_updContact(_CT.F, gapF>-4.0), filtR=_updContact(_CT.R, gapR>-4.0);                       // rawContact (в пределах ~4px поверхности) → filtered (hysteresis 2/3)
+  const airborne=!filtF&&!filtR;
+  const hubAng=Math.atan2(terrainAt(cFx).y-terrainAt(cRx).y, 2*DX);
+  const wasAir=_ph.prevAir; _ph.airFrames = airborne? _ph.airFrames+1 : 0;
+  let firstContact=false;
+  if(wasAir && !airborne){ firstContact=true; _ph.sinceFirst=0; _ph.landImp=Math.abs(B.vy||0); _ph.compPhase='compression'; _ph.compMinY=_pcPy; }
+  else _ph.sinceFirst++;
+  _ph.prevAir=airborne;
+  if(_ph.compPhase==='compression'){ if(_pcPy>_ph.compMinY)_ph.compMinY=_pcPy; if(_pcPy<_ph.compMinY-0.4 && _ph.sinceFirst>3){ _ph.compPhase='rebound'; _ph.sincePhase=0; } }
+  else if(_ph.compPhase==='rebound'){ _ph.sincePhase++; if(Math.abs(_pcPy)<0.8 || _ph.sincePhase>26){ _ph.compPhase=''; } }
+  const rs=B.rShift||0, li=(typeof leanX!=='undefined'?leanX:0), vy=B.vy||0;
+  const climbI=clamp((-hubAng-0.30)/0.5,0,1), wBack=clamp(-rs,0,1)+clamp(-li,0,1)*0.6, wFwd=clamp(rs,0,1)+clamp(li,0,1)*0.6;
+  if(airborne){ _ph.state = vy<-2? 'ascend' : (Math.abs(vy)<2? 'apex' : 'descend'); }
+  else if(_ph.compPhase==='compression') _ph.state='compression';
+  else if(_ph.compPhase==='rebound') _ph.state='rebound';
+  else if(filtR && !filtF) _ph.state='wheelie';                                                          // заднее есть, переднего нет = вилли
+  else _ph.state = climbI>0.3?'uphill':((rs<-0.25||li<-0.25)?'wheelie':'neutral');
+  const state=_ph.state, onGvis=!airborne;
+  // ---- frame-angle пружина + просадка рамы ----
+  const targetAng = onGvis ? hubAng : B.ang; if(!_rgcInit){ _rgcVisAng=B.ang; _rgcInit=true; }
+  const kA=onGvis?0.30:0.65, capV=(onGvis?5:14)*Math.PI/180;
   _rgcAngV=_rgcAngV*0.5 + (targetAng-_rgcVisAng)*kA; if(_rgcAngV>capV)_rgcAngV=capV; else if(_rgcAngV<-capV)_rgcAngV=-capV; _rgcVisAng+=_rgcAngV;
   const delta=_rgcVisAng-B.ang, ca=Math.cos(delta), sa=Math.sin(delta);
   _rgcFC += (Math.min(RIGC.travel,(B._cmpF||0))-_rgcFC)*0.5; _rgcRC += (Math.min(RIGC.travel,(B._cmpR||0))-_rgcRC)*0.5;
   if(window.__rggSusp){ _rgcFC=window.__rggSusp.f*RIGC.travel; _rgcRC=window.__rggSusp.r*RIGC.travel; }
+  if(firstContact){ _rgcDropV += Math.min(6.0, _ph.landImp*0.7); }
   _rgcDropV += (0-_rgcDrop)*0.09; _rgcDropV*=0.80; _rgcDrop+=_rgcDropV; if(_rgcDrop<0){_rgcDrop=0;if(_rgcDropV<0)_rgcDropV=0;} if(_rgcDrop>10)_rgcDrop=10;
   const drop=_rgcDrop, rotDrop=(p)=>({x:p.x*ca-p.y*sa, y:p.x*sa+p.y*ca+drop});
-  // ==== POSE CONTROLLER (физические сигналы → pelvisTarget в зоне + углы, инерция по частям) ====
-  const rs=B.rShift||0, li=(typeof leanX!=='undefined'?leanX:0);
+  // ==== POSE CONTROLLER — целевой таз в ЗОНЕ (в % экранного колеса/базы) + углы, инерция по частям ====
   _pcLongAcc = _pcLongAcc*0.7 + (B.vx-_pcPrevVx)*0.3; _pcPrevVx=B.vx;
-  if(onG)_pcAir=0; else _pcAir++;
-  const fc = onG || (B.y+27>=fyT-10), rc = onG || (B.y+27>=ryT-10);           // контакт перед/зад (approx)
-  if(justLanded){ const imp=Math.min(1,Math.abs(B.vy||0)/6); _pcLandE=1; _pcPvy += 2.2+3.2*imp; _rgcSig.landImp=+(B.vy||0).toFixed(2); }  // firstTouch → инъекция компрессии таза
-  _pcLandE*=0.90; _rgcWasAir=!onG;
-  const Wb=(RIGC.frontAxle[0]-RIGC.rearAxle[0])*S, wheelDia=2*RIGC.wheelR, riderH=42;
-  const zFwd=0.07*Wb, zBack=0.07*Wb, zUp=0.14*wheelDia, zDown=0.09*riderH;
-  const climb=clamp((-hubAng-0.32)/0.5,0,1), wBack=clamp(-rs,0,1)+clamp(-li,0,1)*0.6, wFwd=clamp(rs,0,1)+clamp(li,0,1)*0.6;   // uphill = НАКЛОН ТРАССЫ (не pitch байка) → флэт-вилли не читается как подъём
-  // 1-2) целевое положение таза → кламп в допустимую зону
-  let ptx=0, pty=-zUp*0.28;                                    // neutral: таз чуть над сиденьем
-  ptx += climb*zFwd;                                           // uphill → вперёд
-  ptx -= Math.min(1,wBack)*zBack;                              // wheelie/lean-back → назад
-  ptx -= clamp(_pcLongAcc*0.4,0,0.5)*zBack*0.6;                // разгон → чуть назад
-  if(!onG){ pty -= zUp*clamp(_pcAir/10,0,1); ptx += zFwd*0.5*clamp(1-Math.abs(B.vy)/6,0,1); }  // air: приподняться + tuck у apex
+  const Wb=(RIGC.frontAxle[0]-RIGC.rearAxle[0])*S, wheelDia=2*RIGC.wheelR, riderH=44;
+  const zFwd=0.12*Wb, zBack=0.07*Wb, zUp=0.14*wheelDia, zDown=0.10*riderH;
+  if(firstContact){ const imp=Math.min(1,_ph.landImp/6); _pcLandE=1; _pcPvy += 2.6+3.4*imp; }   // инъекция компрессии таза
+  _pcLandE*=0.90;
+  let ptx=0, pty=-zUp*0.30;
+  if(state==='uphill'){ ptx += climbI*(0.11*Wb); pty -= climbI*(0.60*zUp); }                       // ВПЕРЁД к рулю + ВВЕРХ (attack)
+  else if(state==='wheelie'){ ptx -= Math.min(1,wBack)*zBack; pty -= 0.20*zUp; }                   // назад
+  else { ptx -= clamp(_pcLongAcc*0.4,0,0.5)*zBack*0.5; }                                            // разгон чуть назад
+  if(airborne){ if(state==='ascend'){ ptx-=0.30*zBack; pty-=0.55*zUp; } else if(state==='apex'){ ptx+=0.50*zFwd; pty-=zUp; } else { ptx+=0.15*zFwd; pty-=0.35*zUp; } }
   ptx=clamp(ptx,-zBack,zFwd); pty=clamp(pty,-zUp,zDown);
-  _pcPvx += (ptx-_pcPx)*0.16; _pcPvx*=0.74; _pcPx+=_pcPvx;     // пружина таза X (rate-limited демпфированием)
-  _pcPvy += (pty-_pcPy)*0.16; _pcPvy*=0.80; _pcPy+=_pcPvy;     // пружина таза Y (+ инъекция посадки → компрессия+отбой)
+  _pcPvx += (ptx-_pcPx)*0.16; _pcPvx*=0.74; _pcPx+=_pcPvx;
+  _pcPvy += (pty-_pcPy)*0.16; _pcPvy*=0.80; _pcPy+=_pcPvy;
   _pcPx=clamp(_pcPx,-zBack-1,zFwd+1); _pcPy=clamp(_pcPy,-zUp-1,zDown+2);
-  // 3) торс/голова (инерция медленнее таза)
-  let tt=0.26;                                                 // NEUTRAL ~15° вперёд (не вертикально)
-  if(onG){ tt += climb*0.42; tt -= Math.min(1,wBack)*0.44; tt += wFwd*0.10; }   // wheelie/lean-back: торс заметно назад
-  else { const asc=clamp(-B.vy/6,0,1), dn=clamp(B.vy/6,0,1); tt = 0.18 - asc*0.08 + (1-asc-dn)*0.22 + dn*0.04 + li*0.14; }
-  tt += _pcLandE*0.16;
+  // торс/голова по фазе (разные силуэты; инерция медленнее таза)
+  let tt=0.30;
+  if(state==='uphill') tt += climbI*0.60;                                                          // сильный наклон вперёд (attack)
+  else if(state==='wheelie') tt -= Math.min(1,wBack)*0.50 + 0.14;                                  // назад
+  else if(state==='ascend') tt = 0.16;                                                             // сопротивляется вращению, меньше вперёд
+  else if(state==='apex') tt = 0.44;                                                               // максимальная группировка к рулю
+  else if(state==='descend') tt = 0.24;                                                            // подготовка
+  else if(state==='compression') tt = 0.30 + 0.16;                                                 // краткий вперёд
+  else if(state==='rebound') tt = 0.28;
+  else tt = 0.30 + wFwd*0.10;                                                                      // neutral
   _pcTorV += (tt-_pcTor)*0.11; _pcTorV*=0.72; _pcTor+=_pcTorV;
   const frameRot=B.ang+delta; _pcHead += (clamp(-0.62*frameRot-0.30*_pcTor,-0.5,0.5)-_pcHead)*0.13;   // голова к world-up
-  _rgcSig={pitch:B.ang,slope:hubAng,angV:B.angV,vertV:B.vy,longAcc:_pcLongAcc,fc:fc,rc:rc,air:_pcAir,landImp:_rgcSig.landImp||0,lean:(li||rs)};
-  _pcState = !onG ? (B.vy<-1?'ascend':Math.abs(B.vy)<1.6?'apex':'descend') : (_pcLandE>0.3?'landing':climb>0.3?'uphill':Math.min(1,wBack)>0.3?'wheelie':'neutral');
+  _rgcSig={pitch:B.ang,slope:hubAng,angV:B.angV,vertV:vy,longAcc:_pcLongAcc,fc:filtF,rc:filtR,air:_ph.airFrames,landImp:+_ph.landImp.toFixed(2),lean:(li||rs),gapF:gapF,gapR:gapR};
+  _pcState = state;
   // ==== SOLVER (в pre-delta local; отрисовка внутри delta-контекста) ====
   const seat=C(RIGC.seatAnchor), pelT={x:seat.x+_pcPx, y:seat.y+_pcPy};        // pelvisTarget (НЕ пин к сиденью)
   const pmap=(pt,piv,sock,ang)=>{ const c=Math.cos(ang),s=Math.sin(ang), vx=(pt[0]-piv[0])*RS, vy=(pt[1]-piv[1])*RS; return {x:sock.x+vx*c-vy*s, y:sock.y+vx*s+vy*c}; };
@@ -2437,23 +2470,26 @@ function drawRigCutout(dbg){
   const rearAxG=compressToward(C(RIGC.rearAxle),C(RIGC.swingarmPivot),_rgcRC), frontAxG=compressToward(C(RIGC.frontAxle),C(RIGC.steeringPivot),_rgcFC);
   const A_swP=rotDrop(C(RIGC.swingarmPivot)), A_steer=rotDrop(C(RIGC.steeringPivot)), wd=RIGC.wheelR*2;
   const DEL=()=>{ ctx.translate(0,drop); ctx.rotate(delta); };
+  // b275: rigSilhouette — серый байк + чёрный райдер (объективное сравнение поз)
+  const SIL=RIG_SIL||window.__rigSil, filBike=SIL?'contrast(0) brightness(1.7)':'none', filR=SIL?'brightness(0)':'none', filRfar=SIL?'brightness(0)':'brightness(0.80)', aFar=SIL?1:0.80;
   // порядок back→front: rearWheel · far-ноги/руки(темнее) · swingarm · рама · pelvis/torso · near-ноги/руки · head · fork · frontWheel
-  drawWheelPart(A25V2.wr, rearAxG, wd, B.wheel);
-  ctx.save(); DEL(); ctx.globalAlpha=0.80; ctx.filter='brightness(0.80)';     // far-конечности темнее/за рамой
+  ctx.filter=filBike; drawWheelPart(A25V2.wr, rearAxG, wd, B.wheel); ctx.filter='none';
+  ctx.save(); DEL(); ctx.globalAlpha=aFar; ctx.filter=filRfar;                  // far-конечности за рамой (темнее / чёрные в SIL)
     bone(CUT.luF,RIDP.luF.p,RIDP.luF.d,hipF,{x:legFr.mid[0],y:legFr.mid[1]}); bone(CUT.llF,RIDP.llF.p,RIDP.llF.toe,{x:legFr.mid[0],y:legFr.mid[1]},{x:legFr.end[0],y:legFr.end[1]});
     bone(CUT.auF,RIDP.auF.p,RIDP.auF.d,shF,{x:armFr.mid[0],y:armFr.mid[1]}); bone(CUT.alF,RIDP.alF.p,RIDP.alF.d,{x:armFr.mid[0],y:armFr.mid[1]},{x:armFr.end[0],y:armFr.end[1]});
   ctx.filter='none'; ctx.globalAlpha=1; ctx.restore();
-  drawPart2pt(A25V2.swing, RIGC.swingA, RIGC.swingB, A_swP, rearAxG);
+  ctx.filter=filBike; drawPart2pt(A25V2.swing, RIGC.swingA, RIGC.swingB, A_swP, rearAxG); ctx.filter='none';
   ctx.save(); DEL();
-    ctx.drawImage(CUT.chassis, 0,0,512,512, -O[0]*S, -O[1]*S, 512*S, 512*S);   // НЕИЗМЕННАЯ рама
+    ctx.filter=filBike; ctx.drawImage(CUT.chassis, 0,0,512,512, -O[0]*S, -O[1]*S, 512*S, 512*S);   // НЕИЗМЕННАЯ рама
+    ctx.filter=filR;
     pivpart(CUT.pelvis,RIDP.pelvis.pivot,pelT,pelRot);
     pivpart(CUT.torso,RIDP.torso.p,torsoSock,tor);
     bone(CUT.luN,RIDP.luN.p,RIDP.luN.d,hipN,{x:legNr.mid[0],y:legNr.mid[1]}); bone(CUT.llN,RIDP.llN.p,RIDP.llN.toe,{x:legNr.mid[0],y:legNr.mid[1]},{x:legNr.end[0],y:legNr.end[1]});
     bone(CUT.auN,RIDP.auN.p,RIDP.auN.d,shN,{x:armNr.mid[0],y:armNr.mid[1]}); bone(CUT.alN,RIDP.alN.p,RIDP.alN.d,{x:armNr.mid[0],y:armNr.mid[1]},{x:armNr.end[0],y:armNr.end[1]});
     pivpart(CUT.head,RIDP.head.pivot,neck,_pcHead);
+    ctx.filter='none';
   ctx.restore();
-  drawPart2pt(A25V2.fork, RIGC.forkA, RIGC.forkB, A_steer, frontAxG);
-  drawWheelPart(A25V2.wf, frontAxG, wd, B.wheel);
+  ctx.filter=filBike; drawPart2pt(A25V2.fork, RIGC.forkA, RIGC.forkB, A_steer, frontAxG); drawWheelPart(A25V2.wf, frontAxG, wd, B.wheel); ctx.filter='none';
   if(dbg||RIGDEBUG){ ctx.save(); DEL(); drawCutDebug(seat,pelT,torsoSock,shN,hipN,neck,gN,gF,pN,pF,armNr,legNr,zFwd,zBack,zUp,zDown); ctx.restore(); }
   return true; }
 function drawCutDebug(seat,pelT,torsoSock,shN,hipN,neck,gN,gF,pN,pF,armNr,legNr,zFwd,zBack,zUp,zDown){
@@ -2470,17 +2506,18 @@ function drawCutDebug(seat,pelT,torsoSock,shN,hipN,neck,gN,gF,pN,pF,armNr,legNr,
   for(const [p,col,nm] of P){ ctx.strokeStyle=col; ctx.fillStyle=col; ctx.beginPath(); ctx.arc(p.x,p.y,2.2,0,7); ctx.stroke();
     ctx.beginPath(); ctx.moveTo(p.x-3,p.y); ctx.lineTo(p.x+3,p.y); ctx.moveTo(p.x,p.y-3); ctx.lineTo(p.x,p.y+3); ctx.stroke(); ctx.fillText(nm,p.x+3,p.y-2); }
   // расширенная панель (экранное пространство)
-  ctx.save(); ctx.setTransform(DPR,0,0,DPR,0,0); ctx.font='600 9px ui-monospace,monospace'; ctx.fillStyle='rgba(0,0,0,0.66)'; ctx.fillRect(6,104,244,138); ctx.fillStyle='#bfe';
-  const g=_rgcSig, j=_rgcJ, e=_rgcErr, R2=(x)=>x.toFixed(1), D=(r)=>Math.round(r*180/Math.PI);
-  const rows=['state '+_pcState+'  air '+g.air+'f',
-    'pelvisOff x'+R2(_pcPx)+' y'+R2(_pcPy)+' (off '+R2(e.pelvisOff)+')',
+  ctx.save(); ctx.setTransform(DPR,0,0,DPR,0,0); ctx.font='600 9px ui-monospace,monospace'; ctx.fillStyle='rgba(0,0,0,0.7)'; ctx.fillRect(6,100,262,170); ctx.fillStyle='#bfe';
+  const g=_rgcSig, j=_rgcJ, e=_rgcErr, R2=(x)=>x.toFixed(1), D=(r)=>Math.round(r*180/Math.PI), b=(x)=>x?1:0;
+  const rows=['state '+_pcState+'  air '+g.air+'f  sinceFirst '+_ph.sinceFirst,
+    'FRONT gap'+R2(_CT.F.gap)+' pen'+R2(_CT.F.pen)+' raw'+b(_CT.F.raw)+' filt'+b(g.fc)+' f'+_CT.F.since,
+    'REAR  gap'+R2(_CT.R.gap)+' pen'+R2(_CT.R.pen)+' raw'+b(_CT.R.raw)+' filt'+b(g.rc)+' f'+_CT.R.since,
+    'pelvisOff x'+R2(_pcPx)+' y'+R2(_pcPy),
     'torso '+D(_pcTor)+'° head '+D(_pcHead)+'°',
     'elbow N'+Math.round(j.elbowN)+' F'+Math.round(j.elbowF)+'°  knee N'+Math.round(j.kneeN)+' F'+Math.round(j.kneeF)+'°',
     'hand '+R2(e.handN)+'/'+R2(e.handF)+'  boot '+R2(e.bootN)+'/'+R2(e.bootF)+'px',
     'pitch '+D(g.pitch)+'° slope '+D(g.slope)+'° angV '+g.angV.toFixed(2),
-    'vertV '+R2(g.vertV)+' longAcc '+g.longAcc.toFixed(2),
-    'contact F'+(g.fc?1:0)+' R'+(g.rc?1:0)+' landImp '+g.landImp];
-  for(let i=0;i<rows.length;i++) ctx.fillText(rows[i],12,118+i*14); ctx.restore(); }
+    'vertV '+R2(g.vertV)+' longAcc '+g.longAcc.toFixed(2)+' landImp '+g.landImp];
+  for(let i=0;i<rows.length;i++) ctx.fillText(rows[i],12,114+i*15); ctx.restore(); }
 // b274: детерминированный BIOMECHANICS acceptance-тест → window.__cutSelfCheck()
 window.__cutSelfCheck=function(){ const R=[], ok=(n,c,d)=>R.push({check:n,pass:!!c,detail:d||''});
   ok('assets_no_404', CUTready && _cutBad.length===0 && A25V2ready && A25V2.wf&&A25V2.wr&&A25V2.fork&&A25V2.swing, _cutBad.length?('404: '+_cutBad.join(',')):'12/12 + v2');
