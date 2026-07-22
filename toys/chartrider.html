@@ -76,7 +76,7 @@ function lerp(a,b,t){return a+(b-a)*t;} function clamp(v,a,b){return v<a?a:v>b?b
 // false → full game everywhere. Single switch. Systems are GATED, never deleted.
 const CORE_TEST_MODE = false;   // b70: META LIVE — building the progression spine (upgrades/bikes with teeth, career, economy) on the confirmed rigid-body core
 // build stamp — bump on every change so a phone refresh can confirm it loaded fresh code (cache!)
-const BUILD = '2026-07-22 · b269';
+const BUILD = '2026-07-22 · b270';
 
 // ---------- procedural market terrain ----------
 // height map sampled every STEP px; generated forward as we ride. Market character:
@@ -1995,6 +1995,12 @@ const A25={}, A25SRC={ bikeAtlas:'assets/trials25d/bike_atlas_4x2.png', crashAtl
 let A25ready=false,_a25n=0; const _a25keys=Object.keys(A25SRC);
 function preloadA25(){ for(const k of _a25keys){ const im=new Image(); im.onload=()=>{ A25[k]=im; if(++_a25n>=_a25keys.length)A25ready=true; }; im.onerror=()=>{ A25[k]=null; if(++_a25n>=_a25keys.length)A25ready=true; }; im.src=A25SRC[k]; } }
 if(TRIALS25) preloadA25();
+// b270 articulated-риг v2 (asset-pack v2): раздельные части, joint-точки, rigDebug
+let RIGDEBUG=false; try{ RIGDEBUG=/[?&]rigDebug=1/.test(location.search); }catch(e){}
+const A25V2={}, A25V2SRC={ body:'assets/trials25d_v2/bike/body_poses_atlas_3x2.png', wf:'assets/trials25d_v2/bike/wheel_front_384.png', wr:'assets/trials25d_v2/bike/wheel_rear_384.png', fork:'assets/trials25d_v2/bike/fork_front_512.png', swing:'assets/trials25d_v2/bike/swingarm_rear_512.png' };
+let A25V2ready=false,_v2n=0; const _v2keys=Object.keys(A25V2SRC);
+function preloadA25V2(){ for(const k of _v2keys){ const im=new Image(); im.onload=()=>{ A25V2[k]=im; if(++_v2n>=_v2keys.length)A25V2ready=true; }; im.onerror=()=>{ A25V2[k]=null; if(++_v2n>=_v2keys.length)A25V2ready=true; }; im.src=A25V2SRC[k]; } }
+if(TRIALS25) preloadA25V2();
 const BIKE_CELL={w:445,h:444,pivotX:0.50,pivotY:0.64}, OBJ_CELL={w:418,h:471};
 function bikeFrame(i){ return {sx:(i%4)*BIKE_CELL.w, sy:Math.floor(i/4)*BIKE_CELL.h, sw:BIKE_CELL.w, sh:BIKE_CELL.h}; }   // атлас 4×2
 function objFrame(i){ return {sx:(i%4)*OBJ_CELL.w, sy:Math.floor(i/4)*OBJ_CELL.h, sw:OBJ_CELL.w, sh:OBJ_CELL.h}; }        // атлас 4×2
@@ -2168,6 +2174,39 @@ function drawTrialsBikeWorld(){ if(!A25.bikeAtlas){ return; } const B=bike;   //
   if(_t25wasAir && B.onG){ _t25sq=Math.min(1,Math.abs(B.vy||0)*0.11+0.35); } _t25wasAir=!B.onG; _t25sq*=0.80;   // squash при посадке
   const fr=bikeFrame(_t25pose), dw=OBW.bikeWorldW, dh=dw*(BIKE_CELL.h/BIKE_CELL.w), sq=1-_t25sq*0.16;
   ctx.save(); ctx.scale(1,sq); ctx.drawImage(A25.bikeAtlas, fr.sx,fr.sy,fr.sw,fr.sh, -dw*0.5, -dh*BIKE_CELL.pivotY+OBW.bikeYoff, dw, dh); ctx.restore(); }
+// ===== b270 ARTICULATED-РИГ v2: раздельные части по joint-точкам (asset-pack v2). Контекст уже в (bike, rotate=physicsAngle). Физику НЕ трогаем — только рендер. =====
+const RIG={ cell:512, pivotX:0.50, pivotY:0.60, scale:0.42, yOff:14,   // scale/yOff — калибровка визуального размера/посадки колёс
+  rearAxle:[0.270,0.710], frontAxle:[0.755,0.710], steeringPivot:[0.655,0.410], swingarmPivot:[0.455,0.610], chassisPivot:[0.500,0.600], riderCOM:[0.470,0.360], helmet:[0.430,0.180],
+  forkA:[0.50,0.10], forkB:[0.50,0.87], swingA:[0.82,0.43], swingB:[0.18,0.58],
+  wheelDia:0.34, travel:10, poseCol:{neutral:0,fwd:1,back:2,brake:3,air:4,land:5} };
+window.RIG=RIG;
+let _rigPose=0,_rigPoseT=0,_rigFrontComp=0,_rigRearComp=0;
+function jLoc(j){ return { x:(j[0]-RIG.pivotX)*RIG.cell*RIG.scale, y:(j[1]-RIG.pivotY)*RIG.cell*RIG.scale + RIG.yOff }; }
+function compressToward(ax,piv,px){ const dx=piv.x-ax.x,dy=piv.y-ax.y,l=Math.hypot(dx,dy)||1; return {x:ax.x+dx/l*px, y:ax.y+dy/l*px}; }   // ход подвески: ось к пивоту
+function drawPart2pt(img,aF,bF,aW,bW){ if(!img)return; const iw=img.width,ih=img.height, ax=aF[0]*iw,ay=aF[1]*ih,bx=bF[0]*iw,by=bF[1]*ih;
+  const dImg=Math.hypot(bx-ax,by-ay)||1, dW=Math.hypot(bW.x-aW.x,bW.y-aW.y), s=dW/dImg, rot=Math.atan2(bW.y-aW.y,bW.x-aW.x)-Math.atan2(by-ay,bx-ax);
+  ctx.save(); ctx.translate(aW.x,aW.y); ctx.rotate(rot); ctx.scale(s,s); ctx.translate(-ax,-ay); ctx.drawImage(img,0,0); ctx.restore(); }
+function drawWheelPart(img,pos,dia,spin){ if(!img)return; ctx.save(); ctx.translate(pos.x,pos.y); ctx.rotate(spin); ctx.drawImage(img,-dia/2,-dia/2,dia,dia); ctx.restore(); }
+function drawArticulatedBike(dbg){ if(!A25V2ready||!A25V2.body)return false; const B=bike;
+  // поза (P0: смена не чаще 80-120мс, hysteresis)
+  let want=0; if(!B.onG){ want=RIG.poseCol.air; } else if(brake&&B.vx>1){ want=RIG.poseCol.brake; } else if(B.rShift<-0.40){ want=RIG.poseCol.back; } else if(down&&B.vx>0.5){ want=RIG.poseCol.fwd; } else want=RIG.poseCol.neutral;
+  _rigPoseT--; if(want!==_rigPose && _rigPoseT<=0){ _rigPose=want; _rigPoseT=7; }
+  if(_t25wasAir && B.onG){ _rigRearComp=1; _rigFrontComp=0.7; } _t25wasAir=!B.onG;   // посадка = сжатие подвески
+  _rigFrontComp*=0.86; _rigRearComp*=0.86;
+  const cell=RIG.cell, S=RIG.scale;
+  const steer=jLoc(RIG.steeringPivot), swingP=jLoc(RIG.swingarmPivot);
+  const frontAx=compressToward(jLoc(RIG.frontAxle),steer,_rigFrontComp*RIG.travel), rearAx=compressToward(jLoc(RIG.rearAxle),swingP,_rigRearComp*RIG.travel);
+  const wd=RIG.wheelDia*cell*S;
+  // слои: 1 заднее колесо → 2 маятник → 3 корпус+райдер → 4 вилка → 5 переднее колесо
+  drawWheelPart(A25V2.wr, rearAx, wd, B.wheel);
+  drawPart2pt(A25V2.swing, RIG.swingA, RIG.swingB, swingP, rearAx);
+  ctx.drawImage(A25V2.body, _rigPose*cell,0,cell,cell, -RIG.pivotX*cell*S, -RIG.pivotY*cell*S+RIG.yOff, cell*S, cell*S);
+  drawPart2pt(A25V2.fork, RIG.forkA, RIG.forkB, steer, frontAx);
+  drawWheelPart(A25V2.wf, frontAx, wd, B.wheel);
+  if(dbg||RIGDEBUG) drawRigDebug(steer,swingP,frontAx,rearAx);
+  return true; }
+function drawRigDebug(steer,swingP,frontAx,rearAx){ const pts=[['frontAxle',frontAx,'#2fd9ff'],['rearAxle',rearAx,'#ff2bd6'],['steeringPivot',steer,'#ffd23c'],['swingarmPivot',swingP,'#7cff5a'],['chassisPivot',jLoc(RIG.chassisPivot),'#ffffff'],['riderCOM',jLoc(RIG.riderCOM),'#ff8a3c'],['helmetHitPoint',jLoc(RIG.helmet),'#c07cff']];
+  ctx.save(); ctx.lineWidth=1.4; for(const [name,p,col] of pts){ ctx.strokeStyle=col; ctx.fillStyle=col; ctx.beginPath(); ctx.arc(p.x,p.y,3.2,0,7); ctx.stroke(); ctx.beginPath(); ctx.moveTo(p.x-6,p.y); ctx.lineTo(p.x+6,p.y); ctx.moveTo(p.x,p.y-6); ctx.lineTo(p.x,p.y+6); ctx.stroke(); } ctx.restore(); }
 window.OBW=OBW;
 function draw(){
   if(CALIB25){ drawCalibration25D(); return; }
@@ -2386,7 +2425,7 @@ function draw(){
   if(screen!=='dead'){
     const _rx=lerp(bike._px===undefined?bike.x:bike._px,bike.x,slowLerp), _ry=lerp(bike._py===undefined?bike.y:bike._py,bike.y,slowLerp), _ra=lerp(bike._pa===undefined?bike.ang:bike._pa,bike.ang,slowLerp);   // b154: интерполяция позы в слоумо (slowLerp<1 только в пропущенном кадре)
     ctx.save(); ctx.translate(_rx,_ry); ctx.rotate(_ra); ctx.translate(0,-1); if(PSP_ON)ctx.scale(PSP.BS,PSP.BS);   // b257: герой КРУПНЕЕ в ¾ (референс) · seat the TIRE CONTACT on the price line; -1 aligns wheel-bottom with the CG-implied ground
-    if(TRIALS25){ drawTrialsBikeWorld(); }   // b265: байк = PNG-кадр по позе (контекст уже в позиции+повороте)
+    if(TRIALS25){ if(!drawArticulatedBike(RIGDEBUG)) drawTrialsBikeWorld(); }   // b270: articulated-риг v2 (раздельные части); fallback на b265 single-PNG если v2 не загружен
     else drawMachine(BK(), bike.wheel, bike.rShift, lean, down&&bike.onG, boosting, riderAirB, riderSquat, trick, trickMix);   // b240 ОТКАТ рига: детальная иллюстрация НЕ склеивается с неон-вектор миром (стилевой конфликт, как фото-фоны ×3). Вектор назад
     ctx.restore();
   }

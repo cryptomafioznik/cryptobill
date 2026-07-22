@@ -1,0 +1,59 @@
+{
+  "name": "cryptobill-trials25d-articulated-v2",
+  "version": 2,
+  "targetViewport": { "width": 390, "height": 844 },
+  "renderMode": "trialsOblique25d",
+  "bike": {
+    "bodyAtlas": "bike/runtime/body_poses_atlas_3x2.png",
+    "bodyCell": { "width": 512, "height": 512 },
+    "bodyPivot": { "x": 0.50, "y": 0.60 },
+    "jointsInitialCalibration": {
+      "rearAxle": { "x": 0.270, "y": 0.710 },
+      "frontAxle": { "x": 0.755, "y": 0.710 },
+      "steeringPivot": { "x": 0.655, "y": 0.410 },
+      "swingarmPivot": { "x": 0.455, "y": 0.610 },
+      "riderCOM": { "x": 0.470, "y": 0.360 },
+      "helmetHitPoint": { "x": 0.430, "y": 0.180 }
+    },
+    "bodyFrames": [
+      "body_neutral_512.png",
+      "body_rider_forward_512.png",
+      "body_rider_back_512.png",
+      "body_brake_braced_512.png",
+      "body_air_tuck_512.png",
+      "body_land_compress_512.png"
+    ],
+    "parts": {
+      "wheelFront": { "file": "bike/runtime/wheel_front_384.png", "pivot": { "x": 0.5, "y": 0.5 } },
+      "wheelRear": { "file": "bike/runtime/wheel_rear_384.png", "pivot": { "x": 0.5, "y": 0.5 } },
+      "forkFront": { "file": "bike/runtime/fork_front_512.png", "steeringEnd": { "x": 0.50, "y": 0.10 }, "axleEnd": { "x": 0.50, "y": 0.87 } },
+      "swingarmRear": { "file": "bike/runtime/swingarm_rear_512.png", "chassisEnd": { "x": 0.82, "y": 0.43 }, "axleEnd": { "x": 0.18, "y": 0.58 } },
+      "crashBike": "bike/runtime/crash_bike_512.png",
+      "crashRider": "bike/runtime/crash_rider_512.png"
+    }
+  },
+  "track": {
+    "topTile": "track/track_top_tile_512x128.png",
+    "sideTile": "track/track_side_tile_512x96.png",
+    "gapCapLeft": "track/track_gap_cap_left.png",
+    "gapCapRight": "track/track_gap_cap_right.png",
+    "gapWarning": "track/gap_warning_chevrons.png"
+  },
+  "environment": {
+    "sky": { "file": "environment/sky_tile_seamless_2048x1024.png", "parallax": 0.03 },
+    "sun": { "file": "environment/sun_disc_striped_700.png", "parallax": 0.03 },
+    "cityFar": ["environment/city_far_a.png", "environment/city_far_b.png"],
+    "cityMid": ["environment/city_mid_a.png", "environment/city_mid_b.png"],
+    "palmsForeground": ["environment/palms_fg_a.png", "environment/palms_fg_b.png"]
+  },
+  "extendedObjects": {
+    "atlas": "objects/objects_extended_atlas_4x2.png",
+    "cell": { "width": 512, "height": 512 },
+    "files": [
+      "crate_broken_1_512.png", "crate_broken_2_512.png",
+      "barrier_intact_512.png", "barrier_broken_512.png",
+      "hazard_spikes_512.png", "start_gate_512.png",
+      "finish_gate_512.png", "checkpoint_passed_512.png"
+    ]
+  }
+}
