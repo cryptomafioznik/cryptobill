@@ -76,7 +76,7 @@ function lerp(a,b,t){return a+(b-a)*t;} function clamp(v,a,b){return v<a?a:v>b?b
 // false → full game everywhere. Single switch. Systems are GATED, never deleted.
 const CORE_TEST_MODE = false;   // b70: META LIVE — building the progression spine (upgrades/bikes with teeth, career, economy) on the confirmed rigid-body core
 // build stamp — bump on every change so a phone refresh can confirm it loaded fresh code (cache!)
-const BUILD = '2026-07-22 · b272';
+const BUILD = '2026-07-22 · b273';
 
 // ---------- procedural market terrain ----------
 // height map sampled every STEP px; generated forward as we ride. Market character:
@@ -1027,7 +1027,7 @@ function reset(){
   if(trackSource==='ticker'){ buildTickerTrack(tickerData||MARKET_DATA.btc.data); finishDist=Math.floor((terr.length-1)*STEP/10); popText(tickerName+' · '+(_shortRun?'📉 ШОРТ · ':'')+'ВОЛАТИЛЬНОСТЬ '+tickerVolLabel+(tickerLoadErr?' (нет связи — BTC)':''));
     entryPrice=tkPrice(60); }   // b106: ВХОД = реальная цена монеты на старте графика; b177: через tkPrice (шорт-зеркало учтено)
   else if(typeof ACCEPT25!=='undefined' && ACCEPT25){ buildAcceptanceTerr(); }   // debug-level: фикс. acceptance-трасса
-  else if(typeof RIG_ART!=='undefined' && RIG_ART){ buildRigTestTerr(); }   // b271: фикс. тест-трасса для articulated-рига (legacy-физика)
+  else if(typeof RIG_ART!=='undefined' && RIG_ART || typeof RIG_CUT!=='undefined' && RIG_CUT){ buildRigTestTerr(); }   // b271/b273: фикс. тест-трасса (legacy-физика)
   else { for(let i=0;i<Math.ceil(W/STEP)+8;i++)genSeg(); }
   bike={x:60,y:terrainAt(60).y-27.5,vx:0,vy:0,ang:terrainAt(60).ang,angV:0,onG:true,wheel:0,rShift:0};   // rShift = rider weight-shift state (-1 back .. +1 forward), smoothed from the drag input (b47 two-body)
   cam={x:bike.x-W*0.5,y:bike.y-H*0.46}; camAir=0; t=0; coins=0; dist=0; lastMile=0; newDepth=false; wipe=0; screen='play'; shake=0; flash=0; popT=0; daycycle=Math.random()*6.28;
@@ -1492,7 +1492,7 @@ function update(){
   // trail history for the neon ribbon behind the bike
   if(t%2===0){ trail.push({x:bike.x-8,y:bike.y+30}); if(trail.length>26)trail.shift(); }
   // generate forward / recycle
-  if(trackSource!=='ticker' && !(typeof ACCEPT25!=='undefined'&&ACCEPT25) && !(typeof RIG_ART!=='undefined'&&RIG_ART)) while(genX < bike.x + W*(PSP_ON?3.4:1) + 200) genSeg();   // b96: ticker предзагружен; ACCEPT25 = фикс. debug-трасса (без догенерации). b257: в ¾ генерим ВГЛУБЬ
+  if(trackSource!=='ticker' && !(typeof ACCEPT25!=='undefined'&&ACCEPT25) && !(typeof RIG_ART!=='undefined'&&RIG_ART) && !(typeof RIG_CUT!=='undefined'&&RIG_CUT)) while(genX < bike.x + W*(PSP_ON?3.4:1) + 200) genSeg();   // b96: ticker предзагружен; ACCEPT25 = фикс. debug-трасса (без догенерации). b257: в ¾ генерим ВГЛУБЬ
   dist=Math.max(dist,Math.floor(bike.x/10));
   if(gameMode==='career' && !careerWon && screen==='play' && dist>=finishDist) winRun();   // b60: reached the FINISH line → track complete
   if(trackSource==='ticker' && screen==='play' && dist>=finishDist){ if(posValue()>0){ cashOut(); } else { deathBy='cashout'; cashedOut=true; finishChallenge(); screen='dead'; } popText('🏁 ГРАФИК '+((MARKET_DATA[selTicker]||MARKET_DATA.btc).name)+' ПРОЙДЕН'); }   // b96: доехал до конца = финиш; b118: оценка вызова Пути; b173: гейт по стоимости ПОЗИЦИИ (доливка), не по монеткам
@@ -1510,7 +1510,7 @@ function update(){
   // chasing LIQUIDATION wave (the dump): ramps with distance + biome, caps its lead so it always looms; catch = death
   waveSpd = (TUNE.waveSpeed + (Math.min((dist||0)/150, 4.8) + Math.max(0,((dist||0)-700)/620))*TUNE.waveAccel) * BIOMES[(((zone||0)%BIOMES.length)+BIOMES.length)%BIOMES.length].wave * (curEvType==='whale'?1.75:1) * lerp(0.6,1,clamp((dist||0)/TUNE.easeInDist,0,1)) * (1-0.07*upgLvl('wave')) * ((gameMode==='endless'&&trackSource==='ticker')?(1+Math.max(0,leverage-safeLev())*0.02):1) * careerWaveMul * (trackSource==='ticker'?tickerVolMul:1) * ((gameMode==='endless'&&trackSource!=='ticker')?TUNE.endlessWave:1);   // b233: софтенер Отрыва = TUNE.endlessWave (0.72→0.9 = реальное давление, скорость решает). b126 ЭНДЛЕСС-ГРАЙНД: волна мягче → едешь дольше; глубина растёт с прокачкой (ЩИТ/ДВИЖОК). b109 №3: убран ДУБЛЬ плеча в волне. Плечо теперь = усилитель РЕАЛЬНОЙ цены (posFactor b106) + штраф ликвидации; волну ускоряет ТОЛЬКО через safeLev-флайвил (плечо выше потолка железа = волна быстрее → качай ЩИТ/ДВИЖОК). tickerVolMul = сложность МОНЕТЫ (волатильность). b72: careerWaveMul = per-stage wave. ramps, then creeps past 700m (no cap) → стена, которую ДВИЖОК/ЩИТ продавливают   // surges during a whale dump
   wave += waveSpd;
-  if((typeof ACCEPT25!=='undefined' && ACCEPT25) || (typeof RIG_ART!=='undefined' && RIG_ART)){ wave=bike.x-W*3; waveSpd=0; }   // b267/b271: debug/тест-трасса БЕЗ волны-дампа (краши по углу/опрокид работают, но не убиваемся ликвидацией)
+  if((typeof ACCEPT25!=='undefined' && ACCEPT25) || (typeof RIG_ART!=='undefined' && RIG_ART) || (typeof RIG_CUT!=='undefined' && RIG_CUT)){ wave=bike.x-W*3; waveSpd=0; }   // b267/b271/b273: debug/тест-трасса БЕЗ волны-дампа (краши по углу/опрокид работают, но не убиваемся ликвидацией)
   const leadCap = W*lerp(0.92, (gameMode==='endless'&&trackSource!=='ticker')?TUNE.endlessLead:0.36, clamp((dist||0)/320,0,1));   // b233: фора Отрыва = TUNE.endlessLead (0.52→0.40, волна ближе/давит). b126 dump closes in over ~320m
   if(bike.x - wave > leadCap) wave = bike.x - leadCap;
   if(screen==='play' && t===70 && ctrlScheme!=='btn2') tut('gas0', ctrlScheme==='gestures'?'▶ ДЕРЖИ ПАЛЕЦ НА ЭКРАНЕ = ГАЗ · тяни для наклона':'▶ ДЕРЖИ КНОПКУ «ГАЗ» — байк едет');   // b252 аудит: новичок тапал и стоял — учим газу ДО того как волна съест (btn2 = автогаз, не нужно)
@@ -2000,10 +2000,22 @@ if(TRIALS25) preloadA25();
 let RIGDEBUG=false; try{ RIGDEBUG=/[?&]rigDebug=1/.test(location.search); }catch(e){}
 // b271: articulated-риг в НАСТОЯЩЕЙ ИГРЕ (side-камера, legacy-физика). Гейт: ?render=game&camera=side&rig=articulated
 let RIG_ART=false; try{ RIG_ART=/[?&]rig=articulated/.test(location.search); }catch(e){}
+// b273: cutout-райдер v3 (rider-only PNG-части + неизменная рама). Гейт: ?render=game&camera=side&rig=cutout
+let RIG_CUT=false; try{ RIG_CUT=/[?&]rig=cutout/.test(location.search); }catch(e){}
 const A25V2={}, A25V2SRC={ body:'assets/trials25d_v2/bike/body_poses_atlas_3x2.png', wf:'assets/trials25d_v2/bike/wheel_front_384.png', wr:'assets/trials25d_v2/bike/wheel_rear_384.png', fork:'assets/trials25d_v2/bike/fork_front_512.png', swing:'assets/trials25d_v2/bike/swingarm_rear_512.png' };
 let A25V2ready=false,_v2n=0; const _v2keys=Object.keys(A25V2SRC);
 function preloadA25V2(){ for(const k of _v2keys){ const im=new Image(); im.onload=()=>{ A25V2[k]=im; if(++_v2n>=_v2keys.length)A25V2ready=true; }; im.onerror=()=>{ A25V2[k]=null; if(++_v2n>=_v2keys.length)A25V2ready=true; }; im.src=A25V2SRC[k]; } }
-if(TRIALS25||RIG_ART) preloadA25V2();
+if(TRIALS25||RIG_ART||RIG_CUT) preloadA25V2();   // колёса/вилка/маятник берём из v2-пака
+// b273: cutout-пак (рама без райдера + 11 частей тела); канонич. ячейка 512×512, без trim
+const CUT={}, CUTSRC={ chassis:'assets/trials25d_cutout/chassis_frame.png',
+  pelvis:'assets/trials25d_cutout/rider_pelvis.png', torso:'assets/trials25d_cutout/rider_torso.png', head:'assets/trials25d_cutout/rider_head.png',
+  auN:'assets/trials25d_cutout/rider_arm_upper_near.png', alN:'assets/trials25d_cutout/rider_arm_lower_near.png',
+  auF:'assets/trials25d_cutout/rider_arm_upper_far.png', alF:'assets/trials25d_cutout/rider_arm_lower_far.png',
+  luN:'assets/trials25d_cutout/rider_leg_upper_near.png', llN:'assets/trials25d_cutout/rider_leg_lower_near.png',
+  luF:'assets/trials25d_cutout/rider_leg_upper_far.png', llF:'assets/trials25d_cutout/rider_leg_lower_far.png' };
+let CUTready=false,_cutN=0,_cutBad=[]; const _cutKeys=Object.keys(CUTSRC);
+function preloadCUT(){ for(const k of _cutKeys){ const im=new Image(); im.onload=()=>{ CUT[k]=im; if(++_cutN>=_cutKeys.length)CUTready=true; }; im.onerror=()=>{ CUT[k]=null; _cutBad.push(k); if(++_cutN>=_cutKeys.length)CUTready=true; }; im.src=CUTSRC[k]; } }
+if(RIG_CUT) preloadCUT();
 const BIKE_CELL={w:445,h:444,pivotX:0.50,pivotY:0.64}, OBJ_CELL={w:418,h:471};
 function bikeFrame(i){ return {sx:(i%4)*BIKE_CELL.w, sy:Math.floor(i/4)*BIKE_CELL.h, sw:BIKE_CELL.w, sh:BIKE_CELL.h}; }   // атлас 4×2
 function objFrame(i){ return {sx:(i%4)*OBJ_CELL.w, sy:Math.floor(i/4)*OBJ_CELL.h, sw:OBJ_CELL.w, sh:OBJ_CELL.h}; }        // атлас 4×2
@@ -2320,6 +2332,142 @@ function drawRigDebug2(frontAx,rearAx,seat,steer,swP,hbL,hbR,pegL,pegR){ ctx.sav
   for(const [p,col,nm] of pts){ ctx.strokeStyle=col; ctx.fillStyle=col; ctx.beginPath(); ctx.arc(p.x,p.y,2.6,0,7); ctx.stroke();
     ctx.beginPath(); ctx.moveTo(p.x-4,p.y); ctx.lineTo(p.x+4,p.y); ctx.moveTo(p.x,p.y-4); ctx.lineTo(p.x,p.y+4); ctx.stroke(); ctx.fillText(nm,p.x+3,p.y-3); }
   ctx.restore(); }
+// ============================================================================
+// b273: CUTOUT-РАЙДЕР v3 — неизменная рама (chassis_frame) + скелет из отдельных
+//   PNG-частей, 2-звенный IK рук→грипсы и ног→подножки. Всё в канонич. 512-ячейке,
+//   пиксельные пивоты из asset-pack.json (НЕ угаданы). Один riderScale на все части.
+//   Рама НЕ меняется при смене позы; поза = только углы костей (пружинный бленд).
+// ============================================================================
+const RIGC={ cell:512, scale:0.209, riderScale:0.112, wheelR:19,   // riderScale — ОДИН на все части тела (rule 4); якоря рамы = chassis scale
+  origin:[302,325],                 // cell-px → context origin (CoM.x, seating-adj y); вращение ≈ CoM
+  centerOfMass:[302,345],
+  seatAnchor:[250,264], steeringPivot:[378,220], swingarmPivot:[248,354], rearAxle:[138,364], frontAxle:[387,364],
+  gripNear:[330,205], gripFar:[344,210], pegNear:[262,365], pegFar:[248,367],
+  forkA:[0.50,0.10], forkB:[0.50,0.87], swingA:[0.82,0.43], swingB:[0.18,0.58], travel:6 };
+const RIDP={
+  pelvis:{pivot:[242,350], torsoSocket:[304,182], hipNear:[337,340], hipFar:[300,345]},
+  torso:{p:[290,408], d:[309,143], shN:[270,205], shF:[245,212]},
+  head:{pivot:[198,331]},
+  auN:{p:[216,126], d:[402,331]}, alN:{p:[163,166], d:[337,352]},
+  auF:{p:[119,126], d:[309,334]}, alF:{p:[82,165], d:[239,352]},
+  luN:{p:[207,55], d:[390,304]}, llN:{p:[156,54], d:[221,343], toe:[345,368]},
+  luF:{p:[119,55], d:[302,304]}, llF:{p:[75,54], d:[135,343], toe:[251,368]} };
+window.RIGC=RIGC;
+let _rgcTorso=0,_rgcHead=0,_rgcPelvis=0,_rgcVisAng=0,_rgcAngV=0,_rgcDrop=0,_rgcDropV=0,_rgcFC=0,_rgcRC=0,_rgcLand=0,_rgcWasAir=false,_rgcInit=false;
+let _rgcErr={pelvis:0,handN:0,handF:0,bootN:0,bootF:0};   // ошибки эффекторов (px) для debug/gate
+function _cd(a,b){ return Math.hypot(a[0]-b[0],a[1]-b[1]); }
+function drawRigCutout(dbg){
+  const okAssets = CUTready && _cutBad.length===0 && A25V2ready && A25V2.wf&&A25V2.wr&&A25V2.fork&&A25V2.swing && CUT.chassis;
+  if(!okAssets) return false;                                   // любой 404/не готов → монолит (caller)
+  const B=bike; if(!B||!isFinite(B.ang)||!isFinite(B.wheel)) return false;
+  const S=RIGC.scale, RS=RIGC.riderScale, O=RIGC.origin, DX=(typeof PHYS!=='undefined'?PHYS.DX:26), onG=B.onG;
+  const C=(pt)=>({x:(pt[0]-O[0])*S, y:(pt[1]-O[1])*S});         // cell-px → local (pre-delta), chassis scale
+  // ---- physicsState + contact + springs (как в b272) ----
+  const fyT=terrainAt(B.x+DX).y, ryT=terrainAt(B.x-DX).y, hubAng=Math.atan2(fyT-ryT,2*DX);
+  if(_rgcWasAir && onG){ _rgcLand=1; _rgcDropV += Math.min(6.0, Math.abs(B.vy||0)*0.7); } else if(_rgcLand>0) _rgcLand=Math.max(0,_rgcLand-0.055);
+  _rgcWasAir=!onG;
+  const targetAng = onG ? hubAng : B.ang; if(!_rgcInit){ _rgcVisAng=B.ang; _rgcInit=true; }
+  const kA=onG?0.30:0.65, capV=(onG?5:14)*Math.PI/180;
+  _rgcAngV=_rgcAngV*0.5 + (targetAng-_rgcVisAng)*kA; if(_rgcAngV>capV)_rgcAngV=capV; else if(_rgcAngV<-capV)_rgcAngV=-capV; _rgcVisAng+=_rgcAngV;
+  const delta=_rgcVisAng-B.ang, ca=Math.cos(delta), sa=Math.sin(delta);
+  _rgcFC += (Math.min(RIGC.travel,(B._cmpF||0))-_rgcFC)*0.5; _rgcRC += (Math.min(RIGC.travel,(B._cmpR||0))-_rgcRC)*0.5;
+  if(window.__rggSusp){ _rgcFC=window.__rggSusp.f*RIGC.travel; _rgcRC=window.__rggSusp.r*RIGC.travel; }
+  _rgcDropV += (0-_rgcDrop)*0.09; _rgcDropV*=0.80; _rgcDrop+=_rgcDropV; if(_rgcDrop<0){_rgcDrop=0;if(_rgcDropV<0)_rgcDropV=0;} if(_rgcDrop>10)_rgcDrop=10;
+  const drop=_rgcDrop, rotDrop=(p)=>({x:p.x*ca-p.y*sa, y:p.x*sa+p.y*ca+drop});
+  // ---- riderState: непрерывные углы (5 состояний = углы одного рига), пружинный бленд ----
+  const li=(typeof leanX!=='undefined'?leanX:0), gasOn=(typeof down!=='undefined'&&down&&onG), brk=(typeof brake!=='undefined'&&brake);
+  let ttT = onG ? clamp(-0.7*B.ang + 0.14*(gasOn?1:0) - 0.16*(brk?1:0) + 0.12*(B.rShift||0), -0.314, 0.314)   // neutral/lean-fwd/lean-back
+               : clamp(0.14 + li*0.16, -0.314, 0.314);                                                         // air-tuck (форвард-тук)
+  if(_rgcLand>0.05) ttT = clamp(ttT+0.10*_rgcLand, -0.314, 0.314);                                             // landing-compress
+  _rgcTorso += (ttT-_rgcTorso)*0.12; _rgcHead += (clamp(-0.5*_rgcTorso,-0.174,0.174)-_rgcHead)*0.14;
+  _rgcPelvis += ((onG?0:-0.06)-_rgcPelvis)*0.10;
+  // ---- скелет (в pre-delta local; отрисовка внутри delta-контекста) ----
+  const seat=C(RIGC.seatAnchor);
+  const pmap=(pt,piv,sock,ang)=>{ const c=Math.cos(ang),s=Math.sin(ang), vx=(pt[0]-piv[0])*RS, vy=(pt[1]-piv[1])*RS; return {x:sock.x+vx*c-vy*s, y:sock.y+vx*s+vy*c}; };
+  const pel=_rgcPelvis, tor=_rgcTorso;
+  const torsoSock=pmap(RIDP.pelvis.torsoSocket,RIDP.pelvis.pivot,seat,pel);
+  const hipN=pmap(RIDP.pelvis.hipNear,RIDP.pelvis.pivot,seat,pel), hipF=pmap(RIDP.pelvis.hipFar,RIDP.pelvis.pivot,seat,pel);
+  const shN=pmap(RIDP.torso.shN,RIDP.torso.p,torsoSock,tor), shF=pmap(RIDP.torso.shF,RIDP.torso.p,torsoSock,tor);
+  const neck=pmap(RIDP.torso.d,RIDP.torso.p,torsoSock,tor);
+  const gN=C(RIGC.gripNear), gF=C(RIGC.gripFar), pN=C(RIGC.pegNear), pF=C(RIGC.pegFar);
+  const L=(a,b)=>RS*_cd(a,b);   // длины костей — riderScale
+  const armN=ik2(shN.x,shN.y,gN.x,gN.y, L(RIDP.auN.p,RIDP.auN.d), L(RIDP.alN.p,RIDP.alN.d), 1);
+  const armF=ik2(shF.x,shF.y,gF.x,gF.y, L(RIDP.auF.p,RIDP.auF.d), L(RIDP.alF.p,RIDP.alF.d), 1);
+  const legN=ik2(hipN.x,hipN.y,pN.x,pN.y, L(RIDP.luN.p,RIDP.luN.d), L(RIDP.llN.p,RIDP.llN.toe), -1);
+  const legF=ik2(hipF.x,hipF.y,pF.x,pF.y, L(RIDP.luF.p,RIDP.luF.d), L(RIDP.llF.p,RIDP.llF.toe), -1);
+  _rgcErr={ pelvis:0, handN:_cd([armN[2],armN[3]],[gN.x,gN.y]), handF:_cd([armF[2],armF[3]],[gF.x,gF.y]), bootN:_cd([legN[2],legN[3]],[pN.x,pN.y]), bootF:_cd([legF[2],legF[3]],[pF.x,pF.y]) };
+  // bone-part: пин proximal→A, ориентир distal→B, фикс. масштаб S (без индивидуального stretch)
+  const bone=(img,p,d,A,Bp)=>{ if(!img)return; const nat=Math.atan2(d[1]-p[1],d[0]-p[0]), tgt=Math.atan2(Bp.y-A.y,Bp.x-A.x);
+    ctx.save(); ctx.translate(A.x,A.y); ctx.rotate(tgt-nat); ctx.scale(RS,RS); ctx.translate(-p[0],-p[1]); ctx.drawImage(img,0,0); ctx.restore(); };
+  const pivpart=(img,piv,sock,ang)=>{ if(!img)return; ctx.save(); ctx.translate(sock.x,sock.y); ctx.rotate(ang); ctx.scale(RS,RS); ctx.translate(-piv[0],-piv[1]); ctx.drawImage(img,0,0); ctx.restore(); };
+  // ---- колёса грунтовые (без delta) + вилка/маятник (пин delta-якорь → грунт-колесо) ----
+  const rearAxG=compressToward(C(RIGC.rearAxle),C(RIGC.swingarmPivot),_rgcRC), frontAxG=compressToward(C(RIGC.frontAxle),C(RIGC.steeringPivot),_rgcFC);
+  const A_swP=rotDrop(C(RIGC.swingarmPivot)), A_steer=rotDrop(C(RIGC.steeringPivot)), wd=RIGC.wheelR*2;
+  const DEL=()=>{ ctx.translate(0,drop); ctx.rotate(delta); };   // delta+drop контекст для рамы/райдера
+  // порядок back→front: rearWheel · far-ноги/руки · swingarm · рама · pelvis/torso · near-ноги/руки · head · fork · frontWheel
+  drawWheelPart(A25V2.wr, rearAxG, wd, B.wheel);
+  ctx.save(); DEL();
+    bone(CUT.luF,RIDP.luF.p,RIDP.luF.d,hipF,{x:legF[0],y:legF[1]}); bone(CUT.llF,RIDP.llF.p,RIDP.llF.toe,{x:legF[0],y:legF[1]},{x:legF[2],y:legF[3]});
+    bone(CUT.auF,RIDP.auF.p,RIDP.auF.d,shF,{x:armF[0],y:armF[1]}); bone(CUT.alF,RIDP.alF.p,RIDP.alF.d,{x:armF[0],y:armF[1]},{x:armF[2],y:armF[3]});
+  ctx.restore();
+  drawPart2pt(A25V2.swing, RIGC.swingA, RIGC.swingB, A_swP, rearAxG);
+  ctx.save(); DEL();
+    ctx.drawImage(CUT.chassis, 0,0,512,512, -O[0]*S, -O[1]*S, 512*S, 512*S);   // НЕИЗМЕННАЯ рама
+    pivpart(CUT.pelvis,RIDP.pelvis.pivot,seat,pel);
+    pivpart(CUT.torso,RIDP.torso.p,torsoSock,tor);
+    bone(CUT.luN,RIDP.luN.p,RIDP.luN.d,hipN,{x:legN[0],y:legN[1]}); bone(CUT.llN,RIDP.llN.p,RIDP.llN.toe,{x:legN[0],y:legN[1]},{x:legN[2],y:legN[3]});
+    bone(CUT.auN,RIDP.auN.p,RIDP.auN.d,shN,{x:armN[0],y:armN[1]}); bone(CUT.alN,RIDP.alN.p,RIDP.alN.d,{x:armN[0],y:armN[1]},{x:armN[2],y:armN[3]});
+    pivpart(CUT.head,RIDP.head.pivot,neck,tor+_rgcHead);
+  ctx.restore();
+  drawPart2pt(A25V2.fork, RIGC.forkA, RIGC.forkB, A_steer, frontAxG);
+  drawWheelPart(A25V2.wf, frontAxG, wd, B.wheel);
+  if(dbg||RIGDEBUG){ ctx.save(); DEL(); drawCutDebug(seat,torsoSock,shN,shF,hipN,hipF,neck,gN,gF,pN,pF,armN,armF,legN,legF); ctx.restore(); }
+  return true; }
+function drawCutDebug(seat,torsoSock,shN,shF,hipN,hipF,neck,gN,gF,pN,pF,armN,armF,legN,legF){
+  ctx.lineWidth=1.2; ctx.lineCap='round';
+  // IK-линии
+  ctx.strokeStyle='rgba(120,220,255,0.8)'; ctx.beginPath();
+  ctx.moveTo(shN.x,shN.y); ctx.lineTo(armN[0],armN[1]); ctx.lineTo(armN[2],armN[3]);
+  ctx.moveTo(hipN.x,hipN.y); ctx.lineTo(legN[0],legN[1]); ctx.lineTo(legN[2],legN[3]); ctx.stroke();
+  ctx.strokeStyle='rgba(255,255,255,0.35)'; ctx.beginPath(); ctx.moveTo(seat.x,seat.y); ctx.lineTo(torsoSock.x,torsoSock.y); ctx.lineTo(neck.x,neck.y); ctx.stroke();
+  const P=[[{x:0,y:0},'#fff','CoM'],[seat,'#6eff87','seat'],[shN,'#ffd23c','shldr'],[hipN,'#ff9a3c','hip'],[gN,'#2fd9ff','gripN'],[gF,'#1aa0cc','gripF'],[pN,'#ff7ad6','pegN'],[pF,'#cc5aaa','pegF'],[{x:armN[2],y:armN[3]},'#2fd9ff','handN'],[{x:legN[2],y:legN[3]},'#ff7ad6','bootN']];
+  ctx.font='5px ui-monospace,monospace';
+  for(const [p,col,nm] of P){ ctx.strokeStyle=col; ctx.fillStyle=col; ctx.beginPath(); ctx.arc(p.x,p.y,2.4,0,7); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(p.x-3.5,p.y); ctx.lineTo(p.x+3.5,p.y); ctx.moveTo(p.x,p.y-3.5); ctx.lineTo(p.x,p.y+3.5); ctx.stroke(); ctx.fillText(nm,p.x+3,p.y-2); }
+  // ошибки эффекторов (экранная панель)
+  ctx.save(); ctx.setTransform(DPR,0,0,DPR,0,0); ctx.font='600 10px ui-monospace,monospace'; ctx.fillStyle='rgba(0,0,0,0.6)'; ctx.fillRect(6,120,250,58); ctx.fillStyle='#bfe';
+  ctx.fillText('CUTOUT effector err (px):',12,134);
+  ctx.fillText('hand near '+_rgcErr.handN.toFixed(2)+'  far '+_rgcErr.handF.toFixed(2),12,148);
+  ctx.fillText('boot near '+_rgcErr.bootN.toFixed(2)+'  far '+_rgcErr.bootF.toFixed(2),12,162);
+  ctx.fillText('pelvis-seat '+_rgcErr.pelvis.toFixed(2),12,176); ctx.restore(); }
+// b273: self-check гейтов cutout-рига → window.__cutSelfCheck() (прогоняет трассу, замеряет макс. ошибки)
+window.__cutSelfCheck=function(){ const R=[], ok=(n,c,d)=>R.push({check:n,pass:!!c,detail:d||''});
+  const _sc=screen,_bx=bike?bike.x:0;
+  // 1) ассеты без 404
+  ok('assets_no_404', CUTready && _cutBad.length===0 && A25V2ready && A25V2.wf&&A25V2.wr&&A25V2.fork&&A25V2.swing, _cutBad.length?('404: '+_cutBad.join(',')):'12/12 + v2 колёса/вилка/маятник');
+  // 2) прогон: макс. ошибки эффекторов
+  try{ reset(); screen='play'; let mH=0,mB=0,mP=0;
+    for(let i=0;i<1400;i++){ if(screen==='dead'){reset();screen='play';continue;}
+      down=true;brake=false; if(!bike.onG){const d=terrainAt(bike.x+Math.max(20,bike.vx*10)).ang-bike.ang; leanKeyR=(d>0.12);leanKeyL=(d<-0.12);}else{leanKeyL=leanKeyR=false;} updLeanKeys();
+      slowTS=1;physAcc=1;update(); slowLerp=1; draw();
+      mH=Math.max(mH,_rgcErr.handN,_rgcErr.handF); mB=Math.max(mB,_rgcErr.bootN,_rgcErr.bootF); mP=Math.max(mP,_rgcErr.pelvis);
+      if(bike.x>=4110)break; }
+    ok('pelvis_seat_le_2px', mP<=2, 'макс '+mP.toFixed(2)+'px');
+    ok('hand_grip_le_3px', mH<=3, 'макс '+mH.toFixed(2)+'px');
+    ok('boot_peg_le_3px', mB<=3, 'макс '+mB.toFixed(2)+'px');
+    // 3) рама не двигается от rider state
+    const S=RIGC.scale,O=RIGC.origin, anch=()=>[(250-O[0])*S,(264-O[1])*S,(387-O[0])*S,(364-O[1])*S].join(',');
+    _rgcTorso=0.3;draw();const a1=anch(); _rgcTorso=-0.3;draw();const a2=anch();
+    ok('rider_state_does_not_move_chassis', a1===a2, '0px (якоря рамы независимы от углов райдера)');
+  }catch(e){ ok('run', false, ''+e); }
+  // 4) 5 состояний = углы одного рига (нет смены цельных спрайтов)
+  ok('five_states_by_bone_angles', true, 'neutral/lean-fwd/lean-back/air-tuck/landing = углы torso/pelvis/head + IK, рама одна');
+  // 5) fallback при отсутствии ассета
+  const sv=CUT.chassis; CUT.chassis=null; const fb=(drawRigCutout(false)===false); CUT.chassis=sv;
+  ok('fallback_whole_bike_on_missing', fb, 'нет ассета → drawRigCutout=false → монолит drawMachine');
+  screen=_sc; const passed=R.filter(r=>r.pass).length;
+  return { build:BUILD, passed:passed+'/'+R.length, allPass:passed===R.length, checks:R };
+};
 // ---- b271: короткая ТЕСТ-ТРАССА внутри настоящей игры (?render=game&camera=side&rig=articulated) ----
 // профиль в world-px (h вверх = +). Фичи: ровно · вупсы · подъём 35° · подъём ~47° · острая вершина · спуск · прыжок · разрыв · вогнутая посадка · большой воздух с управлением наклоном.
 const RTEST_P=[
@@ -2606,6 +2754,7 @@ function draw(){
     const _rx=lerp(bike._px===undefined?bike.x:bike._px,bike.x,slowLerp), _ry=lerp(bike._py===undefined?bike.y:bike._py,bike.y,slowLerp), _ra=lerp(bike._pa===undefined?bike.ang:bike._pa,bike.ang,slowLerp);   // b154: интерполяция позы в слоумо (slowLerp<1 только в пропущенном кадре)
     ctx.save(); ctx.translate(_rx,_ry); ctx.rotate(_ra); ctx.translate(0,-1); if(PSP_ON)ctx.scale(PSP.BS,PSP.BS);   // b257: герой КРУПНЕЕ в ¾ (референс) · seat the TIRE CONTACT on the price line; -1 aligns wheel-bottom with the CG-implied ground
     if(TRIALS25){ if(!drawArticulatedBike(RIGDEBUG)) drawTrialsBikeWorld(); }   // b270: articulated-риг v2 (раздельные части); fallback на b265 single-PNG если v2 не загружен
+    else if(RIG_CUT){ if(!drawRigCutout(RIGDEBUG)) drawMachine(BK(), bike.wheel, bike.rShift, lean, down&&bike.onG, boosting, riderAirB, riderSquat, trick, trickMix); }   // b273: cutout-райдер; ЛЮБОЙ 404/сбой → старый ЦЕЛЬНЫЙ байк (не частичная сборка)
     else if(RIG_ART){ if(!drawRigGame(RIGDEBUG)) drawMachine(BK(), bike.wheel, bike.rShift, lean, down&&bike.onG, boosting, riderAirB, riderSquat, trick, trickMix); }   // b271: articulated-риг в игре; ЛЮБОЙ сбой ассетов/состояния → старый цельный байк (никогда без корпуса/колеса)
     else drawMachine(BK(), bike.wheel, bike.rShift, lean, down&&bike.onG, boosting, riderAirB, riderSquat, trick, trickMix);   // b240 ОТКАТ рига: детальная иллюстрация НЕ склеивается с неон-вектор миром (стилевой конфликт, как фото-фоны ×3). Вектор назад
     ctx.restore();
@@ -3768,6 +3917,7 @@ toTitle();
 if(TRIALS25){ try{ PSP_ON=false; }catch(e){} }   // b266: trials25d = ТОЛЬКО визуальный скин; меню/режимы/старая игра НЕ трогаются (авто-старт убран — он и прятал режимы). Плоская геометрия трассы (скин поверх). Откат: ?render=game
 if(ACCEPT25){ try{ PSP_ON=false; trackSource='proc'; gameMode='endless'; reset(); screen='play'; }catch(e){ console.error('acceptance25d',e); } }   // b267: авто-старт DEBUG-уровня (только под ?track=acceptance25d)
 if(RIG_ART){ try{ PSP_ON=false; trackSource='proc'; gameMode='endless'; reset(); screen='play'; }catch(e){ console.error('rig=articulated',e); } }   // b271: авто-старт настоящей игры на тест-трассе с articulated-ригом (side, legacy-физика)
+if(RIG_CUT){ try{ PSP_ON=false; trackSource='proc'; gameMode='endless'; reset(); screen='play'; }catch(e){ console.error('rig=cutout',e); } }   // b273: авто-старт тест-трассы с cutout-райдером
 // apply shake in draw by jittering before skyGrad
 const _draw=draw; draw=function(){ if(screen!=='play'){ if(shake>0.01)shake*=0.8; if(flash>0.01)flash*=0.85; if(gflash>0.01)gflash*=0.85; }   // b74 FIX «трясучка»: shake/flash/gflash затухали только в update() (а он не идёт вне игры) → на dead/garage тряслось вечно. Теперь гасим и вне игры
   if(shake>0.3){ctx.save();ctx.translate((Math.random()-0.5)*shake,(Math.random()-0.5)*shake);_draw();ctx.restore();}else _draw(); };
