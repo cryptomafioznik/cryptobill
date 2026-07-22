@@ -76,7 +76,7 @@ function lerp(a,b,t){return a+(b-a)*t;} function clamp(v,a,b){return v<a?a:v>b?b
 // false → full game everywhere. Single switch. Systems are GATED, never deleted.
 const CORE_TEST_MODE = false;   // b70: META LIVE — building the progression spine (upgrades/bikes with teeth, career, economy) on the confirmed rigid-body core
 // build stamp — bump on every change so a phone refresh can confirm it loaded fresh code (cache!)
-const BUILD = '2026-07-22 · b261';
+const BUILD = '2026-07-22 · b262';
 
 // ---------- procedural market terrain ----------
 // height map sampled every STEP px; generated forward as we ride. Market character:
@@ -1977,7 +1977,7 @@ function f2(v){ return (v==null)?'—':v.toFixed(2); }
 // ============================================================================
 let TRIALS25=false; try{ TRIALS25=/[?&]render=trials25d/.test(location.search); }catch(e){}
 const OB={ scaleX:18, scaleY:18, anchorX:0.33, anchorY:0.52, depthVX:24, depthVY:-12, tilt:-0.05, perspFade:0.12, uFar:20,
-  roadVisW:1.0, sideFacePx:5, depthAmp:0.4, depthFreq:0.12, depthPhase:0, cameraS:7, cameraHeight:2.5, bikeS:7 };
+  roadVisW:1.15, sideFacePx:5, beamThick:24, pillarEvery:4, depthAmp:0.4, depthFreq:0.12, depthPhase:0, cameraS:7, cameraHeight:2.5, bikeS:7 };
 function visualDepth(s){ return OB.depthAmp*Math.sin(s*OB.depthFreq+OB.depthPhase); }   // декоративная низкочастотная глубина — НЕ в физике
 function projOB(s,height,depth){ const u=s-OB.cameraS, persp=1-clamp(u/OB.uFar,0,1)*OB.perspFade;   // слабое уменьшение (≤12%), НЕ точка схода
   return { x: W*OB.anchorX + u*OB.scaleX*persp + depth*OB.depthVX,
@@ -2013,25 +2013,30 @@ function drawTrialsBg(){ const hz=H*0.46;
   ctx.fillStyle='#0c0716'; for(const px of [W*0.06,W*0.9,W*0.55]){ drawPalmSil(px,H*0.9,26); }
 }
 function drawPalmSil(x,y,r){ ctx.strokeStyle='#0c0716'; ctx.lineWidth=5; ctx.beginPath(); ctx.moveTo(x,y); ctx.lineTo(x-4,y-r*2.2); ctx.stroke(); ctx.fillStyle='#0c0716'; for(let k=0;k<7;k++){ const a=-Math.PI/2+(k-3)*0.42; ctx.beginPath(); ctx.moveTo(x-4,y-r*2.2); ctx.quadraticCurveTo(x-4+Math.cos(a)*r*0.7,y-r*2.2+Math.sin(a)*r*0.7-6,x-4+Math.cos(a)*r*1.4,y-r*2.2+Math.sin(a)*r*1.4+4); ctx.lineTo(x-4,y-r*2.2); ctx.fill(); } }
-// --- лента трассы: два визуальных края + верхняя поверхность (квады) + неон ---
-function drawTrialsRibbon(sA,sB){ const ds=0.3, hw=OB.roadVisW/2;
-  const near=[], far=[]; for(let s=sA;s<=sB;s+=ds){ if(inGap(s)){ near.push(null); far.push(null); continue; } const h=trackHeightC(s), d=visualDepth(s); near.push(projOB(s,h,d-hw)); far.push(projOB(s,h,d+hw)); }
-  // 1) дальний край (тусклый неон)
-  ctx.strokeStyle='rgba(90,220,255,0.5)'; ctx.lineWidth=2; ctx.lineJoin='round'; ctx.beginPath(); let pen=false;
-  for(const p of far){ if(!p){pen=false;continue;} if(!pen){ctx.moveTo(p.x,p.y);pen=true;}else ctx.lineTo(p.x,p.y);} ctx.stroke();
-  // 2) верхняя поверхность (квады) — тёмная, почти плоская
-  for(let i=0;i<near.length-1;i++){ const n0=near[i],n1=near[i+1],f0=far[i],f1=far[i+1]; if(!n0||!n1||!f0||!f1)continue;
-    ctx.fillStyle='rgba(22,14,40,0.94)'; ctx.beginPath(); ctx.moveTo(n0.x,n0.y); ctx.lineTo(n1.x,n1.y); ctx.lineTo(f1.x,f1.y); ctx.lineTo(f0.x,f0.y); ctx.closePath(); ctx.fill(); }
-  // 3) боковая грань (тонкая, ≤ sideFacePx) — низ ближнего края
-  for(let i=0;i<near.length-1;i++){ const n0=near[i],n1=near[i+1]; if(!n0||!n1)continue; ctx.fillStyle='rgba(8,5,18,0.96)'; ctx.beginPath(); ctx.moveTo(n0.x,n0.y); ctx.lineTo(n1.x,n1.y); ctx.lineTo(n1.x,n1.y+OB.sideFacePx); ctx.lineTo(n0.x,n0.y+OB.sideFacePx); ctx.closePath(); ctx.fill(); }
-  // 4) поперечные швы (каждые ~1.6 ед.)
-  ctx.strokeStyle='rgba(150,190,230,0.22)'; ctx.lineWidth=1; for(let i=0;i<near.length;i++){ const s=sA+i*ds; if((Math.round(s/1.6)!==Math.round((s-ds)/1.6))&&near[i]&&far[i]){ ctx.beginPath(); ctx.moveTo(near[i].x,near[i].y); ctx.lineTo(far[i].x,far[i].y); ctx.stroke(); } }
+// --- ТОЛСТАЯ 3D-НЕОН-БАЛКА (рефы 4/5): верх с сеткой + боковая толщина + опоры-сваи ---
+function polyOB(arr){ let pen=false; ctx.beginPath(); for(const p of arr){ if(!p){pen=false;continue;} if(!pen){ctx.moveTo(p.x,p.y);pen=true;}else ctx.lineTo(p.x,p.y);} ctx.stroke(); }
+function drawTrialsBeam(sA,sB){ const ds=0.3, hw=OB.roadVisW/2, TH=OB.beamThick;
+  const near=[], far=[], fb=[];   // near=передне-нижний край, far=задне-верхний, fb=низ передней грани
+  for(let s=sA;s<=sB;s+=ds){ if(inGap(s)){near.push(null);far.push(null);fb.push(null);continue;} const h=trackHeightC(s), d=visualDepth(s); const n=projOB(s,h,d-hw), f=projOB(s,h,d+hw); near.push(n); far.push(f); fb.push({x:n.x,y:n.y+TH}); }
+  // 0) опоры-сваи (за балкой) каждые pillarEvery ед. — уходят вниз к воде
+  for(let i=0;i<near.length;i++){ const s=sA+i*ds; if(Math.round(s/OB.pillarEvery)!==Math.round((s-ds)/OB.pillarEvery)&&fb[i]){ const g=ctx.createLinearGradient(0,fb[i].y,0,H); g.addColorStop(0,'rgba(24,16,44,0.95)'); g.addColorStop(1,'rgba(12,8,26,0.35)'); ctx.fillStyle=g; ctx.fillRect(fb[i].x-3.5,fb[i].y,7,H-fb[i].y); ctx.fillStyle='rgba(120,90,180,0.18)'; ctx.fillRect(fb[i].x-3.5,fb[i].y,1.6,H-fb[i].y); } }
+  // 1) ПЕРЕДНЯЯ ГРАНЬ (толщина балки) — тёмная с вертикальным градиентом
+  for(let i=0;i<near.length-1;i++){ const n0=near[i],n1=near[i+1]; if(!n0||!n1)continue; const g=ctx.createLinearGradient(0,n0.y,0,n0.y+TH); g.addColorStop(0,'rgba(26,16,44,0.99)'); g.addColorStop(1,'rgba(9,6,20,0.99)'); ctx.fillStyle=g; ctx.beginPath(); ctx.moveTo(n0.x,n0.y); ctx.lineTo(n1.x,n1.y); ctx.lineTo(n1.x,n1.y+TH); ctx.lineTo(n0.x,n0.y+TH); ctx.closePath(); ctx.fill(); }
+  // 2) ВЕРХНЯЯ ПОВЕРХНОСТЬ (квады) — чуть светлее грани (освещённый верх)
+  for(let i=0;i<near.length-1;i++){ const n0=near[i],n1=near[i+1],f0=far[i],f1=far[i+1]; if(!n0||!n1||!f0||!f1)continue; ctx.fillStyle='rgba(30,20,52,0.98)'; ctx.beginPath(); ctx.moveTo(n0.x,n0.y); ctx.lineTo(n1.x,n1.y); ctx.lineTo(f1.x,f1.y); ctx.lineTo(f0.x,f0.y); ctx.closePath(); ctx.fill(); }
+  // 3) СЕТКА на верхе: поперечные швы (каждые ~1.1 ед.) + продольная центр-линия
+  ctx.strokeStyle='rgba(120,170,225,0.20)'; ctx.lineWidth=1; for(let i=0;i<near.length;i++){ const s=sA+i*ds; if(Math.round(s/1.1)!==Math.round((s-ds)/1.1)&&near[i]&&far[i]){ ctx.beginPath(); ctx.moveTo(near[i].x,near[i].y); ctx.lineTo(far[i].x,far[i].y); ctx.stroke(); } }
+  ctx.strokeStyle='rgba(120,170,225,0.12)'; const mid=near.map((n,i)=>n&&far[i]?{x:(n.x+far[i].x)/2,y:(n.y+far[i].y)/2}:null); polyOB(mid);
+  // 4) дальний (верхний) край — CYAN неон
+  ctx.save(); ctx.lineJoin='round'; ctx.lineCap='round'; ctx.shadowColor='#2fd9ff'; ctx.shadowBlur=7; ctx.strokeStyle='#2fd9ff'; ctx.lineWidth=2.2; polyOB(far); ctx.restore();
+  // 5) нижний край передней грани — тусклый magenta
+  ctx.save(); ctx.strokeStyle='rgba(255,47,208,0.45)'; ctx.lineWidth=1.6; polyOB(fb); ctx.restore();
 }
-// ближний край — яркий неон (magenta + cyan, glow ≤10) — рисуется ПОСЛЕ байка (байк сидит НА ленте)
+// ближний (передне-верхний) край — яркий MAGENTA неон, рисуется ПОСЛЕ байка (байк сидит НА балке)
 function drawTrialsNearEdge(sA,sB){ const ds=0.3, hw=OB.roadVisW/2; const near=[]; for(let s=sA;s<=sB;s+=ds){ if(inGap(s)){near.push(null);continue;} near.push(projOB(s,trackHeightC(s),visualDepth(s)-hw)); }
   ctx.save(); ctx.lineJoin='round'; ctx.lineCap='round';
-  ctx.shadowColor='#ff2fd0'; ctx.shadowBlur=10; ctx.strokeStyle='#ff2fd0'; ctx.lineWidth=3.2; let pen=false; ctx.beginPath(); for(const p of near){ if(!p){pen=false;continue;} if(!pen){ctx.moveTo(p.x,p.y);pen=true;}else ctx.lineTo(p.x,p.y);} ctx.stroke();
-  ctx.shadowBlur=0; ctx.strokeStyle='#7ce8ff'; ctx.lineWidth=1.4; pen=false; ctx.beginPath(); for(const p of near){ if(!p){pen=false;continue;} if(!pen){ctx.moveTo(p.x,p.y);pen=true;}else ctx.lineTo(p.x,p.y);} ctx.stroke(); ctx.restore();
+  ctx.shadowColor='#ff2fd0'; ctx.shadowBlur=11; ctx.strokeStyle='#ff2fd0'; ctx.lineWidth=3.4; polyOB(near);
+  ctx.shadowBlur=0; ctx.strokeStyle='#ffd0f4'; ctx.lineWidth=1.3; polyOB(near); ctx.restore();
 }
 // --- временный ¾-байк (side-dominant ~70%, ось колёс в локальном y=0 = сидит на ленте; оба колеса, толщина шин, намёк дальней стороны) ---
 function drawTrialsBike(cx,cy,ang,scale){ ctx.save(); ctx.translate(cx,cy); ctx.rotate(ang); ctx.scale(scale,scale);
@@ -2073,7 +2078,7 @@ function measureTrials(){ const M={}; const bS=OB.bikeS, bh=trackHeightC(bS);
 function drawTrials25D(dbg){ if(hudEl)hudEl.style.opacity='0'; if(spdEl)spdEl.style.opacity='0'; if(hintEl)hintEl.style.opacity='0';
   drawTrialsBg();
   const sA=Math.max(0,OB.cameraS-2), sB=OB.cameraS+(W*(1-OB.anchorX)+40)/OB.scaleX+2;
-  drawTrialsRibbon(sA,sB);                     // дальний край + поверхность + боковая грань + швы (БЕЗ ближнего края)
+  drawTrialsBeam(sA,sB);                       // толстая 3D-балка: опоры + передняя грань + верх + сетка + cyan/magenta края (БЕЗ ближнего верх-края)
   drawTokensArc();                             // токены аркой над разрывом
   // байк на калибровочном склоне (статично): угол = экранная касательная (на поверхности = физ.угол)
   const bS=OB.bikeS, bh=trackHeightC(bS), bp=projOB(bS,bh,visualDepth(bS));
