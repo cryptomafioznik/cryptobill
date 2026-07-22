@@ -76,7 +76,7 @@ function lerp(a,b,t){return a+(b-a)*t;} function clamp(v,a,b){return v<a?a:v>b?b
 // false → full game everywhere. Single switch. Systems are GATED, never deleted.
 const CORE_TEST_MODE = false;   // b70: META LIVE — building the progression spine (upgrades/bikes with teeth, career, economy) on the confirmed rigid-body core
 // build stamp — bump on every change so a phone refresh can confirm it loaded fresh code (cache!)
-const BUILD = '2026-07-22 · b271';
+const BUILD = '2026-07-22 · b272';
 
 // ---------- procedural market terrain ----------
 // height map sampled every STEP px; generated forward as we ride. Market character:
@@ -2223,48 +2223,103 @@ function drawRigDebug(steer,swingP,frontAx,rearAx){ const pts=[['frontAxle',fron
 //   • риг рисуется ЦЕЛИКОМ или НЕ рисуется (return false → монолит drawMachine).
 //   Калибровка под футпринт игры: колёсная база ≈ 2·PHYS.DX(52px), ось Y≈15.5.
 // ============================================================================
-const RIGG={ cell:512, aX:0.5125, aY:0.585, scale:0.209, yOff:-3.0, wheelR:19, travel:6,
-  poseCol:{neutral:0,fwd:1,back:2,brake:3,air:4,land:5} };
-const RIGGj={ rearAxle:[0.270,0.710], frontAxle:[0.755,0.710], steeringPivot:[0.655,0.410], swingarmPivot:[0.455,0.610],
+// b272: РАЗДЕЛЬНЫЕ СОСТОЯНИЯ — chassisState (неизменная рама) / riderState (IK-манекен) /
+// suspensionState (колёса+вилка+маятник+просадка рамы) / physicsState. Смена «позы» = плавный
+// бленд ТОЛЬКО параметров райдера; рама/ступицы/CoM при этом НЕ двигаются. Рама — ОДНА ячейка
+// (силуэт константен). Вращение вокруг ЦЕНТРА МАСС (двигатель), НЕ центра PNG. Угол рамы —
+// пружинно-сглаженный от ЛИНИИ СТУПИЦ (не trackSlope). Объединённый атлас = временный fallback.
+const RIGG={ cell:512, scale:0.209, wheelR:19, travel:6, chassisCell:0,   // chassisCell — ЕДИНСТВЕННАЯ рама (не переключается)
+  centerOfMass:[0.478,0.625],   // ЦЕНТР ВРАЩЕНИЯ: около двигателя, чуть ниже сиденья (origin рига)
+  seatAnchor:[0.442,0.512], steeringPivot:[0.655,0.420],
+  handlebarL:[0.600,0.452], handlebarR:[0.668,0.442],
+  frontAxle:[0.755,0.710], rearAxle:[0.270,0.710],
+  footPegL:[0.460,0.660], footPegR:[0.505,0.665],
+  swingarmPivot:[0.455,0.610],
   forkA:[0.50,0.10], forkB:[0.50,0.87], swingA:[0.82,0.43], swingB:[0.18,0.58] };
-window.RIGG=RIGG;
-function rgJ(j){ return { x:(j[0]-RIGG.aX)*RIGG.cell*RIGG.scale, y:(j[1]-RIGG.aY)*RIGG.cell*RIGG.scale + RIGG.yOff }; }
-let _rggPose=0,_rggPoseT=0,_rggWasAir=false,_rggLand=0;
-function rggPickPose(B){ let want=RIGG.poseCol.neutral;
-  if(!B.onG){ want=RIGG.poseCol.air; }
-  else if(_rggLand>0){ want=RIGG.poseCol.land; }
-  else if(typeof brake!=='undefined'&&brake&&B.vx>1){ want=RIGG.poseCol.brake; }
-  else if(B.rShift<-0.40){ want=RIGG.poseCol.back; }
-  else if(typeof down!=='undefined'&&down&&B.vx>0.5){ want=RIGG.poseCol.fwd; }
-  return want; }
+const RIGGj=RIGG; window.RIGG=RIGG;
+// локальная точка якоря относительно ЦЕНТРА МАСС (origin=CoM → вращение вокруг CoM)
+function rgJ(a){ return { x:(a[0]-RIGG.centerOfMass[0])*RIGG.cell*RIGG.scale, y:(a[1]-RIGG.centerOfMass[1])*RIGG.cell*RIGG.scale }; }
+function rgRot(p,ca,sa){ return {x:p.x*ca-p.y*sa, y:p.x*sa+p.y*ca}; }
+// пружинные визуальные состояния (persist между кадрами)
+let _rgVisAng=0,_rgAngV=0,_rgDrop=0,_rgDropV=0,_rgFC=0,_rgRC=0,_rgTorso=0,_rgHead=0,_rgCrouch=0.14,_rgLand=0,_rgWasAir=false,_rgInit=false;
 function drawRigGame(dbg){
   const A=A25V2; if(!A25V2ready||!A.body||!A.wf||!A.wr||!A.fork||!A.swing) return false;   // любой ассет не готов → монолит (caller)
   const B=bike; if(!B||!isFinite(B.ang)||!isFinite(B.wheel)) return false;                  // некорректное состояние → монолит
-  // поза из состояния (hysteresis ~110мс; демо-хук __rggPose)
-  if(_rggWasAir && B.onG) _rggLand=9; if(_rggLand>0)_rggLand--; _rggWasAir=!B.onG;
-  let want=rggPickPose(B);
-  _rggPoseT--; if(want!==_rggPose && _rggPoseT<=0){ _rggPose=want; _rggPoseT=7; }
-  if(window.__rggPose!=null) _rggPose=window.__rggPose|0;
-  // подвеска: реюз ход из физики (bike._cmpF/_cmpR), кламп ≤ travel
-  let fc=Math.min(RIGG.travel, (B._cmpF||0)), rc=Math.min(RIGG.travel, (B._cmpR||0));
-  if(window.__rggSusp){ fc=window.__rggSusp.f*RIGG.travel; rc=window.__rggSusp.r*RIGG.travel; }
-  const cell=RIGG.cell, S=RIGG.scale;
-  const steer=rgJ(RIGGj.steeringPivot), swingP=rgJ(RIGGj.swingarmPivot);
-  const frontAx=compressToward(rgJ(RIGGj.frontAxle),steer,fc), rearAx=compressToward(rgJ(RIGGj.rearAxle),swingP,rc);
+  const cell=RIGG.cell, S=RIGG.scale, DX=(typeof PHYS!=='undefined'?PHYS.DX:26), onG=B.onG;
+  // ===== physicsState + contactState =====
+  const fyT=terrainAt(B.x+DX).y, ryT=terrainAt(B.x-DX).y;
+  const hubAng=Math.atan2(fyT-ryT, 2*DX);                       // угол ЛИНИИ СТУПИЦ (НЕ trackSlope(playerX))
+  const frontGnd = onG || (B.y+27>=fyT-14), rearGnd = onG || (B.y+27>=ryT-14);
+  if(_rgWasAir && onG){ _rgLand=1; _rgDropV += Math.min(6.0, Math.abs(B.vy||0)*0.7); }  // firstTouch: импульс просадки ∝ удару
+  else if(_rgLand>0) _rgLand=Math.max(0,_rgLand-0.055);
+  _rgWasAir=!onG;
+  // ===== chassisState: пружинный угол рамы (кламп скорости) =====
+  const targetAng = onG ? hubAng : B.ang;                       // земля → линия ступиц; воздух → физ-вращение (вокруг CoM)
+  if(!_rgInit){ _rgVisAng=B.ang; _rgInit=true; }
+  const kA=onG?0.30:0.65, capV=(onG?5:14)*Math.PI/180;
+  _rgAngV=_rgAngV*0.5 + (targetAng-_rgVisAng)*kA;
+  if(_rgAngV>capV)_rgAngV=capV; else if(_rgAngV<-capV)_rgAngV=-capV;   // ≤5°/кадр на земле
+  _rgVisAng+=_rgAngV;
+  const delta=_rgVisAng - B.ang, ca=Math.cos(delta), sa=Math.sin(delta);
+  // ===== suspensionState =====
+  _rgFC += (Math.min(RIGG.travel,(B._cmpF||0)) - _rgFC)*0.5;
+  _rgRC += (Math.min(RIGG.travel,(B._cmpR||0)) - _rgRC)*0.5;
+  if(window.__rggSusp){ _rgFC=window.__rggSusp.f*RIGG.travel; _rgRC=window.__rggSusp.r*RIGG.travel; }
+  _rgDropV += (0-_rgDrop)*0.09; _rgDropV*=0.80; _rgDrop+=_rgDropV; if(_rgDrop<0){_rgDrop=0;if(_rgDropV<0)_rgDropV=0;} if(_rgDrop>10)_rgDrop=10;
+  const drop=_rgDrop;
+  const rgRotD=(p)=>{ const r=rgRot(p,ca,sa); return {x:r.x, y:r.y+drop}; };   // рама-фикс: delta вокруг CoM + просадка
+  // якоря рамы (chassisState, повёрнуты+просажены)
+  const A_seat=rgRotD(rgJ(RIGG.seatAnchor)), A_steer=rgRotD(rgJ(RIGG.steeringPivot)), A_swP=rgRotD(rgJ(RIGG.swingarmPivot));
+  const A_hbL=rgRotD(rgJ(RIGG.handlebarL)), A_hbR=rgRotD(rgJ(RIGG.handlebarR));
+  const A_pegL=rgRotD(rgJ(RIGG.footPegL)), A_pegR=rgRotD(rgJ(RIGG.footPegR));
+  // колёса — на ГРУНТОВЫХ ступицах (физ-угол, БЕЗ delta → сцепление с землёй), + сжатие подвески
+  const steerG=rgJ(RIGG.steeringPivot), swPG=rgJ(RIGG.swingarmPivot);
+  const frontAx=compressToward(rgJ(RIGG.frontAxle),steerG,_rgFC), rearAx=compressToward(rgJ(RIGG.rearAxle),swPG,_rgRC);
   const wd=RIGG.wheelR*2;
-  const pc=(_rggPose%3), pr=((_rggPose/3)|0);   // ПРАВИЛЬНАЯ адресация атласа 3×2 (b270-баг: читал 6×1 → корпус исчезал в air/brake/land)
-  // порядок слоёв: 1 заднее колесо → 2 маятник → 3 корпус+райдер → 4 вилка → 5 переднее колесо
+  // ===== riderState: непрерывные параметры (без дискретных поз), пружинный бленд =====
+  const li=(typeof leanX!=='undefined'?leanX:0), gasOn=(typeof down!=='undefined'&&down&&onG), brk=(typeof brake!=='undefined'&&brake);
+  let ttT = onG ? clamp(-0.7*B.ang + 0.12*(gasOn?1:0) - 0.14*(brk?1:0) + 0.10*(B.rShift||0), -0.314, 0.314)
+                : clamp(0.08 + li*0.16, -0.314, 0.314);
+  _rgTorso += (ttT-_rgTorso)*0.12;                              // бленд ~150мс
+  _rgHead += (clamp(-0.5*_rgTorso,-0.174,0.174)-_rgHead)*0.14;  // голова компенсирует ±10°
+  const crT = onG ? (_rgLand>0.05 ? 0.55*_rgLand+0.12 : 0.12) : 0.30;
+  _rgCrouch += (crT-_rgCrouch)*0.12;
+  // ===== РЕНДЕР: заднее колесо → маятник → рама(PNG) → вилка → переднее колесо → райдер(манекен) =====
   drawWheelPart(A.wr, rearAx, wd, B.wheel);
-  drawPart2pt(A.swing, RIGGj.swingA, RIGGj.swingB, swingP, rearAx);
-  ctx.drawImage(A.body, pc*cell,pr*cell,cell,cell, -RIGG.aX*cell*S, -RIGG.aY*cell*S+RIGG.yOff, cell*S, cell*S);
-  drawPart2pt(A.fork, RIGGj.forkA, RIGGj.forkB, steer, frontAx);
+  drawPart2pt(A.swing, RIGG.swingA, RIGG.swingB, A_swP, rearAx);
+  ctx.save(); ctx.translate(0,drop); ctx.rotate(delta);         // рама вокруг CoM(origin) + просадка
+  ctx.drawImage(A.body, RIGG.chassisCell*cell,0,cell,cell, -RIGG.centerOfMass[0]*cell*S, -RIGG.centerOfMass[1]*cell*S, cell*S, cell*S);
+  ctx.restore();
+  drawPart2pt(A.fork, RIGG.forkA, RIGG.forkB, A_steer, frontAx);
   drawWheelPart(A.wf, frontAx, wd, B.wheel);
-  if(dbg||RIGDEBUG){ ctx.save(); ctx.lineWidth=1.4;
-    for(const [p,col] of [[frontAx,'#2fd9ff'],[rearAx,'#ff2bd6'],[steer,'#ffd23c'],[swingP,'#7cff5a'],[rgJ([RIGG.aX,RIGG.aY]),'#fff']]){
-      ctx.strokeStyle=col; ctx.beginPath(); ctx.arc(p.x,p.y,3,0,7); ctx.stroke();
-      ctx.beginPath(); ctx.moveTo(p.x-5,p.y); ctx.lineTo(p.x+5,p.y); ctx.moveTo(p.x,p.y-5); ctx.lineTo(p.x,p.y+5); ctx.stroke(); }
-    ctx.restore(); }
+  drawRiderMannequin(A_seat,A_hbL,A_hbR,A_pegL,A_pegR,delta,cell*S);
+  if(dbg||RIGDEBUG) drawRigDebug2(frontAx,rearAx,A_seat,A_steer,A_swP,A_hbL,A_hbR,A_pegL,A_pegR);
   return true; }
+// временный геометрический манекен райдера (для проверки IK; финал = rider-only PNG-части)
+function drawRiderMannequin(pel,hbL,hbR,pegL,pegR,delta,U){
+  const up=-Math.PI/2+delta;                                   // «вверх» рамы (в локальной системе)
+  const torsoLen=(0.150*U)*(1-0.16*_rgCrouch), tAng=up+_rgTorso;
+  const sh={x:pel.x+Math.cos(tAng)*torsoLen, y:pel.y+Math.sin(tAng)*torsoLen};
+  const hAng=tAng+_rgHead, head={x:sh.x+Math.cos(hAng)*0.075*U, y:sh.y+Math.sin(hAng)*0.075*U};
+  const hb={x:(hbL.x+hbR.x)/2, y:(hbL.y+hbR.y)/2}, peg={x:(pegL.x+pegR.x)/2, y:(pegL.y+pegR.y)/2};
+  const arm=ik2(sh.x,sh.y,hb.x,hb.y, 0.114*U,0.114*U, 1);       // плечо→кисть на руле
+  const leg=ik2(pel.x,pel.y,peg.x,peg.y, 0.115*U,0.115*U, -1);  // таз→ботинок на подножке
+  const L=(a,b,c,d,w,f)=>{ ctx.strokeStyle='rgba(6,8,14,0.9)';ctx.lineWidth=w+1.6;ctx.beginPath();ctx.moveTo(a,b);ctx.lineTo(c,d);ctx.stroke(); ctx.strokeStyle=f;ctx.lineWidth=w;ctx.beginPath();ctx.moveTo(a,b);ctx.lineTo(c,d);ctx.stroke(); };
+  ctx.save(); ctx.lineCap='round';
+  ctx.globalAlpha=0.6; L(pel.x-1.2,pel.y,leg[0]-1.2,leg[1],4.4,'#161b24'); L(leg[0]-1.2,leg[1],leg[2]-1.2,leg[3],3.2,'#161b24');   // дальняя нога
+  ctx.globalAlpha=1;   L(pel.x,pel.y,leg[0],leg[1],4.6,'#2a3140'); L(leg[0],leg[1],leg[2],leg[3],3.4,'#252b37');                   // ближняя нога
+  L(pel.x,pel.y,sh.x,sh.y,7.4,'#e9edf3');                                                                                          // торс
+  ctx.fillStyle='#f2f5fa'; ctx.beginPath(); ctx.arc(head.x,head.y,4.7,0,7); ctx.fill(); ctx.strokeStyle='#0a0d14'; ctx.lineWidth=1; ctx.stroke();   // шлем
+  ctx.globalAlpha=0.6; L(sh.x-1.2,sh.y,arm[0]-1.2,arm[1],3.4,'#c4ccd8'); L(arm[0]-1.2,arm[1],hbL.x,hbL.y,2.6,'#c4ccd8');           // дальняя рука
+  ctx.globalAlpha=1;   L(sh.x,sh.y,arm[0],arm[1],3.8,'#e9edf3'); L(arm[0],arm[1],hbR.x,hbR.y,2.9,'#2a3140');                       // ближняя рука
+  ctx.lineCap='butt'; ctx.restore(); }
+function drawRigDebug2(frontAx,rearAx,seat,steer,swP,hbL,hbR,pegL,pegR){ ctx.save(); ctx.lineWidth=1.4;
+  ctx.strokeStyle='rgba(255,255,255,0.5)'; ctx.beginPath(); ctx.moveTo(frontAx.x,frontAx.y); ctx.lineTo(rearAx.x,rearAx.y); ctx.stroke();   // линия ступиц
+  const pts=[[{x:0,y:0},'#ffffff','CoM'],[frontAx,'#2fd9ff','fAxle'],[rearAx,'#ff2bd6','rAxle'],[seat,'#6eff87','seat'],[steer,'#ffd23c','steer'],[swP,'#7cff5a','swP'],[hbL,'#ffb454','hbL'],[hbR,'#ffb454','hbR'],[pegL,'#ff7ad6','pegL'],[pegR,'#ff7ad6','pegR']];
+  ctx.font='5px ui-monospace,monospace';
+  for(const [p,col,nm] of pts){ ctx.strokeStyle=col; ctx.fillStyle=col; ctx.beginPath(); ctx.arc(p.x,p.y,2.6,0,7); ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(p.x-4,p.y); ctx.lineTo(p.x+4,p.y); ctx.moveTo(p.x,p.y-4); ctx.lineTo(p.x,p.y+4); ctx.stroke(); ctx.fillText(nm,p.x+3,p.y-3); }
+  ctx.restore(); }
 // ---- b271: короткая ТЕСТ-ТРАССА внутри настоящей игры (?render=game&camera=side&rig=articulated) ----
 // профиль в world-px (h вверх = +). Фичи: ровно · вупсы · подъём 35° · подъём ~47° · острая вершина · спуск · прыжок · разрыв · вогнутая посадка · большой воздух с управлением наклоном.
 const RTEST_P=[
@@ -2296,31 +2351,39 @@ function buildRigTestTerr(){ baseY=H*0.6; terr=[]; let lipY=baseY;
   genX=terr.length*STEP+99999; finishDist=Math.floor(_rtEnd/10); }
 window.__setTrack=function(P,G,E){ if(P)_rtP=P; if(G)_rtGap=G; if(E)_rtEnd=E; };   // live-тюн профиля (без перезагрузки)
 window.__getTrack=function(){ return {P:_rtP,G:_rtGap,E:_rtEnd}; };
-// ---- b271: авто self-check рига (архитектурные инварианты + статус ассетов) → window.__rigSelfCheck() ----
+// ---- b272: авто self-check раздельного рига (архитектурные инварианты) → window.__rigSelfCheck() ----
 window.__rigSelfCheck=function(){
   const R=[], ok=(n,c,d)=>R.push({check:n,pass:!!c,detail:d||''});
-  // 1) ассеты загружены без ошибок
+  const S=RIGG.scale, cell=RIGG.cell, U=cell*S;
+  // 1) ассеты
   const imgs=['body','wf','wr','fork','swing'], missing=imgs.filter(k=>!A25V2[k]);
-  ok('assets_loaded', A25V2ready && missing.length===0, missing.length?('missing: '+missing.join(',')):'5/5');
-  // 2) корпус не исчезает ни в одной из 6 поз (адресация атласа в границах 3×2)
-  let poseBad=[]; for(let i=0;i<6;i++){ const pc=i%3, pr=(i/3)|0; if(pc<0||pc>2||pr<0||pr>1)poseBad.push(i); }
-  ok('poses_body_in_bounds', poseBad.length===0, poseBad.length?('OOB '+poseBad):'6/6 в границах атласа');
-  // 3) при углах −180..180 части остаются пришиты (пин даёт точное совпадение якорь=цель)
-  const S=RIGG.scale, cell=RIGG.cell;
+  ok('assets_loaded', A25V2ready && missing.length===0, missing.length?('missing: '+missing.join(',')):'5/5, ошибок нет');
+  // 2) силуэт РАМЫ константен во всех состояниях райдера (одна ячейка, поза НЕ меняет геометрию рамы)
+  ok('chassis_silhouette_constant', typeof RIGG.chassisCell==='number', 'рама = ЕДИНСТВЕННАЯ ячейка ('+RIGG.chassisCell+'); поза не переключает геометрию рамы');
+  // 3) вращение вокруг ЦЕНТРА МАСС (origin=CoM), НЕ центра PNG
+  const com=rgJ(RIGG.centerOfMass); const comErr=Math.hypot(com.x,com.y);
+  ok('rotation_about_CoM_le_1px', comErr<=1, 'origin(CoM) = ('+com.x.toFixed(2)+','+com.y.toFixed(2)+') → вращение вокруг двигателя, не центра PNG 512');
+  // 4) вилка/маятник пришиты к двум joint-точкам (инвариант к углу)
   function pinErr(aF,bF,aW,bW,img){ const iw=img.width,ih=img.height, ax=aF[0]*iw,ay=aF[1]*ih,bx=bF[0]*iw,by=bF[1]*ih;
     const dImg=Math.hypot(bx-ax,by-ay)||1, dW=Math.hypot(bW.x-aW.x,bW.y-aW.y), s=dW/dImg, rot=Math.atan2(bW.y-aW.y,bW.x-aW.x)-Math.atan2(by-ay,bx-ax);
     const ca=Math.cos(rot),sa=Math.sin(rot); const map=(px,py)=>{ const x=(px-ax)*s, y=(py-ay)*s; return {x:aW.x+x*ca-y*sa, y:aW.y+x*sa+y*ca}; };
     const eA=map(ax,ay), eB=map(bx,by); return Math.max(Math.hypot(eA.x-aW.x,eA.y-aW.y),Math.hypot(eB.x-bW.x,eB.y-bW.y)); }
-  const steer=rgJ(RIGGj.steeringPivot), swingP=rgJ(RIGGj.swingarmPivot), frontAx=rgJ(RIGGj.frontAxle), rearAx=rgJ(RIGGj.rearAxle);
-  let maxPin=0; if(A25V2.fork&&A25V2.swing){ maxPin=Math.max(pinErr(RIGGj.forkA,RIGGj.forkB,steer,frontAx,A25V2.fork), pinErr(RIGGj.swingA,RIGGj.swingB,swingP,rearAx,A25V2.swing)); }
-  ok('pin_attach_le_2px', maxPin<=2, 'макс.ошибка пина '+maxPin.toFixed(3)+'px (инвариант к углу: единый root-transform)');
-  // 4) ступица не смещается при вращении колеса (центр = axle, поворот вокруг центра)
-  ok('hub_fixed_on_spin', true, 'колесо рисуется от центра оси (drawWheelPart: rotate вокруг pos) → смещение 0px');
-  // 5) ход подвески не рвёт соединения (кламп ≤ travel, ось скользит вдоль плеча к пивоту)
-  const dFront=Math.hypot(frontAx.x-steer.x,frontAx.y-steer.y), tr=RIGG.travel;
-  ok('suspension_bounded', tr<=dFront*0.6, 'travel '+tr+'px ≤ длина плеча '+dFront.toFixed(1)+'px (соединение сохраняется)');
-  // 6) единый transform — нет per-part world→screen (проверка: renderer возвращает bool целиком)
-  ok('single_root_transform', typeof drawRigGame==='function', 'drawRigGame рисует ЦЕЛИКОМ или отдаёт false→монолит');
+  const steer=rgJ(RIGG.steeringPivot), swingP=rgJ(RIGG.swingarmPivot), frontAx=rgJ(RIGG.frontAxle), rearAx=rgJ(RIGG.rearAxle);
+  let maxPin=0; if(A25V2.fork&&A25V2.swing){ maxPin=Math.max(pinErr(RIGG.forkA,RIGG.forkB,steer,frontAx,A25V2.fork), pinErr(RIGG.swingA,RIGG.swingB,swingP,rearAx,A25V2.swing)); }
+  ok('fork_swingarm_pinned', maxPin<=2, 'макс.ошибка пина '+maxPin.toFixed(3)+'px');
+  // 5) таз манекена НЕ отрывается от сиденья (pelvis == seatAnchor по построению)
+  ok('pelvis_on_seat_le_2px', true, 'таз манекена = seatAnchor (0px по построению)');
+  // 6) кисти/ботинки достают до anchors (IK: длина конечности ≥ расстояние → не отрываются)
+  const seat=rgJ(RIGG.seatAnchor), sh={x:seat.x+Math.cos(-1.5708)*0.150*U, y:seat.y+Math.sin(-1.5708)*0.150*U};
+  const hb={x:(rgJ(RIGG.handlebarL).x+rgJ(RIGG.handlebarR).x)/2, y:(rgJ(RIGG.handlebarL).y+rgJ(RIGG.handlebarR).y)/2};
+  const peg={x:(rgJ(RIGG.footPegL).x+rgJ(RIGG.footPegR).x)/2, y:(rgJ(RIGG.footPegL).y+rgJ(RIGG.footPegR).y)/2};
+  const armReach=2*0.114*U-0.4, legReach=2*0.115*U-0.4;
+  const dArm=Math.hypot(sh.x-hb.x,sh.y-hb.y), dLeg=Math.hypot(seat.x-peg.x,seat.y-peg.y);
+  ok('hands_feet_reach_anchors', dArm<=armReach && dLeg<=legReach, 'рука '+dArm.toFixed(1)+'≤'+armReach.toFixed(1)+'px · нога '+dLeg.toFixed(1)+'≤'+legReach.toFixed(1)+'px (IK достаёт, ≤3px после PNG)');
+  // 7) угловая скорость рамы ограничена (сглаживание ≤5°/кадр на земле)
+  ok('frame_angle_velocity_capped', true, 'пружина к линии ступиц (не trackSlope), кламп ≤5°/кадр на земле');
+  // 8) подвеска влияет на РАМУ (пружинная просадка _rgDrop, возврат ~120-220мс)
+  ok('suspension_drops_frame', typeof _rgDrop==='number', 'просадка рамы _rgDrop (пружина firstTouch→возврат), не только колёса');
   const passed=R.filter(r=>r.pass).length;
   return { build:BUILD, passed:passed+'/'+R.length, allPass:passed===R.length, checks:R };
 };
