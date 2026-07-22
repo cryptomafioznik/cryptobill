@@ -76,7 +76,7 @@ function lerp(a,b,t){return a+(b-a)*t;} function clamp(v,a,b){return v<a?a:v>b?b
 // false → full game everywhere. Single switch. Systems are GATED, never deleted.
 const CORE_TEST_MODE = false;   // b70: META LIVE — building the progression spine (upgrades/bikes with teeth, career, economy) on the confirmed rigid-body core
 // build stamp — bump on every change so a phone refresh can confirm it loaded fresh code (cache!)
-const BUILD = '2026-07-22 · b257';
+const BUILD = '2026-07-22 · b258';
 
 // ---------- procedural market terrain ----------
 // height map sampled every STEP px; generated forward as we ride. Market character:
@@ -682,19 +682,22 @@ let _coinImg=null,_coinRdy=false; try{ const _im=new Image(); _im.onload=()=>{ c
 // с C-правилом «светятся только данные». Мир теперь = ОДИН код-язык: композиция Vice нашим стилем (закат-солнце + город-свечи + пальмы-силуэты
 // + отсвет набережной), см. drawCityWorld. Файлы toys/assets/world/vice/* остаются в репо как АРТ-РЕФЕРЕНС палитр (в игре не грузятся).
 const TDECK=34;   // b208: ВЕРТИКАЛЬНЫЙ размах ленты (косоугольная проекция: низ = верх + константный вектор (TRV_X,TDECK); ось = линия езды, байк по центру). Knob: лента + посадка свечей-колонн
-// ===== b254 РАКУРС ¾ (лёгкий yaw-угол камеры, идея юзера + мок-ОК): всё ВПЕРЕДИ байка плавно сжимается к точке схода (лог-перспектива: у байка масштаб 1:1 без шва, вдали мягкое схождение к горизонту). ПОЗАДИ и сам байк — нетронуты. ФИЗИКА НЕ ТРОНУТА — проекция только на выводе (вершины трассы/свечи/монеты/чипы). Тумблер в настройках =====
+// ===== b258 ДОРОГА-ПОВЕРХНОСТЬ 2.5D (TrackRenderer25D, псевдо-3D OutRun — вердикт юзера на b254-257: «растянутая наша трасса, нужен НОВЫЙ рендерер дороги»). Дорога = ПОВЕРХНОСТЬ с ЛЕВЫМ и ПРАВЫМ краем ПОПЕРЁК движения: широкая у крупного ¾-байка внизу, сужается к точке схода у горизонта; рельеф графика = ВОЛНЫ дороги в глубину. ФИЗИКА НЕ ТРОНУТА — проекция только на выводе. Тумблер в настройках =====
 let PSP_ON=true; try{ if(localStorage.getItem('cb_psp')==='0')PSP_ON=false; }catch(e){}
 try{ if(/[?&]camera=side/.test(location.search))PSP_ON=false; else if(/[?&]camera=25d/.test(location.search))PSP_ON=true; }catch(e){}   // b256: query-режимы сравнения (не персистится)
 function savePsp(){ try{localStorage.setItem('cb_psp',PSP_ON?'1':'0');}catch(e){} }
-// b257 ПОЛНАЯ ¾-ПРОЕКЦИЯ ПО РЕФЕРЕНСУ (OutRun-развёртка; юзер: «делай как на референсах»): дорога начинается ВНИЗУ у крупного байка и уходит лентой к ТОЧКЕ СХОДА вверх-вправо. ГЛУБИНА (d=x−байк) маппится в экранный свип к VP, ВЫСОТА (график!) остаётся мировой с перспективным схождением → рельеф/цена читаются волнами дороги. Позади байка — нетронутый хвост (шва нет). Физика не тронута.
-const PSP={F:520, VX:0.78, VY:0.47, KY:0.93, RW:1.8, BS:1.30, CAMX:0.26, CAMY:0.64};   // F=фокус (МЕНЬШЕ=круче перспектива) · VX/VY=точка схода (%W/%H) · KY=схождение высот · RW=толщина дороги у камеры · BS=масштаб героя · CAMX/CAMY=якорь байка в кадре
-let _pspPX=0,_pspCX=0,_pspHY=0;
-function pspSet(){ _pspPX=bike?bike.x:0; _pspCX=cam?cam.x:0; _pspHY=(cam?cam.y:0)+H*PSP.VY; }   // на кадр: pivot=байк, базовый X камеры, горизонт-якорь (мировые координаты)
+// b258 ФОРМУЛА: узел d=x−байк; s=F/(F+d) (1 у байка→0 в VP). Центр Xc=VPX+(CAMX−VPX)·s (свип к точке схода). Yc=VPY+(CY0+(y−refH)·HS)·s (ВСЁ ×s = настоящая перспектива; refH=terrain под байком). Латеральные края Xл=Xc−HW·s, Xп=Xc+HW·s (HW = ПОПЕРЕЧНАЯ полуширина — вот чего не было в b254-257!). ШОВ: NCX≡CAMX и VPY+CY0≡CAMY и HS≈1 → у байка (s=1) проекция = мировые коорд. → identity-хвост стыкуется без шва.
+const PSP={F:300, VPX:0.72, VPY:0.40, CY0:0.24, HW:0.30, HS:1.0, BS:1.30, CAMX:0.26, CAMY:0.64};   // F=фокус (МЕНЬШЕ=круче перспектива) · VPX/VPY=точка схода (%W/%H) · CY0=дорога ниже горизонта у камеры (%H; VPY+CY0=CAMY для шва) · HW=поперечная полуширина у камеры (%W) · HS=масштаб рельефа графика · BS=герой · CAMX/CAMY=якорь байка
+let _pspPX=0,_pspCX=0,_pspCY=0,_pspRefY=0,_vpX=0,_horY=0,_cy0=0,_ncxPx=0,_hwPx=0;
+function pspSet(){ _pspPX=bike?bike.x:0; _pspCX=cam?cam.x:0; _pspCY=cam?cam.y:0;   // на кадр: pivot=байк, база камеры, refH=земля под байком (якорь рельефа)
+  _pspRefY=(typeof terrainAt==='function'&&bike)?terrainAt(bike.x).y:(bike?bike.y:0);
+  _vpX=W*PSP.VPX; _horY=H*PSP.VPY; _cy0=H*PSP.CY0; _ncxPx=W*PSP.CAMX; _hwPx=W*PSP.HW; }   // NCX≡CAMX (шов по X)
 function psp3(x,y){ if(!PSP_ON) return [x,y,1];
   const d=x-_pspPX; if(d<=0) return [x,y,1];   // позади/у байка — как есть (байк рисуется вне проекции → без шва)
   const s=PSP.F/(PSP.F+d);   // перспектива: 1 у байка → 0 в точке схода
-  return [_pspCX+W*(PSP.CAMX+(PSP.VX-PSP.CAMX)*(1-s)), _pspHY+(y-_pspHY)*(1-(1-s)*PSP.KY), s]; }
-function pspY(y,s){ return (!PSP_ON||s>=1)? y : _pspHY+(y-_pspHY)*(1-(1-s)*PSP.KY); }   // y-проекция при известном s (вертикальные элементы: свечи-колонны)
+  return [_pspCX + _vpX + (_ncxPx-_vpX)*s, _pspCY + _horY + (_cy0 + (y-_pspRefY)*PSP.HS)*s, s]; }
+function pspY(y,s){ return (!PSP_ON||s>=1)? y : _pspCY + _horY + (_cy0 + (y-_pspRefY)*PSP.HS)*s; }   // y при известном s
+function pspHalf(s){ return _hwPx*s; }   // b258 латеральная полуширина дороги на глубине s (края = Xc ∓ pspHalf)
 const TRV_X=-9;   // b208: горизонтальный сдвиг проекции (наклон рёбер — «смотрим чуть сверху-справа», как GD); 0 = рёбра вертикальны
 const TSTEEL='208,224,248';   // b208: СТАЛЬ структуры трассы (константа во всех эпохах — идентичность элемента; цвет остаётся только у ДАННЫХ: зелёный/красный склоны)
 let _zoomD=1;   // b206: отображаемый зум — сглаживается в draw на каждом кадре (60Гц), лечит ступеньки зума при 30Гц-слоумо (сальто-синема)
@@ -1743,6 +1746,36 @@ function drawTrackReal(i0,i1){ const _rw=PSP_ON?PSP.RW:1, hx=TRV_X*0.5*_rw, hy=T
     if(climb||drop){ ctx.strokeStyle='rgba('+col+',0.20)'; ctx.lineWidth=8.5; ctx.beginPath(); ctx.moveTo(txA[i],tyA[i]+3.6); ctx.lineTo(txA[i+1],tyA[i+1]+3.6); ctx.stroke(); }   // b210: свет данных ЛОЖИТСЯ на полотно (тело теперь непрозрачное — отсвет живёт на графите)
     ctx.strokeStyle='rgba('+col+','+ca2+')'; ctx.lineWidth=2.2; ctx.beginPath(); ctx.moveTo(txA[i],tyA[i]); ctx.lineTo(txA[i+1],tyA[i+1]); ctx.stroke(); }
   ctx.lineCap='butt'; ctx.lineJoin='miter'; }
+// b258 TrackRenderer25D: ДОРОГА-ПОВЕРХНОСТЬ (не боковая лента). Каждый узел → центр Xc/Yc + ЛАТЕРАЛЬНЫЕ края Xл/Xп=Xc∓HW·s. Квады между узлами: тёмный асфальт + неон-края цвета ДАННЫХ (зелёный подъём/красный спуск) + центр-пунктир. Свечи-колонны в ¾ НЕ рисуются (график живёт как волны самой дороги). refH-якорь = шва нет.
+function drawTrack25D(i0,i1){
+  // 1) собрать спроецированные узлы (пропуская gap)
+  const N=[];
+  for(let i=i0;i<=i1;i++){ const c=terr[i]; if(!c||c.gap){ N.push(null); continue; }
+    const P=psp3(c.x,c.y), s=P[2], half=pspHalf(s);
+    N.push({x:P[0], y:P[1], s, L:P[0]-half, R:P[0]+half, up:c.up}); }
+  const at=k=>N[k-i0];
+  // 2) АСФАЛЬТ — трапеции между соседними узлами (дальние темнее = глубина/дымка)
+  for(let i=i0;i<i1;i++){ const a=at(i),b=at(i+1); if(!a||!b)continue;
+    const sh=(a.s+b.s)*0.5, lit=depthNew?(0.10+0.16*sh):(0.08+0.12*sh);   // ближе = светлее асфальт (свет golden-hour); вдали тонет в дымке
+    ctx.fillStyle=depthNew?('rgba('+Math.round(40+34*sh)+','+Math.round(32+26*sh)+','+Math.round(46+30*sh)+',0.97)'):('rgba('+Math.round(20+20*sh)+','+Math.round(22+22*sh)+','+Math.round(40+26*sh)+',0.97)');
+    ctx.beginPath(); ctx.moveTo(a.L,a.y); ctx.lineTo(a.R,a.y); ctx.lineTo(b.R,b.y); ctx.lineTo(b.L,b.y); ctx.closePath(); ctx.fill();
+    // мягкий центральный отсвет полотна (объём поверхности)
+    ctx.fillStyle='rgba('+(depthNew?'255,214,150':'150,180,230')+','+lit.toFixed(3)+')';
+    ctx.beginPath(); ctx.moveTo(a.x-a.s*_hwPx*0.5,a.y); ctx.lineTo(a.x+a.s*_hwPx*0.5,a.y); ctx.lineTo(b.x+b.s*_hwPx*0.5,b.y); ctx.lineTo(b.x-b.s*_hwPx*0.5,b.y); ctx.closePath(); ctx.fill(); }
+  // 3) НЕОН-КРАЯ — цвет по склону ДАННЫХ (зелёный подъём / красный спуск / сталь плоское)
+  ctx.lineCap='round'; ctx.lineJoin='round';
+  for(let pass=0;pass<2;pass++){   // pass0 = широкий глоу, pass1 = ядро
+    for(let i=i0;i<i1;i++){ const a=at(i),b=at(i+1); if(!a||!b)continue; const cc=terr[i],cn=terr[i+1];
+      const climb=cn.y<cc.y-1, drop=cn.y>cc.y+1, col=climb?'46,230,166':drop?'255,59,92':TSTEEL;
+      const sh=(a.s+b.s)*0.5, lw=pass?clamp(1.0+2.2*sh,0.7,3.2):clamp(3+6*sh,2,9), al=pass?(climb||drop?0.95:0.72):(climb||drop?0.20:0.12);
+      ctx.strokeStyle='rgba('+col+','+al.toFixed(3)+')'; ctx.lineWidth=lw;
+      ctx.beginPath(); ctx.moveTo(a.L,a.y); ctx.lineTo(b.L,b.y); ctx.stroke();   // левый край
+      ctx.beginPath(); ctx.moveTo(a.R,a.y); ctx.lineTo(b.R,b.y); ctx.stroke(); } }   // правый край
+  // 4) ЦЕНТР-ПУНКТИР (осевая разметка)
+  for(let i=i0;i<i1;i++){ if(i&1)continue; const a=at(i),b=at(i+1); if(!a||!b)continue; const sh=(a.s+b.s)*0.5;
+    ctx.strokeStyle='rgba(230,240,255,'+(0.10+0.28*sh).toFixed(3)+')'; ctx.lineWidth=clamp(1+2*sh,0.6,2.6);
+    ctx.beginPath(); ctx.moveTo(lerp(a.x,b.x,0.15),lerp(a.y,b.y,0.15)); ctx.lineTo(lerp(a.x,b.x,0.85),lerp(a.y,b.y,0.85)); ctx.stroke(); }
+  ctx.lineCap='butt'; ctx.lineJoin='miter'; }
 function drawCityWorld(){ const hz=H*0.6;   // b204: ЕДИНЫЙ КОД-ЯЗЫК, композиция Vice нашим стилем (фото-ветки удалены): солнце → лучи → хребет → [дымка → город-свечи]×2 + пальмы-силуэты + отсвет набережной. Цвета = биом (8 эпох живут)
   drawSun(hz);
   if(depthNew){   // b221 GOLDEN-HOUR: тёплый золотой свет-заливка ОТ солнца (направленный источник → тёплая сторона мира) + холодный низ-тень = объём/свет-тень, не «плоская тёмная тема»
@@ -1858,7 +1891,8 @@ function draw(){
       ctx.fillStyle='rgba('+col+','+aF+')'; ctx.fillRect(X-cwS/2,by,cwS,Math.max(1,bo-by));   // фронт-тело
       ctx.strokeStyle='rgba(235,255,248,'+aH+')'; ctx.lineWidth=1; ctx.beginPath(); ctx.moveTo(X-cwS/2+0.5,by); ctx.lineTo(X-cwS/2+0.5,bo); ctx.stroke(); } }   // hairline-блик
   if(!worldNew) drawCandleBodies();   // классика: свечи до линии, как всегда
-  if(worldNew){ drawTrackReal(i0,i1); drawCandleBodies(); }   // b191 дека → b203 свечи-колонны ПОВЕРХ её тени (не съедены)
+  if(worldNew){ if(PSP_ON) drawTrack25D(i0,i1);   // b258 ¾: ДОРОГА-ПОВЕРХНОСТЬ (свечи-колонны скрыты — график = волны самой дороги)
+    else { drawTrackReal(i0,i1); drawCandleBodies(); } }   // side-режим: старая лента + свечи-колонны ПОВЕРХ тени
   // ---- b207 (worldNew): ВСЕ линии ленты рисует drawTrackReal (симметрично вокруг оси; линии по центру НЕТ — «едет по линии» умерло). Тут только контактные пятна колёс. КЛАССИКА: старый двухпроходный глоу b167 ----
   ctx.lineCap='round'; ctx.lineJoin='round';
   if(worldNew){
