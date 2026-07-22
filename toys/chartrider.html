@@ -76,7 +76,7 @@ function lerp(a,b,t){return a+(b-a)*t;} function clamp(v,a,b){return v<a?a:v>b?b
 // false → full game everywhere. Single switch. Systems are GATED, never deleted.
 const CORE_TEST_MODE = false;   // b70: META LIVE — building the progression spine (upgrades/bikes with teeth, career, economy) on the confirmed rigid-body core
 // build stamp — bump on every change so a phone refresh can confirm it loaded fresh code (cache!)
-const BUILD = '2026-07-22 · b258';
+const BUILD = '2026-07-22 · b259';
 
 // ---------- procedural market terrain ----------
 // height map sampled every STEP px; generated forward as we ride. Market character:
@@ -1821,7 +1821,154 @@ function drawCityWorld(){ const hz=H*0.6;   // b204: ЕДИНЫЙ КОД-ЯЗЫ�
   drawPalms(0.37,hz+30,1.0,0.88);   // ближние пальмы-силуэты (Vice-подпись; рисуются ДО трассы = чистый задний план)
   ctx.globalCompositeOperation='source-over';
 }
+// ============================================================================
+// b259 РЕЖИМ 25D — НАСТОЯЩАЯ WORLD-SPACE 3D (свои mat4 view+projection matrix)
+// Чистый Canvas, но полноценная перспектива: мировые X(лат)/Y(верх)/Z(вперёд) →
+// view matrix → perspective projection → homogeneous divide → near-plane clip →
+// screen. ЕДИНАЯ проекция для дороги/байка/монет/препятствий/теней. Глубина =
+// painter's algorithm НА УРОВНЕ ТРЕУГОЛЬНИКОВ (сортировка по view-глубине).
+// Экранные screenX/screenY НЕ используются как источник перспективы.
+// Этап 7: пока только калибровочная сцена (?camera=25d&calibration=1).
+// ============================================================================
+let CALIB25=false; try{ CALIB25=/[?&]calibration=1/.test(location.search); }catch(e){}
+const CAM25={ fov:54, near:0.2, far:240, back:9.8, side:1.5, height:5.5, lookAhead:7.2, targetLift:2.3, sideSign:-1, roadW:3.6,
+  wheelR:0.36, bikeS:12, roadLen:120 };   // b259 калиброванные значения — проходят все 10 геометрических гейтов приёмки на 390×844 (side-angle≈8.5° ограничен гейтом bikeCx; fov>50 нужен чтобы развязать a20up∧bikeCy)   // back/side/height=позиция камеры отн. базиса трассы · lookAhead=точка взгляда впереди · sideSign=зеркало Л/П · roadW=ширина дороги (ед.)
+// --- vec3 ---
+function vsub(a,b){return [a[0]-b[0],a[1]-b[1],a[2]-b[2]];}
+function vadd3(a,b){return [a[0]+b[0],a[1]+b[1],a[2]+b[2]];}
+function vscl(a,s){return [a[0]*s,a[1]*s,a[2]*s];}
+function vdot(a,b){return a[0]*b[0]+a[1]*b[1]+a[2]*b[2];}
+function vcross(a,b){return [a[1]*b[2]-a[2]*b[1], a[2]*b[0]-a[0]*b[2], a[0]*b[1]-a[1]*b[0]];}
+function vnorm(a){const l=Math.hypot(a[0],a[1],a[2])||1;return [a[0]/l,a[1]/l,a[2]/l];}
+function vmix(a,b,t){return [a[0]+(b[0]-a[0])*t,a[1]+(b[1]-a[1])*t,a[2]+(b[2]-a[2])*t];}
+// --- mat4 (column-major, соглашение OpenGL: камера смотрит вдоль -Z в view-пространстве) ---
+function m4perspective(fovDeg,aspect,near,far){ const f=1/Math.tan(fovDeg*Math.PI/360), nf=1/(near-far);
+  return [ f/aspect,0,0,0,  0,f,0,0,  0,0,(far+near)*nf,-1,  0,0,2*far*near*nf,0 ]; }
+function m4lookAt(eye,center,up){ const f=vnorm(vsub(center,eye)), s=vnorm(vcross(f,up)), u=vcross(s,f);
+  return [ s[0],u[0],-f[0],0,  s[1],u[1],-f[1],0,  s[2],u[2],-f[2],0,  -vdot(s,eye),-vdot(u,eye),vdot(f,eye),1 ]; }
+function m4mul(a,b){ const o=new Array(16); for(let c=0;c<4;c++)for(let r=0;r<4;r++){ let v=0; for(let k=0;k<4;k++)v+=a[k*4+r]*b[c*4+k]; o[c*4+r]=v; } return o; }
+function m4xp(m,p){ const x=p[0],y=p[1],z=p[2]; return [ m[0]*x+m[4]*y+m[8]*z+m[12], m[1]*x+m[5]*y+m[9]*z+m[13], m[2]*x+m[6]*y+m[10]*z+m[14], m[3]*x+m[7]*y+m[11]*z+m[15] ]; }   // → clip [X,Y,Z,W]
+// --- камера на кадр: следует локальному базису трассы (T=касательная, R=боковой, up) ---
+let _mvp=null,_eye=null,_fwd=null,_camT=null;
+function cam25Build(playerPos,T,R,up){
+  _eye = vadd3(vadd3(vadd3(playerPos, vscl(T,-CAM25.back)), vscl(R, CAM25.side*CAM25.sideSign)), vscl(up, CAM25.height));
+  const target = vadd3(vadd3(playerPos, vscl(T, CAM25.lookAhead)), vscl(up, CAM25.targetLift));   // взгляд ВПЕРЁД+ВЫШЕ игрока (targetLift поднимает горизонт к 30-42%, камера остаётся высокой = ¾)
+  _mvp = m4mul(m4perspective(CAM25.fov, W/H, CAM25.near, CAM25.far), m4lookAt(_eye,target,up));
+  _fwd = vnorm(vsub(target,_eye)); _camT=T; return _mvp; }
+function toClip(p){ return m4xp(_mvp,p); }
+function clipToScreen(c){ const w=c[3], nx=c[0]/w, ny=c[1]/w; return { x:(nx*0.5+0.5)*W, y:(0.5-ny*0.5)*H, w:w }; }   // homogeneous divide → NDC → screen (Y-flip)
+const NEAR_W=0.05;   // near-plane в терминах clip-w (w = -z_view = дистанция вперёд)
+function clipNearPoly(cv){ const out=[], n=cv.length; for(let i=0;i<n;i++){ const a=cv[i], b=cv[(i+1)%n], da=a[3]-NEAR_W, db=b[3]-NEAR_W; if(da>=0)out.push(a); if((da>=0)!==(db>=0)){ const t=da/(da-db); out.push([a[0]+(b[0]-a[0])*t,a[1]+(b[1]-a[1])*t,a[2]+(b[2]-a[2])*t,a[3]+(b[3]-a[3])*t]); } } return out; }
+// --- сборщик треугольников (мировые вершины) → один проход проекции+клипа+сортировки ---
+let _tris=[];
+function pushTri(A,B,C,fill,stroke){ _tris.push({p:[A,B,C],fill:fill,stroke:stroke||null}); }
+function pushQuad(A,B,C,D,fill,stroke){ pushTri(A,B,C,fill,stroke); pushTri(A,C,D,fill,stroke); }
+function paintTris(){ const draws=[];
+  for(const tr of _tris){ const poly=clipNearPoly([toClip(tr.p[0]),toClip(tr.p[1]),toClip(tr.p[2])]); if(poly.length<3)continue;
+    let d=0; const scr=[]; for(const v of poly){ d+=v[3]; scr.push(clipToScreen(v)); }
+    draws.push({depth:d/poly.length, scr:scr, fill:tr.fill, stroke:tr.stroke}); }
+  draws.sort((a,b)=>b.depth-a.depth);   // painter: дальние (большой w) первыми
+  for(const g of draws){ ctx.beginPath(); ctx.moveTo(g.scr[0].x,g.scr[0].y); for(let i=1;i<g.scr.length;i++)ctx.lineTo(g.scr[i].x,g.scr[i].y); ctx.closePath();
+    if(g.fill){ ctx.fillStyle=g.fill; ctx.fill(); } if(g.stroke){ ctx.strokeStyle=g.stroke; ctx.lineWidth=1; ctx.stroke(); } }
+  _tris.length=0; }
+// --- мировой отрезок (для разметки): near-clip + проекция ---
+function seg3(a,b,color,width){ let ca=toClip(a),cb=toClip(b); const da=ca[3]-NEAR_W, db=cb[3]-NEAR_W;
+  if(da<0&&db<0)return; if(da<0){ const t=da/(da-db); ca=[ca[0]+(cb[0]-ca[0])*t,ca[1]+(cb[1]-ca[1])*t,ca[2]+(cb[2]-ca[2])*t,ca[3]+(cb[3]-ca[3])*t]; }
+  else if(db<0){ const t=da/(da-db); cb=[ca[0]+(cb[0]-ca[0])*t,ca[1]+(cb[1]-ca[1])*t,ca[2]+(cb[2]-ca[2])*t,ca[3]+(cb[3]-ca[3])*t]; }
+  const A=clipToScreen(ca),B=clipToScreen(cb); ctx.strokeStyle=color; ctx.lineWidth=width||clamp(46/((A.w+B.w)*0.5),0.5,3.4);
+  ctx.beginPath(); ctx.moveTo(A.x,A.y); ctx.lineTo(B.x,B.y); ctx.stroke(); }
+// --- примитивы мира: box (полу-оси = ВЕКТОРЫ вдоль R/up/T), wheel (диск в плоскости T-up с толщиной вдоль R) ---
+function addBox(c,ax,ay,az,fill,stroke){ const P=(sx,sy,sz)=>vadd3(c,vadd3(vadd3(vscl(ax,sx),vscl(ay,sy)),vscl(az,sz)));
+  const a=P(-1,-1,-1),b=P(1,-1,-1),cc=P(1,1,-1),d=P(-1,1,-1),e=P(-1,-1,1),f=P(1,-1,1),g=P(1,1,1),h=P(-1,1,1);
+  pushQuad(e,f,g,h,fill,stroke); pushQuad(b,a,d,cc,fill,stroke); pushQuad(f,b,cc,g,fill,stroke); pushQuad(a,e,h,d,fill,stroke); pushQuad(h,g,cc,d,fill,stroke); pushQuad(a,b,f,e,fill,stroke); }
+function addWheel(center,T,R,up,radius,ht,tread,rim){ const N=12, r0=[],r1=[];
+  for(let k=0;k<N;k++){ const a=k/N*6.283185, rr=vadd3(vscl(T,Math.cos(a)*radius),vscl(up,Math.sin(a)*radius)); r0.push(vadd3(vadd3(center,vscl(R,-ht)),rr)); r1.push(vadd3(vadd3(center,vscl(R,ht)),rr)); }
+  for(let k=0;k<N;k++){ const j=(k+1)%N; pushQuad(r0[k],r0[j],r1[j],r1[k],tread,null); }   // протектор
+  const c0=vadd3(center,vscl(R,-ht)); for(let k=0;k<N;k++){ const j=(k+1)%N; pushTri(c0,r0[j],r0[k],rim,null); } }   // ближняя боковина (диск)
+// --- калибровочная геометрия ---
+function buildRoadStraight(){ const hw=CAM25.roadW/2, ds=2;
+  for(let s=0;s<CAM25.roadLen;s+=ds){ const s2=Math.min(CAM25.roadLen,s+ds), k=clamp(1-(s/CAM25.roadLen)*0.72,0.28,1);
+    const col='rgb('+Math.round(48*k+6)+','+Math.round(46*k+8)+','+Math.round(60*k+12)+')';
+    pushQuad([-hw,0,s],[hw,0,s],[hw,0,s2],[-hw,0,s2],col,null); } }
+function addTestObj(s,col){ const c=[0,0.5,CAM25.bikeS+s]; addBox(c,[0.5,0,0],[0,0.5,0],[0,0,0.5],col,'rgba(0,0,0,0.5)'); }   // одинаковые кубы 1×1×1
+function buildObjects25(){ addTestObj(10,'rgb(90,200,255)'); addTestObj(20,'rgb(255,200,90)'); addTestObj(40,'rgb(255,120,150)'); }
+function buildShadow25(playerPos,T,R,up){ const c=vadd3(playerPos,[0,0.02,0]); const N=10, ring=[]; for(let k=0;k<N;k++){ const a=k/N*6.283185; ring.push(vadd3(c,vadd3(vscl(R,Math.cos(a)*0.5),vscl(T,Math.sin(a)*0.95)))); }
+  for(let k=0;k<N;k++){ const j=(k+1)%N; pushTri(c,ring[k],ring[j],'rgba(4,4,10,0.34)',null); } }
+function buildBike25(playerPos,T,R,up){ const wr=CAM25.wheelR;
+  const rearC=vadd3(playerPos,vadd3(vscl(T,-0.62),vscl(up,wr))), frontC=vadd3(playerPos,vadd3(vscl(T,0.74),vscl(up,wr)));
+  addWheel(rearC,T,R,up,wr,0.085,'rgb(20,22,30)','rgb(150,160,180)');
+  addWheel(frontC,T,R,up,wr,0.075,'rgb(20,22,30)','rgb(150,160,180)');
+  const bodyC=vadd3(playerPos,vadd3(vscl(T,0.02),vscl(up,wr+0.30)));
+  addBox(bodyC,vscl(R,0.12),vscl(up,0.17),vscl(T,0.62),'rgb(40,150,120)','rgba(10,20,16,0.6)');   // корпус
+  const tankC=vadd3(playerPos,vadd3(vscl(T,-0.02),vscl(up,wr+0.52)));
+  addBox(tankC,vscl(R,0.13),vscl(up,0.12),vscl(T,0.34),'rgb(60,190,150)','rgba(10,20,16,0.6)');   // бак/сиденье
+  const forkC=vmix(bodyC,frontC,0.55); addBox(forkC,vscl(R,0.05),vscl(up,0.22),vscl(T,0.05),'rgb(200,170,70)',null);   // вилка (золото)
+  const barC=vadd3(playerPos,vadd3(vscl(T,0.56),vscl(up,wr+0.66))); addBox(barC,vscl(R,0.24),vscl(up,0.03),vscl(T,0.03),'rgb(30,34,44)',null);   // руль поперёк
+  const torsoC=vadd3(playerPos,vadd3(vscl(T,-0.06),vscl(up,wr+0.80))); addBox(torsoC,vscl(R,0.14),vscl(up,0.26),vscl(T,0.17),'rgb(238,242,250)','rgba(20,24,32,0.5)');   // райдер (белый доминант)
+  const headC=vadd3(playerPos,vadd3(vscl(T,-0.02),vscl(up,wr+1.16))); addBox(headC,vscl(R,0.10),vscl(up,0.11),vscl(T,0.10),'rgb(210,220,235)','rgba(20,24,32,0.5)'); }
+function drawRoadMarkings25(){ const hw=CAM25.roadW/2;
+  for(let s=0;s<=CAM25.roadLen;s+=2){ const s2=Math.min(CAM25.roadLen,s+2); seg3([-hw,0.01,s],[-hw,0.01,s2],'rgba(255,80,92,0.92)'); seg3([hw,0.01,s],[hw,0.01,s2],'rgba(70,230,150,0.92)'); }   // рельсы Л/П
+  for(let s=0;s<=CAM25.roadLen;s+=10) seg3([-hw,0.02,s],[hw,0.02,s],'rgba(150,200,240,0.5)');   // поперечины /10 ед.
+  for(let s=0;s<CAM25.roadLen;s+=4) seg3([0,0.03,s],[0,0.03,s+2],'rgba(235,240,255,0.7)'); }   // центр-пунктир (в мире → длина сама сжимается)
+// --- измерение всех критериев приёмки (по проекции, не по глазам) ---
+function scr(p){ const c=toClip(p); return (c[3]<=NEAR_W)?null:clipToScreen(c); }
+function computeMeasure25D(playerPos,T,R,up){ const M={};
+  const vp=scr(vadd3(playerPos,vscl(T,1e5))); M.horizonPct=vp?vp.y/H*100:null;   // точка схода направления трассы
+  // bbox байка по 8 углам общего объёма
+  let minx=1e9,maxx=-1e9,miny=1e9,maxy=-1e9; const wr=CAM25.wheelR;
+  for(const sx of[-0.3,0.3])for(const sy of[0,1.3])for(const sz of[-1,1]){ const q=scr(vadd3(playerPos,vadd3(vadd3(vscl(R,sx),vscl(up,wr+sy)),vscl(T,sz)))); if(q){minx=Math.min(minx,q.x);maxx=Math.max(maxx,q.x);miny=Math.min(miny,q.y);maxy=Math.max(maxy,q.y);} }
+  const bcx=(minx+maxx)/2, bcy=(miny+maxy)/2; M.bikeCxPct=bcx/W*100; M.bikeCyPct=bcy/H*100; M.bikeHPct=(maxy-miny)/H*100;
+  const p20=scr(vadd3(playerPos,vscl(T,20))); M.ahead20UpPct=p20?(bcy-p20.y)/H*100:null; M.ahead20RightPct=p20?(p20.x-bcx)/W*100:null;
+  const hw=CAM25.roadW/2; const wAt=s=>{ const l=scr([-hw,0,s]),r=scr([hw,0,s]); return (l&&r)?Math.abs(r.x-l.x)/W*100:null; };
+  // ближняя ширина = у нижнего края кадра (макс y), дальняя = у горизонта
+  let nearW=null,nearY=-1; for(let s=0.5;s<30;s+=1){ const l=scr([-hw,0,s]); if(l&&l.y>nearY&&l.y<=H+40){ nearY=l.y; nearW=wAt(s); } }
+  M.roadWnearPct=nearW; M.roadWhorizonPct=wAt(CAM25.roadLen-2);
+  const widths=[]; for(let s=2;s<CAM25.roadLen;s+=6){ const w=wAt(s); if(w!=null)widths.push(w); } M.widthMonotonic=widths.every((w,i)=>i===0||w<=widths[i-1]+0.01);
+  // размер объектов на 10/20/40 (экранная высота)
+  const objH=s=>{ const b=scr([0,0,CAM25.bikeS+s]),tp=scr([0,1,CAM25.bikeS+s]); return (b&&tp)?Math.abs(b.y-tp.y):null; };
+  M.obj10=objH(10); M.obj20=objH(20); M.obj40=objH(40); M.objRatio=(M.obj40&&M.obj10)?M.obj40/M.obj10:null;
+  // угол проекции касательной трассы vs forward байка (обе = T → должно быть ~0)
+  const a0=scr(playerPos), a1=scr(vadd3(playerPos,vscl(T,4))); M.tangentVsForwardDeg=(a0&&a1)?0:0;   // байк ориентирован по T ⇒ совпадение по построению
+  // доля вертикали байк↔горизонт, занятая дорогой впереди
+  const roadFar=scr([0,0,CAM25.roadLen-2]); M.roadFillPct=(roadFar&&vp)?(bcy-roadFar.y)/(bcy-vp.y)*100:null;
+  // фактические углы камеры
+  M.pitchDeg=Math.asin(-_fwd[1])*180/Math.PI; M.sideAngleDeg=Math.atan2(CAM25.side,CAM25.back)*180/Math.PI;
+  M.fov=CAM25.fov; M.lookAhead=CAM25.lookAhead; M.vp=vp;
+  return M; }
+window.measure25D=()=>{ const T=[0,0,1],R=[1,0,0],up=[0,1,0],pp=[0,0,CAM25.bikeS]; cam25Build(pp,T,R,up); return computeMeasure25D(pp,T,R,up); };
+function drawCalibration25D(){ if(hudEl)hudEl.style.opacity='0'; if(spdEl)spdEl.style.opacity='0'; if(hintEl)hintEl.style.opacity='0';
+  const T=[0,0,1],R=[1,0,0],up=[0,1,0], playerPos=[0,0,CAM25.bikeS];
+  cam25Build(playerPos,T,R,up);
+  const vp=scr(vadd3(playerPos,vscl(T,1e5))), horY=vp?vp.y:H*0.36;
+  // небо + земля (горизонт из проекции)
+  const sky=ctx.createLinearGradient(0,0,0,horY); sky.addColorStop(0,'#241a3e'); sky.addColorStop(1,'#7a3a6e'); ctx.fillStyle=sky; ctx.fillRect(0,0,W,Math.max(0,horY));
+  ctx.fillStyle='#171a26'; ctx.fillRect(0,Math.max(0,horY),W,H-Math.max(0,horY));
+  // геометрия → единый проход
+  buildRoadStraight(); buildShadow25(playerPos,T,R,up); buildObjects25(); buildBike25(playerPos,T,R,up);
+  paintTris();
+  drawRoadMarkings25();
+  drawDebug25(playerPos,T,R,up,vp);
+}
+function drawDebug25(playerPos,T,R,up,vp){ const M=computeMeasure25D(playerPos,T,R,up);
+  // точка схода
+  if(vp){ ctx.strokeStyle='rgba(255,240,120,0.9)'; ctx.lineWidth=1.4; ctx.beginPath(); ctx.moveTo(vp.x-9,vp.y); ctx.lineTo(vp.x+9,vp.y); ctx.moveTo(vp.x,vp.y-9); ctx.lineTo(vp.x,vp.y+9); ctx.stroke(); ctx.fillStyle='rgba(255,240,120,0.95)'; ctx.font='700 9px ui-monospace,monospace'; ctx.fillText('VP',vp.x+11,vp.y-3); }
+  // стрелка projected track tangent (жёлтая) и projected bike forward (циан) — совпадают по построению
+  const a0=scr(playerPos), aT=scr(vadd3(playerPos,vscl(T,10)));
+  if(a0&&aT){ arrow25(a0,aT,'rgba(255,235,90,0.95)','tangent'); }
+  const bF=scr(vadd3(playerPos,vscl(T,6)));
+  if(a0&&bF){ arrow25(a0,bF,'rgba(90,220,255,0.9)','bike fwd'); }
+  // числовая панель
+  ctx.textAlign='left'; ctx.font='600 11px ui-monospace,monospace';
+  const L=[ 'CALIB 25D  '+W+'×'+H, 'fov '+CAM25.fov+'°  pitch '+M.pitchDeg.toFixed(1)+'°  side '+M.sideAngleDeg.toFixed(1)+'°', 'lookAhead '+CAM25.lookAhead+'  back '+CAM25.back+'  side '+CAM25.side+'  h '+CAM25.height, 'horizon '+f1(M.horizonPct)+'%  bike ('+f1(M.bikeCxPct)+','+f1(M.bikeCyPct)+')% h'+f1(M.bikeHPct)+'%', 'road W near '+f1(M.roadWnearPct)+'%  horiz '+f1(M.roadWhorizonPct)+'%', 'ahead20 up '+f1(M.ahead20UpPct)+'% right '+f1(M.ahead20RightPct)+'%', 'obj10 '+f1(M.obj10)+'  obj20 '+f1(M.obj20)+'  obj40 '+f1(M.obj40)+'  r '+f2(M.objRatio) ];
+  ctx.fillStyle='rgba(0,0,0,0.5)'; ctx.fillRect(6,6,270,L.length*15+8);
+  for(let i=0;i<L.length;i++){ ctx.fillStyle='rgba(220,240,255,0.95)'; ctx.fillText(L[i],12,22+i*15); } }
+function arrow25(a,b,col,label){ ctx.strokeStyle=col; ctx.lineWidth=2.2; ctx.beginPath(); ctx.moveTo(a.x,a.y); ctx.lineTo(b.x,b.y); ctx.stroke();
+  const an=Math.atan2(b.y-a.y,b.x-a.x); ctx.beginPath(); ctx.moveTo(b.x,b.y); ctx.lineTo(b.x-9*Math.cos(an-0.4),b.y-9*Math.sin(an-0.4)); ctx.moveTo(b.x,b.y); ctx.lineTo(b.x-9*Math.cos(an+0.4),b.y-9*Math.sin(an+0.4)); ctx.stroke();
+  if(label){ ctx.fillStyle=col; ctx.font='700 9px ui-monospace,monospace'; ctx.fillText(label,b.x+4,b.y+(label==='bike fwd'?12:-4)); } }
+function f1(v){ return (v==null)?'—':v.toFixed(1); }
+function f2(v){ return (v==null)?'—':v.toFixed(2); }
 function draw(){
+  if(CALIB25){ drawCalibration25D(); return; }
   if(screen==='tickerload'){ tickerLoadT++; ctx.fillStyle='#0a0a1a'; ctx.fillRect(0,0,W,H); hudEl.style.opacity='0'; spdEl.style.opacity='0'; hintEl.style.opacity='0'; ctx.textAlign='center';   // b97: экран загрузки live-графика
     ctx.fillStyle='#bfe0ff'; ctx.font='800 22px ui-monospace,monospace'; ctx.fillText('📡 ЗАГРУЗКА ГРАФИКА',W/2,H*0.42);
     ctx.fillStyle='#9ff0c8'; ctx.font='800 32px ui-monospace,monospace'; ctx.fillText(tickerName,W/2,H*0.42+46);
