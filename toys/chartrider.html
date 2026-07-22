@@ -76,7 +76,7 @@ function lerp(a,b,t){return a+(b-a)*t;} function clamp(v,a,b){return v<a?a:v>b?b
 // false → full game everywhere. Single switch. Systems are GATED, never deleted.
 const CORE_TEST_MODE = false;   // b70: META LIVE — building the progression spine (upgrades/bikes with teeth, career, economy) on the confirmed rigid-body core
 // build stamp — bump on every change so a phone refresh can confirm it loaded fresh code (cache!)
-const BUILD = '2026-07-22 · b268';
+const BUILD = '2026-07-22 · b269';
 
 // ---------- procedural market terrain ----------
 // height map sampled every STEP px; generated forward as we ride. Market character:
@@ -1541,6 +1541,8 @@ function update(){
     if(t-_scrubT>7){ _scrubT=t; sfxScrub(bike.vx); } }   // b160: скид-марки при торможении; b179: + шорох резины
   if(skids.length){ for(const s of skids)s.life-=0.004; if(skids[0].life<=0)skids.shift(); }
   cam.x=bike.x-W*(PSP_ON?PSP.CAMX:0.32); cam.y=lerp(cam.y, bike.y-H*((PSP_ON?PSP.CAMY:0.52)-camAir*0.10), lerp(TUNE.camFollow,0.45,camAir));   // b257 ¾-композиция по референсу: байк внизу-слева (CAMX/CAMY), дорога стартует у него и уходит к точке схода. fast follow on big air сохранён
+  if(typeof PHYSV2!=='undefined' && PHYSV2 && !bike.onG){ const lp=predictLanding(); if(lp){ _predLandX=lp.x; _predLandY=lp.y;   // P0#7: в воздухе заранее показать зону посадки (≥0.7с)
+    const need = lp.x - (cam.x + W*0.86); if(need>0) cam.x += need; const camTgtY=Math.min(cam.y, lp.y-H*0.55); cam.y=lerp(cam.y,camTgtY,0.12); } } else { _predLandX=null; }
   for(const p of parts){p.x+=p.vx;p.y+=p.vy;p.vy+=0.12;p.vx*=0.97;p.life-=0.03;} parts=parts.filter(p=>p.life>0);
   for(const d of dust){d.x+=d.vx;d.y+=d.vy;d.vy+=0.04;d.life-=0.04;} dust=dust.filter(d=>d.life>0);
   shake*=0.85; flash*=0.9;
@@ -2003,12 +2005,13 @@ const OB={ scaleX:62, scaleY:62, anchorX:0.26, anchorY:0.60,
 function projFront(s,h){ return { x: W*OB.anchorX + (s-OB.cameraS)*OB.scaleX, y: H*OB.anchorY - (h-OB.cameraH)*OB.scaleY }; }
 function depthAt(s){ const f=clamp((s-OB.cameraS)/OB.aheadUnits,0,1); return { dx:lerp(OB.depthNearX,OB.depthFarX,f), dy:lerp(OB.depthNearY,OB.depthFarY,f), th:lerp(OB.thickNear,OB.thickFar,f), ew:lerp(OB.edgeNear,OB.edgeFar,f) }; }
 // --- acceptance-трасса (?track=acceptance25d): разгон·60°·вершина·разрыв·V70°·выход72°·прыжок·вес-секция ---  Lbike=1 world unit
-// debug-профиль (Lbike=1 ед.): разгон·подъём 70°·вершина·РАЗРЫВ1·посадка·V-провал 79°·выход 78°·рампа·РАЗРЫВ2(большой прыжок)·сложная посадка·вес-секция 72°
-const ACC={ pts:[[0,0],[6,0],[8.2,6.0],[8.9,6.3],/*GAP1*/[10.0,4.5],[11.4,-3.0],[12.9,4.2],[13.7,5.0],[14.5,5.2],/*GAP2*/[16.3,1.5],[17.2,1.0],[19.5,7.0],[20.5,7.1],[24,1.0],[27,0.5]], gaps:[[8.9,10.0],[14.5,16.3]] };
-const ACC_COINS=[[9.0,7.3],[9.5,7.7],[10.0,7.5],[14.7,6.2],[15.4,6.6],[16.1,6.2],[11.4,-2.0]];
+// debug-профиль (Lbike=1 ед., P0#6): разгон·подъём ~70°·вершина·РАЗРЫВ1·УЗКАЯ полка·V-провал·выход·СТУПЕНЬ·РАЗРЫВ2(большой прыжок)·УЗКАЯ зона посадки·вес-секция. Газом-соло не проходится.
+const ACC={ pts:[[0,0],[6,0],[8.1,5.8],[8.8,6.1],/*GAP1*/[10.2,4.6],[10.9,4.5],/*полка*/[12.1,-1.6],[13.9,3.6],[14.6,4.0],[15.0,4.1],/*СТУПЕНЬ*/[15.06,5.1],[15.7,5.2],/*GAP2*/[17.6,1.2],[18.4,1.1],/*зона посадки*/[19.1,1.0],[21.4,7.0],[22.4,7.1],[25,1.2],[28,0.7]], gaps:[[8.8,10.2],[15.7,17.6]] };
+const ACC_COINS=[[8.9,7.0],[9.5,7.5],[10.1,7.2],[16.0,6.0],[16.6,6.4],[17.3,6.0],[12.3,-1.6]];
+const ACC_LAND=[[10.2,10.9],[18.4,19.1]];   // узкие зоны посадки (после разрывов) — камера подсвечивает
 function trackH(s){ const P=ACC.pts; if(s<=P[0][0])return P[0][1]; if(s>=P[P.length-1][0])return P[P.length-1][1]; for(let i=0;i<P.length-1;i++){ if(s>=P[i][0]&&s<=P[i+1][0]){ const t=(s-P[i][0])/(P[i+1][0]-P[i][0]); return P[i][1]+(P[i+1][1]-P[i][1])*t; } } return 0; }
 function inGapA(s){ for(const g of ACC.gaps) if(s>g[0]&&s<g[1])return true; return false; }
-const ACC_UNITPX=58, ACC_END=27;   // 1 ед.≈длина байка (58px ~ 2·DX); slopes сохраняются (x и y один масштаб)
+const ACC_UNITPX=58, ACC_END=28;   // 1 ед.≈длина байка (58px ~ 2·DX); slopes сохраняются (x и y один масштаб)
 function buildAcceptanceTerr(){ baseY=H*0.6; terr=[]; for(let x=0; x<=ACC_END*ACC_UNITPX+240; x+=STEP){ const s=x/ACC_UNITPX, h=trackH(s), y=baseY-h*ACC_UNITPX; terr.push({x:x,y:y,open:y,close:y,hi:y,lo:y,up:false,gap:inGapA(s),coin:false,topY:y,lipY:0,step:false,stepDone:false,kick:false,pump:false,pumpMag:0,whoop:false,mud:false,drop:false,climb:false,mega:false,haz:false,hazHit:false,ev:''}); } genX=terr.length*STEP+99999; finishDist=Math.floor(ACC_END*ACC_UNITPX/10); }   // фикс. debug-трасса, генерация остановлена
 function drawAcceptOverlay(i0,i1){ if(!bike)return; const DX=PHYS.DX;
   // физ-линия трассы (жёлтая) = линия коллизий (== передний неон-край)
@@ -2020,6 +2023,9 @@ function drawAcceptOverlay(i0,i1){ if(!bike)return; const DX=PHYS.DX;
   ctx.strokeStyle='#8dff5a'; ctx.lineWidth=1.6; ctx.beginPath(); ctx.arc(bike.x,bike.y,5,0,7); ctx.moveTo(bike.x-8,bike.y); ctx.lineTo(bike.x+8,bike.y); ctx.moveTo(bike.x,bike.y-8); ctx.lineTo(bike.x,bike.y+8); ctx.stroke();
   // вектор угла корпуса (белый)
   ctx.strokeStyle='#fff'; ctx.lineWidth=2; ctx.beginPath(); ctx.moveTo(bike.x,bike.y); ctx.lineTo(bike.x+Math.cos(bike.ang)*42,bike.y+Math.sin(bike.ang)*42); ctx.stroke();
+  // прогноз зоны посадки (P0#7): жёлтая мишень + пунктир траектории
+  if(!bike.onG && _predLandX!=null){ ctx.strokeStyle='rgba(255,220,60,0.9)'; ctx.lineWidth=2; ctx.beginPath(); ctx.arc(_predLandX,_predLandY,12,0,7); ctx.moveTo(_predLandX-16,_predLandY); ctx.lineTo(_predLandX+16,_predLandY); ctx.stroke();
+    ctx.setLineDash([5,6]); ctx.strokeStyle='rgba(255,220,60,0.5)'; ctx.beginPath(); ctx.moveTo(bike.x,bike.y); ctx.lineTo(_predLandX,_predLandY); ctx.stroke(); ctx.setLineDash([]); }
   // числовая панель (экранное пространство)
   ctx.save(); ctx.setTransform(DPR,0,0,DPR,0,0); const slopeDeg=Math.atan2(terrainAt(fx).y-terrainAt(rx).y,2*DX)*180/Math.PI;
   ctx.fillStyle='rgba(0,0,0,0.6)'; ctx.fillRect(6,40,318,78); ctx.textAlign='left'; ctx.font='600 11px ui-monospace,monospace'; ctx.fillStyle='#dfefff';
@@ -2030,41 +2036,45 @@ function drawAcceptOverlay(i0,i1){ if(!bike)return; const DX=PHYS.DX;
   ctx.restore(); }
 // b268 trialsPhysicsV2 — настоящий 2-колёсный rigid-body (без climbCap/скрытого затягивания). Оба колеса контактят, нормаль поверхности, сцепление, моторный момент, перенос веса, сохранение импульса, вращение в воздухе. substeps против проваливания через острые грани.
 // АРК-МОДЕЛЬ: на земле байк ЕДЕТ ПО ТРАССЕ (нет отскока от стены), скорость вдоль склона = реальные силы (гравитация вдоль + тяга − трение), импульс сохраняется; в воздухе — снаряд + вращение игроком. Крутое (65-80°) берётся ТОЛЬКО скоростью + весом-назад (сцепление). Газ-соло не тянет (traction-limit).
-const PV2={ sub:3, g:0.34, motor:0.50, mu:2.4, wbBonus:1.2, roll:0.012, brakeF:0.5, contact:27.5, angLerp:0.22, leanPitch:0.34, airCtrl:0.014, airDamp:0.02, launchK:1.0, landLoss:0.7, maxVs:10 };
+const PV2={ sub:3, g:0.34, motor:0.80, mu:3.8, wtShift:0.42, roll:0.012, brakeF:0.5, contact:27.5, angLerp:0.22,
+  airTorque:0.0024, airDamp:0.045, maxAngV:0.052, launchK:1.0, landLoss:0.7, maxVs:10, comShift:9 };   // maxAngV 0.052/кадр≈3.1рад/с
 window.PV2=PV2;
+// P0#1: наземный ВЕС = смещение ЦМ райдера → нагрузка на колёса (НЕ вращает раму). P0#2: воздух = момент с клампом+демпфером. P0#3: тяга = момент заднего, ограничен сцеплением×rear-normal. P0#4: вылет только геометрический (скорость×касательная×нормаль), без фикс-импульса.
+let _comX=0, _predLandX=null, _predLandY=null;   // ЦМ райдера + прогноз посадки (P0#7)
+function predictLanding(){ let x=bike.x,y=bike.y,vx=bike.vx,vy=bike.vy; for(let i=0;i<200;i++){ vy+=PV2.g; x+=vx; y+=vy; if(vy>=0){ const gy=terrainAt(x).y-PV2.contact; if(y>=gy) return {x:x, y:gy+PV2.contact, t:i}; } } return null; }
 function trialsStepV2(){ const B=bike, sub=PV2.sub, dt=1/sub;
   for(let it=0;it<sub;it++){
     if(B.onG){
       const g0=terrainAt(B.x), slope=g0.ang, cs=Math.cos(slope), sn=Math.sin(slope);
-      let vs = B.vx*cs + B.vy*sn;                                   // скорость вдоль трассы
-      const aGrav = PV2.g*sn;                                       // гравитация вдоль (на подъёме slope<0 → тормозит)
-      const normal = Math.max(0.06, PV2.g*Math.abs(cs));            // нагрузка в поверхность (на крутом мала → мало сцепления)
-      const wb = clamp(-B.rShift,0,1);                              // вес НАЗАД 0..1 → бонус сцепления ведущего
-      const grip = PV2.mu*normal*(1+PV2.wbBonus*wb);                // предел тяги
-      let aDrive=0; if(down) aDrive = Math.min(PV2.motor, grip);    // тяга ≤ сцепление (газ-соло крутое не тянет)
+      let vs=B.vx*cs+B.vy*sn;                                       // скорость вдоль трассы
+      const aGrav=PV2.g*sn;                                          // гравитация вдоль (подъём slope<0 → тормозит)
+      const totalN=Math.max(0.05, PV2.g*Math.abs(cs));               // суммарная нагрузка в поверхность
+      const rearFrac=clamp(0.5 - B.rShift*PV2.wtShift, 0.12, 0.9);   // вес НАЗАД (rShift<0) → доля на заднее ↑
+      const rearN=totalN*rearFrac;                                   // нагрузка заднего (ведущего)
+      const grip=PV2.mu*rearN;                                       // предел тяги = μ×rear-normal
+      let aDrive=down? Math.min(PV2.motor, grip) : 0;                // МОМЕНТ заднего, ≤ сцепления (газ-соло крутое не тянет)
       if(brake) aDrive -= PV2.brakeF*Math.sign(vs||1);
       aDrive -= PV2.roll*vs;
-      vs += (aGrav + aDrive)*dt;
+      vs += (aGrav+aDrive)*dt;
       if(vs>PV2.maxVs)vs=PV2.maxVs; if(vs<-PV2.maxVs)vs=-PV2.maxVs;
-      B.x += vs*cs*dt;                                              // движение по дуге трассы
-      const g1=terrainAt(B.x); B.y = g1.y - PV2.contact; B.vx=vs*cs; B.vy=vs*sn;
-      // ВЫЛЕТ на выпуклой вершине/кромке: если для следования рельефу нужна отриц. прижимающая сила > гравитации → отрыв
-      const sA=terrainAt(B.x+3).ang, sB=terrainAt(B.x-3).ang, curv=(sA-sB)/6;
-      if(vs>1.2 && curv>0 && vs*vs*curv > PV2.g*PV2.launchK){ B.onG=false; B.angV=(B.angV||0); }
-      // угол корпуса → склон + перенос веса (вес назад = нос вверх); не тянет вверх, только тангаж
-      const tAng = slope - (-B.rShift)*PV2.leanPitch; B.ang += (tAng - B.ang)*PV2.angLerp; B.angV=0;
+      B.x += vs*cs*dt; const g1=terrainAt(B.x); B.y=g1.y-PV2.contact; B.vx=vs*cs; B.vy=vs*sn;
+      const sA=terrainAt(B.x+3).ang, sB=terrainAt(B.x-3).ang, curv=(sA-sB)/6;   // выпуклая кромка → отрыв (геометрия)
+      if(vs>1.2 && curv>0 && vs*vs*curv>PV2.g*PV2.launchK){ B.onG=false; }
+      B.ang += (slope - B.ang)*PV2.angLerp; B.angV=0;                // рама ВЫРАВНИВАЕТСЯ ПО СКЛОНУ (вес НЕ вращает раму — только нагрузку+позу райдера)
+      _comX = -B.rShift*PV2.comShift;                                // визуальный сдвиг ЦМ райдера
       B.wheel += vs*dt*0.12;
     } else {
       B.vy += PV2.g*dt; B.x += B.vx*dt; B.y += B.vy*dt;
-      B.angV += leanX*PV2.airCtrl*dt; B.angV*=(1-PV2.airDamp); B.ang += B.angV*dt;
-      const gy=terrainAt(B.x).y - PV2.contact;
-      if(B.y>=gy && B.vy>=-0.01){                                   // посадка
+      B.angV += leanX*PV2.airTorque*dt;                              // ВОЗДУХ: момент (не прямое вращение)
+      if(B.angV>PV2.maxAngV)B.angV=PV2.maxAngV; if(B.angV<-PV2.maxAngV)B.angV=-PV2.maxAngV;   // кламп ~3.1 рад/с
+      B.angV *= (1-PV2.airDamp);                                     // демпфер → отпустил наклон = вращение гаснет (нет мгновенного сальто)
+      B.ang += B.angV*dt;
+      const gy=terrainAt(B.x).y-PV2.contact;
+      if(B.y>=gy && B.vy>=-0.01){                                    // посадка
         const slope=terrainAt(B.x).ang, cs=Math.cos(slope), sn=Math.sin(slope);
         let vsL=B.vx*cs+B.vy*sn; const mis=Math.abs(((B.ang-slope+Math.PI)%(2*Math.PI))-Math.PI);
-        const loss=clamp(1-mis*PV2.landLoss,0.25,1);                // жёсткая посадка (несовпадение угла) = потеря скорости
-        vsL=Math.max(0,vsL*loss); B.onG=true; B.y=gy; B.ang=slope; B.vx=vsL*cs; B.vy=vsL*sn; B.angV=0;
-        B._hardLand=(1-loss);                                       // squash-сигнал для рендера
-        B.wheel += vsL*0.1;
+        const loss=clamp(1-mis*PV2.landLoss,0.25,1); vsL=Math.max(0,vsL*loss);   // несовпадение угла = потеря скорости
+        B.onG=true; B.y=gy; B.ang=slope; B.vx=vsL*cs; B.vy=vsL*sn; B.angV=0; B._hardLand=1-loss; B.wheel+=vsL*0.1;
       }
     }
   }
@@ -2129,14 +2139,27 @@ const OBW={ wdX:34, wdY:-15, wTH:24, bikeWorldW:96, bikeYoff:16 };   // world-px
 let _t25pose=0,_t25poseT=0,_t25sq=0,_t25wasAir=false;   // гистерезис позы + squash подвески
 function drawEnvG(img,parallax){ if(!img)return; const r=envRect(); let off=(-(cam?cam.x:0)*parallax)%r.w; if(off>0)off-=r.w; ctx.drawImage(img,r.x+off,r.y,r.w,r.h); ctx.drawImage(img,r.x+off+r.w,r.y,r.w,r.h); }
 function drawTrialsEnvWorld(){ drawEnvG(A25.bgSky,0.03); drawEnvG(A25.city,0.11); drawEnvG(A25.palms,0.26); }   // фон-слои (пальмы фоном — не закрывают байка)
-function drawTrialsTrackWorld(i0,i1){ const dX=OBW.wdX,dY=OBW.wdY,TH=OBW.wTH;   // мировые коорд (внутри zoom/cam); ШИРОКАЯ неон-лента из terr
-  const F=[],B=[],FB=[],MID=[]; for(let i=i0;i<=i1;i++){ const c=terr[i]; if(!c||c.gap){F.push(null);B.push(null);FB.push(null);MID.push(null);continue;} F.push({x:c.x,y:c.y}); B.push({x:c.x+dX,y:c.y+dY}); FB.push({x:c.x,y:c.y+TH}); MID.push({x:c.x+dX*0.5,y:c.y+dY*0.5}); }
-  ctx.lineJoin='round'; ctx.lineCap='round';
-  for(let i=0;i<F.length-1;i++){ const a=F[i],b=F[i+1],a2=FB[i],b2=FB[i+1]; if(!a||!b)continue; const g=ctx.createLinearGradient(0,a.y,0,a.y+TH); g.addColorStop(0,'#1a1250'); g.addColorStop(1,'#08061f'); ctx.fillStyle=g; ctx.beginPath(); ctx.moveTo(a.x,a.y); ctx.lineTo(b.x,b.y); ctx.lineTo(b2.x,b2.y); ctx.lineTo(a2.x,a2.y); ctx.closePath(); ctx.fill(); }   // боковая грань (толще)
-  for(let i=0;i<F.length-1;i++){ const a=F[i],b=F[i+1],ba=B[i],bb=B[i+1]; if(!a||!b||!ba||!bb)continue; const g=ctx.createLinearGradient(a.x,a.y,ba.x,ba.y); g.addColorStop(0,'#2a1e5e'); g.addColorStop(1,'#1c1442'); ctx.fillStyle=g; ctx.beginPath(); ctx.moveTo(a.x,a.y); ctx.lineTo(b.x,b.y); ctx.lineTo(bb.x,bb.y); ctx.lineTo(ba.x,ba.y); ctx.closePath(); ctx.fill(); }   // верхняя грань (шире, светлее)
-  ctx.strokeStyle='rgba(160,190,235,0.28)'; ctx.setLineDash([9,11]); ctx.lineWidth=2; { let pen=false; ctx.beginPath(); for(const p of MID){ if(!p){pen=false;continue;} if(!pen){ctx.moveTo(p.x,p.y);pen=true;}else ctx.lineTo(p.x,p.y);} ctx.stroke(); ctx.setLineDash([]); }   // центральная разметка
-  ctx.save(); ctx.shadowColor='#14e8ff'; ctx.shadowBlur=6; ctx.strokeStyle='#14e8ff'; ctx.lineWidth=2.2; { let pen=false; ctx.beginPath(); for(const p of B){ if(!p){pen=false;continue;} if(!pen){ctx.moveTo(p.x,p.y);pen=true;}else ctx.lineTo(p.x,p.y);} ctx.stroke(); } ctx.restore();   // дальний cyan
-  ctx.save(); ctx.shadowColor='#ff2bd6'; ctx.shadowBlur=11; ctx.strokeStyle='#ff2bd6'; ctx.lineWidth=3.4; { let pen=false; ctx.beginPath(); for(const p of F){ if(!p){pen=false;continue;} if(!pen){ctx.moveTo(p.x,p.y);pen=true;}else ctx.lineTo(p.x,p.y);} ctx.stroke(); } ctx.restore();   // передний magenta (ярче)
+// P0#5: лента = сегмент-квады, смещение по УСРЕДНЁННОЙ НОРМАЛИ (постоянная ширина, кромки НЕ пересекаются крестом на вершинах), bevel-join, отдельные торцы разрывов.
+function polySeg(arr,color,width,glow){ ctx.save(); ctx.lineJoin='bevel'; ctx.lineCap='round'; ctx.miterLimit=2; if(glow){ctx.shadowColor=color;ctx.shadowBlur=glow;} ctx.strokeStyle=color; ctx.lineWidth=width; let pen=false; ctx.beginPath(); for(const p of arr){ if(!p){pen=false;continue;} if(!pen){ctx.moveTo(p.x,p.y);pen=true;}else ctx.lineTo(p.x,p.y);} ctx.stroke(); ctx.restore(); }
+function drawTrialsTrackWorld(i0,i1){ const depth=OBW.wTH+6, TH=OBW.wTH, lean=0.5;   // depth=ширина верхней грани по нормали; lean=наклон нормали вправо (косой объём)
+  const F=[],B=[],FB=[],MID=[]; let prev=null,cur=null;
+  for(let i=i0;i<=i1;i++){ const c=terr[i]; if(!c||c.gap){F.push(null);B.push(null);FB.push(null);MID.push(null);prev=cur;cur=null;continue;}
+    const a=terr[i-1]&&!terr[i-1].gap?terr[i-1]:c, b=terr[i+1]&&!terr[i+1].gap?terr[i+1]:c;   // усреднённая касательная
+    let tx=b.x-a.x, ty=b.y-a.y; const tl=Math.hypot(tx,ty)||1; tx/=tl; ty/=tl;
+    let nx=ty, ny=-tx; if(ny>0){nx=-nx;ny=-ny;}                 // нормаль вверх (−y)
+    nx+=lean; const nl=Math.hypot(nx,ny)||1; nx/=nl; ny/=nl;    // косой наклон вправо
+    F.push({x:c.x,y:c.y}); B.push({x:c.x+nx*depth,y:c.y+ny*depth}); FB.push({x:c.x,y:c.y+TH}); MID.push({x:c.x+nx*depth*0.5,y:c.y+ny*depth*0.5});
+    prev=cur; cur={i,c}; }
+  ctx.lineJoin='bevel'; ctx.miterLimit=2;
+  // боковая грань (толщина вниз)
+  for(let i=0;i<F.length-1;i++){ const a=F[i],b=F[i+1],a2=FB[i],b2=FB[i+1]; if(!a||!b)continue; const g=ctx.createLinearGradient(0,a.y,0,a.y+TH); g.addColorStop(0,'#1a1250'); g.addColorStop(1,'#08061f'); ctx.fillStyle=g; ctx.beginPath(); ctx.moveTo(a.x,a.y); ctx.lineTo(b.x,b.y); ctx.lineTo(b2.x,b2.y); ctx.lineTo(a2.x,a2.y); ctx.closePath(); ctx.fill(); }
+  // верхняя грань (квады front→back)
+  for(let i=0;i<F.length-1;i++){ const a=F[i],b=F[i+1],ba=B[i],bb=B[i+1]; if(!a||!b||!ba||!bb)continue; ctx.fillStyle='#241a52'; ctx.beginPath(); ctx.moveTo(a.x,a.y); ctx.lineTo(b.x,b.y); ctx.lineTo(bb.x,bb.y); ctx.lineTo(ba.x,ba.y); ctx.closePath(); ctx.fill(); }
+  // ТОРЦЫ РАЗРЫВОВ (отдельные): вертикальная грань на кромке gap
+  ctx.fillStyle='#0c0a26'; for(let i=0;i<F.length;i++){ const isEdge = F[i] && (!F[i-1]||!F[i+1]); if(isEdge){ const a=F[i],b=B[i],a2=FB[i]; ctx.beginPath(); ctx.moveTo(a.x,a.y); ctx.lineTo(b.x,b.y); ctx.lineTo(b.x,b.y+TH); ctx.lineTo(a2.x,a2.y); ctx.closePath(); ctx.fill(); } }
+  ctx.setLineDash([9,11]); polySeg(MID,'rgba(160,190,235,0.28)',2,0); ctx.setLineDash([]);   // центр-разметка
+  polySeg(B,'#14e8ff',2.2,6);    // дальний cyan (bevel, не пересекается)
+  polySeg(F,'#ff2bd6',3.4,11);   // передний magenta
 }
 function drawTrialsBikeWorld(){ if(!A25.bikeAtlas){ return; } const B=bike;   // контекст уже в (bike, rotate ang)
   let want=0; if(!B.onG){ want = B.ang<-0.30?4 : B.ang>0.30?6 : 5; }
