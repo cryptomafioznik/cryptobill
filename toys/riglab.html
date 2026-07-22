@@ -1,0 +1,371 @@
+<!DOCTYPE html>
+<html lang="ru">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,maximum-scale=1,user-scalable=no">
+<title>rigLab — articulated bike (isolated, no physics)</title>
+<style>
+  :root{ --bg:#0d1018; --panel:#161b26; --line:#2a3344; --txt:#dfe6f2; --dim:#8b97ab; --accent:#48d1cc; }
+  *{ box-sizing:border-box; }
+  html,body{ margin:0; height:100%; background:var(--bg); color:var(--txt);
+    font:13px/1.4 -apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,sans-serif; }
+  #wrap{ display:flex; height:100%; }
+  #stage{ flex:1; display:flex; align-items:center; justify-content:center; position:relative; min-width:0; }
+  canvas{ background:#0a0c12; touch-action:none; }
+  #panel{ width:280px; flex:none; background:var(--panel); border-left:1px solid var(--line);
+    padding:12px 14px; overflow-y:auto; }
+  #panel h1{ font-size:13px; margin:0 0 2px; letter-spacing:.03em; }
+  #panel .ver{ color:var(--dim); font-size:11px; margin-bottom:12px; }
+  .grp{ border-top:1px solid var(--line); padding:10px 0 4px; }
+  .grp:first-of-type{ border-top:0; }
+  .grp .lbl{ display:flex; justify-content:space-between; color:var(--dim); font-size:11px;
+    text-transform:uppercase; letter-spacing:.05em; margin-bottom:6px; }
+  .row{ display:flex; align-items:center; gap:8px; margin:5px 0; }
+  .row label{ flex:none; width:74px; color:var(--dim); font-size:11px; }
+  .row input[type=range]{ flex:1; accent-color:var(--accent); min-width:0; }
+  .row .val{ flex:none; width:44px; text-align:right; font-variant-numeric:tabular-nums; font-size:11px; }
+  button{ background:#232c3d; color:var(--txt); border:1px solid var(--line); border-radius:6px;
+    padding:6px 8px; font-size:11px; cursor:pointer; }
+  button:hover{ border-color:var(--accent); }
+  button.on{ background:var(--accent); color:#04121a; border-color:var(--accent); }
+  .btnrow{ display:flex; flex-wrap:wrap; gap:5px; }
+  .poses button{ flex:1 1 44%; }
+  #status{ color:var(--dim); font-size:11px; margin-top:10px; white-space:pre-line; }
+  .warn{ color:#ffb454; }
+  .ok{ color:#6ee787; }
+</style>
+</head>
+<body>
+<div id="wrap">
+  <div id="stage"><canvas id="cv" width="512" height="700"></canvas></div>
+  <div id="panel">
+    <h1>rigLab — articulated bike</h1>
+    <div class="ver" id="ver">isolated · no physics · no gameplay</div>
+
+    <div class="grp">
+      <div class="lbl"><span>Root transform (единый)</span></div>
+      <div class="row"><label>rotation</label><input id="rot" type="range" min="-180" max="180" value="0" step="1"><span class="val" id="rotV">0°</span></div>
+      <div class="row"><label>root scale</label><input id="scl" type="range" min="20" max="140" value="80" step="1"><span class="val" id="sclV">0.80</span></div>
+      <div class="btnrow"><button id="spin360">▶ oборот −180…180</button><button id="resetRoot">сброс</button></div>
+    </div>
+
+    <div class="grp">
+      <div class="lbl"><span>Wheels (spin вокруг ступиц)</span></div>
+      <div class="row"><label>spin</label><input id="spin" type="range" min="0" max="360" value="0" step="1"><span class="val" id="spinV">0°</span></div>
+      <div class="row"><label>radius F</label><input id="rF" type="range" min="40" max="140" value="92" step="1"><span class="val" id="rFV">92</span></div>
+      <div class="row"><label>radius R</label><input id="rR" type="range" min="40" max="140" value="96" step="1"><span class="val" id="rRV">96</span></div>
+      <div class="btnrow"><button id="rollBtn">▶ roll</button></div>
+    </div>
+
+    <div class="grp">
+      <div class="lbl"><span>Suspension (ход ≤4.5% ширины)</span></div>
+      <div class="row"><label>front</label><input id="susF" type="range" min="0" max="100" value="0" step="1"><span class="val" id="susFV">0%</span></div>
+      <div class="row"><label>rear</label><input id="susR" type="range" min="0" max="100" value="0" step="1"><span class="val" id="susRV">0%</span></div>
+    </div>
+
+    <div class="grp">
+      <div class="lbl"><span>Pose (unknown → neutral)</span></div>
+      <div class="btnrow poses" id="poses"></div>
+    </div>
+
+    <div class="grp">
+      <div class="lbl"><span>Debug</span></div>
+      <div class="btnrow">
+        <button id="tJoints" class="on">joints</button>
+        <button id="tBox">rig box</button>
+        <button id="tParts">part frames</button>
+        <button id="tGround" class="on">ground</button>
+      </div>
+    </div>
+
+    <div id="status">загрузка ассетов…</div>
+  </div>
+</div>
+
+<script>
+"use strict";
+/* ================= rigLab — изолированный стенд articulated-байка =================
+   Принцип (фикс зазоров b270): ОДИН root-transform, все части в локальном
+   пространстве рига 512×512. Вилка/маятник — двухточечный пин к общим joint-точкам.
+   Колёса — только через явный радиус. Никакого отдельного world→screen на часть.  */
+
+const RIG = 512;                 // сторона локального пространства рига (ячейка body)
+const ASSET_DIR = "assets/trials25d_v2/bike/";
+
+// Joint-точки в долях ячейки body (стартовая калибровка из asset-pack.json).
+// Зафиксированы; НЕ вычисляются по alpha-bounds.
+const J = {
+  rearAxle:      {x:0.270, y:0.710},
+  frontAxle:     {x:0.755, y:0.710},
+  steeringPivot: {x:0.655, y:0.410},
+  swingarmPivot: {x:0.455, y:0.610},
+  riderCOM:      {x:0.470, y:0.360},
+  helmetHitPoint:{x:0.430, y:0.180},
+  bodyPivot:     {x:0.500, y:0.600},
+};
+// в пиксели локального пространства рига
+const P = {};
+for (const k in J) P[k] = { x:J[k].x*RIG, y:J[k].y*RIG };
+
+// Якорные точки частей в их СОБСТВЕННЫХ изображениях (доли), из asset-pack.
+const FORK = { steeringEnd:{x:0.50,y:0.10}, axleEnd:{x:0.50,y:0.87} };      // 512×512
+const SWING= { chassisEnd:{x:0.82,y:0.43}, axleEnd:{x:0.18,y:0.58} };       // 512×512
+
+// Атлас поз 3×2, ячейка 512×512. Порядок = bodyFrames из asset-pack.
+const ATLAS_COLS = 3, ATLAS_ROWS = 2, CELL = 512;
+const POSES = ["neutral","rider_forward","rider_back","brake_braced","air_tuck","land_compress"];
+
+const ASSETS = {
+  atlas: "body_poses_atlas_3x2.png",
+  fork:  "fork_front_512.png",
+  swing: "swingarm_rear_512.png",
+  wheelF:"wheel_front_384.png",
+  wheelR:"wheel_rear_384.png",
+};
+
+const IMG = {};
+let loaded = false, loadError = false;
+
+function loadImage(src){
+  return new Promise((res)=>{
+    const im = new Image();
+    im.onload = ()=>res({ok:true, im});
+    im.onerror = ()=>res({ok:false, im:null, src});
+    im.src = src;
+  });
+}
+
+// ---- state ----
+const S = {
+  rot:0, scale:0.80, spin:0, rF:92, rR:96,
+  susF:0, susR:0,             // 0..1 доля хода
+  pose:"neutral",
+  showJoints:true, showBox:false, showParts:false, showGround:true,
+};
+const SUS_MAX = 0.045 * RIG;   // ≤4.5% ширины рига
+
+const cv = document.getElementById("cv");
+const ctx = cv.getContext("2d");
+
+// ---- вспомогательное: двухточечный пин ----
+// Рисует img так, чтобы точка src0 (в px изображения) легла в dst0, src1 → dst1
+// (uniform scale + rotation). Всё в текущей (локальной) системе координат.
+function pin2(img, src0, src1, dst0, dst1){
+  const sdx = src1.x-src0.x, sdy = src1.y-src0.y;
+  const ddx = dst1.x-dst0.x, ddy = dst1.y-dst0.y;
+  const sLen = Math.hypot(sdx,sdy) || 1;
+  const dLen = Math.hypot(ddx,ddy);
+  const scale = dLen / sLen;
+  const rot = Math.atan2(ddy,ddx) - Math.atan2(sdy,sdx);
+  ctx.save();
+  ctx.translate(dst0.x, dst0.y);
+  ctx.rotate(rot);
+  ctx.scale(scale, scale);
+  ctx.translate(-src0.x, -src0.y);
+  ctx.drawImage(img, 0, 0);
+  ctx.restore();
+}
+
+function drawWheel(img, cx, cy, r, spinDeg){
+  ctx.save();
+  ctx.translate(cx, cy);
+  ctx.rotate(spinDeg*Math.PI/180);
+  ctx.drawImage(img, -r, -r, 2*r, 2*r);   // ТОЛЬКО через явный радиус
+  ctx.restore();
+}
+
+// текущая axle-точка колеса с учётом хода подвески (движется К пивоту вдоль плеча)
+function frontAxleNow(){
+  const dir = norm(P.steeringPivot, P.frontAxle);  // ось вилки, вниз к колесу
+  const t = S.susF * SUS_MAX;                       // компрессия = вверх по оси
+  return { x:P.frontAxle.x - dir.x*t, y:P.frontAxle.y - dir.y*t };
+}
+function rearAxleNow(){
+  const dir = norm(P.swingarmPivot, P.rearAxle);
+  const t = S.susR * SUS_MAX;
+  return { x:P.rearAxle.x - dir.x*t, y:P.rearAxle.y - dir.y*t };
+}
+function norm(a,b){ const dx=b.x-a.x, dy=b.y-a.y, L=Math.hypot(dx,dy)||1; return {x:dx/L,y:dy/L}; }
+
+function poseCell(name){
+  let idx = POSES.indexOf(name);
+  if (idx < 0) idx = 0;                 // unknown → neutral
+  const col = idx % ATLAS_COLS, row = (idx/ATLAS_COLS)|0;
+  return { sx:col*CELL, sy:row*CELL, sw:CELL, sh:CELL };
+}
+
+// ------- главный рендер -------
+function draw(){
+  const W = cv.width, H = cv.height;
+  ctx.clearRect(0,0,W,H);
+  // фон-сетка
+  ctx.strokeStyle="#141a26"; ctx.lineWidth=1;
+  for(let x=0;x<W;x+=32){ ctx.beginPath();ctx.moveTo(x+.5,0);ctx.lineTo(x+.5,H);ctx.stroke(); }
+  for(let y=0;y<H;y+=32){ ctx.beginPath();ctx.moveTo(0,y+.5);ctx.lineTo(W,y+.5);ctx.stroke(); }
+
+  // Экранная точка, куда ставим root-пивот
+  const screen = { x:W*0.5, y:H*0.56 };
+
+  // Земля — под ригом на уровне колёс (для визуальной проверки, вне трансформа)
+  if (S.showGround){
+    // вычислим экранный Y самой нижней точки колёс приблизительно (при rot~0)
+    ctx.strokeStyle="#2a3344"; ctx.setLineDash([6,6]);
+    ctx.beginPath(); ctx.moveTo(0, screen.y + (P.rearAxle.y-P.bodyPivot.y)*S.scale + S.rR*S.scale);
+    ctx.lineTo(W, screen.y + (P.rearAxle.y-P.bodyPivot.y)*S.scale + S.rR*S.scale); ctx.stroke();
+    ctx.setLineDash([]);
+  }
+
+  // ===== ЕДИНЫЙ ROOT-TRANSFORM =====
+  ctx.save();
+  ctx.translate(screen.x, screen.y);
+  ctx.rotate(S.rot*Math.PI/180);
+  ctx.scale(S.scale, S.scale);
+  ctx.translate(-P.bodyPivot.x, -P.bodyPivot.y);
+  // ↓↓↓ всё ниже — в ЛОКАЛЬНЫХ координатах рига 512×512 ↓↓↓
+
+  const fAxle = frontAxleNow();
+  const rAxle = rearAxleNow();
+
+  if (loaded && !loadError){
+    // порядок слоёв: rear wheel → rear swingarm → body → front fork → front wheel
+    drawWheel(IMG.wheelR, rAxle.x, rAxle.y, S.rR, S.spin);
+    // маятник: chassisEnd→swingarmPivot, axleEnd→rearAxle(с ходом)
+    pin2(IMG.swing,
+      {x:SWING.chassisEnd.x*512, y:SWING.chassisEnd.y*512},
+      {x:SWING.axleEnd.x*512,    y:SWING.axleEnd.y*512},
+      P.swingarmPivot, rAxle);
+    // body (ячейка позы), pivot внутри — bodyPivot
+    const c = poseCell(S.pose);
+    ctx.drawImage(IMG.atlas, c.sx,c.sy,c.sw,c.sh, 0,0, RIG,RIG);
+    // вилка: steeringEnd→steeringPivot, axleEnd→frontAxle(с ходом)
+    pin2(IMG.fork,
+      {x:FORK.steeringEnd.x*512, y:FORK.steeringEnd.y*512},
+      {x:FORK.axleEnd.x*512,     y:FORK.axleEnd.y*512},
+      P.steeringPivot, fAxle);
+    drawWheel(IMG.wheelF, fAxle.x, fAxle.y, S.rF, S.spin);
+  } else {
+    // fallback: монолитная заглушка (НИКОГДА не части без корпуса)
+    ctx.fillStyle="#39435a";
+    ctx.fillRect(80,180,352,200);
+    ctx.fillStyle="#8b97ab"; ctx.font="20px sans-serif";
+    ctx.fillText("monolithic fallback", 120, 285);
+  }
+
+  // ---- debug overlay (внутри трансформа, чтобы совпадал с частями) ----
+  if (S.showBox){
+    ctx.strokeStyle="#48d1cc"; ctx.lineWidth=2/S.scale;
+    ctx.strokeRect(0,0,RIG,RIG);
+  }
+  if (S.showJoints){
+    const pts = [
+      ["rearAxle",  rAxle, "#ff5c7a"],
+      ["frontAxle", fAxle, "#ff5c7a"],
+      ["steering",  P.steeringPivot, "#ffd24a"],
+      ["swingarm",  P.swingarmPivot, "#ffd24a"],
+      ["riderCOM",  P.riderCOM, "#6ee787"],
+      ["helmet",    P.helmetHitPoint, "#6ee787"],
+      ["bodyPivot", P.bodyPivot, "#48d1cc"],
+    ];
+    const r = 6/S.scale;
+    for(const [name,p,col] of pts){
+      ctx.fillStyle=col;
+      ctx.beginPath(); ctx.arc(p.x,p.y,r,0,7); ctx.fill();
+      ctx.strokeStyle="#000"; ctx.lineWidth=1/S.scale; ctx.stroke();
+    }
+  }
+  ctx.restore();
+  // ===== конец root-transform =====
+}
+
+// ------- UI wiring -------
+function bindRange(id, key, fmt, after){
+  const el = document.getElementById(id), out = document.getElementById(id+"V");
+  const upd = ()=>{
+    let v = +el.value;
+    if (key==="scale") v = v/100;
+    else if (key==="susF"||key==="susR") v = v/100;
+    S[key] = v;
+    out.textContent = fmt(v);
+    if (after) after();
+    draw();
+  };
+  el.addEventListener("input", upd); upd();
+}
+
+document.getElementById("ver").textContent = "isolated · no physics · rigLab v3";
+
+function initUI(){
+  bindRange("rot","rot", v=>Math.round(v)+"°");
+  bindRange("scl","scale", v=>v.toFixed(2));
+  bindRange("spin","spin", v=>Math.round(v)+"°");
+  bindRange("rF","rF", v=>Math.round(v));
+  bindRange("rR","rR", v=>Math.round(v));
+  bindRange("susF","susF", v=>Math.round(v*100)+"%");
+  bindRange("susR","susR", v=>Math.round(v*100)+"%");
+
+  // poses
+  const pc = document.getElementById("poses");
+  POSES.forEach(name=>{
+    const b = document.createElement("button");
+    b.textContent = name;
+    if (name===S.pose) b.classList.add("on");
+    b.onclick = ()=>{
+      S.pose = name;
+      [...pc.children].forEach(c=>c.classList.remove("on"));
+      b.classList.add("on"); draw();
+    };
+    pc.appendChild(b);
+  });
+
+  const toggles = [["tJoints","showJoints"],["tBox","showBox"],["tParts","showParts"],["tGround","showGround"]];
+  toggles.forEach(([id,key])=>{
+    const b=document.getElementById(id);
+    b.onclick=()=>{ S[key]=!S[key]; b.classList.toggle("on",S[key]); draw(); };
+  });
+
+  document.getElementById("resetRoot").onclick=()=>{
+    S.rot=0; S.scale=0.80;
+    document.getElementById("rot").value=0; document.getElementById("rotV").textContent="0°";
+    document.getElementById("scl").value=80; document.getElementById("sclV").textContent="0.80";
+    draw();
+  };
+
+  // анимации
+  let anim=null;
+  function stopAnim(){ if(anim){ cancelAnimationFrame(anim); anim=null; } }
+  document.getElementById("spin360").onclick=(e)=>{
+    stopAnim(); const btn=e.target; let a=-180; const el=document.getElementById("rot"), out=document.getElementById("rotV");
+    const step=()=>{ a+=3; if(a>180){ stopAnim(); return; } S.rot=a; el.value=a; out.textContent=Math.round(a)+"°"; draw(); anim=requestAnimationFrame(step); };
+    step();
+  };
+  document.getElementById("rollBtn").onclick=()=>{
+    stopAnim(); const el=document.getElementById("spin"), out=document.getElementById("spinV");
+    const step=()=>{ S.spin=(S.spin+6)%360; el.value=S.spin; out.textContent=Math.round(S.spin)+"°"; draw(); anim=requestAnimationFrame(step); };
+    step();
+  };
+}
+
+// ------- boot -------
+async function boot(){
+  initUI();
+  const keys = Object.keys(ASSETS);
+  const results = await Promise.all(keys.map(k=>loadImage(ASSET_DIR+ASSETS[k])));
+  const bad=[];
+  results.forEach((r,i)=>{ if(r.ok){ IMG[keys[i]]=r.im; } else { bad.push(ASSETS[keys[i]]); } });
+  if (bad.length){ loadError=true; }
+  loaded = true;
+  const st = document.getElementById("status");
+  if (loadError){
+    st.innerHTML = "<span class='warn'>ошибка загрузки:</span>\n"+bad.join("\n")+"\n→ показан monolithic fallback";
+  } else {
+    st.innerHTML = "<span class='ok'>ассеты загружены ("+keys.length+")</span>\n"
+      + "rig-space "+RIG+"×"+RIG+" · единый root-transform\n"
+      + "порядок: rearWheel→swingarm→body→fork→frontWheel";
+  }
+  draw();
+}
+window.__rigDraw = draw; window.__rigState = S;   // для инспекции из preview
+boot();
+</script>
+</body>
+</html>
