@@ -2394,7 +2394,7 @@ function drawRigCutout(dbg){
   _pcLandE*=0.90; _rgcWasAir=!onG;
   const Wb=(RIGC.frontAxle[0]-RIGC.rearAxle[0])*S, wheelDia=2*RIGC.wheelR, riderH=42;
   const zFwd=0.07*Wb, zBack=0.07*Wb, zUp=0.14*wheelDia, zDown=0.09*riderH;
-  const climb=clamp((-B.ang-0.35)/0.5,0,1), wBack=clamp(-rs,0,1)+clamp(-li,0,1)*0.6, wFwd=clamp(rs,0,1)+clamp(li,0,1)*0.6;
+  const climb=clamp((-hubAng-0.32)/0.5,0,1), wBack=clamp(-rs,0,1)+clamp(-li,0,1)*0.6, wFwd=clamp(rs,0,1)+clamp(li,0,1)*0.6;   // uphill = НАКЛОН ТРАССЫ (не pitch байка) → флэт-вилли не читается как подъём
   // 1-2) целевое положение таза → кламп в допустимую зону
   let ptx=0, pty=-zUp*0.28;                                    // neutral: таз чуть над сиденьем
   ptx += climb*zFwd;                                           // uphill → вперёд
@@ -2407,7 +2407,7 @@ function drawRigCutout(dbg){
   _pcPx=clamp(_pcPx,-zBack-1,zFwd+1); _pcPy=clamp(_pcPy,-zUp-1,zDown+2);
   // 3) торс/голова (инерция медленнее таза)
   let tt=0.26;                                                 // NEUTRAL ~15° вперёд (не вертикально)
-  if(onG){ tt += climb*0.42; tt -= Math.min(1,wBack)*0.30; tt += wFwd*0.10; }
+  if(onG){ tt += climb*0.42; tt -= Math.min(1,wBack)*0.44; tt += wFwd*0.10; }   // wheelie/lean-back: торс заметно назад
   else { const asc=clamp(-B.vy/6,0,1), dn=clamp(B.vy/6,0,1); tt = 0.18 - asc*0.08 + (1-asc-dn)*0.22 + dn*0.04 + li*0.14; }
   tt += _pcLandE*0.16;
   _pcTorV += (tt-_pcTor)*0.11; _pcTorV*=0.72; _pcTor+=_pcTorV;
