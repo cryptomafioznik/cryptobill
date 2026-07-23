@@ -76,7 +76,7 @@ function lerp(a,b,t){return a+(b-a)*t;} function clamp(v,a,b){return v<a?a:v>b?b
 // false → full game everywhere. Single switch. Systems are GATED, never deleted.
 const CORE_TEST_MODE = false;   // b70: META LIVE — building the progression spine (upgrades/bikes with teeth, career, economy) on the confirmed rigid-body core
 // build stamp — bump on every change so a phone refresh can confirm it loaded fresh code (cache!)
-const BUILD = '2026-07-23 · b275';
+const BUILD = '2026-07-23 · b276';
 
 // ---------- procedural market terrain ----------
 // height map sampled every STEP px; generated forward as we ride. Market character:
@@ -2339,7 +2339,7 @@ function drawRigDebug2(frontAx,rearAx,seat,steer,swP,hbL,hbR,pegL,pegR){ ctx.sav
 //   пиксельные пивоты из asset-pack.json (НЕ угаданы). Один riderScale на все части.
 //   Рама НЕ меняется при смене позы; поза = только углы костей (пружинный бленд).
 // ============================================================================
-const RIGC={ cell:512, scale:0.209, riderScale:0.075, wheelR:19,   // riderScale — ОДИН на все части тела (rule 4, откалиброван по экранным пропорциям); якоря рамы = chassis scale
+const RIGC={ cell:512, scale:0.209, riderScale:0.088, wheelR:19,   // b276: riderScale 0.088 (v4-пак укороченных конечностей); ОДИН на все части тела; якоря рамы = chassis scale
   legMinF:0.30, legMaxF:0.94, armMinF:0.28, armMaxF:0.92,           // анатом. лимиты сгиба (доля длины кости)
   origin:[302,325],                 // cell-px → context origin (CoM.x, seating-adj y); вращение ≈ CoM
   centerOfMass:[302,345],
@@ -2350,10 +2350,10 @@ const RIDP={
   pelvis:{pivot:[242,350], torsoSocket:[304,182], hipNear:[337,340], hipFar:[300,345]},
   torso:{p:[290,408], d:[309,143], shN:[270,205], shF:[245,212]},
   head:{pivot:[198,331]},
-  auN:{p:[216,126], d:[402,331]}, alN:{p:[163,166], d:[337,352]},
-  auF:{p:[119,126], d:[309,334]}, alF:{p:[82,165], d:[239,352]},
-  luN:{p:[207,55], d:[390,304]}, llN:{p:[156,54], d:[221,343], toe:[345,368]},
-  luF:{p:[119,55], d:[302,304]}, llF:{p:[75,54], d:[135,343], toe:[251,368]} };
+  auN:{p:[216,126], d:[368,294]}, alN:{p:[163,166], d:[306,318]},   // b276: v4 distal (×0.82 руки)
+  auF:{p:[119,126], d:[275,297]}, alF:{p:[82,165], d:[211,318]},
+  luN:{p:[207,55], d:[338,233]}, llN:{p:[156,54], d:[180,275], toe:[291,279]},   // b276: v4 distal/toe (×0.716 ноги)
+  luF:{p:[119,55], d:[250,233]}, llF:{p:[75,54], d:[96,273], toe:[201,279]} };
 window.RIGC=RIGC;
 let _rgcVisAng=0,_rgcAngV=0,_rgcDrop=0,_rgcDropV=0,_rgcFC=0,_rgcRC=0,_rgcWasAir=false,_rgcInit=false;
 // b274: pose-controller state (пружины с ИНЕРЦИЕЙ по частям; таз = зона, не пин)
