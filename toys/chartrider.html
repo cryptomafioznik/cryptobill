@@ -2390,7 +2390,7 @@ let _rgcW={bikeWorldDeg:0,torsoLocalDeg:0,torsoWorldDeg:0,pelvisWorld:{x:0,y:0},
 const _CT={ F:{raw:false,filt:false,on:0,off:0,gap:0,pen:0,since:9,prevGap:-99}, R:{raw:false,filt:false,on:0,off:0,gap:0,pen:0,since:9,prevGap:-99} };
 // b280: все дуэллы/счётчики — ВРЕМЕННЫЕ аккумуляторы в секундах (airT, upInT, upOutT, fLostT, candT)
 let _ph={ state:'neutral', prevState:'neutral', prevAir:false, airT:0, sinceFirst:9, landImp:0,
-  airRun:0, grndRun:0, airLatch:false, vyLatch:0, upIn:0, upOut:0, uphillLatch:false, fLost:0, cand:'neutral', candT:0, lastGround:'neutral', gndT:0, prevVy:0 };
+  airRun:0, grndRun:0, airLatch:false, vyLatch:0, upIn:0, upOut:0, uphillLatch:false, fLost:0, cand:'neutral', candT:0, lastGround:'neutral', gndT:0, prevVy:0, prevVy2:0, prevDt:1/60 };
 // b278: ТАБЛИЦА ПОЗ И ВРЕМЕННЫХ КОНСТАНТ (кадры @60fps). Живой тюн через window.PC, финальные числа — здесь.
 const PC={
   zF:0.20, zB:0.08, zU:0.19, zD:0.10,                                  // зона таза (доли Wb / wheelDia / riderH)
@@ -2738,8 +2738,14 @@ function solveRigCutout(){
       if(_CT.R.prevGap<TH && gapR>=TH){ const f2=(TH-_CT.R.prevGap)/Math.max(1e-6,gapR-_CT.R.prevGap);
         if(f<0||f2<f){ f=f2; wh='R'; } }
       if(f>=0){ const fc=clamp(f,0,1);
+        // скорость удара: НЕ vy текущего кадра (там уже отработал collision response) и НЕ vy
+        // прошлого кадра (при 30 FPS это 33мс до касания — в падении скорость успевает уйти;
+        // замер давал imp 0.49 против 0.75 при 60 FPS). Линейная ЭКСТРАПОЛЯЦИЯ баллистики
+        // из двух последних воздушных кадров на момент tContact.
+        const aEst=(_ph.prevDt>1e-6)?((_ph.prevVy-_ph.prevVy2)/_ph.prevDt):0;
+        const vyAt=_ph.prevVy + aEst*(fc*dt);
         _ev={ id:_ev.id+1, tContact:tF0+fc*dt, wheel:wh, wasAirConfirmed:true, airDuration:_ph.airT,
-              preSpeed:Math.abs(_ph.prevVy),                                        // скорость ДО collision response
+              preSpeed:Math.abs(vyAt),
               gapPrev:(wh==='F'?_CT.F.prevGap:_CT.R.prevGap), gapCur:(wh==='F'?gapF:gapR), pending:true }; } } }
   _CT.F.prevGap=gapF; _CT.R.prevGap=gapR;
   const filtF=_updContact(_CT.F, gapF>-4.0, dt), filtR=_updContact(_CT.R, gapR>-4.0, dt);               // rawContact (в пределах ~4px поверхности) → filtered (hysteresis по времени)
@@ -2764,7 +2770,7 @@ function solveRigCutout(){
     const cr=Math.max(_CT.F.tCross,_CT.R.tCross), u=(cr>=0&&dt>0)?clamp(cr/dt,0,1):1;
     const vyAt=_ph.prevVy+((B.vy||0)-_ph.prevVy)*u;
     _ph.landImp=Math.abs(vyAt); } else _ph.sinceFirst+=dt;
-  _ph.prevVy=B.vy||0;
+  _ph.prevVy2=_ph.prevVy; _ph.prevVy=B.vy||0; _ph.prevDt=dt;
   _ph.prevAir=trulyAir;
   if(!trulyAir){ if(slopeDeg>=25)_ph.upIn+=dt; else _ph.upIn=0; if(slopeDeg<20)_ph.upOut+=dt; else _ph.upOut=0; }   // в воздухе таймеры ЗАМОРОЖЕНЫ (короткий полёт не сбрасывает подъём)
   const _pUpIn=_ph.upIn-dt;
@@ -2865,18 +2871,28 @@ function solveRigCutout(){
   //   поэтому 60-FPS поведение и гейты не меняются. Шаг дробится максимум по 1/60 с,
   //   чтобы 30 FPS считался двумя шагами, а не одним большим.
   const targetAng = onGvis ? hubAng : B.ang; if(!_rgcInit){ _rgcVisAng=B.ang; _rgcInit=true; }
-  const H0=1/60, KA=(onGvis?0.30:0.65)/(H0*H0), CA=0.5/H0, capVs=(onGvis?5:14)*Math.PI/180/H0;   // °/с вместо °/кадр
+  const H0=1/60, CA=0.5/H0;
+  // b281.1: ВХОД пружины тоже не должен быть квантован. На кадре посадки цель и жёсткость
+  // переключаются с воздушных на наземные В МОМЕНТ КОНТАКТА, а не на границе кадра: замер показал,
+  // что весь остаток расхождения 30/120 FPS шёл именно отсюда (bikeWorld расходился на 10°).
+  const _airP={t:B.ang, K:0.65/(H0*H0), cap:14*Math.PI/180/H0};
+  const _gndP={t:hubAng, K:0.30/(H0*H0), cap:5*Math.PI/180/H0};
+  const tSwitch = (firstContact && _land.tStart>=0) ? clamp(_land.tStart-tF0,0,dt) : (onGvis?0:dt);
+  const KA=(onGvis?0.30:0.65)/(H0*H0), capVs=(onGvis?5:14)*Math.PI/180/H0;   // °/с вместо °/кадр
   const KD=0.072/(H0*H0), CD=0.2/H0;                                                             // просадка: v←(v+0.09(−x))·0.80
   const tauS=H0/Math.LN2;                                                                        // подвеска: alpha 0.5 за кадр@60 ⇔ tau≈24мс
   if(panic){ _rgcVisAng=targetAng; _rgcAngV=0; _rgcDropV=0; _rgcDrop=0;                           // провал кадра: синхронизируем раму, transient'ы гасим
     _rgcFC=Math.min(RIGC.travel,(B._cmpF||0)); _rgcRC=Math.min(RIGC.travel,(B._cmpR||0)); }
   else {
     if(firstContact) _rgcDropV += Math.min(6.0, _ph.landImp*0.7)/H0;                              // импульс просадки — в единицах/с
-    let rem=dt;
-    while(rem>1e-9){ const h=Math.min(H0,rem); rem-=h;
-      _rgcAngV += (KA*(targetAng-_rgcVisAng) - CA*_rgcAngV)*h;
-      if(_rgcAngV>capVs)_rgcAngV=capVs; else if(_rgcAngV<-capVs)_rgcAngV=-capVs;
-      _rgcVisAng += _rgcAngV*h;
+    let rem=dt, el=0;
+    while(rem>1e-9){ let h=Math.min(H0,rem);
+      if(el<tSwitch && el+h>tSwitch) h=tSwitch-el;                       // шаг дробится РОВНО на моменте контакта
+      rem-=h;
+      const P = (el<tSwitch-1e-9)? _airP : _gndP;                        // до контакта — воздушные параметры, после — наземные
+      _rgcAngV += (P.K*(P.t-_rgcVisAng) - CA*_rgcAngV)*h;
+      if(_rgcAngV>P.cap)_rgcAngV=P.cap; else if(_rgcAngV<-P.cap)_rgcAngV=-P.cap;
+      _rgcVisAng += _rgcAngV*h; el+=h;
       _rgcDropV += (-KD*_rgcDrop - CD*_rgcDropV)*h; _rgcDrop += _rgcDropV*h;
       if(_rgcDrop<0){_rgcDrop=0; if(_rgcDropV<0)_rgcDropV=0;} if(_rgcDrop>10)_rgcDrop=10; }
     const aS=1-Math.exp(-dt/tauS);
@@ -3129,7 +3145,7 @@ window.__rigStateReset=function(){
   _land={on:false,f:0,peak:0,rise:5,hold:2,fall:14,env:0};
   _CT.F={raw:false,filt:false,on:0,off:0,gap:0,pen:0,since:999}; _CT.R={raw:false,filt:false,on:0,off:0,gap:0,pen:0,since:999};
   _ph={ state:'neutral', prevState:'neutral', prevAir:false, airT:0, sinceFirst:9, landImp:0,
-    airRun:0, grndRun:0, airLatch:false, vyLatch:0, upIn:0, upOut:0, uphillLatch:false, fLost:0, cand:'neutral', candT:0, lastGround:'neutral', gndT:0, prevVy:0 };
+    airRun:0, grndRun:0, airLatch:false, vyLatch:0, upIn:0, upOut:0, uphillLatch:false, fLost:0, cand:'neutral', candT:0, lastGround:'neutral', gndT:0, prevVy:0, prevVy2:0, prevDt:1/60 };
   _land={on:false,t:0,tStart:-1,peak:0,rise:0.083,hold:0.0167,fall:0.2333,env:0};
   _ld={cF:0,dF:0,cB:0,dB:0,cPrev:0,cVel:0,fY:0,fX:0,fT:0,gain:1,init:false};
   _capCnt={norm:0,hard:0,total:0,joint:'',maxEx:0}; _rgcTPrev=0;
