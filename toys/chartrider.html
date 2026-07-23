@@ -2785,18 +2785,37 @@ function solveRigCutout(){
       if(_ph.candT>=PC.dwellT){ _ph.prevState=_ph.state; _ph.state=st; _ph.candT=0; } }
   } else { _ph.cand=st; _ph.candT=0; }
   const state=_ph.state, onGvis=!trulyAir;
-  // ---- frame-angle пружина + просадка рамы ----
+  // ---- b280.1: ВИЗУАЛЬНЫЕ ФИЛЬТРЫ РАМЫ во времени. Покадровые рекуррентности переведены в
+  // непрерывные системы АНАЛИТИЧЕСКИ, а не «умножением коэффициента на dt»:
+  //   v←0.5v+kA(T−x); x←x+v   ⇔   V += (K(T−x) − cV)dt; x += V dt,  c=0.5/h=30/с, K=kA/h²
+  //   (h=1/60). Полуявный Эйлер при dt=1/60 воспроизводит прежнюю рекуррентность ТОЧНО,
+  //   поэтому 60-FPS поведение и гейты не меняются. Шаг дробится максимум по 1/60 с,
+  //   чтобы 30 FPS считался двумя шагами, а не одним большим.
   const targetAng = onGvis ? hubAng : B.ang; if(!_rgcInit){ _rgcVisAng=B.ang; _rgcInit=true; }
-  const kA=onGvis?0.30:0.65, capV=(onGvis?5:14)*Math.PI/180;
-  _rgcAngV=_rgcAngV*0.5 + (targetAng-_rgcVisAng)*kA; if(_rgcAngV>capV)_rgcAngV=capV; else if(_rgcAngV<-capV)_rgcAngV=-capV; _rgcVisAng+=_rgcAngV;
+  const H0=1/60, KA=(onGvis?0.30:0.65)/(H0*H0), CA=0.5/H0, capVs=(onGvis?5:14)*Math.PI/180/H0;   // °/с вместо °/кадр
+  const KD=0.072/(H0*H0), CD=0.2/H0;                                                             // просадка: v←(v+0.09(−x))·0.80
+  const tauS=H0/Math.LN2;                                                                        // подвеска: alpha 0.5 за кадр@60 ⇔ tau≈24мс
+  if(panic){ _rgcVisAng=targetAng; _rgcAngV=0; _rgcDropV=0; _rgcDrop=0;                           // провал кадра: синхронизируем раму, transient'ы гасим
+    _rgcFC=Math.min(RIGC.travel,(B._cmpF||0)); _rgcRC=Math.min(RIGC.travel,(B._cmpR||0)); }
+  else {
+    if(firstContact) _rgcDropV += Math.min(6.0, _ph.landImp*0.7)/H0;                              // импульс просадки — в единицах/с
+    let rem=dt;
+    while(rem>1e-9){ const h=Math.min(H0,rem); rem-=h;
+      _rgcAngV += (KA*(targetAng-_rgcVisAng) - CA*_rgcAngV)*h;
+      if(_rgcAngV>capVs)_rgcAngV=capVs; else if(_rgcAngV<-capVs)_rgcAngV=-capVs;
+      _rgcVisAng += _rgcAngV*h;
+      _rgcDropV += (-KD*_rgcDrop - CD*_rgcDropV)*h; _rgcDrop += _rgcDropV*h;
+      if(_rgcDrop<0){_rgcDrop=0; if(_rgcDropV<0)_rgcDropV=0;} if(_rgcDrop>10)_rgcDrop=10; }
+    const aS=1-Math.exp(-dt/tauS);
+    _rgcFC += (Math.min(RIGC.travel,(B._cmpF||0))-_rgcFC)*aS; _rgcRC += (Math.min(RIGC.travel,(B._cmpR||0))-_rgcRC)*aS; }
   const delta=_rgcVisAng-B.ang, ca=Math.cos(delta), sa=Math.sin(delta);
-  _rgcFC += (Math.min(RIGC.travel,(B._cmpF||0))-_rgcFC)*0.5; _rgcRC += (Math.min(RIGC.travel,(B._cmpR||0))-_rgcRC)*0.5;
   if(window.__rggSusp){ _rgcFC=window.__rggSusp.f*RIGC.travel; _rgcRC=window.__rggSusp.r*RIGC.travel; }
-  if(firstContact){ _rgcDropV += Math.min(6.0, _ph.landImp*0.7); }
-  _rgcDropV += (0-_rgcDrop)*0.09; _rgcDropV*=0.80; _rgcDrop+=_rgcDropV; if(_rgcDrop<0){_rgcDrop=0;if(_rgcDropV<0)_rgcDropV=0;} if(_rgcDrop>10)_rgcDrop=10;
   const drop=_rgcDrop, rotDrop=(p)=>({x:p.x*ca-p.y*sa, y:p.x*sa+p.y*ca+drop});
   // ==== POSE CONTROLLER (b278) — цель по состоянию → smoothDamp 120-180мс → огибающая → ЖЁСТКИЙ лимит/кадр ====
-  _pcLongAcc = _pcLongAcc*0.7 + (B.vx-_pcPrevVx)*0.3; _pcPrevVx=B.vx;
+  // b280.1: продольное ускорение тоже было покадровым. Дельта нормируется к шагу 1/60 (единицы
+  // сохранены, чтобы не поехала цель ptx), фильтр — по времени: alpha 0.3 за кадр@60 ⇔ tau≈47мс.
+  { const dv=panic?0:(B.vx-_pcPrevVx)*((1/60)/Math.max(1e-4,dt));
+    _pcLongAcc += (dv-_pcLongAcc)*(1-Math.exp(-dt/0.04673)); _pcPrevVx=B.vx; }
   const Wb=(RIGC.frontAxle[0]-RIGC.rearAxle[0])*S, wheelDia=2*RIGC.wheelR, riderH=44;
   const zFwd=PC.zF*Wb, zBack=PC.zB*Wb, zUp=PC.zU*wheelDia, zDown=PC.zD*riderH;
   const bikeWorldAngle=B.ang+delta;                                            // МИРОВОЙ угол рамы (визуальный)
