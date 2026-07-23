@@ -493,6 +493,29 @@ function _emitContact(wi,tAbs,wx,wy,nx,ny,vpx,vpy,vn,pen,prevPen){
     preVx:vpx, preVy:vpy, normalSpeed:Math.abs(vn), airDuration:_wOffT[wi], gapPrev:-prevPen, gapCur:-pen, rawContact:true });
   if(_cev.length>64) _cev.shift();
   if(window.__cevLog) window.__cevLog.push(_cev[_cev.length-1]); }   // отдельный лог: очередь риг выпивает, а приёмке нужен полный поток
+// ============================================================================
+// C1A · ПРОФИЛЬ ПОМОЩНИКОВ (challenge physics). ЕДИНАЯ точка: решатель умножает
+// вклад каждого помощника на коэффициент отсюда. 1.0 = в точности прежнее поведение,
+// 0 = помощник выключен. Профиль выбирается ОДИН РАЗ в reset() по флагу уровня,
+// поэтому в самом решателе нет ни одного if(VSLICE).
+// Интегратор, fixed-step, contact events и Б1/Б2 не затронуты.
+// ============================================================================
+const PHX_DEF={
+  groundAlign:1,      // PD-стабилизатор переда: тянет угол шасси к углу поверхности (земля)
+  airAutoLevel:1,     // PD-автовыравнивание в полёте: тянет угол к углу будущей поверхности
+  airSpinDamp:1,      // гашение angV в полёте, когда игрок НЕ наклоняет (как в стоке)
+  airSpinDampLean:0,  // гашение angV в полёте ПРИ УДЕРЖАНИИ наклона (в стоке 0 — прежнее поведение)
+  leanTorqueAir:1,    // авторитет переноса веса в полёте
+  angDampAssist:1,    // глобальное затухание angV за кадр
+  edgeGuard:1,        // anti-loop: возврат носа от предела
+  wheelieGuard:1,     // подушка у грани вилли
+  leanTorque:1,       // авторитет переноса веса на земле
+  throttleTorque:1,   // момент от тяги (физически уже есть, здесь только масштаб)
+  climbTraction:1,    // эндуро-сцепление на крутом подъёме (climbGrip)
+  loopAngle:1,        // порог опрокида назад
+  endoAngle:1,        // порог клевка вперёд
+  failHoldT:0 };      // сколько секунд держать опасный угол до wipeout
+let PHX=Object.assign({},PHX_DEF), _phxFail=0;
 let physAcc=0, slowTS=1;   // b216 ФЛИП-СЛОУМО-РЕДИЗАЙН: physAcc=аккумулятор дробных физ-шагов, slowTS=текущий масштаб времени (плавно едет к цели). Заменяет бинарный «пропуск каждого 2-го кадра» (b154) на fixed-timestep+интерполяцию — физика идёт дробным темпом, рендер интерполирует slowLerp∈[0,1) между двумя последними состояниями (не только 0.5) = плавно, без статтера
 const SLOWMO_SCALE=0.4;   // масштаб времени в слоумо (0.4 = 2.5× медленнее). Длительности slowmo (20/28 кадров) не тронуты → та же ~0.47с реального времени покрывает меньше движения = драматичнее   // b155: riderAirB 0..1 = стойка райдера в полёте, riderSquat 0..1 = присед-амортизация посадки (∝ высоте). b156: nearKickX = ближайший трамплин впереди (HUD-указатель)
 let trick=0,trickMix=0,trickHeld=false,trickT=0,trickTouch=-1,trickKey='',touchSX={},touchSY={},skids=[];   // b160: skids = следы торможения на трассе   // b158 FMX-ТРЮКИ: trick 1=СУПЕРМЕН 2=ЦУНАМИ 3=COFFIN 4=NO HANDER; trickMix 0..1 = твин позы; trickT = кадры удержания (очки); trickTouch/Key = чей палец/клавиша держит
@@ -1025,6 +1048,7 @@ function reset(){
   if(owned.indexOf(selBike)<0) selBike=owned.length?owned[owned.length-1]:0;   // b115: едем ТОЛЬКО на купленном (превью некупленного на экране БАЙКИ не даёт ездить бесплатно)
   useBikeUpg();   // b143: указатель прокачки на текущий байк
   rankMul=CORE_TEST_MODE?1:1+0.07*rankIdx(career); rankedUp=null;   // CORE TEST: no rank profit multiplier
+  PHX=Object.assign({},PHX_DEF); _phxFail=0;   // C1A: по умолчанию — сток; профиль уровня ставится ниже только для vertical-slice
   baseY=H*0.6; terr=[]; genX=0; walk=0; regimeLeft=0; lastHazIdx=-99;
   evGenType=''; evGenLeft=0; nextEvGenX=3000; curEvType=''; evBanner=''; evBannerT=0; evGlow=0; evBonus=0; lastWarnX=-1; evWarnType='';   // first event ~300m (onboarding breathing room)
   gapLeft=0; nextGapX=TUNE.gapStart*10; gapLandFlat=0; overGap=false; gapLipNow=0; gapFarX=0; gapFxT=0; gapRunup=0; gapRampLeft=0;   // GAPS: first chasm after gapStart
@@ -1038,7 +1062,7 @@ function reset(){
   if(trackSource==='ticker'){ buildTickerTrack(tickerData||MARKET_DATA.btc.data); finishDist=Math.floor((terr.length-1)*STEP/10); popText(tickerName+' · '+(_shortRun?'📉 ШОРТ · ':'')+'ВОЛАТИЛЬНОСТЬ '+tickerVolLabel+(tickerLoadErr?' (нет связи — BTC)':''));
     entryPrice=tkPrice(60); }   // b106: ВХОД = реальная цена монеты на старте графика; b177: через tkPrice (шорт-зеркало учтено)
   else if(typeof ACCEPT25!=='undefined' && ACCEPT25){ buildAcceptanceTerr(); }   // debug-level: фикс. acceptance-трасса
-  else if(typeof VSLICE!=='undefined' && VSLICE){ buildVSliceTerr(); _vsCP=-1; _vsCPState=null; _vsDone=false; _vsTime=0; }   // C1: вертикальный срез — своя трасса
+  else if(typeof VSLICE!=='undefined' && VSLICE){ PHX=Object.assign({},PHX_DEF,VS.physics); _phxFail=0; buildVSliceTerr(); _vsCP=-1; _vsCPState=null; _vsDone=false; _vsTime=0; }   // C1: вертикальный срез — своя трасса
   else if(typeof RIG_ART!=='undefined' && RIG_ART || typeof RIG_CUT!=='undefined' && RIG_CUT){ buildRigTestTerr(); }   // b271/b273: фикс. тест-трасса (legacy-физика)
   else { for(let i=0;i<Math.ceil(W/STEP)+8;i++)genSeg(); }
   bike={x:60,y:terrainAt(60).y-27.5,vx:0,vy:0,ang:terrainAt(60).ang,angV:0,onG:true,wheel:0,rShift:0};   // rShift = rider weight-shift state (-1 back .. +1 forward), smoothed from the drag input (b47 two-body)
@@ -1355,9 +1379,9 @@ function rigidStep(){
         let Ft=-vt*(onMud?R.mudRoll:R.rollResist);          // wheel ROLLS (slight resistance; mud = more = sap)
         const maxF=muEff*Fn;                                // боковой/тормоз cone — мгновенный Fn (физика приземления/стабильности цела)
         let FnDrive=Math.max(Fn, R.mass*R.grav*0.85);   // b100: ТЯГА вперёд опирается на СТАБИЛЬНУЮ нагрузку (floor). Корень «залипания»: Fn пульсирует на неровностях (колесо разгружается на гребнях) → maxF дёргался → тяга проваливалась. Floor убирает дёрготню = лезет РОВНО
-        if(drive){ const up=-ta.ang; if(up>R.climbFrom){ FnDrive *= 1 + Math.min(1,(up-R.climbFrom)/R.climbSpan)*R.climbGrip; } }   // b213 ЭНДУРО-СЦЕПЛЕНИЕ на крутом подъёме (баг «не заехать ни на одном байке»): зубастая резина/1-я передача цепляется → крутой склон (памп-рампа до 40°) берётся ТЯГОЙ уверенно, не только скоростью. muEff уже ×(стат grip)×(апгрейд СЦЕПЛЕНИЕ) → байк/прокачка РАСШИРЯЮТ предел проходимости
+        if(drive){ const up=-ta.ang; if(up>R.climbFrom){ FnDrive *= 1 + Math.min(1,(up-R.climbFrom)/R.climbSpan)*R.climbGrip*PHX.climbTraction; } }   // b213 ЭНДУРО-СЦЕПЛЕНИЕ на крутом подъёме (баг «не заехать ни на одном байке»): зубастая резина/1-я передача цепляется → крутой склон (памп-рампа до 40°) берётся ТЯГОЙ уверенно, не только скоростью. muEff уже ×(стат grip)×(апгрейд СЦЕПЛЕНИЕ) → байк/прокачка РАСШИРЯЮТ предел проходимости
         const maxFd=muEff*FnDrive;
-        if(drive&&thr>0.02){ const want=R.engine*engScale*thr; Ft += Math.min(want, maxFd); spun=want>maxFd*1.2; }   // b100: тяга до стабильного предела — букс МЯГКИЙ (юзер: «залипание/торможение мешает, особ. с волной — убрать»)
+        if(drive&&thr>0.02){ const want=R.engine*engScale*thr*PHX.throttleTorque; Ft += Math.min(want, maxFd); spun=want>maxFd*1.2; }   // b100: тяга до стабильного предела — букс МЯГКИЙ (юзер: «залипание/торможение мешает, особ. с волной — убрать»)
         if(brake){ Ft+=-Math.sign(vt)*R.brakeF; if(drive && !down && bike.vx<R.reverseV){ Ft += -R.reverse*engScale; } }   // b214 ЗАДНИЙ ХОД (юзер): тормоз на почти-стоящем = сдать НАЗАД → отъехал, разогнался, взял крутой подъём со 2-го раза. Гейт !down (газ приоритетнее) + vx<reverseV (только когда встал, на ходу это тормоз). engScale = байк-зависимо
         const loCap = drive ? maxFd : maxF;   // b214: ведущее колесо — реверс/задний тормоз опираются на СТАБИЛЬНУЮ нагрузку (floor maxFd), не на мгновенный Fn (мал когда байк стоит ровно → реверс проваливался в 0)
         if(Ft>maxFd)Ft=maxFd; else if(Ft<-loCap)Ft=-loCap;   // b100: верхний cap по СТАБИЛЬНОЙ тяге; нижний по loCap (ведущее=floor, переднее=мгновенный)
@@ -1365,25 +1389,32 @@ function rigidStep(){
       }
     }
     if(onGround){ let leanK=1; { const _gs=terrainAt(bike.x).ang; if(_gs<-R.climbFrom){ const _ck=Math.min(1,(-_gs-R.climbFrom)/R.climbSpan), _dh=(trackSource!=='ticker')?R.designHard*_ck:0; leanK=(1-R.climbCalm*_ck)*(1-_dh)+_dh; } }   // b213: на крутом тикере (USP-график) вклад веса ослаблен = прощение. b232: на ДИЗАЙН-трассе вес НЕ ослабляем (_dh→1) — он единственный контр-инструмент против power-loop, нужен полным
-      tq+=(bike.rShift*R.leanGround + dRS*R.leanYank)*R.inertia*leanK; }    // b83: аркадный вес=тангаж + b153 РЫВОК ТЕЛОМ (dRS×leanYank): быстрый бросок веса назад = импульс подъёма переда (инициация вилли), вперёд = прижим. Вес полный всегда (магнита нет — баланс из рук)
+      tq+=(bike.rShift*R.leanGround + dRS*R.leanYank)*R.inertia*leanK*PHX.leanTorque; }    // b83: аркадный вес=тангаж + b153 РЫВОК ТЕЛОМ (dRS×leanYank): быстрый бросок веса назад = импульс подъёма переда (инициация вилли), вперёд = прижим. Вес полный всегда (магнита нет — баланс из рук)
     else { const _au=trickAir? 1 : clamp(Math.max(R.airAuthMin+(1-R.airAuthMin)*airT/R.airAuthT, Math.abs(bike.vy)/5), R.airAuthMin, 1);   // авторитет: ТРАМПЛИН-полёт (trickAir) = полный СРАЗУ (намеренный прыжок, даже с медленного захода); кочки = слабый ранний (max(время, |vy|/5)) — случайный флик в подскоке не крутанёт
-      tq+=(dRS*R.leanYankAir*(1+0.18*_aL) + bike.rShift*leanAirEff*R.airHold)*R.inertia*_au;   // b153 ИМПУЛЬСНОЕ ВРАЩЕНИЕ (физика: статичный вес в полёте НЕ крутит — нет опоры; вращение = ПЕРЕБРОС массы): РЫВОК наклона в воздухе задаёт спин (∝ ВОЗД.КОНТРОЛЬ-апгрейду и авторитету=времени полёта), ОБРАТНЫЙ рывок/отпускание гасит его же импульсом, удержание = лишь лёгкий докрут (airHold). Итог: кочка с зажатым НОС↑ НЕ раскручивает (вес уже был назад = нет переброса), намеренный флип = бросок телом В ПОЛЁТЕ, полный оборот ~20-25к = мотокросс-темп, спам не работает
-      if(Math.abs(bike.rShift)<0.15 && pumpAir<=0){ const la=terrainAt(bike.x+Math.max(20,bike.vx*8)).ang; let d=la-bike.ang; while(d>Math.PI)d-=6.283; while(d<-Math.PI)d+=6.283; const near=clamp(1-(terrainAt(bike.x).y-(bike.y+R.oy+R.wr))/240,0,1); tq+=(d*R.uprightAir-bike.angV*R.uprightDamp)*(0.4+near)*R.inertia; }   // not holding lean → PD auto-level + spin-damp = forgiving normal launches/landings
+      tq+=(dRS*R.leanYankAir*(1+0.18*_aL) + bike.rShift*leanAirEff*R.airHold)*R.inertia*_au*PHX.leanTorqueAir;   // b153 ИМПУЛЬСНОЕ ВРАЩЕНИЕ (физика: статичный вес в полёте НЕ крутит — нет опоры; вращение = ПЕРЕБРОС массы): РЫВОК наклона в воздухе задаёт спин (∝ ВОЗД.КОНТРОЛЬ-апгрейду и авторитету=времени полёта), ОБРАТНЫЙ рывок/отпускание гасит его же импульсом, удержание = лишь лёгкий докрут (airHold). Итог: кочка с зажатым НОС↑ НЕ раскручивает (вес уже был назад = нет переброса), намеренный флип = бросок телом В ПОЛЁТЕ, полный оборот ~20-25к = мотокросс-темп, спам не работает
+      // C1A: авто-выравнивание и гашение спина разведены на разные ручки.
+      // ПРИ НЕНАЖАТОМ наклоне ветка в точности прежняя (обе ручки=1 → бит-в-бит сток).
+      // Демпфер ПРИ УДЕРЖАНИИ наклона — отдельный коэффициент, в стоке он 0 (как было),
+      // в challenge-профиле >0: без него вращение уходило на кап (замер 450°/500мс).
+      { const near=clamp(1-(terrainAt(bike.x).y-(bike.y+R.oy+R.wr))/240,0,1);
+        if(Math.abs(bike.rShift)<0.15 && pumpAir<=0){ const la=terrainAt(bike.x+Math.max(20,bike.vx*8)).ang; let d=la-bike.ang; while(d>Math.PI)d-=6.283; while(d<-Math.PI)d+=6.283;
+          tq+=(d*R.uprightAir*PHX.airAutoLevel - bike.angV*R.uprightDamp*PHX.airSpinDamp)*(0.4+near)*R.inertia; }
+        else if(PHX.airSpinDampLean>0) tq += (-bike.angV*R.uprightDamp*PHX.airSpinDampLean)*(0.4+near)*R.inertia; }
     }
     if(onGround){ const gs=terrainAt(bike.x).ang; let rp=bike.ang-gs; while(rp>Math.PI)rp-=6.283; while(rp<-Math.PI)rp+=6.283;
       const _sck=(gs<-R.climbFrom)?Math.min(1,(-gs-R.climbFrom)/R.climbSpan):0, dh=(trackSource!=='ticker')?R.designHard*_sck:0;   // b232 ДИЗАЙН-СЛОЖНОСТЬ: доля снятого прощения ∝ крутизне подъёма (0 вне крутого/на тикере)
-      if(Math.abs(bike.rShift)<0.2) tq += (-rp*R.frontLevel - bike.angV*R.frontLevelD)*R.inertia*(1-dh*R.dhLevel);   // b139 СТАБИЛИЗАЦИЯ ПЕРЕДА (не наклоняешь): мягкий PD держит байк по склону, фикс «встаёт на колесо на газу». b232: на дизайн-крутом ГАСНЕТ (dhLevel) → газ-и-держи задирает нос сам = power-loop, ставка есть
-      if(gs < -R.climbFrom && Math.abs(bike.rShift)>=0.2){ const ck=Math.min(1,(-gs-R.climbFrom)/R.climbSpan); tq += (-rp*R.frontLevel - bike.angV*R.frontLevelD)*R.climbCalm*ck*R.inertia*(1-dh); }   // b213 стабилизация переда при наклоне на крутом (тикер = не кувыркает). b232: на дизайн-трассе ГАСНЕТ (×(1-dh)) → наклон назад больше НЕ спасает от лупа
-      if(wheelieAssist && rp<-0.2){ const _ed=clamp((-R.wheelieZone-rp)/(R.wheelieEdge-R.wheelieZone),0,1); tq += (_ed*_ed*R.wheelieGuard - bike.angV*R.wheelieD*0.5)*R.inertia*(1-dh*R.dhGuard); }   // b153 ПОДУШКА У ГРАНИ + демпфер. b232: на дизайн-крутом подушка ГАСНЕТ (dhGuard) → грань пробивается по-настоящему
+      if(Math.abs(bike.rShift)<0.2) tq += (-rp*R.frontLevel - bike.angV*R.frontLevelD)*R.inertia*(1-dh*R.dhLevel)*PHX.groundAlign;   // b139 СТАБИЛИЗАЦИЯ ПЕРЕДА (не наклоняешь): мягкий PD держит байк по склону, фикс «встаёт на колесо на газу». b232: на дизайн-крутом ГАСНЕТ (dhLevel) → газ-и-держи задирает нос сам = power-loop, ставка есть
+      if(gs < -R.climbFrom && Math.abs(bike.rShift)>=0.2){ const ck=Math.min(1,(-gs-R.climbFrom)/R.climbSpan); tq += (-rp*R.frontLevel - bike.angV*R.frontLevelD)*R.climbCalm*ck*R.inertia*(1-dh)*PHX.groundAlign; }   // b213 стабилизация переда при наклоне на крутом (тикер = не кувыркает). b232: на дизайн-трассе ГАСНЕТ (×(1-dh)) → наклон назад больше НЕ спасает от лупа
+      if(wheelieAssist && rp<-0.2){ const _ed=clamp((-R.wheelieZone-rp)/(R.wheelieEdge-R.wheelieZone),0,1); tq += (_ed*_ed*R.wheelieGuard - bike.angV*R.wheelieD*0.5)*R.inertia*(1-dh*R.dhGuard)*PHX.wheelieGuard; }   // b153 ПОДУШКА У ГРАНИ + демпфер. b232: на дизайн-крутом подушка ГАСНЕТ (dhGuard) → грань пробивается по-настоящему
       if(brake && rp<-0.15) tq += clamp(-rp,0,1)*R.wheelieBrk*R.inertia;   // b153 РЕАЛЬНАЯ ФИЗИКА СПАСЕНИЯ: задний тормоз на вилли опускает перед (∝ задранности) — ГЛАВНЫЙ инструмент баланса игрока, работает и в PRO (на дизайн-трассе тоже = отпусти газ/тормозни = спасение)
-      { const upRet=(1-dh); if(rp<-R.loopLimit)tq+=(-R.loopLimit-rp)*R.antiLoop*upRet*R.inertia; else if(rp>R.loopLimit)tq+=(R.loopLimit-rp)*R.antiLoop*R.inertia; } }   // b83 прощающий anti-loop. b232: возврат НОСА-ВВЕРХ гаснет на дизайн-крутом (upRet) → нос реально уходит за грань; носа-вниз (endo вперёд) прощение цело
+      { const upRet=(1-dh); if(rp<-R.loopLimit)tq+=(-R.loopLimit-rp)*R.antiLoop*upRet*R.inertia*PHX.edgeGuard; else if(rp>R.loopLimit)tq+=(R.loopLimit-rp)*R.antiLoop*R.inertia*PHX.edgeGuard; } }   // b83 прощающий anti-loop. b232: возврат НОСА-ВВЕРХ гаснет на дизайн-крутом (upRet) → нос реально уходит за грань; носа-вниз (endo вперёд) прощение цело
     bike.vx+=(fx/R.mass)*sdt; bike.vy+=(fy/R.mass)*sdt;
     bike.x+=bike.vx*sdt; bike.y+=bike.vy*sdt;
     bike.angV+=(tq/(R.inertia*poseI))*sdt; bike.ang+=bike.angV*sdt;   // b158: инерция позы — вытянутый райдер медленнее реагирует на моменты
   }
   bike.vx*=onGround?R.rollDrag:R.airDrag;                  // drag once per frame (speed ceiling)
   if(onGround && wheelieAim>0.03){ const _fc=Math.cos(bike.ang),_fs=Math.sin(bike.ang); if(((bike.y+R.wb*_fs+R.oy*_fc+R.wr)-terrainAt(bike.x+R.wb*_fc-R.oy*_fs).y)<=0) bike.vx-=bike.vx*R.rollResist; }   // b147: ВИЛЛИ ≠ ТУРБО — с поднятым передним качение падало вдвое → вилли давал ×2.3 скорости (degenerate: ехать на заднем всегда выгодно, сим). Противовес причинный: вертикальная поза/баланс съедают эквивалент качения переднего. Вилли ≈ скорость-нейтрален (бонус трекшена на заднем остаётся)
-  bike.angV*=R.angDamp;
+  bike.angV*=(1-(1-R.angDamp)*PHX.angDampAssist);   // C1A: 1.0 = прежнее, 0 = затухания нет
   if(!onGround){ const hAir=terrainAt(bike.x).y-(bike.y+R.oy+R.wr); if(hAir>260 && bike.vy<0) bike.vy += (hAir-260)*0.012; }   // b144 МЯГКИЙ ПОТОЛОК ВОЗДУХА: выше ~300px над землёй воздух «густеет» (доп. притяжение ∝ превышению) → байк не улетает В КОСМОС даже над обвалом (юзер), всегда в кадре. Мягко (не режет обычные прыжки <300px). Порог — руки
   if(onGround) pumpAir=0;   // b149: авто-флип пампа (b139 pumpAir/pumpSpin) УДАЛЁН — флип теперь решение игрока (НОС↑ в полёте, как в реальном мотокроссе); переменные остались (декл/сброс), сюда больше ничего не пишет
   if(bike.angV>R.avMax)bike.angV=R.avMax; else if(bike.angV<-R.avMax)bike.angV=-R.avMax;   // КАП вращения → сальто УПРАВЛЯЕМОЕ (b83: b82-кап наземного темпа снят — вернулись к аркаде)
@@ -1475,7 +1506,14 @@ function update(){
   if(grounded && rel<-0.45 && dist>25) tut('climb','▲ КРУТО? ОТПУСТИ ГАЗ — НЕ ОПРОКИНЕШЬСЯ');   // teach feathering before the first loop-out
   const loopThresh = lerp(TUNE.loopForgive, P.LOOP, clamp((dist||0)/TUNE.easeInDist,0,1));   // Alto on-ramp: forgiving early, eases to full over easeInDist — mastery ceiling unchanged
   if(grounded && screen==='play' && Math.abs(rel)>2.4 && Math.abs(bike.angV)<0.06) wipeout('loop');   // b83: аркадно-прощающая смерть (полностью улёгся вверх ногами) — базовый порог всех режимов/тикера
-  else if(grounded && screen==='play' && trackSource!=='ticker' && supA<-RB.climbFrom && rel<-RB.loopCommit && bike.angV<-0.015) wipeout('loop');   // b232 ДИЗАЙН-ТРАССА: на крутом подъёме нос ушёл за точку невозврата (loopCommit) И ВСЁ ЕЩЁ валится назад = опрокид. Окно на коррекцию было (нос задирался постепенно + tut «ОТПУСТИ ГАЗ»); держал газ/вес назад = наказание, как в GD
+  // C1A: порог опрокида/клевка масштабируется профилем, и опасный угол должен ДЕРЖАТЬСЯ failHoldT секунд.
+  // Смерть следует из состояния байка (угол + вращение + контакт), а не из координаты трассы.
+  else if(grounded && screen==='play' && trackSource!=='ticker' &&
+          ((supA<-RB.climbFrom && rel<-RB.loopCommit*PHX.loopAngle && bike.angV<-0.015) ||
+           (rel>RB.loopCommit*PHX.endoAngle && bike.angV>0.015))){
+    _phxFail+=1/60;
+    if(_phxFail>=PHX.failHoldT) wipeout(rel>0?'endo':'loop');
+  } else if(grounded) _phxFail=0;   // b232 ДИЗАЙН-ТРАССА: на крутом подъёме нос ушёл за точку невозврата (loopCommit) И ВСЁ ЕЩЁ валится назад = опрокид. Окно на коррекцию было (нос задирался постепенно + tut «ОТПУСТИ ГАЗ»); держал газ/вес назад = наказание, как в GD
   // ---- ФАЗА-2: УДЕРЖАНИЕ ВИЛЛИ/СТОППИ = осмысленный скилл-баланс (как флипы дают очки — балансируешь весом → копишь буст + фидбэк) ----
   if(grounded && !rearBal && screen==='play' && Math.abs(rel)>0.42 && bike.vx>1.5 && !(rel>0 && supA<-0.1) && TUNE.wheelieRew>0){   // b147: порог 0.55→0.42 — вилли-помощник держит 0.55, награда должна срабатывать стабильно. wheelie (rel<0) counts anywhere; stoppie (rel>0) NOT on a climb
     wheelieT++;
@@ -3320,25 +3358,33 @@ let VSDBG=false;  try{ VSDBG=/[?&]vsDebug=1/.test(location.search); }catch(e){}
 const VS={
   // --- профиль: [x, h] в world-px, h вверх = + . Между узлами — сглаженная интерполяция ---
   P:[
-    [0,0],[1150,0],                                          // 1. СТАРТ И РАЗГОН (~3с): знакомство с газом
-    [1400,54],[1650,0],[1900,74],[2150,0],[2400,96],[2650,0],[2900,120],[3150,0],   // 2. ВУПСЫ: 4 шт растущей высоты — на постоянном газе раскачивают
-    [3450,0],                                                // короткий выход, подготовка
-    [3700,150],[4450,900],                                   // 3. ТЕХНИЧЕСКИЙ ПОДЪЁМ ~45°: нужна скорость + вес ВПЕРЁД
-    [4620,1010],[4760,1030],                                 // 4. ОСТРЫЙ ПЕРЕЛОМ ВЕРШИНЫ: полный газ = плохой вылет
-    [5000,880],[5450,470],                                   // 5. КОРОТКИЙ СПУСК...
-    [5700,300],[5950,340],                                   // ...и ЯМА: нужна подготовка к компрессии
-    [6150,360],[7050,360],                                   // 6a. РАЗГОННАЯ ПОЛОСА к прыжку
-    [7350,470],                                              // 6b. ЛИП ~20°
-    /* GAP 7350 → 7690 */
-    [7690,470],[8250,150],                                   // 6c. ПОСАДКА ПОД УКЛОН ~30°
-    [8500,110],[8750,190],[8950,110],                        // 7. ТЕХНИЧЕСКАЯ ЗОНА: неровность + встречный уклон сразу после посадки
-    [9250,150],[9600,150],                                   // короткий разгон
-    [9900,300],[10850,1250],                                 // 8. ФИНАЛЬНЫЙ ПОДЪЁМ ~45°: нужна накопленная скорость и дозировка
-    [11100,1330],[11800,1330],[12300,1330]                   // 9. ФИНИШНАЯ ПЛОЩАДКА
+    [0,0],[950,0],                                           // 1. СТАРТ И РАЗГОН (~2.5с)
+    [1200,54],[1450,0],[1700,74],[1950,0],[2200,96],[2450,0],[2700,120],[2950,0],   // 2. ВУПСЫ ×4, растущие
+    [3150,0],                                                // короткий выход
+    [3400,150],[4150,900],                                   // 3. ТЕХНИЧЕСКИЙ ПОДЪЁМ ~45°
+    [4320,1010],[4460,1030],                                 // 4. ОСТРЫЙ ПЕРЕЛОМ ВЕРШИНЫ
+    [4700,880],[5150,470],                                   // 5. СПУСК...
+    [5400,300],[5650,340],                                   // ...и ЯМА (компрессия)
+    [5850,360],[6450,360],                                   // 6a. РАЗГОННАЯ ПОЛОСА
+    [6750,470],                                              // 6b. ЛИП ~20°
+    /* GAP 6750 → 7090 */
+    [7090,470],[7650,150],                                   // 6c. ПОСАДКА ПОД УКЛОН ~30°
+    [7900,110],[8150,190],[8350,110],                        // 7. ТЕХНИЧЕСКАЯ ЗОНА сразу после посадки
+    [8600,150],[8850,150],                                   // короткий разгон
+    [9100,240],[9420,560],[10120,1330],                      // 8. ФИНАЛЬНЫЙ ПОДЪЁМ ~48-50° с выраженным входом
+    [10380,1400],[10900,1400],[11400,1400]                   // 9. ФИНИШНАЯ ПЛОЩАДКА
   ],
-  GAP:[[7350,7690]],
-  END:12100,                                                 // финиш
-  CP:[{x:6600,name:'перед прыжком'},{x:9550,name:'перед финальным подъёмом'}],   // чекпоинты по ТЗ
+  GAP:[[6750,7090]],
+  END:11150,                                                 // финиш
+  CP:[{x:6100,name:'перед прыжком'},{x:8800,name:'перед финальным подъёмом'}],   // чекпоинты по ТЗ
+  // ПРОФИЛЬ ФИЗИКИ УРОВНЯ. Числа подобраны по диагностической матрице (см. отчёт), не наугад.
+  physics:{ groundAlign:0.30,    // стабилизатор переда ослаблен: тяга реально задирает нос на крутом
+            airAutoLevel:0.0,   // авто-выравнивание в полёте ВЫКЛЮЧЕНО — pitch держит игрок
+            airSpinDamp:0.45, airSpinDampLean:0.45,   // гашение спина оставлено: без него вращение уходило на кап (450°/500мс)
+            angDampAssist:1, edgeGuard:0.25, wheelieGuard:0.0,
+            leanTorque:1.5, leanTorqueAir:0.35, throttleTorque:1,
+            climbTraction:0.35, // эндуро-сцепление ослаблено: крутое берётся импульсом, не одной тягой
+            loopAngle:0.62, endoAngle:0.72, failHoldT:0.25 },
   roadW:104, farLift:0.30, ribEvery:120,                     // визуальная 2.5D-дорога (на коллизию не влияет)
   camXFrac:0.30, camYFrac:0.58, camLead:26, camLeadT:0.10, camVertT:0.055
 };
@@ -3402,15 +3448,22 @@ window.__vsRun=function(policy, maxF, onFrame){
     else if(policy==='notilt'){                                   // газ+тормоз, БЕЗ переноса веса
       if(slopeNow>26 && bike.vx>2.4) down=(i%5===0);
       if(slopeNow<-24 && bike.vx>9) brake=true;
-    } else {                                                       // technical: газ, тормоз, вес, pitch в воздухе
-      if(air){ const d=terrainAt(bike.x+Math.max(20,bike.vx*10)).ang-bike.ang;
-        leanKeyR=(d>0.10); leanKeyL=(d<-0.10); down=false; }
-      else {
-        if(slopeNow>22){ leanKeyR=true;                            // подъём: вес ВПЕРЁД против переворота
-          if(bike.vx>2.6 && slopeNow>30) down=(i%4!==0); }         // дозируем газ на крутом
-        else if(slopeAhead>28 && slopeNow<12){ down=true; leanKeyL=(bike.vx<8); }   // разгон перед подъёмом
-        else if(slopeNow<-20){ down=false; if(bike.vx>10) brake=true; leanKeyL=true; }  // спуск: вес назад, придержать
-        else if(slopeAhead<-25 && slopeNow>16){ down=false; leanKeyR=true; }        // подход к перелому: сброс газа
+    } else {                                                       // TECHNICAL: газ, сброс газа/тормоз, nose-up, nose-down, pitch в воздухе
+      const rel=bike.ang-terrainAt(bike.x).ang;
+      if(air){                                                     // в воздухе — только pitch к углу зоны приземления
+        const d=terrainAt(bike.x+Math.max(24,bike.vx*11)).ang-bike.ang;
+        down=false; leanKeyR=(d>0.06); leanKeyL=(d<-0.06);
+      } else if(rel<-0.42){                                        // нос уже задран — СПАСЕНИЕ: сброс газа + вес вперёд
+        down=false; brake=(rel<-0.75); leanKeyR=true;
+      } else if(slopeNow>20){                                      // ПОДЪЁМ: держим нос, газ дозируем по крутизне
+        leanKeyR=(rel<-0.16);
+        down = slopeNow>40 ? (i%3!==0) : true;
+      } else if(slopeNow>8 && slopeAhead<-18){                     // подход к ПЕРЕЛОМУ вершины: сброс газа + вес вперёд
+        down=false; leanKeyR=true;
+      } else if(slopeNow<-18){                                     // СПУСК: не разгоняться, вес чуть назад
+        down=(bike.vx<6.4); if(bike.vx>9.6) brake=true; leanKeyL=(rel>0.30);
+      } else {                                                     // ровное/вупсы: ровный газ, нос ниже
+        down=true; leanKeyR=(rel<-0.12);
       }
     }
     updLeanKeys(); slowTS=1; physAcc=1; update(); slowLerp=1; draw();
