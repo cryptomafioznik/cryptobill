@@ -76,7 +76,7 @@ function lerp(a,b,t){return a+(b-a)*t;} function clamp(v,a,b){return v<a?a:v>b?b
 // false → full game everywhere. Single switch. Systems are GATED, never deleted.
 const CORE_TEST_MODE = false;   // b70: META LIVE — building the progression spine (upgrades/bikes with teeth, career, economy) on the confirmed rigid-body core
 // build stamp — bump on every change so a phone refresh can confirm it loaded fresh code (cache!)
-const BUILD = '2026-07-23 · b278';
+const BUILD = '2026-07-23 · b279';
 
 // ---------- procedural market terrain ----------
 // height map sampled every STEP px; generated forward as we ride. Market character:
@@ -2363,6 +2363,7 @@ let _land={on:false,f:0,peak:0,rise:5,hold:2,fall:14,env:0};          // оги�
 let _rgcErr={pelvis:0,handN:0,handF:0,bootN:0,bootF:0,pelvisOff:0};   // ошибки эффекторов + смещение таза (px)
 let _rgcJ={elbowN:0,elbowF:0,kneeN:0,kneeF:0};                        // углы суставов (град) для debug
 let _rgcPrevJ=null, _rgcD={joint:0,pelvis:0,px:0,py:0,hard:false};    // b278: пер-кадровые дельты ПОСЛЕ solve
+let _rgcPose=null, _rgcXf=null;                                       // b279: решённая поза + трансформ кадра (solve → draw)
 // b277: МИРОВЫЕ метрики торса/плеча/таза (torsoWorld = bikeWorld + torsoLocal)
 let _rgcW={bikeWorldDeg:0,torsoLocalDeg:0,torsoWorldDeg:0,pelvisWorld:{x:0,y:0},shoulderWorld:{x:0,y:0},shoulderAheadPx:0,shoulderAheadPctWb:0};
 // b275: ПРАВИЛЬНЫЕ per-wheel контакты + фаза-машина с hysteresis
@@ -2400,10 +2401,12 @@ function ik2c(ax,ay,tx,ty,l1,l2,dir,dMinF,dMaxF){
   const cd=Math.max(dMin,Math.min(dMax,d)), ux=dx/d,uy=dy/d, ex=ax+ux*cd, ey=ay+uy*cd;
   const r=ik2(ax,ay,ex,ey,l1,l2,dir); const cosI=clamp((l1*l1+l2*l2-cd*cd)/(2*l1*l2),-1,1);
   return { mid:[r[0],r[1]], end:[ex,ey], err:Math.abs(d-cd), interiorDeg:Math.acos(cosI)*180/Math.PI }; }
-function drawRigCutout(dbg){
+// b279: SOLVE отделён от DRAW. Поза стала ЗНАЧЕНИЕМ → её можно записать, воспроизвести и
+// скормить двум рендерам (PNG / код) для честного side-by-side. Ни одно число здесь не менялось.
+function solveRigCutout(){
   const okAssets = CUTready && _cutBad.length===0 && A25V2ready && A25V2.wf&&A25V2.wr&&A25V2.fork&&A25V2.swing && CUT.chassis;
-  if(!okAssets) return false;                                   // любой 404/не готов → монолит (caller)
-  const B=bike; if(!B||!isFinite(B.ang)||!isFinite(B.wheel)) return false;
+  if(!okAssets) return null;                                    // любой 404/не готов → монолит (caller)
+  const B=bike; if(!B||!isFinite(B.ang)||!isFinite(B.wheel)) return null;
   const S=RIGC.scale, RS=RIGC.riderScale, O=RIGC.origin, DX=(typeof PHYS!=='undefined'?PHYS.DX:26), onG=B.onG;
   const C=(pt)=>({x:(pt[0]-O[0])*S, y:(pt[1]-O[1])*S});         // cell-px → local (pre-delta), chassis scale
   // ---- b275: ПРАВИЛЬНЫЕ per-wheel КОНТАКТЫ (геометрия физ.колёс) + фаза-машина с hysteresis ----
@@ -2557,6 +2560,18 @@ function drawRigCutout(dbg){
       pelvisWorld:{x:+pw.x.toFixed(1),y:+pw.y.toFixed(1)}, shoulderWorld:{x:+sw.x.toFixed(1),y:+sw.y.toFixed(1)},
       shoulderAheadPx:+ahead.toFixed(1), shoulderAheadPctWb:+(ahead/Wbm*100).toFixed(1) }; }
   _rgcErr={ pelvis:0, handN:armNr.err, handF:armFr.err, bootN:legNr.err, bootF:legFr.err, pelvisOff:Math.hypot(_pcPx,_pcPy) };
+  _rgcPose=sol; _rgcXf={delta:delta,drop:drop,pelRot:pelRot,tor:tor,head:_pcHead,state:state};   // b279: поза наружу (для побитовой сверки solve/draw и кодового рендера)
+  return { B:B, S:S, RS:RS, O:O, delta:delta, ca:ca, sa:sa, drop:drop, state:state,
+    pelT:pelT, torsoSock:torsoSock, hipN:hipN, hipF:hipF, shN:shN, shF:shF, neck:neck,
+    legNr:legNr, legFr:legFr, armNr:armNr, armFr:armFr, pelRot:pelRot, tor:tor, head:_pcHead,
+    seat:seat, gN:gN, gF:gF, pN:pN, pF:pF, zFwd:zFwd, zBack:zBack, zUp:zUp, zDown:zDown }; }
+function drawRigCutout(dbg){
+  const P=solveRigCutout(); if(!P) return false;
+  const B=P.B, S=P.S, RS=P.RS, O=P.O, delta=P.delta, ca=P.ca, sa=P.sa, drop=P.drop;
+  const C=(pt)=>({x:(pt[0]-O[0])*S, y:(pt[1]-O[1])*S});
+  const rotDrop=(p)=>({x:p.x*ca-p.y*sa, y:p.x*sa+p.y*ca+drop});
+  const pelT=P.pelT, torsoSock=P.torsoSock, hipN=P.hipN, hipF=P.hipF, shN=P.shN, shF=P.shF, neck=P.neck;
+  const legNr=P.legNr, legFr=P.legFr, armNr=P.armNr, armFr=P.armFr, pelRot=P.pelRot, tor=P.tor;
   const bone=(img,p,d,A,Bp)=>{ if(!img)return; const nat=Math.atan2(d[1]-p[1],d[0]-p[0]), tgt=Math.atan2(Bp.y-A.y,Bp.x-A.x);
     ctx.save(); ctx.translate(A.x,A.y); ctx.rotate(tgt-nat); ctx.scale(RS,RS); ctx.translate(-p[0],-p[1]); ctx.drawImage(img,0,0); ctx.restore(); };
   const pivpart=(img,piv,sock,ang)=>{ if(!img)return; ctx.save(); ctx.translate(sock.x,sock.y); ctx.rotate(ang); ctx.scale(RS,RS); ctx.translate(-piv[0],-piv[1]); ctx.drawImage(img,0,0); ctx.restore(); };
@@ -2583,7 +2598,7 @@ function drawRigCutout(dbg){
     ctx.filter='none';
   ctx.restore();
   ctx.filter=filBike; drawPart2pt(A25V2.fork, RIGC.forkA, RIGC.forkB, A_steer, frontAxG); drawWheelPart(A25V2.wf, frontAxG, wd, B.wheel); ctx.filter='none';
-  if(dbg||RIGDEBUG){ ctx.save(); DEL(); drawCutDebug(seat,pelT,torsoSock,shN,hipN,neck,gN,gF,pN,pF,armNr,legNr,zFwd,zBack,zUp,zDown); ctx.restore(); }
+  if(dbg||RIGDEBUG){ ctx.save(); DEL(); drawCutDebug(P.seat,pelT,torsoSock,shN,hipN,neck,P.gN,P.gF,P.pN,P.pF,armNr,legNr,P.zFwd,P.zBack,P.zUp,P.zDown); ctx.restore(); }
   return true; }
 function drawCutDebug(seat,pelT,torsoSock,shN,hipN,neck,gN,gF,pN,pF,armNr,legNr,zFwd,zBack,zUp,zDown){
   ctx.lineWidth=1.2; ctx.lineCap='round';
@@ -2627,6 +2642,55 @@ window.__rgcRec=function(){ const g=_rgcSig,W=_rgcW,J=_rgcJ,E=_rgcErr;
     landImp:+g.landImp, landEnv:+_land.env.toFixed(2), landF:_land.on?_land.f:0,
     dJoint:+_rgcD.joint.toFixed(2), dPelvis:+_rgcD.pelvis.toFixed(2), hard:_rgcD.hard?1:0,
     vy:+(g.vertV||0).toFixed(2), angV:+(g.angV||0).toFixed(3), bx:+bike.x.toFixed(1) }; };
+// ============================================================================
+// b279 ПОБИТОВАЯ СВЕРКА solve/draw. Вход солвера = снимок физики (bike+leanX); трасса
+// детерминирована, времени/random солвер не читает. Схема приёмки:
+//   __poseRun() один раз пишет ВХОДЫ и ПОЗЫ → __poseReplay(inputs) прогоняет те же входы
+//   через текущую реализацию → __poseDiff(a,b) сравнивает КАЖДОЕ числовое поле без допуска.
+// ============================================================================
+const _RIGIN=['x','y','ang','vx','vy','angV','onG','wheel','rShift','_cmpF','_cmpR'];
+window.__rigInSnap=function(){ const o={}; for(const k of _RIGIN) o[k]=bike[k]; o.leanX=(typeof leanX!=='undefined'?leanX:0); return o; };
+window.__rigInApply=function(s){ for(const k of _RIGIN) bike[k]=s[k]; if(typeof leanX!=='undefined') leanX=s.leanX; };
+// ПОЛНОЕ состояние рига: всё, что переносится между кадрами + решённая поза. Без toFixed.
+window.__poseSnap=function(){ const P=_rgcPose, X=_rgcXf; if(!P||!X) return null;
+  const pt=(p)=>[p.x,p.y], ar=(a)=>[a.mid[0],a.mid[1],a.end[0],a.end[1],a.interiorDeg,a.err];
+  return { st:X.state, delta:X.delta, drop:X.drop, pelRot:X.pelRot, tor:X.tor, head:X.head,
+    pel:pt(P.pelT), sock:pt(P.torsoSock), hipN:pt(P.hipN), hipF:pt(P.hipF), shN:pt(P.shN), shF:pt(P.shF), neck:pt(P.neck),
+    legN:ar(P.legNr), legF:ar(P.legFr), armN:ar(P.armNr), armF:ar(P.armFr),
+    pc:[_pcPx,_pcPy,_pcPxB,_pcPyB,_pcTor,_pcTorB,_pcHead,_pcPelRot,_pcPrevVx,_pcLongAcc],
+    sd:[_sd.px.v,_sd.py.v,_sd.tor.v,_sd.head.v,_sd.pr.v],
+    ld:[_land.on?1:0,_land.f,_land.peak,_land.rise,_land.hold,_land.fall,_land.env],
+    ct:[_CT.F.raw?1:0,_CT.F.filt?1:0,_CT.F.on,_CT.F.off,_CT.F.gap,_CT.F.pen,_CT.F.since,
+        _CT.R.raw?1:0,_CT.R.filt?1:0,_CT.R.on,_CT.R.off,_CT.R.gap,_CT.R.pen,_CT.R.since],
+    ph:[_ph.state,_ph.prevState,_ph.airFrames,_ph.sinceFirst,_ph.landImp,_ph.airRun,_ph.grndRun,_ph.airLatch?1:0,
+        _ph.vyLatch,_ph.upIn,_ph.upOut,_ph.uphillLatch?1:0,_ph.fLost,_ph.cand,_ph.candN],
+    rg:[_rgcVisAng,_rgcAngV,_rgcDrop,_rgcDropV,_rgcFC,_rgcRC,_rgcD.joint,_rgcD.pelvis,_rgcD.px,_rgcD.py,_rgcD.hard?1:0] }; };
+// сброс ВСЕГО переносимого состояния рига — иначе реплей стартует с хвоста прошлого прогона
+window.__rigStateReset=function(){
+  _rgcVisAng=0;_rgcAngV=0;_rgcDrop=0;_rgcDropV=0;_rgcFC=0;_rgcRC=0;_rgcWasAir=false;_rgcInit=false;
+  _pcPx=0;_pcPy=0;_pcPxB=0;_pcPyB=0;_pcTor=0.26;_pcTorB=0.26;_pcHead=0;_pcPelRot=0;_pcPrevVx=0;_pcLongAcc=0;_pcState='neutral';
+  _sd.px.v=0;_sd.py.v=0;_sd.tor.v=0;_sd.head.v=0;_sd.pr.v=0;
+  _land={on:false,f:0,peak:0,rise:5,hold:2,fall:14,env:0};
+  _CT.F={raw:false,filt:false,on:0,off:0,gap:0,pen:0,since:999}; _CT.R={raw:false,filt:false,on:0,off:0,gap:0,pen:0,since:999};
+  _ph={ state:'neutral', prevState:'neutral', prevAir:false, airFrames:0, sinceFirst:999, landImp:0,
+    airRun:0, grndRun:0, airLatch:false, vyLatch:0, upIn:0, upOut:0, uphillLatch:false, fLost:0, cand:'neutral', candN:0 };
+  _rgcPrevJ=null; _rgcD={joint:0,pelvis:0,px:0,py:0,hard:false}; _rgcPose=null; _rgcXf=null; };
+// прогон с записью ВХОДОВ и ПОЗ (эталон снимается ДО рефакторинга)
+window.__poseRun=function(N,mod,vth){ const IN=[],PS=[]; window.__rigStateReset();
+  window.__rgcRun(N,mod,vth,function(){ IN.push(window.__rigInSnap()); PS.push(window.__poseSnap()); });
+  return {inputs:IN, poses:PS}; };
+// реплей ТЕХ ЖЕ входов через текущую реализацию (физика не крутится — только солвер+рендер)
+window.__poseReplay=function(IN){ const PS=[]; window.__rigStateReset();
+  for(let i=0;i<IN.length;i++){ window.__rigInApply(IN[i]); drawRigCutout(false); PS.push(window.__poseSnap()); }
+  return PS; };
+// сравнение БЕЗ допуска: любое расхождение числа/строки = ошибка рефакторинга
+window.__poseDiff=function(A,B){ const bad=[]; if(A.length!==B.length) return [{f:'length',i:-1,a:A.length,b:B.length}];
+  const walk=(a,b,i,path)=>{ if(bad.length>40) return;
+    if(Array.isArray(a)){ for(let k=0;k<a.length;k++) walk(a[k],b?b[k]:undefined,i,path+'['+k+']'); return; }
+    if(a&&typeof a==='object'){ for(const k in a) walk(a[k],b?b[k]:undefined,i,path+'.'+k); return; }
+    if(a!==b && !(typeof a==='number'&&typeof b==='number'&&isNaN(a)&&isNaN(b))) bad.push({f:path,i:i,a:a,b:b}); };
+  for(let i=0;i<A.length;i++) walk(A[i],B[i],i,'');
+  return bad; };
 // b278: ЕДИНЫЙ ПРОГОН — покадровая запись (rAF заморожен в headless → update()+draw() вручную).
 // mod/vth: дозировка газа на склоне >26° (реальный игрок не держит газ в пол на крутом) — физика/трасса НЕ трогаются.
 window.__rgcRun=function(N,mod,vth,onFrame,xLim){ reset(); screen='play'; const rec=[]; let deaths=0;
