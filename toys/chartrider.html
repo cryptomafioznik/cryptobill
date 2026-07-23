@@ -1038,6 +1038,7 @@ function reset(){
   if(trackSource==='ticker'){ buildTickerTrack(tickerData||MARKET_DATA.btc.data); finishDist=Math.floor((terr.length-1)*STEP/10); popText(tickerName+' · '+(_shortRun?'📉 ШОРТ · ':'')+'ВОЛАТИЛЬНОСТЬ '+tickerVolLabel+(tickerLoadErr?' (нет связи — BTC)':''));
     entryPrice=tkPrice(60); }   // b106: ВХОД = реальная цена монеты на старте графика; b177: через tkPrice (шорт-зеркало учтено)
   else if(typeof ACCEPT25!=='undefined' && ACCEPT25){ buildAcceptanceTerr(); }   // debug-level: фикс. acceptance-трасса
+  else if(typeof VSLICE!=='undefined' && VSLICE){ buildVSliceTerr(); _vsCP=-1; _vsCPState=null; _vsDone=false; _vsTime=0; }   // C1: вертикальный срез — своя трасса
   else if(typeof RIG_ART!=='undefined' && RIG_ART || typeof RIG_CUT!=='undefined' && RIG_CUT){ buildRigTestTerr(); }   // b271/b273: фикс. тест-трасса (legacy-физика)
   else { for(let i=0;i<Math.ceil(W/STEP)+8;i++)genSeg(); }
   bike={x:60,y:terrainAt(60).y-27.5,vx:0,vy:0,ang:terrainAt(60).ang,angV:0,onG:true,wheel:0,rShift:0};   // rShift = rider weight-shift state (-1 back .. +1 forward), smoothed from the drag input (b47 two-body)
@@ -3304,6 +3305,124 @@ window.__cutSelfCheck=function(){ const R=[], ok=(n,c,d)=>R.push({check:n,pass:!
   const passed=R.filter(r=>r.pass).length;
   return { build:BUILD, passed:passed+'/'+R.length, allPass:passed===R.length, checks:R };
 };
+// ============================================================================
+// C1 · VERTICAL SLICE (?level=vertical-slice) — законченный технический участок.
+// Физика, риг, hybrid-рендер и гейты Б2 НЕ ТРОГАЮТСЯ. Здесь только: профиль трассы,
+// чекпоинты, камера и 2.5D-отрисовка полотна. Всё под флагом VSLICE — без него игра
+// идёт прежним путём.
+//
+// Коллизия — ОДНА авторитетная линия VS.h(s). Визуальная дорога строится вокруг неё
+// и на столкновение не влияет (проверяется debug-режимом ?vsDebug=1).
+// Профиль задан сегментами вдоль S, поэтому позже поверх него можно положить график цены.
+// ============================================================================
+let VSLICE=false; try{ VSLICE=/[?&]level=vertical-slice/.test(location.search); }catch(e){}
+let VSDBG=false;  try{ VSDBG=/[?&]vsDebug=1/.test(location.search); }catch(e){}
+const VS={
+  // --- профиль: [x, h] в world-px, h вверх = + . Между узлами — сглаженная интерполяция ---
+  P:[
+    [0,0],[1150,0],                                          // 1. СТАРТ И РАЗГОН (~3с): знакомство с газом
+    [1400,54],[1650,0],[1900,74],[2150,0],[2400,96],[2650,0],[2900,120],[3150,0],   // 2. ВУПСЫ: 4 шт растущей высоты — на постоянном газе раскачивают
+    [3450,0],                                                // короткий выход, подготовка
+    [3700,150],[4450,900],                                   // 3. ТЕХНИЧЕСКИЙ ПОДЪЁМ ~45°: нужна скорость + вес ВПЕРЁД
+    [4620,1010],[4760,1030],                                 // 4. ОСТРЫЙ ПЕРЕЛОМ ВЕРШИНЫ: полный газ = плохой вылет
+    [5000,880],[5450,470],                                   // 5. КОРОТКИЙ СПУСК...
+    [5700,300],[5950,340],                                   // ...и ЯМА: нужна подготовка к компрессии
+    [6150,360],[7050,360],                                   // 6a. РАЗГОННАЯ ПОЛОСА к прыжку
+    [7350,470],                                              // 6b. ЛИП ~20°
+    /* GAP 7350 → 7690 */
+    [7690,470],[8250,150],                                   // 6c. ПОСАДКА ПОД УКЛОН ~30°
+    [8500,110],[8750,190],[8950,110],                        // 7. ТЕХНИЧЕСКАЯ ЗОНА: неровность + встречный уклон сразу после посадки
+    [9250,150],[9600,150],                                   // короткий разгон
+    [9900,300],[10850,1250],                                 // 8. ФИНАЛЬНЫЙ ПОДЪЁМ ~45°: нужна накопленная скорость и дозировка
+    [11100,1330],[11800,1330],[12300,1330]                   // 9. ФИНИШНАЯ ПЛОЩАДКА
+  ],
+  GAP:[[7350,7690]],
+  END:12100,                                                 // финиш
+  CP:[{x:6600,name:'перед прыжком'},{x:9550,name:'перед финальным подъёмом'}],   // чекпоинты по ТЗ
+  roadW:104, farLift:0.30, ribEvery:120,                     // визуальная 2.5D-дорога (на коллизию не влияет)
+  camXFrac:0.30, camYFrac:0.58, camLead:26, camLeadT:0.10, camVertT:0.055
+};
+window.VS=VS;
+// --- авторитетная линия коллизии: монотонная кусочно-кубическая интерполяция по узлам ---
+// Гладкость нужна, чтобы на переломах не было ступенек, но БЕЗ выбросов между узлами
+// (обычный Catmull-Rom давал «горбы» на резких переходах вершины).
+function vsSlopeAt(i,P){ return (P[i+1][1]-P[i][1])/Math.max(1e-6,P[i+1][0]-P[i][0]); }
+function vsHeight(x){ const P=VS.P, n=P.length;
+  if(x<=P[0][0]) return P[0][1];
+  if(x>=P[n-1][0]) return P[n-1][1];
+  let i=0; for(; i<n-1; i++) if(x>=P[i][0] && x<=P[i+1][0]) break;
+  const x0=P[i][0],y0=P[i][1],x1=P[i+1][0],y1=P[i+1][1], h=x1-x0, t=(x-x0)/h;
+  const s=vsSlopeAt(i,P);
+  const sPrev = i>0? vsSlopeAt(i-1,P) : s, sNext = i<n-2? vsSlopeAt(i+1,P) : s;
+  // касательные по Фрицу–Карлсону: наклон гасится в ноль на смене знака → нет перелётов
+  const m0 = (i===0)? s : ((sPrev*s<=0)? 0 : (sPrev+s)/2);
+  const m1 = (i===n-2)? s : ((s*sNext<=0)? 0 : (s+sNext)/2);
+  const lim=3*Math.abs(s), c0=Math.max(-lim,Math.min(lim,m0)), c1=Math.max(-lim,Math.min(lim,m1));
+  const t2=t*t, t3=t2*t;
+  return (2*t3-3*t2+1)*y0 + (t3-2*t2+t)*h*c0 + (-2*t3+3*t2)*y1 + (t3-t2)*h*c1; }
+function vsIsGap(x){ for(const g of VS.GAP) if(x>g[0] && x<g[1]) return true; return false; }
+function buildVSliceTerr(){ baseY=H*0.6; terr=[]; let lipY=baseY;
+  for(let x=0; x<=VS.END+400; x+=STEP){ const y=baseY-vsHeight(x), g=vsIsGap(x);
+    if(!g) lipY=y;
+    terr.push({x:x,y:y,open:y,close:y,hi:y,lo:y,up:false,gap:g,coin:false,topY:y,lipY:lipY,step:false,stepDone:false,
+      kick:false,pump:false,pumpMag:0,whoop:false,mud:false,drop:false,climb:false,mega:false,haz:false,hazHit:false,ev:''}); }
+  genX=terr.length*STEP+99999; finishDist=Math.floor(VS.END/10); }
+// --- чекпоинты и рестарт ---
+let _vsCP=-1, _vsCPState=null, _vsT0=0, _vsDone=false, _vsTime=0;
+function vsSnapshot(){ return { x:bike.x, y:bike.y, ang:bike.ang, vx:bike.vx, vy:bike.vy, angV:bike.angV,
+  wheel:bike.wheel, rShift:bike.rShift, onG:bike.onG, cmpF:bike._cmpF||0, cmpR:bike._cmpR||0, t:_vsTime }; }
+// ПОЛНЫЙ сброс: физика + риг + очередь contact events + камера. Остаточной скорости,
+// позы или огибающей приземления от прошлой попытки остаться не должно.
+function vsRestore(S){
+  bike.x=S.x; bike.y=S.y; bike.ang=S.ang; bike.vx=S.vx; bike.vy=S.vy; bike.angV=S.angV;
+  bike.wheel=S.wheel; bike.rShift=S.rShift; bike.onG=S.onG; bike._cmpF=S.cmpF; bike._cmpR=S.cmpR;
+  bike._px=undefined; bike._py=undefined; bike._pa=undefined; bike._pRS=undefined;
+  if(typeof window.__rigStateReset==='function') window.__rigStateReset();
+  if(typeof _cev!=='undefined') _cev.length=0;
+  if(typeof _wPen!=='undefined'){ _wPen[0]=-1; _wPen[1]=-1; }
+  down=false; brake=false; leanX=0; leanKeyL=false; leanKeyR=false; activeTouches={};
+  physAcc=0; slowTS=1; slowLerp=1; shake=0; flash=0; parts.length=0; dust.length=0;
+  cam.x=bike.x-W*VS.camXFrac; cam.y=bike.y-H*VS.camYFrac; _vsLead=0;
+  _vsTime=S.t; screen='play'; deathBy=''; }
+function vsRestart(full){
+  if(full||!_vsCPState){ _vsCP=-1; _vsCPState=null; _vsTime=0; reset(); screen='play'; return; }
+  vsRestore(_vsCPState); }
+window.__vsRestart=vsRestart;
+// --- КОНТРОЛЬНЫЕ ПРОГОНЫ. Одна и та же конфигурация уровня, отличается ТОЛЬКО политика ввода.
+// Физика между попытками не меняется — все три строят трассу одним buildVSliceTerr().
+// leanX>0 = вес ВПЕРЁД (клавиша вправо), leanX<0 = вес НАЗАД.
+function _vsSlopeAhead(dx){ const a=terrainAt(bike.x+dx); return -Math.atan2(terrainAt(bike.x+dx+30).y-a.y,30)*180/Math.PI; }
+window.__vsRun=function(policy, maxF, onFrame){
+  reset(); screen='play'; _vsTime=0;
+  let deaths=0, frames=0, res={policy:policy};
+  for(let i=0;i<maxF;i++){
+    const slopeNow=_vsSlopeAhead(0), slopeAhead=_vsSlopeAhead(160), air=!bike.onG;
+    down=true; brake=false; leanKeyL=false; leanKeyR=false;
+    if(policy==='gas'){ /* только газ: ни тормоза, ни веса */ }
+    else if(policy==='notilt'){                                   // газ+тормоз, БЕЗ переноса веса
+      if(slopeNow>26 && bike.vx>2.4) down=(i%5===0);
+      if(slopeNow<-24 && bike.vx>9) brake=true;
+    } else {                                                       // technical: газ, тормоз, вес, pitch в воздухе
+      if(air){ const d=terrainAt(bike.x+Math.max(20,bike.vx*10)).ang-bike.ang;
+        leanKeyR=(d>0.10); leanKeyL=(d<-0.10); down=false; }
+      else {
+        if(slopeNow>22){ leanKeyR=true;                            // подъём: вес ВПЕРЁД против переворота
+          if(bike.vx>2.6 && slopeNow>30) down=(i%4!==0); }         // дозируем газ на крутом
+        else if(slopeAhead>28 && slopeNow<12){ down=true; leanKeyL=(bike.vx<8); }   // разгон перед подъёмом
+        else if(slopeNow<-20){ down=false; if(bike.vx>10) brake=true; leanKeyL=true; }  // спуск: вес назад, придержать
+        else if(slopeAhead<-25 && slopeNow>16){ down=false; leanKeyR=true; }        // подход к перелому: сброс газа
+      }
+    }
+    updLeanKeys(); slowTS=1; physAcc=1; update(); slowLerp=1; draw();
+    _vsTime+=1/60; frames++;
+    if(onFrame) onFrame(i);
+    if(screen==='dead'){ res.died=true; res.deathBy=deathBy; res.atX=Math.round(bike.x); break; }
+    if(bike.x>=VS.END){ res.finished=true; res.atX=Math.round(bike.x); break; }
+  }
+  res.frames=frames; res.seconds=+(frames/60).toFixed(2); res.maxX=Math.round(bike.x);
+  res.pct=+(100*bike.x/VS.END).toFixed(1);
+  if(!res.died && !res.finished){ res.stalled=true; res.vx=+bike.vx.toFixed(2); }
+  return res; };
 // ---- b271: короткая ТЕСТ-ТРАССА внутри настоящей игры (?render=game&camera=side&rig=articulated) ----
 // профиль в world-px (h вверх = +). Фичи: ровно · вупсы · подъём 35° · подъём ~47° · острая вершина · спуск · прыжок · разрыв · вогнутая посадка · большой воздух с управлением наклоном.
 const RTEST_P=[
@@ -4751,7 +4870,9 @@ window.CRS = {
 };
 toTitle();
 if(TRIALS25){ try{ PSP_ON=false; }catch(e){} }   // b266: trials25d = ТОЛЬКО визуальный скин; меню/режимы/старая игра НЕ трогаются (авто-старт убран — он и прятал режимы). Плоская геометрия трассы (скин поверх). Откат: ?render=game
-if(ACCEPT25){ try{ PSP_ON=false; trackSource='proc'; gameMode='endless'; reset(); screen='play'; }catch(e){ console.error('acceptance25d',e); } }   // b267: авто-старт DEBUG-уровня (только под ?track=acceptance25d)
+if(ACCEPT25){ try{ PSP_ON=false; trackSource='proc'; gameMode='endless'; reset(); screen='play'; }catch(e){ console.error('acceptance25d',e); } }
+// C1: вертикальный срез — ДИЗАЙН-трасса (trackSource='proc'), иначе b232 designHard/power-loop выключены
+if(typeof VSLICE!=='undefined' && VSLICE){ try{ PSP_ON=false; trackSource='proc'; gameMode='endless'; reset(); screen='play'; }catch(e){ console.error('vertical-slice',e); } }   // b267: авто-старт DEBUG-уровня (только под ?track=acceptance25d)
 if(RIG_ART){ try{ PSP_ON=false; trackSource='proc'; gameMode='endless'; reset(); screen='play'; }catch(e){ console.error('rig=articulated',e); } }   // b271: авто-старт настоящей игры на тест-трассе с articulated-ригом (side, legacy-физика)
 if(RIG_CUT){ try{ PSP_ON=false; trackSource='proc'; gameMode='endless'; reset(); screen='play'; }catch(e){ console.error('rig=cutout',e); } }   // b273: авто-старт тест-трассы с cutout-райдером
 // apply shake in draw by jittering before skyGrad
