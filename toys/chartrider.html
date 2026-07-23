@@ -76,7 +76,7 @@ function lerp(a,b,t){return a+(b-a)*t;} function clamp(v,a,b){return v<a?a:v>b?b
 // false → full game everywhere. Single switch. Systems are GATED, never deleted.
 const CORE_TEST_MODE = false;   // b70: META LIVE — building the progression spine (upgrades/bikes with teeth, career, economy) on the confirmed rigid-body core
 // build stamp — bump on every change so a phone refresh can confirm it loaded fresh code (cache!)
-const BUILD = '2026-07-23 · b280';
+const BUILD = '2026-07-23 · b282';
 
 // ---------- procedural market terrain ----------
 // height map sampled every STEP px; generated forward as we ride. Market character:
@@ -482,6 +482,17 @@ function drawSpark(arr,sx,sy,sw,sh,col){ let mn=Infinity,mx=-Infinity; for(const
 let bike, cam, t, coins, dist, best, screen, wipe, parts, stars, dust, shake, flash, daycycle, trail, streaks, mult, bestPnl, airT, nearMissed, hitstop, gflash, floats, multPulse, maxMult, lean, rush, prevVx, wave, waveSpd, deathBy, boost, boosting, zone, biomeBanner, biomeBannerT, BSKY, BLINE, BRIDGE, lastMile, newDepth, camAir=0, wheelieT=0;
 let posPulse=0,_posPrev=0,_dangBuzz=0,prMax=0,prMin=0,slowmo=0,menuFx=0,menuFxAmt=0,wheelieAim=0,wheelieI=0,trickAir=0,trickZoom=0,trickGnd=0,slowLerp=1,riderAirB=0,riderSquat=0,nearKickX=-1,flowBoost=0,megaAir=0;
 function flow(a){ flowBoost=Math.min(TUNE.flowMax,(flowBoost||0)+a); }   // b233 копилка ФЛОУ-инерции: чистые скилл-события кормят → авто-разгон впереди волны (см. flowPush в update)
+// b282: АВТОРИТЕТНЫЕ CONTACT EVENTS. Физика fixed-step, поэтому касание определяется РОВНО один
+// раз в update() и эмитится read-only событием. Анимация их ПОТРЕБЛЯЕТ и больше не переоткрывает
+// столкновение из разреженных render-сэмплов (это давало tContact ±21мс и разное число событий 2/2/1).
+// Силы, collision response и траектория байка не затрагиваются.
+let _simT=0, _cevId=0, _cev=[], _wPen=[-1,-1], _wOffT=[9,9];
+const SIM_DT=1/60;                                              // один update() = один фикс-шаг
+function _emitContact(wi,tAbs,wx,wy,nx,ny,vpx,vpy,vn,pen,prevPen){
+  _cev.push({ id:++_cevId, simTime:tAbs, wheel:wi?'F':'R', cx:wx, cy:wy, nx:nx, ny:ny,
+    preVx:vpx, preVy:vpy, normalSpeed:Math.abs(vn), airDuration:_wOffT[wi], gapPrev:-prevPen, gapCur:-pen, rawContact:true });
+  if(_cev.length>64) _cev.shift();
+  if(window.__cevLog) window.__cevLog.push(_cev[_cev.length-1]); }   // отдельный лог: очередь риг выпивает, а приёмке нужен полный поток
 let physAcc=0, slowTS=1;   // b216 ФЛИП-СЛОУМО-РЕДИЗАЙН: physAcc=аккумулятор дробных физ-шагов, slowTS=текущий масштаб времени (плавно едет к цели). Заменяет бинарный «пропуск каждого 2-го кадра» (b154) на fixed-timestep+интерполяцию — физика идёт дробным темпом, рендер интерполирует slowLerp∈[0,1) между двумя последними состояниями (не только 0.5) = плавно, без статтера
 const SLOWMO_SCALE=0.4;   // масштаб времени в слоумо (0.4 = 2.5× медленнее). Длительности slowmo (20/28 кадров) не тронуты → та же ~0.47с реального времени покрывает меньше движения = драматичнее   // b155: riderAirB 0..1 = стойка райдера в полёте, riderSquat 0..1 = присед-амортизация посадки (∝ высоте). b156: nearKickX = ближайший трамплин впереди (HUD-указатель)
 let trick=0,trickMix=0,trickHeld=false,trickT=0,trickTouch=-1,trickKey='',touchSX={},touchSY={},skids=[];   // b160: skids = следы торможения на трассе   // b158 FMX-ТРЮКИ: trick 1=СУПЕРМЕН 2=ЦУНАМИ 3=COFFIN 4=NO HANDER; trickMix 0..1 = твин позы; trickT = кадры удержания (очки); trickTouch/Key = чей палец/клавиша держит
@@ -1316,6 +1327,20 @@ function rigidStep(){
       const ox=wi?R.wb:-R.wb, drive=(wi===0);
       const wx=bike.x+ox*ca-R.oy*sa, wy=bike.y+ox*sa+R.oy*ca;   // wheel hub world pos
       const ta=terrainAt(wx), pen=(wy+R.wr)-ta.y;          // bottom of wheel below the line = penetration
+      // b282: RAW CONTACT EVENT — эмитится ДО применения сил, на переходе «не касался → касается».
+      // Время внутри подшага находится по bracket (prevPen<0, pen>=0) линейно; подшаг физики короткий,
+      // поэтому оценка устойчива. Ничего не меняет в расчёте.
+      { const sub=SIM_DT/R.subSteps, tSub=_simT-SIM_DT+s*sub, pp=_wPen[wi];
+        if(pen>0 && pp<=0){
+          const f=(pp<0 && pen-pp>1e-9)? clamp((0-pp)/(pen-pp),0,1) : 0;
+          const ga2=ta.ang, n2x=Math.sin(ga2), n2y=-Math.cos(ga2);
+          const ca2=Math.cos(bike.ang), sa2=Math.sin(bike.ang);
+          const rx2=wx-bike.x, ry2=wy-bike.y;
+          const vx2=bike.vx-bike.angV*ry2, vy2=bike.vy+bike.angV*rx2;
+          _emitContact(wi, tSub+f*sub, wx, wy, n2x, n2y, vx2, vy2, vx2*n2x+vy2*n2y, pen, pp); }
+        else if(pen<=0 && pp>0) _wOffT[wi]=0;
+        if(pen<=0) _wOffT[wi]+=sub; else _wOffT[wi]=0;
+        _wPen[wi]=pen; }
       if(pen>0){
         onGround=true;
         { const cv=clamp(pen*0.55,0,6); if(drive){ if(cv>bike._cmpR)bike._cmpR=cv; } else if(cv>bike._cmpF)bike._cmpF=cv; }   // b160: компрессия per колесо — визуальный ХОД подвески в drawMachine
@@ -1369,6 +1394,7 @@ function rigidStep(){
   if(bike.spin>0.2) bike.wheel+=bike.vx*0.10*bike.spin;     // буксующее колесо крутится быстрее визуально
 }
 function update(){
+  _simT+=SIM_DT;                                                // b282: время симуляции (fixed-step)
   if(hitstop>0){ hitstop--; return; }   // brief freeze for impact punch
   if(cashCelebT>0){ celebStep(); return; }   // b134: праздник фикса проигрывается В МИРЕ перед экраном итога (см. celebStep/cashOut)
   if(boosting>0)boosting--;
@@ -2368,7 +2394,7 @@ let _capCnt={norm:0,hard:0,total:0,joint:'',maxEx:0};
 // b281: СОБЫТИЕ КОНТАКТА — отдельная сущность. raw-пересечение порога (точное время) ≠ filtered
 // contact (устойчивость) ≠ air latch (классификация) ≠ landing envelope (визуальная реакция).
 // Время старта огибающей берётся ТОЛЬКО из tContact; латч её больше не сдвигает.
-let _ev={id:0, tContact:-1, wheel:'', wasAirConfirmed:false, airDuration:0, preSpeed:0, gapPrev:0, gapCur:0, pending:false};                 // b280 Б2.7: контроль ограничителя (cap не должен ЛЕПИТЬ анимацию)
+let _ev={id:0, seenId:0, rawCount:0, qualified:0, rejected:0, rejectReason:'', tContact:-1, wheel:'', wasAirConfirmed:false, airDuration:0, preSpeed:0, gapPrev:0, gapCur:0, pending:false};                 // b280 Б2.7: контроль ограничителя (cap не должен ЛЕПИТЬ анимацию)
 let _rgcErr={pelvis:0,handN:0,handF:0,bootN:0,bootF:0,pelvisOff:0};   // ошибки эффекторов + смещение таза (px)
 let _rgcJ={elbowN:0,elbowF:0,kneeN:0,kneeF:0};                        // углы суставов (град) для debug
 let _rgcPrevJ=null, _rgcD={joint:0,pelvis:0,px:0,py:0,hard:false};    // b278: пер-кадровые дельты ПОСЛЕ solve
@@ -2415,7 +2441,8 @@ const PC={
   ldKY:2.60, ldKX:0.55, ldKT:0.010,                                     // ЗАМЕР: common на вупсах = 0.78px p2p при ходе 6 → для таза 1.5-3.5px нужен коэф ~2.6, а не 0.8
   ldMaxY:3.5, ldMaxX:2.0, ldMaxT:0.0873,                                // СТРАХОВОЧНЫЕ пределы отклонения: ±3.5px / ±2px / ±5°
   ldAirT:0.080, ldDropT:0.020, ldRiseT:0.180, ldVMax:120,
-  gndSettleT:0.050 };                                                   // neutral требует 50мс устойчивого контакта обоих колёс             // уступить приоритет — мгновенно (20мс), вернуться — мягко (180мс)                                           // затухание в воздухе 80мс; кламп выброса производной нагрузки
+  gndSettleT:0.050,
+  evMinAirT:0.080, evMinSpeed:1.2 };                                     // квалификация landing: воздух ≥80мс и нормальная скорость ≥1.2                                                   // neutral требует 50мс устойчивого контакта обоих колёс             // уступить приоритет — мгновенно (20мс), вернуться — мягко (180мс)                                           // затухание в воздухе 80мс; кламп выброса производной нагрузки
 window.PC=PC;
 // критически демпфированный сглаживатель (Unity SmoothDamp): st ≈ время выхода на цель
 function smd(cur,tgt,vr,st,dt){ const om=2/st, x=om*dt, e=1/(1+x+0.48*x*x+0.235*x*x*x);
@@ -2729,24 +2756,18 @@ function solveRigCutout(){
   const dt=Math.min(PC.dtMax, panic?1/60:dtRaw);
   if(panic){ _ld.cPrev=_ld.cF; _ld.cVel=0; _pcPrevVx=B.vx; }                                            // после провала кадра — никаких ложных производных
   const tF0=_rgcT; _rgcT+=dt;                                                                           // кадр покрывает [tF0, _rgcT]; переходы ищем ВНУТРИ него
-  // b281: ТОЧНОЕ ВРЕМЯ КАСАНИЯ по пересечению порога, доля шага f = (TH-prevGap)/(cur-prevGap).
-  // Считается ДО фильтров и ДО латча; одно касание = один eventId (дребезг не перезапускает compression).
-  { const TH=-4.0;
-    if(_ph.airLatch && !_ev.pending){
-      let f=-1, wh='';
-      if(_CT.F.prevGap<TH && gapF>=TH){ f=(TH-_CT.F.prevGap)/Math.max(1e-6,gapF-_CT.F.prevGap); wh='F'; }
-      if(_CT.R.prevGap<TH && gapR>=TH){ const f2=(TH-_CT.R.prevGap)/Math.max(1e-6,gapR-_CT.R.prevGap);
-        if(f<0||f2<f){ f=f2; wh='R'; } }
-      if(f>=0){ const fc=clamp(f,0,1);
-        // скорость удара: НЕ vy текущего кадра (там уже отработал collision response) и НЕ vy
-        // прошлого кадра (при 30 FPS это 33мс до касания — в падении скорость успевает уйти;
-        // замер давал imp 0.49 против 0.75 при 60 FPS). Линейная ЭКСТРАПОЛЯЦИЯ баллистики
-        // из двух последних воздушных кадров на момент tContact.
-        const aEst=(_ph.prevDt>1e-6)?((_ph.prevVy-_ph.prevVy2)/_ph.prevDt):0;
-        const vyAt=_ph.prevVy + aEst*(fc*dt);
-        _ev={ id:_ev.id+1, tContact:tF0+fc*dt, wheel:wh, wasAirConfirmed:true, airDuration:_ph.airT,
-              preSpeed:Math.abs(vyAt),
-              gapPrev:(wh==='F'?_CT.F.prevGap:_CT.R.prevGap), gapCur:(wh==='F'?gapF:gapR), pending:true }; } } }
+  // b282: РИГ БОЛЬШЕ НЕ ОБНАРУЖИВАЕТ КОНТАКТ. Он потребляет авторитетные события физики
+  // (fixed-step), поэтому число событий, их id, время и импульс одинаковы при любой частоте
+  // рендера. Фильтры контакта и air-латч остались потребителями состояния, но время события
+  // не сдвигают. Raw contact ≠ landing: квалификация — ниже, по airDuration и normalSpeed.
+  { const feed=(window.__rigEventFeed||_cev);
+    while(feed.length && feed[0].id>_ev.seenId){
+      const e=feed.shift(); _ev.seenId=e.id; _ev.rawCount++;
+      if(e.airDuration>=PC.evMinAirT && e.normalSpeed>=PC.evMinSpeed){
+        _ev={ id:e.id, seenId:e.id, rawCount:_ev.rawCount, qualified:_ev.qualified+1, rejected:_ev.rejected,
+              tContact:e.simTime, wheel:e.wheel, wasAirConfirmed:true, airDuration:e.airDuration,
+              preSpeed:e.normalSpeed, gapPrev:e.gapPrev, gapCur:e.gapCur, pending:true };
+      } else { _ev.rejected++; _ev.rejectReason = e.airDuration<PC.evMinAirT?'airTooShort':'impactTooLow'; } } }
   _CT.F.prevGap=gapF; _CT.R.prevGap=gapR;
   const filtF=_updContact(_CT.F, gapF>-4.0, dt), filtR=_updContact(_CT.R, gapR>-4.0, dt);               // rawContact (в пределах ~4px поверхности) → filtered (hysteresis по времени)
   const hubAng=Math.atan2(terrainAt(cFx).y-terrainAt(cRx).y, 2*DX), slopeDeg=-hubAng*180/Math.PI;        // slopeDeg > 0 = ПОДЪЁМ
@@ -2784,7 +2805,7 @@ function solveRigCutout(){
   if(firstContact){ _land.on=true;
     // b281: огибающая BACKDATE'ится к tContact — уже прошедшая фаза вычисляется сразу, без скачка.
     // Латч мог подтвердиться на кадр позже; это больше не сдвигает старт.
-    _land.t = (_ev.pending && _ev.tContact>=0) ? Math.max(0, _rgcT-_ev.tContact) : 0;
+    _land.t = (_ev.pending && _ev.tContact>=0) ? clamp(_simT-_ev.tContact,0,0.25) : 0;
     if(_ev.pending){ _ph.landImp=_ev.preSpeed; _land.tStart=_ev.tContact; _ev.pending=false; } else _land.tStart=_rgcT;
     _land.peak=Math.min(PC.lPeakMax, PC.lPeakB+PC.lPeakK*_ph.landImp);
     _land.rise=clamp(_land.peak,3,6)/60; _land.hold=PC.lHoldT; _land.fall=PC.lFallT; _land.env=0; }
@@ -3151,7 +3172,7 @@ window.__rigStateReset=function(){
   _capCnt={norm:0,hard:0,total:0,joint:'',maxEx:0}; _rgcTPrev=0;
   _rgcPrevJ=null; _rgcD={joint:0,pelvis:0,px:0,py:0,hard:false}; _rgcPose=null; _rgcXf=null;
   _rgcT=0; _bl={t0:-9,dur:0.30,fx:0,fy:0,ft:0.26,fr:0,frozen:false};
-  _ev={id:0,tContact:-1,wheel:'',wasAirConfirmed:false,airDuration:0,preSpeed:0,gapPrev:0,gapCur:0,pending:false}; };
+  _ev={id:0,seenId:0,rawCount:0,qualified:0,rejected:0,rejectReason:'',tContact:-1,wheel:'',wasAirConfirmed:false,airDuration:0,preSpeed:0,gapPrev:0,gapCur:0,pending:false}; };
 // прогон с записью ВХОДОВ и ПОЗ (эталон снимается ДО рефакторинга)
 window.__poseRun=function(N,mod,vth){ const IN=[],PS=[]; window.__rigStateReset();
   window.__rgcRun(N,mod,vth,function(){ IN.push(window.__rigInSnap()); PS.push(window.__poseSnap()); });
