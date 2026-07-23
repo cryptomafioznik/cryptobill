@@ -2386,7 +2386,7 @@ let _rgcW={bikeWorldDeg:0,torsoLocalDeg:0,torsoWorldDeg:0,pelvisWorld:{x:0,y:0},
 const _CT={ F:{raw:false,filt:false,on:0,off:0,gap:0,pen:0,since:9}, R:{raw:false,filt:false,on:0,off:0,gap:0,pen:0,since:9} };
 // b280: все дуэллы/счётчики — ВРЕМЕННЫЕ аккумуляторы в секундах (airT, upInT, upOutT, fLostT, candT)
 let _ph={ state:'neutral', prevState:'neutral', prevAir:false, airT:0, sinceFirst:9, landImp:0,
-  airRun:0, grndRun:0, airLatch:false, vyLatch:0, upIn:0, upOut:0, uphillLatch:false, fLost:0, cand:'neutral', candT:0, lastGround:'neutral' };
+  airRun:0, grndRun:0, airLatch:false, vyLatch:0, upIn:0, upOut:0, uphillLatch:false, fLost:0, cand:'neutral', candT:0, lastGround:'neutral', gndT:0, prevVy:0 };
 // b278: ТАБЛИЦА ПОЗ И ВРЕМЕННЫХ КОНСТАНТ (кадры @60fps). Живой тюн через window.PC, финальные числа — здесь.
 const PC={
   zF:0.20, zB:0.08, zU:0.19, zD:0.10,                                  // зона таза (доли Wb / wheelDia / riderH)
@@ -2410,16 +2410,19 @@ const PC={
   ldAtkT:0.050, ldRelT:0.140,                                           // атака отклика 50мс / возврат 140мс
   ldKY:2.60, ldKX:0.55, ldKT:0.010,                                     // ЗАМЕР: common на вупсах = 0.78px p2p при ходе 6 → для таза 1.5-3.5px нужен коэф ~2.6, а не 0.8
   ldMaxY:3.5, ldMaxX:2.0, ldMaxT:0.0873,                                // СТРАХОВОЧНЫЕ пределы отклонения: ±3.5px / ±2px / ±5°
-  ldAirT:0.080, ldDropT:0.020, ldRiseT:0.180, ldVMax:120 };             // уступить приоритет — мгновенно (20мс), вернуться — мягко (180мс)                                           // затухание в воздухе 80мс; кламп выброса производной нагрузки
+  ldAirT:0.080, ldDropT:0.020, ldRiseT:0.180, ldVMax:120,
+  gndSettleT:0.050 };                                                   // neutral требует 50мс устойчивого контакта обоих колёс             // уступить приоритет — мгновенно (20мс), вернуться — мягко (180мс)                                           // затухание в воздухе 80мс; кламп выброса производной нагрузки
 window.PC=PC;
 // критически демпфированный сглаживатель (Unity SmoothDamp): st ≈ время выхода на цель
 function smd(cur,tgt,vr,st,dt){ const om=2/st, x=om*dt, e=1/(1+x+0.48*x*x+0.235*x*x*x);
   const ch=cur-tgt, tmp=(vr.v+om*ch)*dt; vr.v=(vr.v-om*tmp)*e; return (cur-ch)+(ch+tmp)*e; }
 // b280: hysteresis контакта — во ВРЕМЕНИ (было 2 кадра on / 3 кадра off)
 function _updContact(w, raw, dt){
-  w.raw=raw;
-  if(raw){ w.on+=dt; w.off=0; if(w.on>=PC.ctOnT && !w.filt){ w.filt=true; w.since=0; } }
-  else { w.off+=dt; w.on=0; if(w.off>=PC.ctOffT && w.filt){ w.filt=false; w.since=0; } }
+  w.raw=raw; w.tCross=-1;                                             // b280.5: смещение ВНУТРИ шага, когда фильтр переключился
+  if(raw){ const pv=w.on; w.on+=dt; w.off=0;
+    if(w.on>=PC.ctOnT && !w.filt){ w.filt=true; w.since=0; w.tCross=Math.max(0,Math.min(dt,PC.ctOnT-pv)); } }
+  else { const pv=w.off; w.off+=dt; w.on=0;
+    if(w.off>=PC.ctOffT && w.filt){ w.filt=false; w.since=0; w.tCross=Math.max(0,Math.min(dt,PC.ctOffT-pv)); } }
   w.since+=dt; return w.filt; }
 // однополюсный фильтр по времени: alpha = 1 - exp(-dt/tau). Частотно-независим по построению.
 function lp1(cur,tgt,tau,dt){ return cur + (tgt-cur)*(1-Math.exp(-dt/Math.max(1e-6,tau))); }
@@ -2737,7 +2740,14 @@ function solveRigCutout(){
   const trulyAir=_ph.airLatch, airborne=trulyAir;
   _ph.airT = trulyAir? _ph.airT+dt : 0;
   let firstContact=false;
-  if(wasAirL && !trulyAir){ firstContact=true; _ph.sinceFirst=0; _ph.landImp=Math.abs(B.vy||0); } else _ph.sinceFirst+=dt;
+  if(wasAirL && !trulyAir){ firstContact=true; _ph.sinceFirst=0;
+    // b280.6: импульс посадки берётся в ИСТИННЫЙ момент касания (интерполяция vy между кадрами).
+    // Снятый на границе кадра vy давал разную АМПЛИТУДУ огибающей при 30/60/120 FPS — это и был
+    // основной остаток расхождения внутри окна компрессии.
+    const cr=Math.max(_CT.F.tCross,_CT.R.tCross), u=(cr>=0&&dt>0)?clamp(cr/dt,0,1):1;
+    const vyAt=_ph.prevVy+((B.vy||0)-_ph.prevVy)*u;
+    _ph.landImp=Math.abs(vyAt); } else _ph.sinceFirst+=dt;
+  _ph.prevVy=B.vy||0;
   _ph.prevAir=trulyAir;
   if(!trulyAir){ if(slopeDeg>=25)_ph.upIn+=dt; else _ph.upIn=0; if(slopeDeg<20)_ph.upOut+=dt; else _ph.upOut=0; }   // в воздухе таймеры ЗАМОРОЖЕНЫ (короткий полёт не сбрасывает подъём)
   const _pUpIn=_ph.upIn-dt;
@@ -2745,11 +2755,19 @@ function solveRigCutout(){
   if(_ph.upIn>=PC.upInT && !trulyAir){ if(!_ph.uphillLatch) tUpCross=tF0+Math.max(0,Math.min(dt,PC.upInT-_pUpIn)); _ph.uphillLatch=true; }                                                    // вход: ≥25° в течение 100мс
   if(_ph.upOut>=PC.upOutT || _ph.airRun>0.333) _ph.uphillLatch=false;                                          // выход: <20° в течение 150мс (или длинный полёт)
   if(!filtF) _ph.fLost+=dt; else _ph.fLost=0;
+  _ph.gndT = (filtF&&filtR)? _ph.gndT+dt : 0;                                                            // b280.4: время УСТОЙЧИВОГО контакта обоих колёс
   // ---- огибающая приземления ВО ВРЕМЕНИ: contact → rise 50-100мс → полка → отбой 233мс ----
   _land.isFirst=firstContact;                                                                            // b280: маркер ПЕРВОГО кадра огибающей (был _land.f===1)
-  if(firstContact){ _land.on=true; _land.t=0; _land.peak=Math.min(PC.lPeakMax, PC.lPeakB+PC.lPeakK*_ph.landImp);
+  if(firstContact){ _land.on=true;
+    // b280.5: огибающая стартует в ИСТИННЫЙ момент касания внутри шага, а не на границе кадра.
+    // Фронт длится ~100мс, поэтому квантование старта на 33мс (30 FPS) давало основную часть
+    // расхождения именно на компрессии.
+    const cr=Math.max(_CT.F.tCross,_CT.R.tCross);
+    _land.t = cr>=0 ? Math.max(0, dt-cr) : 0;
+    _land.peak=Math.min(PC.lPeakMax, PC.lPeakB+PC.lPeakK*_ph.landImp);
     _land.rise=clamp(_land.peak,3,6)/60; _land.hold=PC.lHoldT; _land.fall=PC.lFallT; _land.env=0; }
-  if(_land.on){ _land.t+=dt; const f=_land.t,R=_land.rise,Hd=_land.hold,Fl=_land.fall, sm=(u)=>{u=clamp(u,0,1);return u*u*(3-2*u);};
+  else if(_land.on){ _land.t+=dt; }
+  if(_land.on){ const f=_land.t,R=_land.rise,Hd=_land.hold,Fl=_land.fall, sm=(u)=>{u=clamp(u,0,1);return u*u*(3-2*u);};
     if(f<=R) _land.env=_land.peak*sm(f/R);
     else if(f<=R+Hd) _land.env=_land.peak;
     else if(f<=R+Hd+Fl) _land.env=_land.peak*(1-sm((f-R-Hd)/Fl));
@@ -2773,7 +2791,10 @@ function solveRigCutout(){
     // затухание АСИММЕТРИЧНО: уступает МГНОВЕННО (20мс), возвращается мягко (180мс). Симметричные
     // 80мс отставали от фронта огибающей → рельефный отклик складывался с посадкой и выносил
     // колено за 20° / локоть за 14° (гейт landing_contact_compress_rebound это и поймал).
-    const gTgt=trulyAir?0:(1-clamp(envN,0,1));
+    // b280.5: на ВСЮ огибающую приземления рельефный путь уступает ПОЛНОСТЬЮ (не пропорционально
+    // envN): пропорциональное подавление оставляло перекрытие на фронте и складывалось с посадкой.
+    // Возврат — через ldRiseT=180мс, то есть уже во время позднего rebound.
+    const gTgt=(trulyAir||_land.on)?0:1;
     _ld.gain=lp1(_ld.gain,gTgt, gTgt<_ld.gain?PC.ldDropT:PC.ldRiseT, dt);
     const tY=clamp(PC.ldKY*cDev,-PC.ldMaxY,PC.ldMaxY)*_ld.gain;          // common → таз Y (подвеска давит → таз проседает)
     const tX=clamp(-PC.ldKX*dDev,-PC.ldMaxX,PC.ldMaxX)*_ld.gain;         // differential → небольшой таз X
@@ -2799,7 +2820,12 @@ function solveRigCutout(){
   else if(_ph.uphillLatch && (filtR||filtF) && (filtF || _ph.fLost<=PC.fLostT || !(rs<-0.35||li<-0.35))) st='uphill';  // F0R1 на склоне НЕ отменяет uphill
   else if(departPending && _ph.lastGround) st=_ph.lastGround;                                            // b280.3: контакт потерян, воздух НЕ подтверждён → держим прежнюю наземную позу
   else if(filtR && !filtF) st='wheelie';
-  else st = (rs<-0.25||li<-0.25) ? (_ph.uphillLatch?'uphill':'wheelie') : 'neutral';                      // b280: латч подъёма СТАРШЕ наклон-индуцированного вилли
+  else if(rs<-0.25||li<-0.25) st = _ph.uphillLatch?'uphill':'wheelie';                                    // b280: латч подъёма СТАРШЕ наклон-индуцированного вилли
+  // b280.4: NEUTRAL разрешён ТОЛЬКО при устойчивом наземном контакте. Иначе держим прежнюю наземную
+  // позу — это убирает rebound→neutral→wheelie (контакт после отбоя ещё не устоялся, а neutral
+  // проскакивал на 1-2 кадра). Настоящие короткие firstContact/compression не затронуты: они выше по приоритету.
+  else if(_ph.gndT>=PC.gndSettleT) st='neutral';
+  else st = _ph.lastGround || 'neutral';
   let tTrans=-1;                                                                                         // СУБКАДРОВОЕ время смены state (−1 = смены не было)
   if(st!==_ph.state){                                                                                    // анти-дребезг: наземная смена только после dwell по ВРЕМЕНИ
     const inst = trulyAir || st==='compression' || st==='rebound' || _ph.state==='compression' || _ph.state==='rebound' || _ph.state==='ascend' || _ph.state==='apex' || _ph.state==='descend';
@@ -3085,7 +3111,7 @@ window.__rigStateReset=function(){
   _land={on:false,f:0,peak:0,rise:5,hold:2,fall:14,env:0};
   _CT.F={raw:false,filt:false,on:0,off:0,gap:0,pen:0,since:999}; _CT.R={raw:false,filt:false,on:0,off:0,gap:0,pen:0,since:999};
   _ph={ state:'neutral', prevState:'neutral', prevAir:false, airT:0, sinceFirst:9, landImp:0,
-    airRun:0, grndRun:0, airLatch:false, vyLatch:0, upIn:0, upOut:0, uphillLatch:false, fLost:0, cand:'neutral', candT:0, lastGround:'neutral' };
+    airRun:0, grndRun:0, airLatch:false, vyLatch:0, upIn:0, upOut:0, uphillLatch:false, fLost:0, cand:'neutral', candT:0, lastGround:'neutral', gndT:0, prevVy:0 };
   _land={on:false,t:0,peak:0,rise:0.083,hold:0.0167,fall:0.2333,env:0};
   _ld={cF:0,dF:0,cB:0,dB:0,cPrev:0,cVel:0,fY:0,fX:0,fT:0,gain:1,init:false};
   _capCnt={norm:0,hard:0,total:0,joint:'',maxEx:0}; _rgcTPrev=0;
