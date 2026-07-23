@@ -76,7 +76,7 @@ function lerp(a,b,t){return a+(b-a)*t;} function clamp(v,a,b){return v<a?a:v>b?b
 // false → full game everywhere. Single switch. Systems are GATED, never deleted.
 const CORE_TEST_MODE = false;   // b70: META LIVE — building the progression spine (upgrades/bikes with teeth, career, economy) on the confirmed rigid-body core
 // build stamp — bump on every change so a phone refresh can confirm it loaded fresh code (cache!)
-const BUILD = '2026-07-23 · b277';
+const BUILD = '2026-07-23 · b278';
 
 // ---------- procedural market terrain ----------
 // height map sampled every STEP px; generated forward as we ride. Market character:
@@ -2356,15 +2356,35 @@ const RIDP={
   luF:{p:[119,55], d:[250,233]}, llF:{p:[75,54], d:[96,273], toe:[201,279]} };
 window.RIGC=RIGC;
 let _rgcVisAng=0,_rgcAngV=0,_rgcDrop=0,_rgcDropV=0,_rgcFC=0,_rgcRC=0,_rgcWasAir=false,_rgcInit=false;
-// b274: pose-controller state (пружины с ИНЕРЦИЕЙ по частям; таз = зона, не пин)
-let _pcPx=0,_pcPy=0,_pcPvx=0,_pcPvy=0, _pcTor=0.26,_pcTorV=0, _pcHead=0, _pcPrevVx=0,_pcLongAcc=0, _pcLandE=0, _pcState='neutral';
+// b278: pose-controller state — smoothDamp-база + огибающая приземления + жёсткий лимит скорости ПОСЛЕ solve
+let _pcPx=0,_pcPy=0, _pcPxB=0,_pcPyB=0, _pcTor=0.26,_pcTorB=0.26, _pcHead=0, _pcPelRot=0, _pcPrevVx=0,_pcLongAcc=0, _pcState='neutral';
+const _sd={px:{v:0},py:{v:0},tor:{v:0},head:{v:0},pr:{v:0}};          // накопители скорости smoothDamp
+let _land={on:false,f:0,peak:0,rise:5,hold:2,fall:14,env:0};          // огибающая приземления (contact→compression→rebound)
 let _rgcErr={pelvis:0,handN:0,handF:0,bootN:0,bootF:0,pelvisOff:0};   // ошибки эффекторов + смещение таза (px)
 let _rgcJ={elbowN:0,elbowF:0,kneeN:0,kneeF:0};                        // углы суставов (град) для debug
+let _rgcPrevJ=null, _rgcD={joint:0,pelvis:0,px:0,py:0,hard:false};    // b278: пер-кадровые дельты ПОСЛЕ solve
 // b277: МИРОВЫЕ метрики торса/плеча/таза (torsoWorld = bikeWorld + torsoLocal)
 let _rgcW={bikeWorldDeg:0,torsoLocalDeg:0,torsoWorldDeg:0,pelvisWorld:{x:0,y:0},shoulderWorld:{x:0,y:0},shoulderAheadPx:0,shoulderAheadPctWb:0};
 // b275: ПРАВИЛЬНЫЕ per-wheel контакты + фаза-машина с hysteresis
 const _CT={ F:{raw:false,filt:false,on:0,off:0,gap:0,pen:0,since:999}, R:{raw:false,filt:false,on:0,off:0,gap:0,pen:0,since:999} };
-let _ph={ state:'neutral', prevAir:false, airFrames:0, sinceFirst:999, landImp:0, compPhase:'', compMinY:0, sincePhase:0 };
+let _ph={ state:'neutral', prevState:'neutral', prevAir:false, airFrames:0, sinceFirst:999, landImp:0,
+  airRun:0, grndRun:0, airLatch:false, vyLatch:0, upIn:0, upOut:0, uphillLatch:false, fLost:0, cand:'neutral', candN:0 };
+// b278: ТАБЛИЦА ПОЗ И ВРЕМЕННЫХ КОНСТАНТ (кадры @60fps). Живой тюн через window.PC, финальные числа — здесь.
+const PC={
+  zF:0.20, zB:0.08, zU:0.19, zD:0.10,                                  // зона таза (доли Wb / wheelDia / riderH)
+  upX0:0.145, upX1:0.045, upY0:0.60, upY1:0.33,                        // uphill: таз вперёд-вверх (мировой перенос веса)
+  upAhead:0.245, upWmin:0.80, upWmax:0.99, upPelRot:0.16,              // uphill: цель плеча + КЛАМП мирового угла торса 45.8-57.9°
+  ascX:-0.30, ascY:-0.50, apexX:0.35, apexY:0.55, desX:0.20, desY:-0.34,// воздух: apexY>0 = таз ВНИЗ к подножкам (группировка)
+  ascT:0.16, apexT:0.62, desT:0.24,
+  lPeakB:1.2, lPeakK:0.72, lPeakMax:6.1, lHold:1, lFall:14, lFoldT:-0.25,// приземление: пик просадки 4-6.4px, полка 2 кадра, отбой 233мс; torso слегка РАЗГИБАЕТСЯ (иначе локоть складывается на 30°)
+  stG:0.15, stA:0.13,                                                   // время смешивания поз (120-180мс)
+  capPos:0.85, capPosHard:1.75, capTor:0.035, capTorHard:0.085, capHead:0.055,  // лимиты/кадр ПОСЛЕ solve
+  capAng:3.5, capAngHard:6.0,                                           // ГЛАВНЫЙ гейт: макс Δ любого сустава за кадр (бисекция по решённой позе)
+  upIn:6, upOut:9, fLost:11, airOn:3, dwell:3 };                        // дуэлл: вход 100мс / выход 150мс / F-потеря 180мс / air >3 кадров
+window.PC=PC;
+// критически демпфированный сглаживатель (Unity SmoothDamp): st ≈ время выхода на цель
+function smd(cur,tgt,vr,st,dt){ const om=2/st, x=om*dt, e=1/(1+x+0.48*x*x+0.235*x*x*x);
+  const ch=cur-tgt, tmp=(vr.v+om*ch)*dt; vr.v=(vr.v-om*tmp)*e; return (cur-ch)+(ch+tmp)*e; }
 function _updContact(w, raw){ // hysteresis: on 2 кадра, off 3 кадра
   w.raw=raw;
   if(raw){ w.on++; w.off=0; if(w.on>=2 && !w.filt){ w.filt=true; w.since=0; } }
@@ -2393,23 +2413,52 @@ function drawRigCutout(dbg){
   const gapF=cFy-terrainAt(cFx).y, gapR=cRy-terrainAt(cRx).y;                                          // >0 penetration, <0 над поверхностью
   _CT.F.gap=gapF; _CT.F.pen=Math.max(0,gapF); _CT.R.gap=gapR; _CT.R.pen=Math.max(0,gapR);
   const filtF=_updContact(_CT.F, gapF>-4.0), filtR=_updContact(_CT.R, gapR>-4.0);                       // rawContact (в пределах ~4px поверхности) → filtered (hysteresis 2/3)
-  const airborne=!filtF&&!filtR;
-  const hubAng=Math.atan2(terrainAt(cFx).y-terrainAt(cRx).y, 2*DX);
-  const wasAir=_ph.prevAir; _ph.airFrames = airborne? _ph.airFrames+1 : 0;
-  let firstContact=false;
-  if(wasAir && !airborne){ firstContact=true; _ph.sinceFirst=0; _ph.landImp=Math.abs(B.vy||0); _ph.compPhase='compression'; _ph.compMinY=_pcPy; }
-  else _ph.sinceFirst++;
-  _ph.prevAir=airborne;
-  if(_ph.compPhase==='compression'){ if(_pcPy>_ph.compMinY)_ph.compMinY=_pcPy; if(_pcPy<_ph.compMinY-0.4 && _ph.sinceFirst>3){ _ph.compPhase='rebound'; _ph.sincePhase=0; } }
-  else if(_ph.compPhase==='rebound'){ _ph.sincePhase++; if((_ph.sincePhase>=12 && Math.abs(_pcPy)<1.2) || _ph.sincePhase>30){ _ph.compPhase=''; } }   // отбой 180-300ms, neutral не сразу
+  const hubAng=Math.atan2(terrainAt(cFx).y-terrainAt(cRx).y, 2*DX), slopeDeg=-hubAng*180/Math.PI;        // slopeDeg > 0 = ПОДЪЁМ
   const rs=B.rShift||0, li=(typeof leanX!=='undefined'?leanX:0), vy=B.vy||0;
-  const climbI=clamp((-hubAng-0.30)/0.5,0,1), wBack=clamp(-rs,0,1)+clamp(-li,0,1)*0.6, wFwd=clamp(rs,0,1)+clamp(li,0,1)*0.6;
-  if(airborne){ _ph.state = vy<-2.8? 'ascend' : (Math.abs(vy)<2.8? 'apex' : 'descend'); }   // apex-окно шире → таз успевает отработать группировку
-  else if(_ph.compPhase==='compression') _ph.state='compression';
-  else if(_ph.compPhase==='rebound') _ph.state='rebound';
-  else if(filtR && !filtF) _ph.state='wheelie';                                                          // заднее есть, переднего нет = вилли
-  else _ph.state = climbI>0.3?'uphill':((rs<-0.25||li<-0.25)?'wheelie':'neutral');
-  const state=_ph.state, onGvis=!airborne;
+  const wBack=clamp(-rs,0,1)+clamp(-li,0,1)*0.6, wFwd=clamp(rs,0,1)+clamp(li,0,1)*0.6;
+  // ---- b278: УСТОЙЧИВОСТЬ СОСТОЯНИЙ. air только после >3 кадров F0R0; uphill с дуэллом вход/выход ----
+  const airRaw=!filtF&&!filtR;
+  _ph.airRun = airRaw? _ph.airRun+1 : 0; _ph.grndRun = airRaw? 0 : _ph.grndRun+1;
+  const wasAirL=_ph.airLatch;
+  if(_ph.airRun>PC.airOn){ if(!_ph.airLatch) _ph.vyLatch=Math.abs(B.vy||0); _ph.airLatch=true; } else if(_ph.grndRun>=1) _ph.airLatch=false;
+  const trulyAir=_ph.airLatch, airborne=trulyAir;
+  _ph.airFrames = trulyAir? _ph.airFrames+1 : 0;
+  let firstContact=false;
+  if(wasAirL && !trulyAir){ firstContact=true; _ph.sinceFirst=0; _ph.landImp=Math.abs(B.vy||0); } else _ph.sinceFirst++;
+  _ph.prevAir=trulyAir;
+  if(!trulyAir){ if(slopeDeg>=25)_ph.upIn++; else _ph.upIn=0; if(slopeDeg<20)_ph.upOut++; else _ph.upOut=0; }   // в воздухе таймеры ЗАМОРОЖЕНЫ (короткий полёт не сбрасывает подъём)
+  if(_ph.upIn>=PC.upIn && !trulyAir) _ph.uphillLatch=true;                                                     // вход: ≥25° в течение 100мс
+  if(_ph.upOut>=PC.upOut || _ph.airRun>20) _ph.uphillLatch=false;                                              // выход: <20° в течение 150мс (или длинный полёт)
+  if(!filtF) _ph.fLost++; else _ph.fLost=0;
+  // ---- огибающая приземления: contact → rise 50-100мс → полка 2 кадра → отбой 233мс ----
+  if(firstContact){ _land.on=true; _land.f=0; _land.peak=Math.min(PC.lPeakMax, PC.lPeakB+PC.lPeakK*_ph.landImp);
+    _land.rise=clamp(Math.round(_land.peak),3,6); _land.hold=PC.lHold; _land.fall=PC.lFall; _land.env=0; }
+  if(_land.on){ _land.f++; const f=_land.f,R=_land.rise,Hd=_land.hold,Fl=_land.fall, sm=(u)=>{u=clamp(u,0,1);return u*u*(3-2*u);};
+    if(f<=R) _land.env=_land.peak*sm(f/R);
+    else if(f<=R+Hd) _land.env=_land.peak;
+    else if(f<=R+Hd+Fl) _land.env=_land.peak*(1-sm((f-R-Hd)/Fl));
+    else { _land.env=0; _land.on=false; } }
+  else _land.env=0;
+  const envN=_land.peak>0? _land.env/_land.peak : 0;
+  // ---- разрешение состояния (приоритет: air → приземление → uphill → wheelie → neutral) ----
+  let st;
+  // порог фаз воздуха ПРОПОРЦИОНАЛЕН полёту: 4-кадровая задержка air-латча съедает начало подъёма,
+  // фикс. 2.8 съедал ascend целиком (замер: g≈0.26px/кадр², подъём ≈13 кадров)
+  // окно apex АСИММЕТРИЧНО (падение длиннее подъёма): иначе apex ≈ 8 кадров < времени смешивания позы
+  const aUp=clamp(0.45*(_ph.vyLatch||0),0.9,2.2), aDn=clamp(1.9*aUp,1.5,3.6);
+  if(trulyAir) st = vy<-aUp?'ascend':(vy<=aDn?'apex':'descend');
+  else if(_land.on && _land.f<=_land.rise+_land.hold) st='compression';
+  else if(_land.on) st='rebound';
+  else if(_ph.uphillLatch && (filtR||filtF) && (filtF || _ph.fLost<=PC.fLost || !(rs<-0.35||li<-0.35))) st='uphill';  // F0R1 на склоне НЕ отменяет uphill
+  else if(filtR && !filtF) st='wheelie';
+  else st = (rs<-0.25||li<-0.25)?'wheelie':'neutral';
+  if(st!==_ph.state){                                                                                    // анти-дребезг: наземная смена только после dwell кадров подряд
+    const inst = trulyAir || st==='compression' || st==='rebound' || _ph.state==='compression' || _ph.state==='rebound' || _ph.state==='ascend' || _ph.state==='apex' || _ph.state==='descend';
+    if(inst){ _ph.prevState=_ph.state; _ph.state=st; _ph.cand=st; _ph.candN=0; }
+    else { if(st===_ph.cand)_ph.candN++; else {_ph.cand=st;_ph.candN=1;}
+      if(_ph.candN>=PC.dwell){ _ph.prevState=_ph.state; _ph.state=st; _ph.candN=0; } }
+  } else { _ph.cand=st; _ph.candN=0; }
+  const state=_ph.state, onGvis=!trulyAir;
   // ---- frame-angle пружина + просадка рамы ----
   const targetAng = onGvis ? hubAng : B.ang; if(!_rgcInit){ _rgcVisAng=B.ang; _rgcInit=true; }
   const kA=onGvis?0.30:0.65, capV=(onGvis?5:14)*Math.PI/180;
@@ -2420,73 +2469,85 @@ function drawRigCutout(dbg){
   if(firstContact){ _rgcDropV += Math.min(6.0, _ph.landImp*0.7); }
   _rgcDropV += (0-_rgcDrop)*0.09; _rgcDropV*=0.80; _rgcDrop+=_rgcDropV; if(_rgcDrop<0){_rgcDrop=0;if(_rgcDropV<0)_rgcDropV=0;} if(_rgcDrop>10)_rgcDrop=10;
   const drop=_rgcDrop, rotDrop=(p)=>({x:p.x*ca-p.y*sa, y:p.x*sa+p.y*ca+drop});
-  // ==== POSE CONTROLLER — целевой таз в ЗОНЕ (в % экранного колеса/базы) + углы, инерция по частям ====
+  // ==== POSE CONTROLLER (b278) — цель по состоянию → smoothDamp 120-180мс → огибающая → ЖЁСТКИЙ лимит/кадр ====
   _pcLongAcc = _pcLongAcc*0.7 + (B.vx-_pcPrevVx)*0.3; _pcPrevVx=B.vx;
   const Wb=(RIGC.frontAxle[0]-RIGC.rearAxle[0])*S, wheelDia=2*RIGC.wheelR, riderH=44;
-  const zFwd=0.20*Wb, zBack=0.08*Wb, zUp=0.19*wheelDia, zDown=0.10*riderH;   // b277: зона расширена под мировой перенос веса
-  if(firstContact){ const imp=Math.min(1,_ph.landImp/6); _pcLandE=1; _pcPvy += 1.6+1.9*imp; }   // инъекция компрессии таза (просадка 5-9% роста)
-  _pcLandE*=0.90;
+  const zFwd=PC.zF*Wb, zBack=PC.zB*Wb, zUp=PC.zU*wheelDia, zDown=PC.zD*riderH;
   const bikeWorldAngle=B.ang+delta;                                            // МИРОВОЙ угол рамы (визуальный)
-  // ---- целевой таз (bike-local: x к рулю, y вниз) ----
-  let ptx=0, pty=-zUp*0.22;
-  if(state==='uphill'){ ptx += climbI*(0.28*Wb); pty -= climbI*(0.85*zUp); }                       // 6-10px к рулю + 4-7px вверх
-  else if(state==='wheelie'){ ptx -= Math.min(1,wBack)*zBack; pty -= 0.20*zUp; }
-  else { ptx -= clamp(_pcLongAcc*0.4,0,0.5)*zBack*0.5; }
-  if(airborne){ if(state==='ascend'){ ptx-=0.30*zBack; pty-=0.25*zUp; }                            // фазы: ΔpelY ≥5% wheelDia между соседними
-    else if(state==='apex'){ ptx+=0.60*zFwd; pty-=1.35*zUp; } else { ptx+=0.15*zFwd; pty-=0.25*zUp; } }
+  const climbN=clamp((slopeDeg-25)/18,0,1), climbI=climbN;                     // 25°→0, 43°→1
+  // ---- целевой таз (bike-local: +x к рулю, +y вниз) ----
+  let ptx=-clamp(_pcLongAcc*0.4,0,0.5)*zBack*0.5, pty=-0.22*zUp, prT=clamp(-0.12*B.ang,-0.12,0.12);
+  if(state==='uphill'){ ptx=(PC.upX0+PC.upX1*climbN)*Wb; pty=-(PC.upY0+PC.upY1*climbN)*zUp; prT=PC.upPelRot*(0.5+0.5*climbN); }
+  else if(state==='wheelie'){ ptx=-Math.min(1,wBack)*zBack; pty=-0.20*zUp; }
+  else if(state==='ascend'){ ptx=PC.ascX*zBack; pty=PC.ascY*zUp; }
+  else if(state==='apex'){ ptx=PC.apexX*zFwd; pty=PC.apexY*zDown; }            // ГРУППИРОВКА: таз ВНИЗ к подножкам (+y) → колени складываются
+  else if(state==='descend'){ ptx=PC.desX*zFwd; pty=PC.desY*zUp; }
   ptx=clamp(ptx,-zBack,zFwd); pty=clamp(pty,-zUp,zDown);
-  const kPel=airborne?0.30:0.16;                                               // в воздухе таз отрабатывает фазы быстрее (различимые силуэты)
-  _pcPvx += (ptx-_pcPx)*kPel; _pcPvx*=0.74;
-  _pcPvy += (pty-_pcPy)*kPel; _pcPvy*=0.80;
-  { const hard=_ph.sinceFirst<5, vCap=hard?3.0:1.45, vm=Math.hypot(_pcPvx,_pcPvy);   // b277: МЯГКИЙ лимит скорости таза (не clamp — избыток гасится плавно)
-    if(vm>vCap){ const k=vCap/vm, soft=k+(1-k)*0.30; _pcPvx*=soft; _pcPvy*=soft; } }
-  _pcPx+=_pcPvx; _pcPy+=_pcPvy;
-  _pcPx=clamp(_pcPx,-zBack-1,zFwd+1); _pcPy=clamp(_pcPy,-zUp-1,zDown+2);
-  // ---- ТОРС: цель задаётся в МИРОВЫХ координатах → переводится в bike-local ----
-  // torsoWorldAngle = bikeWorldAngle + torsoLocalAngle  (знак проекта: + = наклон вперёд к рулю)
-  let tt;
-  if(airborne){                                                                                    // в воздухе торс следует раме (мировая стабилизация — у головы)
-    tt = (state==='ascend')?0.16 : (state==='apex')?0.52 : 0.24;
-  } else {
-    // ЦЕЛЬ В МИРЕ: плечо должно быть впереди таза на A экранных px → численно решаем torsoLocal
-    let aheadT = 0.16*Wb;                                                                          // neutral ~16% Wb
-    if(state==='uphill') aheadT = (0.16+climbI*0.10)*Wb;                                            // до ~26% Wb на 35° (цель 18-28%)
-    else if(state==='wheelie') aheadT = 0.02*Wb - Math.min(1,wBack)*0.06*Wb;                        // плечо назад
-    else if(state==='compression') aheadT = 0.305*Wb;                                                // плечи ниже/вперёд → локти складываются на 8-18°
-    else if(state==='rebound') aheadT = 0.17*Wb;
-    else aheadT = (0.16+wFwd*0.04)*Wb;
+  // ---- ТОРС: цель в МИРОВЫХ координатах (torsoWorld = bikeWorld + torsoLocal; + = вперёд к рулю) ----
+  let tt=_pcTorB;
+  if(trulyAir){ tt = state==='ascend'?PC.ascT : state==='apex'?PC.apexT : PC.desT; }               // в воздухе торс следует раме
+  else if(state!=='compression' && state!=='rebound'){                                            // при приземлении база заморожена — склад даёт огибающая
+    let aheadT=(0.16+wFwd*0.04)*Wb;                                                               // ЦЕЛЬ В МИРЕ: плечо впереди таза на A экранных px
+    if(state==='uphill') aheadT=PC.upAhead*Wb;
+    else if(state==='wheelie') aheadT=0.02*Wb-Math.min(1,wBack)*0.06*Wb;
     const Pv={x:(RIDP.pelvis.torsoSocket[0]-RIDP.pelvis.pivot[0])*RS, y:(RIDP.pelvis.torsoSocket[1]-RIDP.pelvis.pivot[1])*RS};
     const Sv={x:(RIDP.torso.shN[0]-RIDP.torso.p[0])*RS, y:(RIDP.torso.shN[1]-RIDP.torso.p[1])*RS};
     const cbw=Math.cos(bikeWorldAngle), sbw=Math.sin(bikeWorldAngle);
     let best=0.30, bestE=1e9;
-    for(let i=0;i<=48;i++){ const tq=-0.50+(1.62-(-0.50))*i/48;
+    for(let i=0;i<=160;i++){ const tq=-0.50+2.12*i/160;                                            // шаг 0.76° — без квантового дребезга
       const sx=Pv.x+(Sv.x*Math.cos(tq)-Sv.y*Math.sin(tq)), sy=Pv.y+(Sv.x*Math.sin(tq)+Sv.y*Math.cos(tq));
       const ahead=sx*cbw-sy*sbw, e=Math.abs(ahead-aheadT); if(e<bestE){bestE=e;best=tq;} }
-    tt = best;                                                                                     // ← мировая цель → bike-local угол для solver
+    tt=best;
+    if(state==='uphill') tt=clamp(tt, PC.upWmin-bikeWorldAngle, PC.upWmax-bikeWorldAngle);         // torsoWORLD принудительно в 45.8-57.9°
   }
-  tt = clamp(tt, -0.50, 1.62);                                                                     // анатомический локальный предел
-  _pcTorV += (tt-_pcTor)*0.11; _pcTorV*=0.72;
-  { const cap=(_ph.sinceFirst<5?0.20:0.095); if(_pcTorV>cap)_pcTorV=cap; else if(_pcTorV<-cap)_pcTorV=-cap; }   // мягкий предел угловой скорости торса
-  _pcTor+=_pcTorV;
-  _pcHead += (clamp(-0.62*bikeWorldAngle-0.30*_pcTor,-0.5,0.5)-_pcHead)*0.13;                      // голова частично к world-up
-  _rgcSig={pitch:B.ang,slope:hubAng,angV:B.angV,vertV:vy,longAcc:_pcLongAcc,fc:filtF,rc:filtR,air:_ph.airFrames,landImp:+_ph.landImp.toFixed(2),lean:(li||rs),gapF:gapF,gapR:gapR};
-  _pcState = state;
-  // ==== SOLVER (в pre-delta local; отрисовка внутри delta-контекста) ====
-  const seat=C(RIGC.seatAnchor), pelT={x:seat.x+_pcPx, y:seat.y+_pcPy};        // pelvisTarget (НЕ пин к сиденью)
+  tt=clamp(tt,-0.50,1.62);                                                                        // анатомический локальный предел
+  // ---- сглаживание: база (smoothDamp) заморожена на время огибающей приземления ----
+  const dt=1/60, ST=trulyAir?PC.stA:PC.stG, hardW=_land.on && _land.f<=_land.rise+_land.hold+2;
+  if(!_land.on){ _pcPxB=smd(_pcPxB,ptx,_sd.px,ST,dt); _pcPyB=smd(_pcPyB,pty,_sd.py,ST,dt); _pcTorB=smd(_pcTorB,tt,_sd.tor,ST,dt); }
+  const nPx=_pcPxB, nPy=_pcPyB+_land.env, nTor=_pcTorB+envN*PC.lFoldT*(_land.peak/PC.lPeakMax);
+  const seat=C(RIGC.seatAnchor);
   const pmap=(pt,piv,sock,ang)=>{ const c=Math.cos(ang),s=Math.sin(ang), vx=(pt[0]-piv[0])*RS, vy=(pt[1]-piv[1])*RS; return {x:sock.x+vx*c-vy*s, y:sock.y+vx*s+vy*c}; };
-  const pelRot=clamp(-0.12*B.ang,-0.12,0.12), tor=_pcTor;
-  const torsoSock=pmap(RIDP.pelvis.torsoSocket,RIDP.pelvis.pivot,pelT,pelRot);
-  const hipN=pmap(RIDP.pelvis.hipNear,RIDP.pelvis.pivot,pelT,pelRot), hipF=pmap(RIDP.pelvis.hipFar,RIDP.pelvis.pivot,pelT,pelRot);
-  const shN=pmap(RIDP.torso.shN,RIDP.torso.p,torsoSock,tor), shF=pmap(RIDP.torso.shF,RIDP.torso.p,torsoSock,tor);
-  const neck=pmap(RIDP.torso.d,RIDP.torso.p,torsoSock,tor);
   const gN=C(RIGC.gripNear), gF=C(RIGC.gripFar), pN=C(RIGC.pegNear), pF=C(RIGC.pegFar);
   const L=(a,b)=>RS*_cd(a,b);
-  // 4-5) ноги от таза к подножкам, руки от плеч к грипсам — с анатом. лимитами (не тянутся, согнуты, без выворота)
-  const legNr=ik2c(hipN.x,hipN.y,pN.x,pN.y, L(RIDP.luN.p,RIDP.luN.d), L(RIDP.llN.p,RIDP.llN.toe), -1, RIGC.legMinF, RIGC.legMaxF);
-  const legFr=ik2c(hipF.x,hipF.y,pF.x,pF.y, L(RIDP.luF.p,RIDP.luF.d), L(RIDP.llF.p,RIDP.llF.toe), -1, RIGC.legMinF, RIGC.legMaxF);
-  const armNr=ik2c(shN.x,shN.y,gN.x,gN.y, L(RIDP.auN.p,RIDP.auN.d), L(RIDP.alN.p,RIDP.alN.d), 1, RIGC.armMinF, RIGC.armMaxF);
-  const armFr=ik2c(shF.x,shF.y,gF.x,gF.y, L(RIDP.auF.p,RIDP.auF.d), L(RIDP.alF.p,RIDP.alF.d), 1, RIGC.armMinF, RIGC.armMaxF);
+  // ==== SOLVER как ФУНКЦИЯ позы — чтобы лимит скорости применялся к РЕШЁННЫМ углам, а не к target ====
+  const solvePose=(px,py,tq,pr)=>{
+    const pelT={x:seat.x+px, y:seat.y+py};                                     // pelvisTarget (НЕ пин к сиденью)
+    const torsoSock=pmap(RIDP.pelvis.torsoSocket,RIDP.pelvis.pivot,pelT,pr);
+    const hipN=pmap(RIDP.pelvis.hipNear,RIDP.pelvis.pivot,pelT,pr), hipF=pmap(RIDP.pelvis.hipFar,RIDP.pelvis.pivot,pelT,pr);
+    const shN=pmap(RIDP.torso.shN,RIDP.torso.p,torsoSock,tq), shF=pmap(RIDP.torso.shF,RIDP.torso.p,torsoSock,tq);
+    const neck=pmap(RIDP.torso.d,RIDP.torso.p,torsoSock,tq);
+    // ноги от таза к подножкам, руки от плеч к грипсам — с анатом. лимитами (не тянутся, согнуты, без выворота)
+    const legNr=ik2c(hipN.x,hipN.y,pN.x,pN.y, L(RIDP.luN.p,RIDP.luN.d), L(RIDP.llN.p,RIDP.llN.toe), -1, RIGC.legMinF, RIGC.legMaxF);
+    const legFr=ik2c(hipF.x,hipF.y,pF.x,pF.y, L(RIDP.luF.p,RIDP.luF.d), L(RIDP.llF.p,RIDP.llF.toe), -1, RIGC.legMinF, RIGC.legMaxF);
+    const armNr=ik2c(shN.x,shN.y,gN.x,gN.y, L(RIDP.auN.p,RIDP.auN.d), L(RIDP.alN.p,RIDP.alN.d), 1, RIGC.armMinF, RIGC.armMaxF);
+    const armFr=ik2c(shF.x,shF.y,gF.x,gF.y, L(RIDP.auF.p,RIDP.auF.d), L(RIDP.alF.p,RIDP.alF.d), 1, RIGC.armMinF, RIGC.armMaxF);
+    return {pelT,torsoSock,hipN,hipF,shN,shF,neck,legNr,legFr,armNr,armFr,
+      J:[legNr.interiorDeg,legFr.interiorDeg,armNr.interiorDeg,armFr.interiorDeg]}; };
+  // ---- ЖЁСТКИЙ ЛИМИТ/КАДР: сначала грубо по позе, затем БИСЕКЦИЯ по фактическим углам после solve ----
+  const p0={x:_pcPx,y:_pcPy,t:_pcTor,r:_pcPelRot};
+  const cp=hardW?PC.capPosHard:PC.capPos, ctq=hardW?PC.capTorHard:PC.capTor, capA=hardW?PC.capAngHard:PC.capAng;
+  let c1={ x:clamp(nPx,p0.x-cp,p0.x+cp), y:clamp(nPy,p0.y-cp,p0.y+cp), t:clamp(nTor,p0.t-ctq,p0.t+ctq), r:smd(_pcPelRot,prT,_sd.pr,ST,dt) };
+  c1.x=clamp(c1.x,-zBack-1,zFwd+1); c1.y=clamp(c1.y,-zUp-1,zDown+3.5);
+  let sol=solvePose(c1.x,c1.y,c1.t,c1.r);
+  const dJ=(J)=>{ if(!_rgcPrevJ) return 0; let m=0; for(let k=0;k<4;k++) m=Math.max(m,Math.abs(J[k]-_rgcPrevJ[k])); return m; };
+  if(dJ(sol.J)>capA){                                                          // бисекция доли шага, пока Δ любого сустава не влезет в лимит
+    let lo=0, hi=1, mid=0, best=null;
+    for(let it=0; it<6; it++){ mid=(lo+hi)/2;
+      const s=solvePose(p0.x+(c1.x-p0.x)*mid, p0.y+(c1.y-p0.y)*mid, p0.t+(c1.t-p0.t)*mid, p0.r+(c1.r-p0.r)*mid);
+      if(dJ(s.J)>capA) hi=mid; else { lo=mid; best=s; } }
+    c1={x:p0.x+(c1.x-p0.x)*lo, y:p0.y+(c1.y-p0.y)*lo, t:p0.t+(c1.t-p0.t)*lo, r:p0.r+(c1.r-p0.r)*lo};
+    sol = best || solvePose(c1.x,c1.y,c1.t,c1.r); }
+  _pcPx=c1.x; _pcPy=c1.y; _pcTor=c1.t; _pcPelRot=c1.r;
+  { const hT=clamp(-0.62*bikeWorldAngle-0.30*_pcTor,-0.5,0.5), nH=smd(_pcHead,hT,_sd.head,ST,dt);
+    _pcHead += clamp(nH-_pcHead,-PC.capHead,PC.capHead); }
+  _rgcSig={pitch:B.ang,slope:hubAng,slopeDeg:slopeDeg,angV:B.angV,vertV:vy,longAcc:_pcLongAcc,fc:filtF,rc:filtR,air:_ph.airFrames,landImp:+_ph.landImp.toFixed(2),lean:(li||rs),gapF:gapF,gapR:gapR};
+  _pcState = state;
+  const pelT=sol.pelT, torsoSock=sol.torsoSock, hipN=sol.hipN, hipF=sol.hipF, shN=sol.shN, shF=sol.shF, neck=sol.neck;
+  const legNr=sol.legNr, legFr=sol.legFr, armNr=sol.armNr, armFr=sol.armFr, pelRot=_pcPelRot, tor=_pcTor;
   _rgcJ={elbowN:armNr.interiorDeg,elbowF:armFr.interiorDeg,kneeN:legNr.interiorDeg,kneeF:legFr.interiorDeg};
+  // b278: пер-кадровые дельты ВИЗУАЛЬНО ЗНАЧИМЫХ величин ПОСЛЕ solve (гейт сглаживания)
+  { const cur=sol.J; _rgcD.joint=dJ(cur); _rgcPrevJ=cur;
+    _rgcD.pelvis=Math.hypot(_pcPx-_rgcD.px,_pcPy-_rgcD.py); _rgcD.px=_pcPx; _rgcD.py=_pcPy; _rgcD.hard=hardW; }
   // b277: МИРОВЫЕ метрики — local→world поворотом на bikeWorldAngle; "ahead" = мировой экранный +X (к рулю)
   { const bw=B.ang+delta, cbw=Math.cos(bw), sbw=Math.sin(bw), Wbm=(RIGC.frontAxle[0]-RIGC.rearAxle[0])*S;
     const tw=(p)=>({x:p.x*cbw-p.y*sbw, y:p.x*sbw+p.y*cbw});
@@ -2539,8 +2600,11 @@ function drawCutDebug(seat,pelT,torsoSock,shN,hipN,neck,gN,gF,pN,pF,armNr,legNr,
     ctx.beginPath(); ctx.moveTo(p.x-3,p.y); ctx.lineTo(p.x+3,p.y); ctx.moveTo(p.x,p.y-3); ctx.lineTo(p.x,p.y+3); ctx.stroke(); ctx.fillText(nm,p.x+3,p.y-2); }
   // расширенная панель (экранное пространство)
   ctx.save(); ctx.setTransform(DPR,0,0,DPR,0,0); ctx.font='600 9px ui-monospace,monospace'; ctx.fillStyle='rgba(0,0,0,0.7)'; ctx.fillRect(6,100,352,186); ctx.fillStyle='#bfe';
+  ctx.fillRect(6,100,352,216); ctx.fillStyle='#bfe';
   const g=_rgcSig, j=_rgcJ, e=_rgcErr, R2=(x)=>x.toFixed(1), D=(r)=>Math.round(r*180/Math.PI), b=(x)=>x?1:0;
-  const rows=['state '+_pcState+'  air '+g.air+'f  sinceFirst '+_ph.sinceFirst,
+  const rows=['state '+_pcState+' (prev '+_ph.prevState+')  air '+g.air+'f  sinceFirst '+_ph.sinceFirst,
+    'uphillLatch '+(_ph.uphillLatch?'ON':'off')+'  slope '+(g.slopeDeg||0).toFixed(1)+'°  upIn'+_ph.upIn+' upOut'+_ph.upOut+' fLost'+_ph.fLost,
+    'land env '+_land.env.toFixed(2)+'px f'+_land.f+'/'+(_land.rise+_land.hold+_land.fall)+'  Δjoint '+_rgcD.joint.toFixed(2)+'°/f  Δpel '+_rgcD.pelvis.toFixed(2)+'px/f',
     'FRONT gap'+R2(_CT.F.gap)+' pen'+R2(_CT.F.pen)+' raw'+b(_CT.F.raw)+' filt'+b(g.fc)+' f'+_CT.F.since,
     'REAR  gap'+R2(_CT.R.gap)+' pen'+R2(_CT.R.pen)+' raw'+b(_CT.R.raw)+' filt'+b(g.rc)+' f'+_CT.R.since,
     'pelvisOff x'+R2(_pcPx)+' y'+R2(_pcPy)+'  head '+D(_pcHead)+'°',
@@ -2551,39 +2615,87 @@ function drawCutDebug(seat,pelT,torsoSock,shN,hipN,neck,gN,gF,pN,pF,armNr,legNr,
     'pitch '+D(g.pitch)+'° slope '+D(g.slope)+'° angV '+g.angV.toFixed(2),
     'vertV '+R2(g.vertV)+' longAcc '+g.longAcc.toFixed(2)+' landImp '+g.landImp];
   for(let i=0;i<rows.length;i++) ctx.fillText(rows[i],12,114+i*15); ctx.restore(); }
-// b274: детерминированный BIOMECHANICS acceptance-тест → window.__cutSelfCheck()
+// b278: ПОКАДРОВАЯ ЗАПИСЬ — полный набор величин для CSV/JSON-приёмки (вызывается ПОСЛЕ draw())
+window.__rgcRec=function(){ const g=_rgcSig,W=_rgcW,J=_rgcJ,E=_rgcErr;
+  return { state:_pcState, prevState:_ph.prevState, slope:+(g.slopeDeg||0).toFixed(2),
+    fc:_CT.F.filt?1:0, rc:_CT.R.filt?1:0, gapF:+_CT.F.gap.toFixed(2), gapR:+_CT.R.gap.toFixed(2),
+    airFrames:_ph.airFrames, uphillLatch:_ph.uphillLatch?1:0, sinceFirst:_ph.sinceFirst,
+    torsoLocal:W.torsoLocalDeg, bikeWorld:W.bikeWorldDeg, torsoWorld:W.torsoWorldDeg,
+    aheadPct:W.shoulderAheadPctWb, aheadPx:W.shoulderAheadPx, pelX:+_pcPx.toFixed(2), pelY:+_pcPy.toFixed(2),
+    kneeN:+J.kneeN.toFixed(1), kneeF:+J.kneeF.toFixed(1), elbowN:+J.elbowN.toFixed(1), elbowF:+J.elbowF.toFixed(1),
+    footErr:+Math.max(E.bootN,E.bootF).toFixed(2), handErr:+Math.max(E.handN,E.handF).toFixed(2),
+    landImp:+g.landImp, landEnv:+_land.env.toFixed(2), landF:_land.on?_land.f:0,
+    dJoint:+_rgcD.joint.toFixed(2), dPelvis:+_rgcD.pelvis.toFixed(2), hard:_rgcD.hard?1:0,
+    vy:+(g.vertV||0).toFixed(2), angV:+(g.angV||0).toFixed(3), bx:+bike.x.toFixed(1) }; };
+// b278: ЕДИНЫЙ ПРОГОН — покадровая запись (rAF заморожен в headless → update()+draw() вручную).
+// mod/vth: дозировка газа на склоне >26° (реальный игрок не держит газ в пол на крутом) — физика/трасса НЕ трогаются.
+window.__rgcRun=function(N,mod,vth,onFrame,xLim){ reset(); screen='play'; const rec=[]; let deaths=0;
+  for(let i=0;i<N;i++){ if(screen==='dead'){ deaths++; reset(); screen='play'; continue; }
+    down=true; brake=false;
+    if(mod && (!xLim || bike.x<xLim)){ const sd=-Math.atan2(terrainAt(bike.x+26).y-terrainAt(bike.x-26).y,52)*180/Math.PI;
+      if(sd>26 && bike.vx>vth) down=(i%mod===0); }
+    if(!bike.onG){ const d=terrainAt(bike.x+Math.max(20,bike.vx*10)).ang-bike.ang; leanKeyR=(d>0.12); leanKeyL=(d<-0.12); } else { leanKeyL=leanKeyR=false; }
+    updLeanKeys(); slowTS=1; physAcc=1; update(); slowLerp=1; draw();
+    const r=window.__rgcRec(); r.i=i; r.t=+(i/60).toFixed(4); rec.push(r);
+    if(onFrame) onFrame(i,r);
+    if(bike.x>=4110) break; }
+  window.__rec=rec; return {frames:rec.length,deaths:deaths}; };
+// b274/b278: детерминированный BIOMECHANICS acceptance-тест → window.__cutSelfCheck()
 window.__cutSelfCheck=function(){ const R=[], ok=(n,c,d)=>R.push({check:n,pass:!!c,detail:d||''});
   ok('assets_no_404', CUTready && _cutBad.length===0 && A25V2ready && A25V2.wf&&A25V2.wr&&A25V2.fork&&A25V2.swing, _cutBad.length?('404: '+_cutBad.join(',')):'12/12 + v2');
   try{
-    reset(); screen='play';
-    let neuTorso=null, climbTorso=0, climbPelX=0, pelXmin=9,pelXmax=-9,pelYmin=9,pelYmax=-9;
-    let intMin=999,intMax=-999, grndHand=0,grndBoot=0, maxJDelta=0, airStates={}, landPelY=[], prevJ=null, landing=false, landMinY=0,landRet=false;
-    for(let i=0;i<1500;i++){ if(screen==='dead'){reset();screen='play';prevJ=null;continue;}
-      down=true;brake=false; if(!bike.onG){const d=terrainAt(bike.x+Math.max(20,bike.vx*10)).ang-bike.ang; leanKeyR=(d>0.12);leanKeyL=(d<-0.12);}else{leanKeyL=leanKeyR=false;} updLeanKeys();
-      slowTS=1;physAcc=1;update(); slowLerp=1; draw();
-      const tor=_pcTor*180/Math.PI, J=_rgcJ;
-      if(bike.onG && Math.abs(bike.ang)<0.08 && neuTorso===null && bike.x>2600) neuTorso=tor;   // нейтраль на ровном
-      if(bike.onG && bike.ang<-0.6){ if(tor>climbTorso){climbTorso=tor; climbPelX=_pcPx;} }      // подъём
-      pelXmin=Math.min(pelXmin,_pcPx);pelXmax=Math.max(pelXmax,_pcPx);pelYmin=Math.min(pelYmin,_pcPy);pelYmax=Math.max(pelYmax,_pcPy);
-      for(const v of [J.elbowN,J.elbowF,J.kneeN,J.kneeF]){ intMin=Math.min(intMin,v); intMax=Math.max(intMax,v); }
-      if(bike.onG){ grndHand=Math.max(grndHand,_rgcErr.handN,_rgcErr.handF); grndBoot=Math.max(grndBoot,_rgcErr.bootN,_rgcErr.bootF); }
-      if(!bike.onG) airStates[_pcState]=1;
-      const cur=[J.elbowN,J.elbowF,J.kneeN,J.kneeF]; if(prevJ){ for(let k=0;k<4;k++) maxJDelta=Math.max(maxJDelta,Math.abs(cur[k]-prevJ[k])); } prevJ=cur;
-      if(landing){ landMinY=Math.max(landMinY,_pcPy); if(_pcPy<landMinY-0.5)landRet=true; }
-      if(_rgcSig && _rgcSig.landImp && bike.onG && !landing){ landing=true; landMinY=_pcPy; }
-      if(bike.x>=4110)break; }
-    ok('neutral_not_chair_vertical', neuTorso!=null && neuTorso>=11, 'нейтраль торс '+(neuTorso==null?'?':neuTorso.toFixed(0))+'° (≥12° вперёд)');
-    ok('uphill_weight_forward', climbTorso>=(neuTorso||15)+12 && climbPelX>1.5, 'подъём торс '+climbTorso.toFixed(0)+'° (нейтр+'+(climbTorso-(neuTorso||15)).toFixed(0)+'°), таз +'+climbPelX.toFixed(1)+'px');
-    ok('three_air_phases', Object.keys(airStates).length>=3, 'фаз в воздухе: '+Object.keys(airStates).join('/'));
-    ok('pelvis_moves_rel_seat', (pelXmax-pelXmin)>2 || (pelYmax-pelYmin)>2, 'диапазон таза x'+(pelXmax-pelXmin).toFixed(1)+' y'+(pelYmax-pelYmin).toFixed(1)+'px');
-    ok('landing_compression_visible', landRet, 'таз проседает и возвращается (компрессия+отбой)');
-    ok('no_reverse_joint_bend', intMin>8 && intMax<176, 'интерьер суставов '+intMin.toFixed(0)+'–'+intMax.toFixed(0)+'° (нет выворота/полн.выпрямл.)');
-    ok('no_instant_pose_switch', maxJDelta<=16, 'макс Δугла '+maxJDelta.toFixed(1)+'°/кадр (≤16 на контакте)');
-    ok('effectors_near_controls_ground', grndHand<=3 && grndBoot<=3.5, 'на земле рука≤'+grndHand.toFixed(1)+' ботинок≤'+grndBoot.toFixed(1)+'px');
+    window.__rgcRun(2600,5,2.2); const F=window.__rec;                       // прогон A: дозированный газ → длинный подъём (Задача 1)
+    window.__rgcRun(2600,0,0);   const G=window.__rec;                       // прогон B: газ в пол → воздух/прыжки/посадки (Задачи 2-5)
+    window.__recA=F; window.__recB=G;
+    const med=(a)=>{const v=a.slice().sort((x,y)=>x-y); return v.length?v[(v.length/2)|0]:0;};
+    const mnx=(a)=>({min:+Math.min.apply(null,a).toFixed(1),med:+med(a).toFixed(1),max:+Math.max.apply(null,a).toFixed(1),n:a.length});
+    const pick=(s,k,skip)=>{ const o=[]; for(let i=0;i<G.length;i++){ if(G[i].state!==s) continue;
+      if(skip){ let j=i,c=0; while(j>0&&G[j-1].state===s){j--;c++;} if(c<skip) continue; } o.push(G[i][k]); } return o; };
+    // ---- ЗАДАЧА 1: удержание attack-позы на всём подъёме (непрерывный фрагмент ≥1с на 30-40°) ----
+    let bl=0,cl=0,bs=0,cs=0; F.forEach((r,k)=>{ if(r.slope>=30&&r.slope<=40){ if(cl===0)cs=k; cl++; if(cl>bl){bl=cl;bs=cs;} } else cl=0; });
+    const seg=F.slice(bs,bs+bl); let ent=bs; while(ent>0 && F[ent-1].state==='uphill') ent--;
+    const ev=seg.filter(r=>r.i>=F[ent].i+12);                                        // после первых 200мс перехода
+    const gate=(r)=>r.state==='uphill' && r.aheadPct>=18&&r.aheadPct<=28 && r.pelX>=6&&r.pelX<=10 && r.pelY<=-4&&r.pelY>=-7 && r.torsoWorld>=45&&r.torsoWorld<=60;
+    const pass1=ev.filter(gate).length, pct1=ev.length?100*pass1/ev.length:0;
+    ok('uphill_hold_1s_30_40deg', bl>=60 && pct1>=90,
+      'фрагмент '+bl+'к ('+(bl/60).toFixed(2)+'с) на '+mnx(seg.map(r=>r.slope)).min+'-'+mnx(seg.map(r=>r.slope)).max+'°: '+pass1+'/'+ev.length+' = '+pct1.toFixed(1)+'% | ahead '+JSON.stringify(mnx(ev.map(r=>r.aheadPct)))+' pelX '+JSON.stringify(mnx(ev.map(r=>r.pelX)))+' pelY '+JSON.stringify(mnx(ev.map(r=>r.pelY)))+' torsoW '+JSON.stringify(mnx(ev.map(r=>r.torsoWorld))));
+    const upRuns=[]; { let n=0; F.forEach(r=>{ if(r.state==='uphill')n++; else { if(n)upRuns.push(n); n=0; } }); if(n)upRuns.push(n); }
+    ok('uphill_no_state_flicker', new Set(ev.map(r=>r.state)).size===1 && Math.max.apply(null,upRuns)>=60,
+      'подъёмные серии кадров: '+upRuns.join(',')+' (макс '+Math.max.apply(null,upRuns)+'к); состояний во фрагменте: '+[...new Set(ev.map(r=>r.state))].join('/'));
+    // ---- ЗАДАЧА 2: настоящая ГРУППИРОВКА в apex ----
+    const kAsc=pick('ascend','kneeN',0), kApx=pick('apex','kneeN',12), kDes=pick('descend','kneeN',12);
+    const mAsc=med(kAsc), mApx=med(kApx), mDes=med(kDes);
+    ok('apex_tuck_knees_fold', mApx<=mAsc-12 && mApx>=55 && mApx<=70 && mAsc>=75 && mAsc<=85 && mDes>=65 && mDes<=80,
+      'ascend '+JSON.stringify(mnx(kAsc))+' → apex '+JSON.stringify(mnx(kApx))+' → descend '+JSON.stringify(mnx(kDes))+'; apex согнут сильнее ascend на '+(mAsc-mApx).toFixed(1)+'° (≥12)');
+    // ---- ЗАДАЧА 3: временная структура приземления ----
+    const L=[]; G.forEach((r,i)=>{ if(r.landF===1&&r.landImp>=4) L.push(i); });
+    const li=L.map(i=>{ const b=G[i-1]; let pi=i,pk=-9; for(let k=i;k<Math.min(G.length,i+20);k++) if(G[k].landEnv>pk){pk=G[k].landEnv;pi=k;}
+      let hold=0; for(let k=pi;k<G.length&&Math.abs(G[k].landEnv-pk)<0.001;k++) hold++;
+      let reb=0,mono=0; for(let k=pi+hold;k<G.length&&G[k].landEnv>0;k++){ reb++; if(G[k].pelY>G[k-1].pelY+1e-6) mono++; }
+      return {imp:b?G[i].landImp:0, peakF:pi-i+1, hold, rebMs:Math.round(reb*1000/60), monoBad:mono,
+        dPelY:+(G[pi].pelY-b.pelY).toFixed(2), dKnee:+(b.kneeN-G[pi].kneeN).toFixed(1), dElbow:+(b.elbowN-G[pi].elbowN).toFixed(1)}; });
+    ok('landing_contact_compress_rebound', li.length>0 && li.every(o=>o.peakF>=3 && o.hold>=1 && o.hold<=2 && o.rebMs>=180 && o.rebMs<=260 && o.monoBad===0 && o.dPelY>=4 && o.dPelY<=7 && o.dKnee>=12 && o.dKnee<=20 && o.dElbow>=6 && o.dElbow<=14),
+      'сильных посадок '+li.length+': '+li.map(o=>'imp'+o.imp+' пик@'+o.peakF+'к полка'+o.hold+'к отбой'+o.rebMs+'мс таз+'+o.dPelY+'px колено+'+o.dKnee+'° локоть+'+o.dElbow+'° немонот.'+o.monoBad).join(' | '));
+    // ---- ЗАДАЧА 4: сглаживание ПОСЛЕ solve ----
+    const AB=F.concat(G);
+    const dn=AB.filter(r=>!r.hard).map(r=>r.dJoint), dh=AB.filter(r=>r.hard).map(r=>r.dJoint);
+    ok('smoothing_3p5_and_6_deg_per_frame', Math.max.apply(null,dn)<=3.5 && (!dh.length||Math.max.apply(null,dh)<=6.0),
+      'обычное '+JSON.stringify(mnx(dn))+'°/кадр (≤3.5), приземление '+(dh.length?JSON.stringify(mnx(dh)):'—')+'°/кадр (≤6.0)');
+    // ---- ЗАДАЧА 5: takeoff = первый кадр F0R0 ПОСЛЕ подтверждённого контакта, state ≠ apex ----
+    const tk=[]; G.forEach((r,i)=>{ if(i&&r.fc===0&&r.rc===0&&G[i-1].fc+G[i-1].rc>0) tk.push({i:r.i,prev:G[i-1].state,cur:r.state,air:r.airFrames,fc:r.fc,rc:r.rc,vy:r.vy,angV:r.angV}); });
+    window.__takeoffs=tk;
+    ok('takeoff_capture_not_apex', tk.length>0 && tk.every(t=>t.cur!=='apex' && t.air===0),
+      'takeoff-кадров '+tk.length+': '+tk.slice(0,4).map(t=>'#'+t.i+' '+t.prev+'→'+t.cur+' air'+t.air+' vy'+t.vy+' angV'+t.angV).join(' | '));
+    // ---- базовая анатомия/эффекторы (сохранено с b274) ----
+    const iv=[]; AB.forEach(r=>iv.push(r.kneeN,r.kneeF,r.elbowN,r.elbowF));
+    ok('no_reverse_joint_bend', Math.min.apply(null,iv)>8 && Math.max.apply(null,iv)<176, 'интерьер суставов '+Math.min.apply(null,iv).toFixed(0)+'–'+Math.max.apply(null,iv).toFixed(0)+'°');
+    const gh=Math.max.apply(null,AB.map(r=>r.handErr)), gb=Math.max.apply(null,AB.map(r=>r.footErr));
+    ok('hands_on_grips_feet_on_pegs', gh<=1 && gb<=4, 'макс ошибка кисть '+gh.toFixed(2)+'px, ботинок '+gb.toFixed(2)+'px (≤4 допуск apex)');
+    ok('three_air_phases', ['ascend','apex','descend'].every(s=>G.some(r=>r.state===s)), 'фазы воздуха: '+['ascend','apex','descend'].map(s=>s+' '+G.filter(r=>r.state===s).length+'к').join(', '));
     const S=RIGC.scale,O=RIGC.origin, anch=()=>[(250-O[0])*S,(387-O[0])*S,0].join(',');
     _pcTor=0.4;draw();const a1=anch(); _pcTor=-0.2;draw();const a2=anch();
     ok('frame_unmoved_by_rider', a1===a2, 'якоря рамы независимы от позы = 0px');
-  }catch(e){ ok('run', false, ''+e); }
+  }catch(e){ ok('run', false, ''+e+(e&&e.stack?(' @ '+e.stack.split('\n')[1]):'')); }
   const sv=CUT.chassis; CUT.chassis=null; const fb=(drawRigCutout(false)===false); CUT.chassis=sv;
   ok('fallback_whole_bike_on_missing', fb, 'нет ассета → монолит drawMachine');
   const passed=R.filter(r=>r.pass).length;
