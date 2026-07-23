@@ -2849,29 +2849,32 @@ function drawRigCutout(dbg){
   // ctx.filter — дорогая смена состояния; вне silhouette-режима filBike всегда 'none', так что не трогаем его вовсе
   const FB=(f)=>{ if(f!=='none') ctx.filter=f; }, FBoff=()=>{ if(ctx.filter!=='none') ctx.filter='none'; };
   // порядок back→front: rearWheel · far-ноги/руки(темнее) · swingarm · рама · pelvis/torso · near-ноги/руки · head · fork · frontWheel
+  // b279: _RP аккумулирует время ТОЛЬКО рендера райдера (части байка не попадают). Инструментовка
+  // приёмки: при выключенном __riderProf это прямой вызов, на отрисовку не влияет.
+  const _RP=(fn)=>{ if(!window.__riderProf) return fn(); const a=performance.now(); const r=fn(); window.__riderMs+=performance.now()-a; return r; };
   let MODE=RIDER_MODE; if(window.__riderMode) MODE=window.__riderMode;
   if(window.__riderCode===true) MODE='code'; else if(window.__riderCode===false) MODE='png';
   const CODE=(MODE==='code'), HYB=(MODE==='hybrid');
-  const RC=CODE?rcPrepare(P):(HYB?hbPrepare(P):null);
+  const RC=_RP(()=>CODE?rcPrepare(P):(HYB?hbPrepare(P):null));
   FB(filBike); drawWheelPart(A25V2.wr, rearAxG, wd, B.wheel); FBoff();
   ctx.save(); DEL();                                                            // far-конечности за рамой (темнее / чёрные в SIL)
-    if(RC) RC.back();
-    else { ctx.globalAlpha=aFar; ctx.filter=filRfar;
+    if(RC) _RP(()=>RC.back());
+    else _RP(()=>{ ctx.globalAlpha=aFar; ctx.filter=filRfar;
       bone(CUT.luF,RIDP.luF.p,RIDP.luF.d,hipF,{x:legFr.mid[0],y:legFr.mid[1]}); bone(CUT.llF,RIDP.llF.p,RIDP.llF.toe,{x:legFr.mid[0],y:legFr.mid[1]},{x:legFr.end[0],y:legFr.end[1]});
       bone(CUT.auF,RIDP.auF.p,RIDP.auF.d,shF,{x:armFr.mid[0],y:armFr.mid[1]}); bone(CUT.alF,RIDP.alF.p,RIDP.alF.d,{x:armFr.mid[0],y:armFr.mid[1]},{x:armFr.end[0],y:armFr.end[1]});
-      ctx.filter='none'; ctx.globalAlpha=1; }
+      ctx.filter='none'; ctx.globalAlpha=1; });
   ctx.restore();
   FB(filBike); drawPart2pt(A25V2.swing, RIGC.swingA, RIGC.swingB, A_swP, rearAxG); FBoff();
   ctx.save(); DEL();
     FB(filBike); ctx.drawImage(CUT.chassis, 0,0,512,512, -O[0]*S, -O[1]*S, 512*S, 512*S); FBoff();   // НЕИЗМЕННАЯ рама
-    if(RC) RC.front();
-    else { ctx.filter=filR;
+    if(RC) _RP(()=>RC.front());
+    else _RP(()=>{ ctx.filter=filR;
       pivpart(CUT.pelvis,RIDP.pelvis.pivot,pelT,pelRot);
       pivpart(CUT.torso,RIDP.torso.p,torsoSock,tor);
       bone(CUT.luN,RIDP.luN.p,RIDP.luN.d,hipN,{x:legNr.mid[0],y:legNr.mid[1]}); bone(CUT.llN,RIDP.llN.p,RIDP.llN.toe,{x:legNr.mid[0],y:legNr.mid[1]},{x:legNr.end[0],y:legNr.end[1]});
       bone(CUT.auN,RIDP.auN.p,RIDP.auN.d,shN,{x:armNr.mid[0],y:armNr.mid[1]}); bone(CUT.alN,RIDP.alN.p,RIDP.alN.d,{x:armNr.mid[0],y:armNr.mid[1]},{x:armNr.end[0],y:armNr.end[1]});
       pivpart(CUT.head,RIDP.head.pivot,neck,_pcHead);
-      ctx.filter='none'; }
+      ctx.filter='none'; });
   ctx.restore();
   FB(filBike); drawPart2pt(A25V2.fork, RIGC.forkA, RIGC.forkB, A_steer, frontAxG); drawWheelPart(A25V2.wf, frontAxG, wd, B.wheel); FBoff();
   if(dbg||RIGDEBUG){ ctx.save(); DEL(); drawCutDebug(P.seat,pelT,torsoSock,shN,hipN,neck,P.gN,P.gF,P.pN,P.pF,armNr,legNr,P.zFwd,P.zBack,P.zUp,P.zDown); ctx.restore(); }
@@ -2924,6 +2927,13 @@ window.__rgcRec=function(){ const g=_rgcSig,W=_rgcW,J=_rgcJ,E=_rgcErr;
 //   __poseRun() один раз пишет ВХОДЫ и ПОЗЫ → __poseReplay(inputs) прогоняет те же входы
 //   через текущую реализацию → __poseDiff(a,b) сравнивает КАЖДОЕ числовое поле без допуска.
 // ============================================================================
+// b279: ТЕСТ-хук настоящего DPR (игровой resize() зажимает DPR до 2). Меняет ТОЛЬКО backing store
+// при неизменном CSS-размере — это и есть честная проверка «толщина рима в CSS-px не зависит от DPR».
+window.__setDPR=function(d){ DPR=d; cv.width=Math.round(W*d); cv.height=Math.round(H*d);
+  cv.style.width=W+'px'; cv.style.height=H+'px'; ctx.setTransform(d,0,0,d,0,0);
+  if(typeof sprCache!=='undefined') sprCache={};
+  return {dpr:DPR, cssW:W, cssH:H, backW:cv.width, backH:cv.height}; };
+window.__riderMs=0;
 const _RIGIN=['x','y','ang','vx','vy','angV','onG','wheel','rShift','_cmpF','_cmpR'];
 window.__rigInSnap=function(){ const o={}; for(const k of _RIGIN) o[k]=bike[k]; o.leanX=(typeof leanX!=='undefined'?leanX:0); return o; };
 window.__rigInApply=function(s){ for(const k of _RIGIN) bike[k]=s[k]; if(typeof leanX!=='undefined') leanX=s.leanX; };
