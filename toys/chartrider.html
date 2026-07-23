@@ -481,7 +481,8 @@ function drawSpark(arr,sx,sy,sw,sh,col){ let mn=Infinity,mx=-Infinity; for(const
 // ---------- bike ----------
 let bike, cam, t, coins, dist, best, screen, wipe, parts, stars, dust, shake, flash, daycycle, trail, streaks, mult, bestPnl, airT, nearMissed, hitstop, gflash, floats, multPulse, maxMult, lean, rush, prevVx, wave, waveSpd, deathBy, boost, boosting, zone, biomeBanner, biomeBannerT, BSKY, BLINE, BRIDGE, lastMile, newDepth, camAir=0, wheelieT=0;
 let posPulse=0,_posPrev=0,_dangBuzz=0,prMax=0,prMin=0,slowmo=0,menuFx=0,menuFxAmt=0,wheelieAim=0,wheelieI=0,trickAir=0,trickZoom=0,trickGnd=0,slowLerp=1,riderAirB=0,riderSquat=0,nearKickX=-1,flowBoost=0,megaAir=0;
-function flow(a){ flowBoost=Math.min(TUNE.flowMax,(flowBoost||0)+a); }   // b233 копилка ФЛОУ-инерции: чистые скилл-события кормят → авто-разгон впереди волны (см. flowPush в update)
+function flow(a){ if(typeof VSLICE!=='undefined'&&VSLICE&&VS.gameplay&&!VS.gameplay.flowBoostEnabled)return;   // C1B: flowBoost выключен КОНФИГОМ уровня (gameplay, не HUD)
+  flowBoost=Math.min(TUNE.flowMax,(flowBoost||0)+a); }   // b233 копилка ФЛОУ-инерции: чистые скилл-события кормят → авто-разгон впереди волны (см. flowPush в update)
 // b282: АВТОРИТЕТНЫЕ CONTACT EVENTS. Физика fixed-step, поэтому касание определяется РОВНО один
 // раз в update() и эмитится read-only событием. Анимация их ПОТРЕБЛЯЕТ и больше не переоткрывает
 // столкновение из разреженных render-сэмплов (это давало tContact ±21мс и разное число событий 2/2/1).
@@ -3410,6 +3411,8 @@ const VS={
   GAP:[[6750,7090]],
   END:11150,                                                 // финиш
   CP:[{x:6100,name:'перед прыжком'},{x:8800,name:'перед финальным подъёмом'}],   // чекпоинты по ТЗ
+  // GAMEPLAY-ФЛАГИ УРОВНЯ (не render). flowBoost для тех.среза выключен ЯВНО, а не как побочка HUD.
+  gameplay:{ flowBoostEnabled:false },
   // ПРОФИЛЬ ФИЗИКИ УРОВНЯ. Числа подобраны по диагностической матрице (см. отчёт), не наугад.
   physics:{ groundAlign:0.30,    // стабилизатор переда ослаблен: тяга реально задирает нос на крутом
             airAutoLevel:0.0,   // авто-выравнивание в полёте ВЫКЛЮЧЕНО — pitch держит игрок
