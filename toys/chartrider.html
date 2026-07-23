@@ -2431,10 +2431,12 @@ let RIDER_MODE='png'; try{ const m=/[?&]rider=(code|png|hybrid)/.exec(location.s
 // поэтому исходная фактура остаётся видна. Рим строится ОТДЕЛЬНО для far- и near-группы,
 // иначе рама перестанет правильно перекрывать дальнюю часть.
 const HCFG={
-  bandLit:1.25, litA:0.34, litAFar:0.20,          // ширина световой грани и её сила (не полоса через середину)
+  bandLit:1.25, litA:0.50, litAFar:0.28,          // ширина световой грани и её сила (не полоса через середину)
+                                                  // 0.34 было измеримо, но НЕ различимо глазом при смене эпохи → усилен именно directional, не рим
   ambA:0.20, ambAFar:0.30,                        // ambient-подмешивание с теневой стороны / общий увод дальней стороны
   farDim:0.26,                                    // ≈ ×0.74 яркости: результат = 0.74*ориг + 0.26*ambient
-  rimMain:1.25, rimSafe:0.55, rimMainA:0.95, rimSafeA:0.35, rimUnder:0.5, rimUnderA:0.40 };   // верх разрешённого диапазона: на игровом масштабе 0.80/0.30 читалось на грани
+  rimMain:1.25, rimSafe:0.55, rimMainA:0.70, rimSafeA:0.28, rimUnder:0.5, rimUnderA:0.40,
+  rimAmbMix:0.38, rimFar:true };   // ширина по ТЗ; alpha снижена (0.95 читалась бело-розовым свечением), цвет = свет+ambient, а не почти белый
 window.HCFG=HCFG;
 function _hbAmb(){ return (typeof _sunWarm!=='undefined' && !_sunWarm)? '#26304e' : '#4a2f3d'; }
 function _hbLit(){ return (typeof _sunWarm!=='undefined' && !_sunWarm)? '#cfe0ff' : '#ffd9a8'; }
@@ -2463,22 +2465,30 @@ function hbRelight(B,SC,bw,bh,Lx,Ly,far){
   B.g.globalAlpha=far?H.ambAFar:H.ambA; B.g.drawImage(SC.c,0,0);
   B.g.globalAlpha=1; B.g.globalCompositeOperation='source-over'; }
 // рим ОДНОЙ z-группы: дилатация смещёнными копиями → выбивание середины → окраска. Без getImageData и blur.
-function hbRim(src,RM,bw,bh,dpr,Lx,Ly,put){
+// ⚠ КРИТИЧНО: и дилатация, и выбивание идут по ЖЁСТКОЙ маске силуэта, а не по самому PNG.
+// У PNG полупрозрачные края/зоны: destination-out по ним снимает лишь часть кольца, остаток
+// расползается ПОВЕРХ тела широкой дымкой (ловилось визуально как «песочное свечение»).
+// Повторные наложения добивают альфу до непрозрачной: a→1-(1-a)^5.
+function hbRim(src,RM,HM,bw,bh,dpr,Lx,Ly,put){
   const H=HCFG, ALL=[0,0.7854,1.5708,2.3562,3.1416,3.9270,4.7124,5.4978];
   const la=Math.atan2(Ly,Lx), HEMI=[la-0.9,la-0.45,la,la+0.45,la+0.9];
+  HM.g.setTransform(1,0,0,1,0,0); HM.g.clearRect(0,0,bw,bh); HM.g.globalCompositeOperation='source-over';
+  for(let i=0;i<5;i++) HM.g.drawImage(src,0,0);
   const ring=(rad,dirs,col,alpha)=>{ RM.g.setTransform(1,0,0,1,0,0); RM.g.clearRect(0,0,bw,bh);
     RM.g.globalCompositeOperation='source-over';
-    for(let i=0;i<dirs.length;i++) RM.g.drawImage(src,Math.cos(dirs[i])*rad,Math.sin(dirs[i])*rad);
-    RM.g.globalCompositeOperation='destination-out'; RM.g.drawImage(src,0,0);
+    for(let i=0;i<dirs.length;i++) RM.g.drawImage(HM.c,Math.cos(dirs[i])*rad,Math.sin(dirs[i])*rad);
+    RM.g.globalCompositeOperation='destination-out';
+    for(let i=0;i<3;i++) RM.g.drawImage(HM.c,0,0);
     RM.g.globalCompositeOperation='source-in'; RM.g.globalAlpha=alpha; RM.g.fillStyle=col;
     RM.g.fillRect(0,0,bw,bh); RM.g.globalAlpha=1; RM.g.globalCompositeOperation='source-over'; put(RM.c); };
+  const rc=_rcMix(_hbLit(),_hbAmb(),H.rimAmbMix);          // рим НЕ белый: цвет светила, уведённый к ambient сцены → остаётся тёплым/холодным по эпохе
   ring(H.rimUnder*dpr,ALL,'#0a0806',H.rimUnderA);          // тёмный под-штрих (отделяет светлый рим от светлого фона)
-  ring(H.rimSafe*dpr,ALL,'#fff4e6',H.rimSafeA);            // страховочный по всему контуру
-  ring(H.rimMain*dpr,HEMI,'#fff4e6',H.rimMainA); }         // основной направленный
+  ring(H.rimSafe*dpr,ALL,rc,H.rimSafeA);                   // страховочный по всему контуру
+  ring(H.rimMain*dpr,HEMI,rc,H.rimMainA); }                // основной направленный
 function hbPrepare(P){
   const dpr=(typeof DPR!=='undefined'?DPR:1), RS=P.RS;
   const bw=Math.ceil(RC_W*dpr), bh=Math.ceil(RC_H*dpr);
-  const FB=_rcBuf('hf',bw,bh), NB=_rcBuf('hn',bw,bh), RM=_rcBuf('hr',bw,bh), SC=_rcBuf('hs',bw,bh);
+  const FB=_rcBuf('hf',bw,bh), NB=_rcBuf('hn',bw,bh), RM=_rcBuf('hr',bw,bh), SC=_rcBuf('hs',bw,bh), HM=_rcBuf('hm',bw,bh);
   const setT=(b)=>{ b.g.setTransform(dpr,0,0,dpr,-RC_X0*dpr,-RC_Y0*dpr); b.g.globalCompositeOperation='source-over'; b.g.globalAlpha=1; };
   let sa=-1.15;
   try{ if(typeof _sunSX==='number'){ const z=_zoomD||1,
@@ -2505,8 +2515,8 @@ function hbPrepare(P){
     hbPiv(NB.g,CUT.head,RIDP.head.pivot,P.neck,P.head,RS);
   hbRelight(NB,SC,bw,bh,Lx,Ly,false);
   const put=(img)=>{ ctx.drawImage(img,RC_X0,RC_Y0,RC_W,RC_H); };
-  return { back:()=>{ hbRim(FB.c,RM,bw,bh,dpr,Lx,Ly,put); put(FB.c); },
-           front:()=>{ hbRim(NB.c,RM,bw,bh,dpr,Lx,Ly,put); put(NB.c); } };
+  return { back:()=>{ if(HCFG.rimFar) hbRim(FB.c,RM,HM,bw,bh,dpr,Lx,Ly,put); put(FB.c); },
+           front:()=>{ hbRim(NB.c,RM,HM,bw,bh,dpr,Lx,Ly,put); put(NB.c); } };
 }
 let _rcLightA=null;                                                    // сглаженное во времени направление света (иначе грань перескакивает между сторонами)
 const _rcB={};                                                         // переиспользуемые буферы (создаются один раз на DPR)
