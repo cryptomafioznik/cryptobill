@@ -206,15 +206,14 @@ window.__capSelfCheck        // см. __cutSelfCheck
 Визуальный прототип принят. **Human-playability ещё НЕ подтверждена** — проверяется руками
 пользователем (см. риск flowBoost ниже).
 
-**Команда запуска сервера** (из корня репо):
-```bash
-python3 -m http.server 8123
+**ДЛЯ ИГРОКА — LIVE (сервер НЕ нужен):** авто-деплой GitHub Pages при push в main.
 ```
-**Полный локальный URL:**
+https://cryptomafioznik.github.io/cryptobill/toys/chartrider.html?render=game&camera=side&rig=cutout&rider=hybrid&level=vertical-slice
 ```
-http://localhost:8123/toys/chartrider.html?render=game&camera=side&rig=cutout&rider=hybrid&level=vertical-slice
-```
-Debug-проекция: добавить `&vsDebug=1`. При правках html добавлять `&cb=N` (кэш dev-сервера).
+Debug-проекция: добавить `&vsDebug=1`.
+
+**Локальный сервер нужен ТОЛЬКО Claude** для headless-оснастки (`__vsRun` и т.п.):
+`python3 -m http.server 8123`, URL с `localhost:8123`, при правках добавлять `&cb=N` (кэш dev-сервера).
 
 **Управление — клавиатура:**
 | действие | клавиши |
