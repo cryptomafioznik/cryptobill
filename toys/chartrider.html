@@ -2391,6 +2391,11 @@ let _land={on:false,t:0,tStart:-1,peak:0,rise:0.083,hold:0.0167,fall:0.2333,env:
 // fY/fX/fT — сам быстрый offset, gain — затухание в воздухе/на приземлении.
 let _ld={cF:0,dF:0,cB:0,dB:0,cPrev:0,cVel:0,fY:0,fX:0,fT:0,gain:1,init:false};
 let _capCnt={norm:0,hard:0,total:0,joint:'',maxEx:0};
+// b282.1: ИНВАРИАНТЫ landing-конвейера. Только debug-учёт, поведение не меняют.
+// Главный: rebound не может существовать для landingId, у которого не было ни одного compression-кадра.
+let _asrt={landingId:0, compFrames:0, rebFrames:0, seenIds:{}, errors:[]};
+function _asrtErr(kind,info){ if(_asrt.errors.length<40) _asrt.errors.push({kind:kind,info:info,t:+_simT.toFixed(5),lid:_asrt.landingId}); }
+window.__rigAssert=function(){ return {landings:_asrt.landingId, errors:_asrt.errors.slice()}; };
 // b281: СОБЫТИЕ КОНТАКТА — отдельная сущность. raw-пересечение порога (точное время) ≠ filtered
 // contact (устойчивость) ≠ air latch (классификация) ≠ landing envelope (визуальная реакция).
 // Время старта огибающей берётся ТОЛЬКО из tContact; латч её больше не сдвигает.
@@ -2763,6 +2768,8 @@ function solveRigCutout(){
   { const feed=(window.__rigEventFeed||_cev);
     while(feed.length && feed[0].id>_ev.seenId){
       const e=feed.shift(); _ev.seenId=e.id; _ev.rawCount++;
+      if(_asrt.seenIds[e.id]) _asrtErr('duplicateEventId',e.id); _asrt.seenIds[e.id]=1;
+      if(_simT-e.simTime < -1e-6) _asrtErr('negativeEventAge',+((_simT-e.simTime)*1000).toFixed(3));
       if(e.airDuration>=PC.evMinAirT && e.normalSpeed>=PC.evMinSpeed){
         _ev={ id:e.id, seenId:e.id, rawCount:_ev.rawCount, qualified:_ev.qualified+1, rejected:_ev.rejected,
               tContact:e.simTime, wheel:e.wheel, wasAirConfirmed:true, airDuration:e.airDuration,
@@ -2806,7 +2813,10 @@ function solveRigCutout(){
     // b281: огибающая BACKDATE'ится к tContact — уже прошедшая фаза вычисляется сразу, без скачка.
     // Латч мог подтвердиться на кадр позже; это больше не сдвигает старт.
     _land.t = (_ev.pending && _ev.tContact>=0) ? clamp(_simT-_ev.tContact,0,0.25) : 0;
-    if(_ev.pending){ _ph.landImp=_ev.preSpeed; _land.tStart=_ev.tContact; _ev.pending=false; } else _land.tStart=_rgcT;
+    if(_ev.pending){ _ph.landImp=_ev.preSpeed; _land.tStart=_ev.tContact; _ev.pending=false; }
+    else { _land.tStart=_rgcT; _asrtErr('envelopeWithoutConsumedEvent',''); }
+    if(_asrt.landingId>0 && _asrt.rebFrames>0 && _asrt.compFrames===0) _asrtErr('reboundWithoutCompression',_asrt.landingId);
+    _asrt.landingId++; _asrt.compFrames=0; _asrt.rebFrames=0;
     _land.peak=Math.min(PC.lPeakMax, PC.lPeakB+PC.lPeakK*_ph.landImp);
     _land.rise=clamp(_land.peak,3,6)/60; _land.hold=PC.lHoldT; _land.fall=PC.lFallT; _land.env=0; }
   else if(_land.on){ _land.t+=dt; }
@@ -2884,6 +2894,8 @@ function solveRigCutout(){
   } else { _ph.cand=st; _ph.candT=0; }
   if(tTrans<0 && tUpCross>=0 && _ph.state==='uphill') tTrans=tUpCross;
   const state=_ph.state, onGvis=!trulyAir;
+  if(state==='compression') _asrt.compFrames++;
+  else if(state==='rebound'){ _asrt.rebFrames++; if(_asrt.compFrames===0) _asrtErr('reboundBeforeAnyCompression',_asrt.landingId); }
   if(!airRaw && (state==='neutral'||state==='uphill'||state==='wheelie')) _ph.lastGround=state;           // запоминаем ПОДТВЕРЖДЁННУЮ наземную позу
   // ---- b280.1: ВИЗУАЛЬНЫЕ ФИЛЬТРЫ РАМЫ во времени. Покадровые рекуррентности переведены в
   // непрерывные системы АНАЛИТИЧЕСКИ, а не «умножением коэффициента на dt»:
@@ -3172,7 +3184,8 @@ window.__rigStateReset=function(){
   _capCnt={norm:0,hard:0,total:0,joint:'',maxEx:0}; _rgcTPrev=0;
   _rgcPrevJ=null; _rgcD={joint:0,pelvis:0,px:0,py:0,hard:false}; _rgcPose=null; _rgcXf=null;
   _rgcT=0; _bl={t0:-9,dur:0.30,fx:0,fy:0,ft:0.26,fr:0,frozen:false};
-  _ev={id:0,seenId:0,rawCount:0,qualified:0,rejected:0,rejectReason:'',tContact:-1,wheel:'',wasAirConfirmed:false,airDuration:0,preSpeed:0,gapPrev:0,gapCur:0,pending:false}; };
+  _ev={id:0,seenId:0,rawCount:0,qualified:0,rejected:0,rejectReason:'',tContact:-1,wheel:'',wasAirConfirmed:false,airDuration:0,preSpeed:0,gapPrev:0,gapCur:0,pending:false};
+  _asrt={landingId:0,compFrames:0,rebFrames:0,seenIds:{},errors:[]}; };
 // прогон с записью ВХОДОВ и ПОЗ (эталон снимается ДО рефакторинга)
 window.__poseRun=function(N,mod,vth){ const IN=[],PS=[]; window.__rigStateReset();
   window.__rgcRun(N,mod,vth,function(){ IN.push(window.__rigInSnap()); PS.push(window.__poseSnap()); });
