@@ -2401,6 +2401,179 @@ function ik2c(ax,ay,tx,ty,l1,l2,dir,dMinF,dMaxF){
   const cd=Math.max(dMin,Math.min(dMax,d)), ux=dx/d,uy=dy/d, ex=ax+ux*cd, ey=ay+uy*cd;
   const r=ik2(ax,ay,ex,ey,l1,l2,dir); const cosI=clamp((l1*l1+l2*l2-cd*cd)/(2*l1*l2),-1,1);
   return { mid:[r[0],r[1]], end:[ex,ey], err:Math.abs(d-cd), interiorDeg:Math.acos(cosI)*180/Math.PI }; }
+// ============================================================================
+// b279 КОДОВЫЙ РАЙДЕР (?rider=code). Не «капсулы»: конечность = ОДНА непрерывная полоса
+// переменной ширины через сустав, со скосом и лимитом скоса → bevel. Длины костей = точки
+// солвера, рендер их не трогает. Профили ширины ЗАМЕРЕНЫ с v4-PNG (полуширина, экранные px):
+//   плечо 4.4→2.6 · предплечье 3.3→2.1 (+перчатка 3.3) · бедро 5.0→4.7 (+наколенник 6.7)
+//   голень 4.3→2.7 (икра 5.5, ботинок 3.6) · торс 6.5→7.9(грудь)→2.9(шея)
+// Цветовые блоки — по доминантам тех же PNG: шлем/наплечник белые, предплечье чёрное,
+// торс чёрный + оранжевый акцент, наколенник/ботинок белые.
+// ============================================================================
+const RCFG={
+  base:'#14100f', lit:'#4e4644', shad:'#090707',                       // костюм (чёрный ПОДНЯТ с #0a0606 — иначе тень и складка не читаются)
+  wht:'#faf7f7', whtLit:'#ffffff', whtShad:'#b9b2b2',
+  org:'#ce3201', orgLit:'#ff5f22', orgShad:'#8d2201',
+  bandLit:1.15, bandShad:0.9,                                          // ширина световой/теневой грани, экранные px
+  farMul:0.74, farAmb:0.30,                                            // дальняя сторона: яркость ×0.74 + увод к амбиенту (НЕ обесцвечивание в серый)
+  rimMain:1.15, rimSafe:0.5, rimMainA:0.85, rimSafeA:0.30, rimUnder:0.55, rimUnderA:0.45,
+  rimCol:'#fff4e6', rimUnderCol:'#0a0806',
+  headScale:0.90,                                                      // кандидат 90% (сравнение 100/90/85 через window.RCFG.headScale)
+  miterLim:2.2, foldDeg:95,                                            // лимит скоса → bevel; порог складки на суставе
+  wShoulder:4.4, wElbow:2.9, wWrist:2.1, wGlove:3.3,
+  wHip:5.0, wKnee:4.5, wAnkle:2.7, wBoot:3.6, wKneePad:6.0,
+  thick:1.00 };                                                        // ±5% параметр — ПО УМОЛЧАНИЮ 0% (нагрузку показывает поза/складка/грань)
+window.RCFG=RCFG;
+let RIDER_MODE='png'; try{ const m=/[?&]rider=(code|png)/.exec(location.search); if(m) RIDER_MODE=m[1]; }catch(e){}
+let _rcLightA=null;                                                    // сглаженное во времени направление света (иначе грань перескакивает между сторонами)
+const _rcB={};                                                         // переиспользуемые буферы (создаются один раз на DPR)
+const RC_X0=-46, RC_Y0=-72, RC_W=94, RC_H=100;                         // локальный bbox райдера (world px вокруг CoM)
+function _rcBuf(k,w,h){ let b=_rcB[k];
+  if(!b || b.w!==w || b.h!==h){ const c=document.createElement('canvas'); c.width=w; c.height=h; _rcB[k]=b={c:c,g:c.getContext('2d'),w:w,h:h}; }
+  b.g.setTransform(1,0,0,1,0,0); b.g.clearRect(0,0,w,h); return b; }
+function _rcMix(hex,to,t){ const p=(s)=>[parseInt(s.slice(1,3),16),parseInt(s.slice(3,5),16),parseInt(s.slice(5,7),16)];
+  const a=p(hex), b=p(to); return '#'+a.map((v,i)=>('0'+Math.round(v+(b[i]-v)*t).toString(16)).slice(-2)).join(''); }
+function _rcDim(hex,mul,amb){ const t=_rcMix(hex,amb,RCFG.farAmb), p=[parseInt(t.slice(1,3),16),parseInt(t.slice(3,5),16),parseInt(t.slice(5,7),16)];
+  return '#'+p.map(v=>('0'+Math.round(v*mul).toString(16)).slice(-2)).join(''); }
+// --- полоса переменной ширины A→M→B: скос на изломе, при остром сгибе bevel (иначе ШИП из сустава) ---
+function rcStripPath(g,A,M,B,wA,wM,wB){
+  const th=RCFG.thick; wA*=th; wM*=th; wB*=th;
+  let d1x=M.x-A.x, d1y=M.y-A.y, l1=Math.hypot(d1x,d1y)||1e-6; d1x/=l1; d1y/=l1;
+  let d2x=B.x-M.x, d2y=B.y-M.y, l2=Math.hypot(d2x,d2y)||1e-6; d2x/=l2; d2y/=l2;
+  const n1x=-d1y, n1y=d1x, n2x=-d2y, n2y=d2x;
+  let mx=n1x+n2x, my=n1y+n2y, ml=Math.hypot(mx,my);
+  const side=(s)=>{ const out=[];
+    out.push([A.x+n1x*wA*s, A.y+n1y*wA*s]);
+    if(ml<1e-4){ out.push([M.x+n1x*wM*s, M.y+n1y*wM*s]); }            // сегменты сонаправлены — скос вырождается
+    else { const ux=mx/ml, uy=my/ml, den=ux*n1x+uy*n1y;
+      const len = Math.abs(den)<1e-4 ? 1e9 : wM/den;
+      // ЕДИНОЕ правило гасит и шип по внешней стороне, и самопересечение по внутренней
+      if(Math.abs(len) <= RCFG.miterLim*wM && Math.abs(len) <= 0.85*Math.min(l1,l2)) out.push([M.x+ux*len*s, M.y+uy*len*s]);
+      else { out.push([M.x+n1x*wM*s, M.y+n1y*wM*s]); out.push([M.x+n2x*wM*s, M.y+n2y*wM*s]); } }
+    out.push([B.x+n2x*wB*s, B.y+n2y*wB*s]); return out; };
+  const L=side(1), R=side(-1);
+  g.beginPath(); g.moveTo(L[0][0],L[0][1]);
+  for(let i=1;i<L.length;i++) g.lineTo(L[i][0],L[i][1]);
+  for(let i=R.length-1;i>=0;i--) g.lineTo(R[i][0],R[i][1]);
+  g.closePath(); }
+function rcPoly(g,pts){ const X=(p)=>p.x!==undefined?p.x:p[0], Y=(p)=>p.y!==undefined?p.y:p[1];   // принимает и [x,y], и {x,y}
+  g.beginPath(); g.moveTo(X(pts[0]),Y(pts[0])); for(let i=1;i<pts.length;i++) g.lineTo(X(pts[i]),Y(pts[i])); g.closePath(); }
+// --- 3-тоновая заливка СМЕЩЁННЫМИ копиями: без градиента, без клипа, без скачков при повороте ---
+// смещение копии в -L оставляет незакрытой полосу шириной |смещение| со СТОРОНЫ СВЕТА
+function rcShade(g,pathFn,base,lit,shad,Lx,Ly,extent){
+  g.save(); pathFn(); g.clip();                       // КЛИП обязателен: смещённая заливка иначе добавляет площадь СНАРУЖИ формы (силуэт размазывает)
+  g.fillStyle=lit;  pathFn(); g.fill();
+  g.save(); g.translate(-Lx*RCFG.bandLit,-Ly*RCFG.bandLit); g.fillStyle=base; pathFn(); g.fill(); g.restore();
+  const o=Math.max(RCFG.bandLit+0.4, extent-RCFG.bandShad);
+  g.save(); g.translate(-Lx*o,-Ly*o); g.fillStyle=shad; pathFn(); g.fill(); g.restore();
+  g.restore(); }
+// --- один комплект конечностей/корпуса. near/far СТРОЯТСЯ ОДНИМ АЛГОРИТМОМ, отличаются только тоном ---
+function rcSide(g,P,far,Lx,Ly,amb){
+  const C=RCFG, hs=C.headScale;
+  const M=far? (h)=>_rcDim(h,C.farMul,amb) : (h)=>h;
+  const B=M(C.base), Lt=M(C.lit), Sh=M(C.shad), Wt=M(C.wht), WL=M(C.whtLit), WS=M(C.whtShad),
+        Og=M(C.org), OL=M(C.orgLit), OS=M(C.orgShad);
+  const hip=far?P.hipF:P.hipN, sh=far?P.shF:P.shN, leg=far?P.legFr:P.legNr, arm=far?P.armFr:P.armNr;
+  const kn={x:leg.mid[0],y:leg.mid[1]}, ank={x:leg.end[0],y:leg.end[1]};
+  const el={x:arm.mid[0],y:arm.mid[1]}, wr={x:arm.end[0],y:arm.end[1]};
+  // НОГА: непрерывная полоса таз→колено→стопа
+  rcShade(g,()=>rcStripPath(g,hip,kn,ank,C.wHip,C.wKnee,C.wAnkle),B,Lt,Sh,Lx,Ly,2*C.wHip);
+  // наколенник — белый акцент поверх сустава (плюс он же читаемо «ломает» колено)
+  { const dx=ank.x-kn.x, dy=ank.y-kn.y, l=Math.hypot(dx,dy)||1, ux=dx/l, uy=dy/l, r=C.wKneePad*0.55;
+    rcShade(g,()=>{ g.beginPath(); g.ellipse(kn.x+ux*r*0.35,kn.y+uy*r*0.35,r,r*0.86,Math.atan2(dy,dx),0,6.2832); g.closePath(); },Wt,WL,WS,Lx,Ly,2*r); }
+  // БОТИНОК: отдельная форма у подножки, стопа лежит горизонтально в раме байка
+  { const bx=ank.x, by=ank.y, fl=C.wBoot*2.35, fh=C.wBoot*1.05;
+    rcShade(g,()=>rcPoly(g,[[bx-fl*0.34,by-fh],[bx+fl*0.66,by-fh*0.72],[bx+fl*0.70,by+fh*0.5],[bx-fl*0.30,by+fh*0.62]]),Wt,WL,WS,Lx,Ly,2*fh); }
+  // контактная тень ПОД рукой: без неё чёрная рука на чёрном торсе не отделяется (обе #14100f)
+  if(!far){ g.save(); g.globalAlpha=0.55; g.fillStyle=C.shad;
+    rcStripPath(g,sh,el,wr,C.wShoulder+1.1,C.wElbow+1.1,C.wWrist+1.1); g.fill(); g.restore(); }
+  // РУКА: непрерывная полоса плечо→локоть→кисть
+  rcShade(g,()=>rcStripPath(g,sh,el,wr,C.wShoulder,C.wElbow,C.wWrist),B,Lt,Sh,Lx,Ly,2*C.wShoulder);
+  // белое плечо целиком (по доминанте auN: белый 36% — это и есть разделитель руки и торса), предплечье чёрное
+  { const mx=sh.x+(el.x-sh.x)*0.72, my=sh.y+(el.y-sh.y)*0.72;
+    rcShade(g,()=>rcStripPath(g,sh,{x:(sh.x+mx)/2,y:(sh.y+my)/2},{x:mx,y:my},C.wShoulder*0.99,C.wShoulder*0.86,C.wElbow*1.2),Wt,WL,WS,Lx,Ly,2*C.wShoulder); }
+  // перчатка
+  { const r=C.wGlove; rcShade(g,()=>{ g.beginPath(); g.ellipse(wr.x,wr.y,r,r*0.82,Math.atan2(wr.y-el.y,wr.x-el.x),0,6.2832); g.closePath(); },B,Lt,Sh,Lx,Ly,2*r); }
+}
+// корпус рисуется ДО конечностей — иначе торс закрывает ближнюю руку (порядок как в PNG-риге)
+function rcBody(g,P,Lx,Ly,amb){
+  const C=RCFG;
+  const B=C.base, Lt=C.lit, Sh=C.shad, Og=C.org, OL=C.orgLit, OS=C.orgShad;
+  const pel=P.pelT, sock=P.torsoSock, nk=P.neck;
+  // таз строится ПО ЯКОРЯМ (сокет торса → середина бёдер), а не произвольным квадратом —
+  // иначе между тазом и бедром остаётся щель ~3px (корень ноги начинается в hipN)
+  { const hm={x:(P.hipN.x+P.hipF.x)/2, y:(P.hipN.y+P.hipF.y)/2};
+    const md={x:(sock.x+hm.x)/2+(pel.x-(sock.x+hm.x)/2)*0.55, y:(sock.y+hm.y)/2+(pel.y-(sock.y+hm.y)/2)*0.55};
+    rcShade(g,()=>rcStripPath(g,sock,md,hm,5.6,6.4,6.6),B,Lt,Sh,Lx,Ly,12); }
+  const mid={x:sock.x+(nk.x-sock.x)*0.58, y:sock.y+(nk.y-sock.y)*0.58};
+  rcShade(g,()=>rcStripPath(g,sock,mid,nk,6.5,7.9,2.9),B,Lt,Sh,Lx,Ly,15);
+  // оранжевый акцент на груди
+  { const a={x:sock.x+(nk.x-sock.x)*0.34,y:sock.y+(nk.y-sock.y)*0.34}, b={x:sock.x+(nk.x-sock.x)*0.78,y:sock.y+(nk.y-sock.y)*0.78};
+    rcShade(g,()=>rcStripPath(g,a,{x:(a.x+b.x)/2,y:(a.y+b.y)/2},b,4.6,4.9,2.4),Og,OL,OS,Lx,Ly,9); }
+}
+// ---- ШЛЕМ: череп + подбородочная дуга + козырёк + визор + блик. Козырёк = силуэтная подпись кросса ----
+function rcHead(g,P,Lx,Ly,amb){
+  const C=RCFG, hs=C.headScale, nk=P.neck, Sh=C.shad, Wt=C.wht, WL=C.whtLit, WS=C.whtShad;
+  { const ha=P.head, c=Math.cos(ha), s=Math.sin(ha), q=(ax,ay)=>({x:nk.x+(ax*c-ay*s)*hs, y:nk.y+(ax*s+ay*c)*hs});
+    const O=q(3.9,-5.5), rx=7.8, ry=7.4;   // череп ОПУЩЕН к шее: при -7.2 низ черепа лишь касался конца торса и на повороте отрывался
+    // подбородочная дуга и козырёк обязаны ВЫСТУПАТЬ ЗА череп — иначе силуэт остаётся кругом,
+    // а деталь внутри читается «полоской на шарике» (череп кончается на x≈12.2)
+    rcShade(g,()=>rcPoly(g,[q(9.2,-6.8),q(14.9,-5.4),q(14.6,-1.5),q(8.8,-0.3),q(5.2,-1.8)]),Wt,WL,WS,Lx,Ly,7);    // подбородочная дуга вперёд-вниз
+    rcShade(g,()=>{ g.beginPath(); g.ellipse(O.x,O.y,rx*hs,ry*hs,ha,0,6.2832); g.closePath(); },Wt,WL,WS,Lx,Ly,2*ry*hs);
+    rcShade(g,()=>rcPoly(g,[q(6.8,-12.3),q(15.2,-11.6),q(15.4,-9.7),q(7.0,-9.4)]),Wt,WL,WS,Lx,Ly,3.0);            // КОЗЫРЁК — силуэтная подпись кросса (выступ ~3px, не клюв)
+    g.fillStyle=Sh; g.globalAlpha=0.55; rcPoly(g,[q(7.0,-9.8),q(15.3,-9.8),q(15.4,-9.2),q(7.0,-9.2)]); g.fill(); g.globalAlpha=1;   // тень ПОД козырьком (отделяет его от лба)
+    g.fillStyle='#14181c'; rcPoly(g,[q(9.4,-9.0),q(14.3,-8.3),q(13.9,-5.4),q(9.0,-6.0)]); g.fill();                // визор
+    g.fillStyle='#8fb6cc'; g.globalAlpha=0.5; rcPoly(g,[q(9.8,-8.5),q(12.6,-8.1),q(12.2,-7.0),q(9.6,-7.4)]); g.fill(); g.globalAlpha=1; }
+}
+// --- сборка: буферы → рим по СИЛУЭТУ ОБЪЕДИНЕНИЯ → блиты в двух z-слотах (райдер разрезан рамой) ---
+function rcPrepare(P){
+  const C=RCFG, dpr=(typeof DPR!=='undefined'?DPR:1);
+  const bw=Math.ceil(RC_W*dpr), bh=Math.ceil(RC_H*dpr);
+  const RB=_rcBuf('rb',bw,bh), NB=_rcBuf('nb',bw,bh), RM=_rcBuf('rm',bw,bh), SC=_rcBuf('sc',bw,bh), MK=_rcBuf('mk',bw,bh);
+  const setT=(b)=>{ b.g.setTransform(dpr,0,0,dpr,-RC_X0*dpr,-RC_Y0*dpr); };
+  // --- направление света: от райдера к светилу, из ЭКРАНА в локальную систему, сглажено во времени ---
+  let sa=-1.15;
+  try{ if(typeof _sunSX==='number'){ const z=_zoomD||1,
+      rx=(bike.x-cam.x-W/2)*z+W/2, ry=(bike.y-cam.y-H/2)*z+H/2;
+      sa=Math.atan2(_sunSY-ry,_sunSX-rx); } }catch(e){}
+  const loc=sa-(P.B.ang+P.delta);
+  if(_rcLightA===null) _rcLightA=loc;
+  else { let d=loc-_rcLightA; while(d>Math.PI)d-=6.2832; while(d<-Math.PI)d+=6.2832; _rcLightA+=d*0.12; }
+  const Lx=Math.cos(_rcLightA), Ly=Math.sin(_rcLightA);
+  const amb=(typeof _sunWarm!=='undefined'&&!_sunWarm)?'#2b3550':'#4a3348';
+  setT(RB); rcSide(RB.g,P,true,Lx,Ly,amb);                       // дальняя сторона — в общий буфер (она за рамой)
+  setT(NB); rcBody(NB.g,P,Lx,Ly,amb); rcSide(NB.g,P,false,Lx,Ly,amb); rcHead(NB.g,P,Lx,Ly,amb);   // корпус → конечности → шлем
+  RB.g.setTransform(1,0,0,1,0,0); RB.g.drawImage(NB.c,0,0);      // объединение = истинный силуэт райдера
+  // --- рим-кольцо: дилатация смещёнными копиями, затем выбивание середины. Без getImageData ---
+  const ring=(src,rad,dirs,col,alpha)=>{ RM.g.setTransform(1,0,0,1,0,0); RM.g.clearRect(0,0,bw,bh);
+    RM.g.globalCompositeOperation='source-over';
+    for(let i=0;i<dirs.length;i++) RM.g.drawImage(src,Math.cos(dirs[i])*rad,Math.sin(dirs[i])*rad);
+    RM.g.globalCompositeOperation='destination-out'; RM.g.drawImage(src,0,0);
+    RM.g.globalCompositeOperation='source-in'; RM.g.fillStyle=col; RM.g.globalAlpha=alpha;
+    RM.g.fillRect(0,0,bw,bh); RM.g.globalAlpha=1; RM.g.globalCompositeOperation='source-over'; };
+  const ALL=[0,0.7854,1.5708,2.3562,3.1416,3.9270,4.7124,5.4978];
+  const la=Math.atan2(Ly,Lx), HEMI=[la-0.9,la-0.45,la,la+0.45,la+0.9];   // основной рим — со стороны света
+  // ширина задаётся в CSS-px и умножается на DPR → визуальная ширина одинакова при DPR 1/2/3
+  const blitRim=(dst,maskFn)=>{
+    ring(RB.c,C.rimUnder*dpr,ALL,C.rimUnderCol,C.rimUnderA); pushRim(dst,maskFn);        // тёмный под-штрих
+    ring(RB.c,C.rimSafe*dpr,ALL,C.rimCol,C.rimSafeA); pushRim(dst,maskFn);               // страховочный по всему контуру
+    ring(RB.c,C.rimMain*dpr,HEMI,C.rimCol,C.rimMainA); pushRim(dst,maskFn); };           // основной направленный
+  function pushRim(dst,maskFn){
+    if(!maskFn){ dst(RM.c); return; }
+    // маска собирается ОБЪЕДИНЕНИЕМ в отдельном буфере: destination-in копится, и цепочка
+    // смещённых копий схлопывала бы её в ПЕРЕСЕЧЕНИЕ (рим второго слота выходил пустым)
+    MK.g.setTransform(1,0,0,1,0,0); MK.g.clearRect(0,0,bw,bh);
+    MK.g.globalCompositeOperation='source-over'; maskFn(MK.g);
+    SC.g.setTransform(1,0,0,1,0,0); SC.g.clearRect(0,0,bw,bh);
+    SC.g.globalCompositeOperation='source-over'; SC.g.drawImage(RM.c,0,0);
+    SC.g.globalCompositeOperation='destination-in'; SC.g.drawImage(MK.c,0,0);
+    SC.g.globalCompositeOperation='source-over'; dst(SC.c); }
+  const put=(img)=>{ ctx.drawImage(img,RC_X0,RC_Y0,RC_W,RC_H); };
+  // маска ближней группы, расширенная на радиус рима, — чтобы во втором слоте вернулся ТОЛЬКО её рим
+  const nearMask=(g)=>{ const r=C.rimMain*dpr; for(let i=0;i<ALL.length;i++) g.drawImage(NB.c,Math.cos(ALL[i])*r,Math.sin(ALL[i])*r); g.drawImage(NB.c,0,0); };
+  return { back:()=>{ blitRim(put,null); put(RB.c); },                 // до рамы: весь райдер + полный рим (раму он не переживёт — так и надо)
+           front:()=>{ blitRim(put,nearMask); put(NB.c); } };          // после рамы: ближняя группа + её часть рима
+}
 // b279: SOLVE отделён от DRAW. Поза стала ЗНАЧЕНИЕМ → её можно записать, воспроизвести и
 // скормить двум рендерам (PNG / код) для честного side-by-side. Ни одно число здесь не менялось.
 function solveRigCutout(){
@@ -2581,21 +2754,28 @@ function drawRigCutout(dbg){
   // b275: rigSilhouette — серый байк + чёрный райдер (объективное сравнение поз)
   const SIL=RIG_SIL||window.__rigSil, filBike=SIL?'contrast(0) brightness(1.7)':'none', filR=SIL?'brightness(0)':'none', filRfar=SIL?'brightness(0)':'brightness(0.80)', aFar=SIL?1:0.80;
   // порядок back→front: rearWheel · far-ноги/руки(темнее) · swingarm · рама · pelvis/torso · near-ноги/руки · head · fork · frontWheel
+  const CODE=(RIDER_MODE==='code'||window.__riderCode===true)&&window.__riderCode!==false;
+  const RC=CODE?rcPrepare(P):null;
   ctx.filter=filBike; drawWheelPart(A25V2.wr, rearAxG, wd, B.wheel); ctx.filter='none';
-  ctx.save(); DEL(); ctx.globalAlpha=aFar; ctx.filter=filRfar;                  // far-конечности за рамой (темнее / чёрные в SIL)
-    bone(CUT.luF,RIDP.luF.p,RIDP.luF.d,hipF,{x:legFr.mid[0],y:legFr.mid[1]}); bone(CUT.llF,RIDP.llF.p,RIDP.llF.toe,{x:legFr.mid[0],y:legFr.mid[1]},{x:legFr.end[0],y:legFr.end[1]});
-    bone(CUT.auF,RIDP.auF.p,RIDP.auF.d,shF,{x:armFr.mid[0],y:armFr.mid[1]}); bone(CUT.alF,RIDP.alF.p,RIDP.alF.d,{x:armFr.mid[0],y:armFr.mid[1]},{x:armFr.end[0],y:armFr.end[1]});
-  ctx.filter='none'; ctx.globalAlpha=1; ctx.restore();
+  ctx.save(); DEL();                                                            // far-конечности за рамой (темнее / чёрные в SIL)
+    if(CODE) RC.back();
+    else { ctx.globalAlpha=aFar; ctx.filter=filRfar;
+      bone(CUT.luF,RIDP.luF.p,RIDP.luF.d,hipF,{x:legFr.mid[0],y:legFr.mid[1]}); bone(CUT.llF,RIDP.llF.p,RIDP.llF.toe,{x:legFr.mid[0],y:legFr.mid[1]},{x:legFr.end[0],y:legFr.end[1]});
+      bone(CUT.auF,RIDP.auF.p,RIDP.auF.d,shF,{x:armFr.mid[0],y:armFr.mid[1]}); bone(CUT.alF,RIDP.alF.p,RIDP.alF.d,{x:armFr.mid[0],y:armFr.mid[1]},{x:armFr.end[0],y:armFr.end[1]});
+      ctx.filter='none'; ctx.globalAlpha=1; }
+  ctx.restore();
   ctx.filter=filBike; drawPart2pt(A25V2.swing, RIGC.swingA, RIGC.swingB, A_swP, rearAxG); ctx.filter='none';
   ctx.save(); DEL();
     ctx.filter=filBike; ctx.drawImage(CUT.chassis, 0,0,512,512, -O[0]*S, -O[1]*S, 512*S, 512*S);   // НЕИЗМЕННАЯ рама
-    ctx.filter=filR;
-    pivpart(CUT.pelvis,RIDP.pelvis.pivot,pelT,pelRot);
-    pivpart(CUT.torso,RIDP.torso.p,torsoSock,tor);
-    bone(CUT.luN,RIDP.luN.p,RIDP.luN.d,hipN,{x:legNr.mid[0],y:legNr.mid[1]}); bone(CUT.llN,RIDP.llN.p,RIDP.llN.toe,{x:legNr.mid[0],y:legNr.mid[1]},{x:legNr.end[0],y:legNr.end[1]});
-    bone(CUT.auN,RIDP.auN.p,RIDP.auN.d,shN,{x:armNr.mid[0],y:armNr.mid[1]}); bone(CUT.alN,RIDP.alN.p,RIDP.alN.d,{x:armNr.mid[0],y:armNr.mid[1]},{x:armNr.end[0],y:armNr.end[1]});
-    pivpart(CUT.head,RIDP.head.pivot,neck,_pcHead);
     ctx.filter='none';
+    if(CODE) RC.front();
+    else { ctx.filter=filR;
+      pivpart(CUT.pelvis,RIDP.pelvis.pivot,pelT,pelRot);
+      pivpart(CUT.torso,RIDP.torso.p,torsoSock,tor);
+      bone(CUT.luN,RIDP.luN.p,RIDP.luN.d,hipN,{x:legNr.mid[0],y:legNr.mid[1]}); bone(CUT.llN,RIDP.llN.p,RIDP.llN.toe,{x:legNr.mid[0],y:legNr.mid[1]},{x:legNr.end[0],y:legNr.end[1]});
+      bone(CUT.auN,RIDP.auN.p,RIDP.auN.d,shN,{x:armNr.mid[0],y:armNr.mid[1]}); bone(CUT.alN,RIDP.alN.p,RIDP.alN.d,{x:armNr.mid[0],y:armNr.mid[1]},{x:armNr.end[0],y:armNr.end[1]});
+      pivpart(CUT.head,RIDP.head.pivot,neck,_pcHead);
+      ctx.filter='none'; }
   ctx.restore();
   ctx.filter=filBike; drawPart2pt(A25V2.fork, RIGC.forkA, RIGC.forkB, A_steer, frontAxG); drawWheelPart(A25V2.wf, frontAxG, wd, B.wheel); ctx.filter='none';
   if(dbg||RIGDEBUG){ ctx.save(); DEL(); drawCutDebug(P.seat,pelT,torsoSock,shN,hipN,neck,P.gN,P.gF,P.pN,P.pF,armNr,legNr,P.zFwd,P.zBack,P.zUp,P.zDown); ctx.restore(); }
