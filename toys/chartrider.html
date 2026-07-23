@@ -2385,7 +2385,7 @@ let _rgcVisAng=0,_rgcAngV=0,_rgcDrop=0,_rgcDropV=0,_rgcFC=0,_rgcRC=0,_rgcWasAir=
 // b278: pose-controller state — smoothDamp-база + огибающая приземления + жёсткий лимит скорости ПОСЛЕ solve
 let _pcPx=0,_pcPy=0, _pcPxB=0,_pcPyB=0, _pcTor=0.26,_pcTorB=0.26, _pcHead=0, _pcPelRot=0, _pcPrevVx=0,_pcLongAcc=0, _pcState='neutral';
 const _sd={px:{v:0},py:{v:0},tor:{v:0},head:{v:0},pr:{v:0}};          // накопители скорости smoothDamp
-let _land={on:false,t:0,tStart:-1,peak:0,rise:0.083,hold:0.0167,fall:0.2333,env:0};   // b280: огибающая приземления ВО ВРЕМЕНИ (contact→compression→rebound)
+let _land={on:false,t:0,tStart:-1,peak:0,rise:0.083,hold:0.0167,fall:0.2333,env:0,id:0,airEp:-1,lastEp:-1,justOpened:false};   // b280: огибающая приземления ВО ВРЕМЕНИ (contact→compression→rebound)
 // b280 Б2.2: состояние пути НАГРУЗКИ. cF/dF — отфильтрованные common/differential, cB/dB — медленная
 // база (постоянное сжатие на длинном подъёме уходит сюда и НЕ смещает attack-позу навсегда),
 // fY/fX/fT — сам быстрый offset, gain — затухание в воздухе/на приземлении.
@@ -2399,7 +2399,7 @@ window.__rigAssert=function(){ return {landings:_asrt.landingId, errors:_asrt.er
 // b281: СОБЫТИЕ КОНТАКТА — отдельная сущность. raw-пересечение порога (точное время) ≠ filtered
 // contact (устойчивость) ≠ air latch (классификация) ≠ landing envelope (визуальная реакция).
 // Время старта огибающей берётся ТОЛЬКО из tContact; латч её больше не сдвигает.
-let _ev={id:0, seenId:0, rawCount:0, qualified:0, rejected:0, rejectReason:'', tContact:-1, wheel:'', wasAirConfirmed:false, airDuration:0, preSpeed:0, gapPrev:0, gapCur:0, pending:false};                 // b280 Б2.7: контроль ограничителя (cap не должен ЛЕПИТЬ анимацию)
+let _ev={id:0, seenId:0, rawCount:0, qualified:0, rejected:0, rejectReason:'', decisions:[], tContact:-1, wheel:'', wasAirConfirmed:false, airDuration:0, preSpeed:0, gapPrev:0, gapCur:0, pending:false};                 // b280 Б2.7: контроль ограничителя (cap не должен ЛЕПИТЬ анимацию)
 let _rgcErr={pelvis:0,handN:0,handF:0,bootN:0,bootF:0,pelvisOff:0};   // ошибки эффекторов + смещение таза (px)
 let _rgcJ={elbowN:0,elbowF:0,kneeN:0,kneeF:0};                        // углы суставов (град) для debug
 let _rgcPrevJ=null, _rgcD={joint:0,pelvis:0,px:0,py:0,hard:false};    // b278: пер-кадровые дельты ПОСЛЕ solve
@@ -2421,7 +2421,7 @@ let _rgcW={bikeWorldDeg:0,torsoLocalDeg:0,torsoWorldDeg:0,pelvisWorld:{x:0,y:0},
 const _CT={ F:{raw:false,filt:false,on:0,off:0,gap:0,pen:0,since:9,prevGap:-99}, R:{raw:false,filt:false,on:0,off:0,gap:0,pen:0,since:9,prevGap:-99} };
 // b280: все дуэллы/счётчики — ВРЕМЕННЫЕ аккумуляторы в секундах (airT, upInT, upOutT, fLostT, candT)
 let _ph={ state:'neutral', prevState:'neutral', prevAir:false, airT:0, sinceFirst:9, landImp:0,
-  airRun:0, grndRun:0, airLatch:false, vyLatch:0, upIn:0, upOut:0, uphillLatch:false, fLost:0, cand:'neutral', candT:0, lastGround:'neutral', gndT:0, prevVy:0, prevVy2:0, prevDt:1/60 };
+  airRun:0, grndRun:0, airLatch:false, vyLatch:0, upIn:0, upOut:0, uphillLatch:false, fLost:0, cand:'neutral', candT:0, lastGround:'neutral', gndT:0, prevVy:0, prevVy2:0, prevDt:1/60, airEpId:0 };
 // b278: ТАБЛИЦА ПОЗ И ВРЕМЕННЫХ КОНСТАНТ (кадры @60fps). Живой тюн через window.PC, финальные числа — здесь.
 const PC={
   zF:0.20, zB:0.08, zU:0.19, zD:0.10,                                  // зона таза (доли Wb / wheelDia / riderH)
@@ -2765,16 +2765,46 @@ function solveRigCutout(){
   // (fixed-step), поэтому число событий, их id, время и импульс одинаковы при любой частоте
   // рендера. Фильтры контакта и air-латч остались потребителями состояния, но время события
   // не сдвигают. Raw contact ≠ landing: квалификация — ниже, по airDuration и normalSpeed.
+  // b283: ТРИ РАЗНЫХ ИДЕНТИФИКАТОРА. contactEventId — отдельное касание колеса; airEpisodeId —
+  // один реальный воздушный эпизод; landingId — одна визуальная реакция. Эпизод посадки открывается
+  // НЕПОСРЕДСТВЕННО квалифицированным событием в его tContact; air-латч больше не источник времени,
+  // он только классификатор земля/воздух. Оба колеса одного воздушного эпизода дают ОДИН landingId.
+  _land.isFirst=false;                                                   // маркер выставляется ниже, РОВНО на кадре открытия эпизода
   { const feed=(window.__rigEventFeed||_cev);
     while(feed.length && feed[0].id>_ev.seenId){
       const e=feed.shift(); _ev.seenId=e.id; _ev.rawCount++;
       if(_asrt.seenIds[e.id]) _asrtErr('duplicateEventId',e.id); _asrt.seenIds[e.id]=1;
       if(_simT-e.simTime < -1e-6) _asrtErr('negativeEventAge',+((_simT-e.simTime)*1000).toFixed(3));
-      if(e.airDuration>=PC.evMinAirT && e.normalSpeed>=PC.evMinSpeed){
-        _ev={ id:e.id, seenId:e.id, rawCount:_ev.rawCount, qualified:_ev.qualified+1, rejected:_ev.rejected,
-              tContact:e.simTime, wheel:e.wheel, wasAirConfirmed:true, airDuration:e.airDuration,
-              preSpeed:e.normalSpeed, gapPrev:e.gapPrev, gapCur:e.gapCur, pending:true };
-      } else { _ev.rejected++; _ev.rejectReason = e.airDuration<PC.evMinAirT?'airTooShort':'impactTooLow'; } } }
+      const qual = e.airDuration>=PC.evMinAirT && e.normalSpeed>=PC.evMinSpeed;
+      if(!qual){ _ev.rejected++; _ev.rejectReason = e.airDuration<PC.evMinAirT?'airTooShort':'impactTooLow';
+        _ev.decisions.push({id:e.id,d:'REJECT',why:_ev.rejectReason}); continue; }
+      _ev.qualified++;
+      const ep=_ph.airEpId;
+      if(_land.on && _land.airEp===ep){                                   // тот же воздушный эпизод — не новая посадка
+        const eImp=Math.abs(e.preVy);                                     // прежнее определение |vy|, но ДО collision response
+        if(eImp>_ph.landImp){ const p0=_land.peak; _ph.landImp=eImp;   // UPDATE_IMPULSE: сильнее — можно усилить
+          _land.peak=Math.min(PC.lPeakMax, PC.lPeakB+PC.lPeakK*_ph.landImp);
+          // фронт ПРОДЛЕВАЕТСЯ вперёд от текущего момента, фаза назад НЕ откатывается
+          if(_land.peak>p0) _land.rise=Math.max(_land.rise, _land.t+clamp(_land.peak-p0,0,6)/60);
+          _ev.decisions.push({id:e.id,d:'UPDATE_IMPULSE',dPeak:+(_land.peak-p0).toFixed(2)}); }
+        else _ev.decisions.push({id:e.id,d:'ATTACH_TO_LANDING'});
+        continue; }
+      if(_land.on){ _ev.decisions.push({id:e.id,d:'IGNORE_ACTIVE_EPISODE'}); continue; }
+      if(_land.lastEp===ep){ _ev.decisions.push({id:e.id,d:'IGNORE_ACTIVE_EPISODE',why:'эпизод уже отработан'}); continue; }
+      // OPEN_LANDING — сразу, не дожидаясь снятия латча
+      _ev.id=e.id; _ev.tContact=e.simTime; _ev.wheel=e.wheel; _ev.airDuration=e.airDuration; _ev.preSpeed=Math.abs(e.preVy);
+      _ph.landImp=Math.abs(e.preVy);
+      _land.on=true; _land.airEp=ep; _land.lastEp=ep; _land.tStart=e.simTime;
+      _land.t=clamp(_simT-e.simTime,0,0.25);
+      _land.peak=Math.min(PC.lPeakMax, PC.lPeakB+PC.lPeakK*_ph.landImp);
+      _land.rise=clamp(_land.peak,3,6)/60; _land.hold=PC.lHoldT; _land.fall=PC.lFallT; _land.env=0;
+      if(_land.t>_land.rise+_land.hold) _asrtErr('landingOpenedPastCompression',+(_land.t*1000).toFixed(1));
+      if(_asrt.landingId>0 && _asrt.rebFrames>0 && _asrt.compFrames===0) _asrtErr('reboundWithoutCompression',_asrt.landingId);
+      _asrt.landingId++; _asrt.compFrames=0; _asrt.rebFrames=0;
+      _land.id=_asrt.landingId;
+      _land.justOpened=true; _land.isFirst=true;
+      _ev.decisions.push({id:e.id,d:'OPEN_LANDING',lid:_land.id,ep:ep,t:+e.simTime.toFixed(4)});
+      if(_ev.decisions.length>200) _ev.decisions.shift(); } }
   _CT.F.prevGap=gapF; _CT.R.prevGap=gapR;
   const filtF=_updContact(_CT.F, gapF>-4.0, dt), filtR=_updContact(_CT.R, gapR>-4.0, dt);               // rawContact (в пределах ~4px поверхности) → filtered (hysteresis по времени)
   const hubAng=Math.atan2(terrainAt(cFx).y-terrainAt(cRx).y, 2*DX), slopeDeg=-hubAng*180/Math.PI;        // slopeDeg > 0 = ПОДЪЁМ
@@ -2786,18 +2816,14 @@ function solveRigCutout(){
   _ph.airRun = airRaw? _ph.airRun+dt : 0; _ph.grndRun = airRaw? 0 : _ph.grndRun+dt;
   const wasAirL=_ph.airLatch;
   let tAirCross=-1;
-  if(_ph.airRun>PC.airOnT){ if(!_ph.airLatch){ _ph.vyLatch=Math.abs(B.vy||0); tAirCross=tF0+Math.max(0,Math.min(dt,PC.airOnT-_pAir)); } _ph.airLatch=true; }
+  if(_ph.airRun>PC.airOnT){ if(!_ph.airLatch){ _ph.vyLatch=Math.abs(B.vy||0); tAirCross=tF0+Math.max(0,Math.min(dt,PC.airOnT-_pAir)); _ph.airEpId++; } _ph.airLatch=true; }
   else if(_ph.grndRun>0){ if(_ph.airLatch) tAirCross=tF0+Math.max(0,Math.min(dt,0-_pGrn)); _ph.airLatch=false; }
   const trulyAir=_ph.airLatch, airborne=trulyAir;
   _ph.airT = trulyAir? _ph.airT+dt : 0;
   let firstContact=false;
-  if(wasAirL && !trulyAir){ firstContact=true; _ph.sinceFirst=0;
-    // b280.6: импульс посадки берётся в ИСТИННЫЙ момент касания (интерполяция vy между кадрами).
-    // Снятый на границе кадра vy давал разную АМПЛИТУДУ огибающей при 30/60/120 FPS — это и был
-    // основной остаток расхождения внутри окна компрессии.
-    const cr=Math.max(_CT.F.tCross,_CT.R.tCross), u=(cr>=0&&dt>0)?clamp(cr/dt,0,1):1;
-    const vyAt=_ph.prevVy+((B.vy||0)-_ph.prevVy)*u;
-    _ph.landImp=Math.abs(vyAt); } else _ph.sinceFirst+=dt;
+  // b283: landImp имеет РОВНО ОДНОГО писателя — событие контакта. Прежняя vy-оценка здесь
+  // перезаписывала его и ломала сравнение в UPDATE_IMPULSE (сильный удар помечался ATTACH).
+  if(wasAirL && !trulyAir){ firstContact=true; _ph.sinceFirst=0; } else _ph.sinceFirst+=dt;
   _ph.prevVy2=_ph.prevVy; _ph.prevVy=B.vy||0; _ph.prevDt=dt;
   _ph.prevAir=trulyAir;
   if(!trulyAir){ if(slopeDeg>=25)_ph.upIn+=dt; else _ph.upIn=0; if(slopeDeg<20)_ph.upOut+=dt; else _ph.upOut=0; }   // в воздухе таймеры ЗАМОРОЖЕНЫ (короткий полёт не сбрасывает подъём)
@@ -2808,18 +2834,9 @@ function solveRigCutout(){
   if(!filtF) _ph.fLost+=dt; else _ph.fLost=0;
   _ph.gndT = (filtF&&filtR)? _ph.gndT+dt : 0;                                                            // b280.4: время УСТОЙЧИВОГО контакта обоих колёс
   // ---- огибающая приземления ВО ВРЕМЕНИ: contact → rise 50-100мс → полка → отбой 233мс ----
-  _land.isFirst=firstContact;                                                                            // b280: маркер ПЕРВОГО кадра огибающей (был _land.f===1)
-  if(firstContact){ _land.on=true;
-    // b281: огибающая BACKDATE'ится к tContact — уже прошедшая фаза вычисляется сразу, без скачка.
-    // Латч мог подтвердиться на кадр позже; это больше не сдвигает старт.
-    _land.t = (_ev.pending && _ev.tContact>=0) ? clamp(_simT-_ev.tContact,0,0.25) : 0;
-    if(_ev.pending){ _ph.landImp=_ev.preSpeed; _land.tStart=_ev.tContact; _ev.pending=false; }
-    else { _land.tStart=_rgcT; _asrtErr('envelopeWithoutConsumedEvent',''); }
-    if(_asrt.landingId>0 && _asrt.rebFrames>0 && _asrt.compFrames===0) _asrtErr('reboundWithoutCompression',_asrt.landingId);
-    _asrt.landingId++; _asrt.compFrames=0; _asrt.rebFrames=0;
-    _land.peak=Math.min(PC.lPeakMax, PC.lPeakB+PC.lPeakK*_ph.landImp);
-    _land.rise=clamp(_land.peak,3,6)/60; _land.hold=PC.lHoldT; _land.fall=PC.lFallT; _land.env=0; }
-  else if(_land.on){ _land.t+=dt; }
+  // b283: firstContact (снятие латча) БОЛЬШЕ НЕ ОТКРЫВАЕТ эпизод — это делает событие выше.
+  if(_land.on && !_land.justOpened) _land.t+=dt;
+  _land.justOpened=false;
   if(_land.on){ const f=_land.t,R=_land.rise,Hd=_land.hold,Fl=_land.fall, sm=(u)=>{u=clamp(u,0,1);return u*u*(3-2*u);};
     if(f<=R) _land.env=_land.peak*sm(f/R);
     else if(f<=R+Hd) _land.env=_land.peak;
@@ -3178,13 +3195,13 @@ window.__rigStateReset=function(){
   _land={on:false,f:0,peak:0,rise:5,hold:2,fall:14,env:0};
   _CT.F={raw:false,filt:false,on:0,off:0,gap:0,pen:0,since:999}; _CT.R={raw:false,filt:false,on:0,off:0,gap:0,pen:0,since:999};
   _ph={ state:'neutral', prevState:'neutral', prevAir:false, airT:0, sinceFirst:9, landImp:0,
-    airRun:0, grndRun:0, airLatch:false, vyLatch:0, upIn:0, upOut:0, uphillLatch:false, fLost:0, cand:'neutral', candT:0, lastGround:'neutral', gndT:0, prevVy:0, prevVy2:0, prevDt:1/60 };
-  _land={on:false,t:0,tStart:-1,peak:0,rise:0.083,hold:0.0167,fall:0.2333,env:0};
+    airRun:0, grndRun:0, airLatch:false, vyLatch:0, upIn:0, upOut:0, uphillLatch:false, fLost:0, cand:'neutral', candT:0, lastGround:'neutral', gndT:0, prevVy:0, prevVy2:0, prevDt:1/60, airEpId:0 };
+  _land={on:false,t:0,tStart:-1,peak:0,rise:0.083,hold:0.0167,fall:0.2333,env:0,id:0,airEp:-1,lastEp:-1,justOpened:false};
   _ld={cF:0,dF:0,cB:0,dB:0,cPrev:0,cVel:0,fY:0,fX:0,fT:0,gain:1,init:false};
   _capCnt={norm:0,hard:0,total:0,joint:'',maxEx:0}; _rgcTPrev=0;
   _rgcPrevJ=null; _rgcD={joint:0,pelvis:0,px:0,py:0,hard:false}; _rgcPose=null; _rgcXf=null;
   _rgcT=0; _bl={t0:-9,dur:0.30,fx:0,fy:0,ft:0.26,fr:0,frozen:false};
-  _ev={id:0,seenId:0,rawCount:0,qualified:0,rejected:0,rejectReason:'',tContact:-1,wheel:'',wasAirConfirmed:false,airDuration:0,preSpeed:0,gapPrev:0,gapCur:0,pending:false};
+  _ev={id:0,seenId:0,rawCount:0,qualified:0,rejected:0,rejectReason:'',decisions:[],tContact:-1,wheel:'',wasAirConfirmed:false,airDuration:0,preSpeed:0,gapPrev:0,gapCur:0,pending:false};
   _asrt={landingId:0,compFrames:0,rebFrames:0,seenIds:{},errors:[]}; };
 // прогон с записью ВХОДОВ и ПОЗ (эталон снимается ДО рефакторинга)
 window.__poseRun=function(N,mod,vth){ const IN=[],PS=[]; window.__rigStateReset();
