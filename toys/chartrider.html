@@ -76,7 +76,7 @@ function lerp(a,b,t){return a+(b-a)*t;} function clamp(v,a,b){return v<a?a:v>b?b
 // false → full game everywhere. Single switch. Systems are GATED, never deleted.
 const CORE_TEST_MODE = false;   // b70: META LIVE — building the progression spine (upgrades/bikes with teeth, career, economy) on the confirmed rigid-body core
 // build stamp — bump on every change so a phone refresh can confirm it loaded fresh code (cache!)
-const BUILD = '2026-07-24 · C1B';
+const BUILD = '2026-07-24 · C1B-VC';
 
 // ---------- procedural market terrain ----------
 // height map sampled every STEP px; generated forward as we ride. Market character:
@@ -1473,7 +1473,7 @@ function update(){
       if(airT>6 && (bike.vy<2 || _th>130)) trickZoom=Math.min(1,trickZoom+(megaAir?0.13:0.09)); else trickZoom=Math.max(0,trickZoom-0.09);   // b234 мега = быстрее наезд. b214: нарастание/спад зума мягче (0.14/0.12→0.09) → плавный наезд камеры, без рывка
       if(trickAir===1 && airT>8 && Math.abs(bike.vy)<1.6 && Math.abs(bike.angV)>0.13){ slowmo=Math.max(slowmo,megaAir?30:20); trickAir=2; } }   // b234 мега-апекс = глубже слоумо. b214: слоумо апекса 14→20. b216: airT>12→8 (раньше ловим апекс, пол сохранён от подскоков). Только реальный полёт + реально крутишь, раз за полёт
     const skim=terrainAt(bike.x).y-(bike.y+DY);                        // gap of lower wheel above surface
-    if(airT>16 && skim>0 && skim<16 && bike.vx>6 && !nearMissed){ nearMissed=true; mult+=0.5; boost=Math.min(1,(boost||0)+0.15); multPulse=1; const g2=1.5*mult; coins+=g2; floatPop(bike.x,bike.y-22,'NEAR MISS +$'+Math.round(g2),'#9ff0ff'); shake=4; hitstop=2; gflash=0.4; sfxNear(); flow(0.35); }
+    if(airT>16 && skim>0 && skim<16 && bike.vx>6 && !nearMissed && !(typeof VSLICE!=='undefined'&&VSLICE)){ nearMissed=true; mult+=0.5; boost=Math.min(1,(boost||0)+0.15); multPulse=1; const g2=1.5*mult; coins+=g2; floatPop(bike.x,bike.y-22,'NEAR MISS +$'+Math.round(g2),'#9ff0ff'); shake=4; hitstop=2; gflash=0.4; sfxNear(); flow(0.35); }
     flipAcc+=Math.abs(bike.angV); if(flipAcc>6.283){flipAcc-=6.283;flipCount++; blip(150+flipCount*40,0.18,'sawtooth',0.13); buzz(10);}   // b152: «вжух» на каждом ПОЛНОМ обороте В ВОЗДУХЕ (тон растёт с витками) — флип слышен в момент, не только при посадке
     if(!bike._flipCine && airT>4 && flipAcc>3.4){ bike._flipCine=1; trickAir=1; if(slowmo<28)slowmo=28; }   // b182 ФЛИП-СИНЕМА: полоборота в ЛЮБОМ полёте → слоумо + трик-зум К БАЙКУ, раз за полёт. b214: 22→28 дольше. b216: airT>8→5 (гейт flipAcc>3.4=полоборота держит от микро-кочек, но синема стартует раньше)
   }
@@ -1493,7 +1493,7 @@ function update(){
       bike.angV*=0.4;   // damp residual spin on touchdown
       if(flipAcc>5.5){ flipAcc=0; flipCount++; }   // b153: ≥88% оборота при ЧИСТОЙ посадке = флип засчитан (плант доводит остаток визуально; строгие 100% заставляли отпускать впритык земле = несправедливо)
       if(airT>28){ const ab=airT*0.1*mult; coins+=ab; mult+=0.4; boost=Math.min(1,(boost||0)+0.3); multPulse=1; popText('BIG AIR  +$'+Math.round(ab)); floatPop(bike.x,bike.y-30,'+$'+Math.round(ab),'#9ff0ff'); gflash=0.6; shake=7; sfxAir(); buzz(18); flow(0.45); }
-      else if(diff<0.16 && airT>10){ coins+=2; floatPop(bike.x,bike.y-34,'CLEAN +$2','#aef0ff'); flow(0.28); }
+      else if(diff<0.16 && airT>10 && !(typeof VSLICE!=='undefined'&&VSLICE)){ coins+=2; floatPop(bike.x,bike.y-34,'CLEAN +$2','#aef0ff'); flow(0.28); }
       if(flipCount){ flipsTotal+=flipCount; mult+=flipCount*0.6; boost=Math.min(1,(boost||0)+0.22*flipCount); multPulse=1; const gain=flipCount*2*mult; coins+=gain; popText('🔄 САЛЬТО ×'+flipCount+'   +$'+Math.round(gain)); shake=9; hitstop=4; gflash=0.7; sfxFlipCrescendo(flipCount); flow(0.3*flipCount); }   // b91: ФЛИП = реальный профит ◆ (× комбо) — не мёртвый $
       if(terr[ci0]&&terr[ci0].fzone&&airT>14){ const fb=6+Math.round(airT*0.25); coins+=fb; mult+=0.5; multPulse=1; popText('✨ FLOW  +$'+fb); floatPop(bike.x,bike.y-40,'+$'+fb,'#7dffc8'); gflash=Math.max(gflash,0.5); sfxNear(); }   // b156 FLOW: сел в светящуюся зону на посадочном спуске = идеальная линия (бонус ∝ высоте полёта, комбо растёт) — учит долетать до спуска, как в мотокроссе
       if(trick && trickT>8){ const tp=Math.round(trickT*0.20*(1+0.6*flipCount)*mult*0.5+3);   // b158: очки трюка = удержание × (комбо с флипом) × полкомбо
@@ -1579,11 +1579,11 @@ function update(){
   }
   if(trackSource==='ticker' && screen==='play' && dist>=finishDist){ if(posValue()>0){ cashOut(); } else { deathBy='cashout'; cashedOut=true; finishChallenge(); screen='dead'; } popText('🏁 ГРАФИК '+((MARKET_DATA[selTicker]||MARKET_DATA.btc).name)+' ПРОЙДЕН'); }   // b96: доехал до конца = финиш; b118: оценка вызова Пути; b173: гейт по стоимости ПОЗИЦИИ (доливка), не по монеткам
   // depth milestones: every 500m a gem reward (deeper = more) → going deeper directly funds upgrades
-  if(!CORE_TEST_MODE && dist>=lastMile+500){ lastMile=Math.floor(dist/500)*500; const rew=20+Math.floor(lastMile/500)*10; coins+=rew; gflash=0.5; multPulse=1; popText('ГЛУБИНА '+lastMile+'м  +$'+rew); floatPop(bike.x,bike.y-40,'+$'+rew,'#9ff0c8'); sfxLev(); }
-  if(!newDepth && (best||0)>0 && dist>best){ newDepth=true; gflash=0.6; popText('★ НОВАЯ ГЛУБИНА!'); }
+  if(!CORE_TEST_MODE && !(typeof VSLICE!=='undefined'&&VSLICE) && dist>=lastMile+500){ lastMile=Math.floor(dist/500)*500; const rew=20+Math.floor(lastMile/500)*10; coins+=rew; gflash=0.5; multPulse=1; popText('ГЛУБИНА '+lastMile+'м  +$'+rew); floatPop(bike.x,bike.y-40,'+$'+rew,'#9ff0c8'); sfxLev(); }
+  if(!newDepth && (best||0)>0 && dist>best && !(typeof VSLICE!=='undefined'&&VSLICE)){ newDepth=true; gflash=0.6; popText('★ НОВАЯ ГЛУБИНА!'); }
   // market-era biome by distance + entry banner
   const zi2=Math.floor((dist||0)/520);   // b58: 700→520м — биомы (рыночные эпохи) сменяются чаще → больше визуальной динамики за заезд
-  if(zi2!==zone){ zone=zi2; biomeBanner=BIOMES[zi2%BIOMES.length].name; biomeBannerT=1; }
+  if(zi2!==zone){ zone=zi2; if(!(typeof VSLICE!=='undefined'&&VSLICE)){ biomeBanner=BIOMES[zi2%BIOMES.length].name; biomeBannerT=1; } }
   if(biomeBannerT>0) biomeBannerT-=0.012;
   if(evBannerT>0) evBannerT-=0.0095;
   if((boost||0)>=1 && screen==='play') tut('pump','⚡ PUMP ЗАРЯЖЕН — '+('ontouchstart'in window?'ЖМИ ⚡PUMP':'SHIFT')+' ЧТОБ ОТОРВАТЬСЯ');
@@ -1628,8 +1628,13 @@ function update(){
     // вертикаль сглажена сильнее (не повторяет подвеску); на большом воздухе шире обзор.
     const spd=Math.hypot(bike.vx,bike.vy);
     _vsLead = _vsLead===undefined?0 : _vsLead + (clamp(bike.vx,0,14)*VS.camLead - _vsLead)*VS.camLeadT;   // упреждение вперёд ∝ скорости
-    const airWide = (!bike.onG)? clamp(spd/16,0,1)*0.06 : 0;
-    cam.x = bike.x - W*(VS.camXFrac - airWide) + _vsLead;
+    const airWide = (!bike.onG)? clamp(spd/16,0,1)*0.05 : 0;
+    let camx = bike.x - W*(VS.camXFrac - airWide) + _vsLead;
+    // ГАРАНТИЯ: экранный X байка в окне [0.14, 0.34] — не ближе 12% к левому краю (ТЗ)
+    const sxRatio = (bike.x - camx)/W;
+    if(sxRatio < 0.14) camx = bike.x - W*0.14;
+    else if(sxRatio > 0.34) camx = bike.x - W*0.34;
+    cam.x = camx;
     const tgtY = bike.y - H*VS.camYFrac + (!bike.onG? -H*0.06 : 0);   // в воздухе чуть выше — видно зону посадки
     cam.y = lerp(cam.y, tgtY, VS.camVertT);
   } else {
@@ -1668,8 +1673,8 @@ function update(){
   if(bike.onG&&bike.vx>9) shake=Math.max(shake,Math.min(3.2,(bike.vx-9)*0.45));
 }
 let flipAcc=0, flipCount=0, popMsg='', popT=0, cashCelebT=0, pumpAir=0, pumpSpin=-0.32;   // b139: pumpAir = кадры авто-флипа на пампе (подавляет авто-выравнивание пока высоко → байк крутит сальто; гаснет к земле → чистая посадка); pumpSpin = скорость вращения сальто
-function popText(m){ if(CORE_TEST_MODE)return; popMsg=m;popT=1;}                                        // CORE TEST: no score popups
-function floatPop(x,y,txt,col){ if(CORE_TEST_MODE)return; if(!floats)floats=[]; floats.push({x:x,y:y,txt:txt,col:col,vy:-0.9,life:1}); }
+function popText(m){ if((typeof VSLICE!=='undefined'&&VSLICE))return; if(CORE_TEST_MODE)return; popMsg=m;popT=1;}                                        // CORE TEST: no score popups
+function floatPop(x,y,txt,col){ if(CORE_TEST_MODE||(typeof VSLICE!=='undefined'&&VSLICE))return; if(!floats)floats=[]; floats.push({x:x,y:y,txt:txt,col:col,vy:-0.9,life:1}); }
 function activateBoost(){ if((boost||0)<1||boosting>0||screen!=='play')return; boost=0; boosting=Math.round(TUNE.pumpDur*(1+0.22*upgLvl('pump'))); if(bike){ bike.vx+=2; bike.wheel+=4; for(let e=0;e<12;e++)dust.push({x:bike.x-24+Math.random()*10,y:bike.y+22,vx:-(2+Math.random()*4.5),vy:-Math.random()*2.2,life:1,r:Math.random()*2.6+1.5}); } rush=1; shake=4; gflash=0.4; multPulse=1; popText('⚡ PUMP!'); sfxLev(); buzz(28); }   // wheelspin roost on launch (traction-break juice)   // small instant nudge + long gentle push (see TUNE.pumpForce/pumpDur); no more vx-snap-to-18
 function resolveEvent(type){ if(screen!=='play')return;          // payoff when the bike clears an event block
   if(type==='rally'){ coins+=3; popText('ПАМП-РАЛЛИ  +$'+(Math.round(evBonus)+3)); floatPop(bike.x,bike.y-34,'+$','#9ff0c8'); gflash=0.7; multPulse=1; sfxAir(); }
@@ -3414,7 +3419,7 @@ const VS={
             climbTraction:0.35, // эндуро-сцепление ослаблено: крутое берётся импульсом, не одной тягой
             loopAngle:0.62, endoAngle:0.72, failHoldT:0.25 },
   roadW:104, farLift:0.30, ribEvery:120,                     // визуальная 2.5D-дорога (на коллизию не влияет)
-  camXFrac:0.30, camYFrac:0.58, camLead:26, camLeadT:0.10, camVertT:0.055
+  camXFrac:0.26, camYFrac:0.56, camLead:22, camLeadT:0.09, camVertT:0.05
 };
 window.VS=VS;
 // --- авторитетная линия коллизии: монотонная кусочно-кубическая интерполяция по узлам ---
@@ -3441,87 +3446,113 @@ function buildVSliceTerr(){ baseY=H*0.6; terr=[]; let lipY=baseY;
     terr.push({x:x,y:y,open:y,close:y,hi:y,lo:y,up:false,gap:g,coin:false,topY:y,lipY:lipY,step:false,stepDone:false,
       kick:false,pump:false,pumpMag:0,whoop:false,mud:false,drop:false,climb:false,mega:false,haz:false,hazHit:false,ev:''}); }
   genX=terr.length*STEP+99999; finishDist=Math.floor(VS.END/10); }
-// --- 2.5D-ПОЛОТНО вокруг collision-line VS.h(s). Косоугольная проекция (постоянный вектор
-// глубины) — все дальние точки = ближние + const, поэтому лента не выворачивается и не даёт дыр.
-// Коллизия рисование НЕ читает: это чисто визуальный слой над terr[].y.
-const VSD={ dx:9, dy:34, side:26 };   // вектор глубины (вправо-вверх, глубина ~34px) + высота боковой грани
+// --- 2.5D-ДОРОГА как ТРИ РАЗДЕЛЬНЫЕ ПОВЕРХНОСТИ вокруг collision-line vsHeight(s).
+// N(s) = ближний контактный край (= физическая линия). F(s)=N+depthVector (ДИАГОНАЛЬ вверх-вправо,
+// горизонтальный компонент ДОМИНИРУЕТ — иначе дорога = толстая 2D-полоса). B(s)=N+sideDrop (вниз-влево).
+// top face между N и F · side face между N и B · far edge по F. Коллизия рисование не читает.
+const VSD={ dvx:50, dvy:-27, sdx:-9, sdy:19, rib:78 };   // depthVector (гориз.>вертик.) + sideDrop + шаг диагональных рёбер
 function _vsRuns(i0,i1){ const runs=[]; let a=-1;
   for(let i=i0;i<=i1;i++){ const c=terr[i]; if(c&&!c.gap){ if(a<0)a=i; } else { if(a>=0){runs.push([a,i-1]);a=-1;} } }
   if(a>=0)runs.push([a,i1]); return runs; }
 function drawVSliceRoad(i0,i1){
-  const DX=VSD.dx, DY=VSD.dy, SIDE=VSD.side, runs=_vsRuns(i0,i1);
+  const DVX=VSD.dvx, DVY=VSD.dvy, SDX=VSD.sdx, SDY=VSD.sdy, runs=_vsRuns(i0,i1);
+  const N=(i)=>[terr[i].x,terr[i].y], F=(i)=>[terr[i].x+DVX,terr[i].y+DVY], B=(i)=>[terr[i].x+SDX,terr[i].y+SDY];
   for(const [a,b] of runs){
-    // ---- боковая/фронтальная грань: свисает ВНИЗ от ближнего края, самая тёмная ----
-    ctx.beginPath(); ctx.moveTo(terr[a].x,terr[a].y);
-    for(let i=a;i<=b;i++) ctx.lineTo(terr[i].x,terr[i].y);
-    for(let i=b;i>=a;i--) ctx.lineTo(terr[i].x,terr[i].y+SIDE);
+    // ---- (1) ДАЛЬНИЙ КРАЙ / ОГРАЖДЕНИЕ — рисуется первым, позади всего ----
+    ctx.strokeStyle='rgba(96,88,150,0.5)'; ctx.lineWidth=1.6; ctx.lineJoin='round';   // приглушён (атм. перспектива)
+    ctx.beginPath(); for(let i=a;i<=b;i++){ const f=F(i); i===a?ctx.moveTo(f[0],f[1]):ctx.lineTo(f[0],f[1]); } ctx.stroke();
+    // тонкие столбики ограждения дальнего края (глубину видно и на ровном)
+    ctx.strokeStyle='rgba(110,100,165,0.32)'; ctx.lineWidth=1;
+    for(let i=a;i<=b;i++){ if((Math.round(terr[i].x)%(VSD.rib*2))!==0)continue; const f=F(i); ctx.beginPath(); ctx.moveTo(f[0],f[1]); ctx.lineTo(f[0],f[1]+7); ctx.stroke(); }
+    // ---- (2) БОКОВАЯ ГРАНЬ (near→B): вниз-влево, самая тёмная ----
+    ctx.beginPath(); const na0=N(a); ctx.moveTo(na0[0],na0[1]);
+    for(let i=a;i<=b;i++){ const n=N(i); ctx.lineTo(n[0],n[1]); }
+    for(let i=b;i>=a;i--){ const bb=B(i); ctx.lineTo(bb[0],bb[1]); }
+    ctx.closePath(); { const y0=terr[a].y, g=ctx.createLinearGradient(0,y0,0,y0+SDY+4);
+      g.addColorStop(0,'rgba(26,20,46,0.98)'); g.addColorStop(1,'rgba(9,7,20,0.99)'); ctx.fillStyle=g; } ctx.fill();
+    // ---- (3) ВЕРХНЯЯ ПЛОСКОСТЬ (near→F): отдельный СВЕТЛЫЙ тон, градиент near→far ----
+    ctx.beginPath(); ctx.moveTo(na0[0],na0[1]);
+    for(let i=a;i<=b;i++){ const n=N(i); ctx.lineTo(n[0],n[1]); }
+    for(let i=b;i>=a;i--){ const f=F(i); ctx.lineTo(f[0],f[1]); }
     ctx.closePath();
-    const sf=ctx.createLinearGradient(0,0,0,1); // вертикальный, зададим через фиксированные world-Y ниже
-    { const y0=terr[a].y, g=ctx.createLinearGradient(0,y0,0,y0+SIDE);
-      g.addColorStop(0,'rgba(24,20,44,0.96)'); g.addColorStop(1,'rgba(8,6,20,0.98)'); ctx.fillStyle=g; }
-    ctx.fill();
-    // ---- ВЕРХНЕЕ ПОЛОТНО: near → far, светлее у ближнего края ----
-    ctx.beginPath(); ctx.moveTo(terr[a].x,terr[a].y);
-    for(let i=a;i<=b;i++) ctx.lineTo(terr[i].x,terr[i].y);
-    for(let i=b;i>=a;i--) ctx.lineTo(terr[i].x+DX,terr[i].y-DY);
-    ctx.closePath();
-    { const y0=terr[a].y, g=ctx.createLinearGradient(0,y0-DY,0,y0);
-      g.addColorStop(0,'rgba(52,44,92,0.95)'); g.addColorStop(1,'rgba(96,80,150,0.98)'); ctx.fillStyle=g; }
-    ctx.fill();
-    // ---- поперечные рёбра: показывают ширину/глубину ----
-    ctx.strokeStyle='rgba(150,170,230,0.16)'; ctx.lineWidth=1;
-    for(let i=a;i<=b;i++){ if((Math.round(terr[i].x)%VS.ribEvery)!==0) continue;
-      ctx.beginPath(); ctx.moveTo(terr[i].x,terr[i].y); ctx.lineTo(terr[i].x+DX,terr[i].y-DY); ctx.stroke(); }
-    // ---- дальний край: приглушённая линия (атмосферная перспектива) ----
-    ctx.strokeStyle='rgba(120,120,190,0.55)'; ctx.lineWidth=1.4;
-    ctx.beginPath(); for(let i=a;i<=b;i++){ const X=terr[i].x+DX,Y=terr[i].y-DY; i===a?ctx.moveTo(X,Y):ctx.lineTo(X,Y); } ctx.stroke();
-    // ---- ближний край: яркий неон, где едет байк (НЕ перекрывает колёса — они рисуются позже) ----
+    { const y0=terr[a].y, g=ctx.createLinearGradient(0,y0+DVY,0,y0);   // far (тускло-холодный) → near (светлее-теплее)
+      g.addColorStop(0,'rgba(58,50,98,0.99)'); g.addColorStop(1,'rgba(104,90,158,0.99)'); ctx.fillStyle=g; } ctx.fill();
+    // ---- ДИАГОНАЛЬНЫЕ ПОПЕРЕЧНЫЕ РЁБРА (N→F): прямо показывают направление глубины ----
+    ctx.strokeStyle='rgba(168,180,238,0.22)'; ctx.lineWidth=1;
+    for(let i=a;i<=b;i++){ if((Math.round(terr[i].x)%VSD.rib)!==0)continue; const n=N(i),f=F(i); ctx.beginPath(); ctx.moveTo(n[0],n[1]); ctx.lineTo(f[0],f[1]); ctx.stroke(); }
+    // ---- ЦЕНТРАЛЬНАЯ РАЗМЕТКА по середине верхней плоскости (пунктир вдоль поверхности) ----
+    ctx.strokeStyle='rgba(200,208,255,0.30)'; ctx.lineWidth=1.4; ctx.setLineDash([10,10]);
+    ctx.beginPath(); for(let i=a;i<=b;i++){ const mx=terr[i].x+DVX*0.5, my=terr[i].y+DVY*0.5; i===a?ctx.moveTo(mx,my):ctx.lineTo(mx,my); } ctx.stroke(); ctx.setLineDash([]);
+    // ---- БЛИЖНИЙ КАНТ: яркая тонкая грань где едет байк (тонкая — не перекрывает покрышки) ----
     ctx.lineCap='round'; ctx.lineJoin='round';
-    ctx.strokeStyle='rgba(60,150,180,0.35)'; ctx.lineWidth=4.5;
-    ctx.beginPath(); for(let i=a;i<=b;i++){ i===a?ctx.moveTo(terr[i].x,terr[i].y):ctx.lineTo(terr[i].x,terr[i].y); } ctx.stroke();
-    ctx.strokeStyle='rgba(120,240,255,0.95)'; ctx.lineWidth=1.8;
-    ctx.beginPath(); for(let i=a;i<=b;i++){ i===a?ctx.moveTo(terr[i].x,terr[i].y):ctx.lineTo(terr[i].x,terr[i].y); } ctx.stroke();
+    ctx.strokeStyle='rgba(90,200,230,0.30)'; ctx.lineWidth=3.5;
+    ctx.beginPath(); for(let i=a;i<=b;i++){ const n=N(i); i===a?ctx.moveTo(n[0],n[1]):ctx.lineTo(n[0],n[1]); } ctx.stroke();
+    ctx.strokeStyle='rgba(130,244,255,0.95)'; ctx.lineWidth=1.6;
+    ctx.beginPath(); for(let i=a;i<=b;i++){ const n=N(i); i===a?ctx.moveTo(n[0],n[1]):ctx.lineTo(n[0],n[1]); } ctx.stroke();
+    ctx.lineCap='butt';
   }
-  // ---- кромки разрыва: красный лип взлёта, зелёный лип посадки ----
-  for(const g of VS.GAP){ const y0=baseY-vsHeight(g[0]), y1=baseY-vsHeight(g[1]);
-    ctx.strokeStyle='rgba(255,90,80,0.95)'; ctx.lineWidth=3; ctx.beginPath(); ctx.moveTo(g[0],y0+8); ctx.lineTo(g[0]+DX,y0-DY); ctx.stroke();
-    ctx.strokeStyle='rgba(120,255,170,0.95)'; ctx.lineWidth=3; ctx.beginPath(); ctx.moveTo(g[1],y1+8); ctx.lineTo(g[1]+DX,y1-DY); ctx.stroke(); }
-  // ---- зона приземления впереди (в воздухе): проекция куда придёт байк ----
+  // ---- ТОРЦЫ РАЗРЫВА: у gap видны обрезанные top+side грани (поверхность НЕ идёт через пропасть) ----
+  for(const g of VS.GAP){ [[g[0],1],[g[1],-1]].forEach(function(e){ const gx=e[0], gy=baseY-vsHeight(gx);
+    const n=[gx,gy], f=[gx+DVX,gy+DVY], bb=[gx+SDX,gy+SDY];
+    ctx.fillStyle='rgba(14,10,26,0.95)'; ctx.beginPath(); ctx.moveTo(n[0],n[1]); ctx.lineTo(f[0],f[1]); ctx.lineTo(f[0],f[1]+SDY+4); ctx.lineTo(bb[0],bb[1]); ctx.closePath(); ctx.fill();
+    ctx.strokeStyle=e[1]>0?'rgba(255,90,80,0.95)':'rgba(120,255,170,0.95)'; ctx.lineWidth=2.6; ctx.beginPath(); ctx.moveTo(n[0],n[1]); ctx.lineTo(f[0],f[1]); ctx.stroke(); }); }
+  // ---- КОНТАКТНАЯ ТЕНЬ на верхней плоскости под байком (высота → меньше/прозрачнее) ----
+  if(bike){ const gx=bike.x, gy=terrainAt(gx).y, air=bike.onG?0:clamp((gy-(bike.y))/160,0,1);
+    const sh=1-air, sx=gx+DVX*0.28, sy=gy+DVY*0.28;   // тень чуть в глубину от near-края
+    ctx.save(); ctx.globalAlpha=0.34*sh+0.05; ctx.fillStyle='#05040c';
+    ctx.beginPath(); ctx.ellipse(sx, sy, 20*(0.7+0.3*sh), 5*(0.6+0.4*sh), 0, 0, 6.2832); ctx.fill(); ctx.restore(); }
+  // ---- зона приземления впереди (в воздухе) ----
   if(bike && !bike.onG){ let lx=bike.x, ly=bike.y, lvx=bike.vx, lvy=bike.vy;
-    for(let s2=0;s2<160;s2++){ lvy+=0.35; lx+=lvx*0.5; ly+=lvy*0.5; if(ly>=terrainAt(lx).y-27){ break; } }
+    for(let s2=0;s2<200;s2++){ lvy+=0.35; lx+=lvx*0.5; ly+=lvy*0.5; if(ly>=terrainAt(lx).y-27){ break; } }
     const gy=terrainAt(lx).y;
-    ctx.strokeStyle='rgba(120,240,180,0.85)'; ctx.lineWidth=2; ctx.setLineDash([6,5]);
-    ctx.beginPath(); ctx.ellipse(lx,gy,20,5,0,0,6.2832); ctx.stroke(); ctx.setLineDash([]);
-    ctx.strokeStyle='rgba(120,240,180,0.4)'; ctx.beginPath(); ctx.moveTo(bike.x,bike.y+8); ctx.lineTo(lx,gy-6); ctx.stroke(); }
+    ctx.strokeStyle='rgba(120,255,180,0.9)'; ctx.lineWidth=2; ctx.setLineDash([6,5]);
+    ctx.beginPath(); ctx.ellipse(lx+DVX*0.28,gy+DVY*0.28,22,5,0,0,6.2832); ctx.stroke(); ctx.setLineDash([]); }
   // ---- флаги чекпоинтов ----
   for(let k=0;k<VS.CP.length;k++){ const cx=VS.CP[k].x, cy=baseY-vsHeight(cx), done=k<=_vsCP;
     const col=done?'120,255,170':'255,210,110';
-    ctx.strokeStyle='rgba('+col+',0.9)'; ctx.lineWidth=2; ctx.beginPath(); ctx.moveTo(cx,cy-4); ctx.lineTo(cx,cy-48); ctx.stroke();
-    ctx.fillStyle='rgba('+col+',0.85)'; ctx.beginPath(); ctx.moveTo(cx,cy-48); ctx.lineTo(cx+18,cy-42); ctx.lineTo(cx,cy-34); ctx.closePath(); ctx.fill(); }
+    ctx.strokeStyle='rgba('+col+',0.9)'; ctx.lineWidth=2; ctx.beginPath(); ctx.moveTo(cx,cy-4); ctx.lineTo(cx,cy-50); ctx.stroke();
+    ctx.fillStyle='rgba('+col+',0.85)'; ctx.beginPath(); ctx.moveTo(cx,cy-50); ctx.lineTo(cx+18,cy-44); ctx.lineTo(cx,cy-36); ctx.closePath(); ctx.fill(); }
   // ---- финишная линия ----
   { const fx=VS.END, fy=baseY-vsHeight(fx);
-    for(let r=0;r<7;r++){ ctx.fillStyle=(r%2)?'rgba(240,240,255,0.85)':'rgba(20,20,40,0.85)';
-      ctx.fillRect(fx-2, fy-6-r*7, 6, 7); } }
-  // ---- DEBUG-ПРОЕКЦИЯ (?vsDebug=1): авторитетная линия, края, нормали, поперечники, контакты ----
+    for(let r=0;r<8;r++){ ctx.fillStyle=(r%2)?'rgba(240,240,255,0.9)':'rgba(20,20,40,0.9)'; ctx.fillRect(fx-2, fy-6-r*7, 6, 7);
+      ctx.fillStyle=(r%2)?'rgba(20,20,40,0.9)':'rgba(240,240,255,0.9)'; ctx.fillRect(fx-2+DVX*0.5, fy-6-r*7+DVY*0.5, 6, 7); } }
+  // ---- DEBUG-ПРОЕКЦИЯ (?vsDebug=1): подписанные слои + числовые гейты ----
   if(typeof VSDBG!=='undefined' && VSDBG){
-    ctx.strokeStyle='rgba(255,80,80,0.95)'; ctx.lineWidth=1.4;   // collision-line (авторитет)
+    const lbl=(txt,col,x,y)=>{ ctx.fillStyle=col; ctx.font='9px ui-monospace,monospace'; ctx.fillText(txt,x,y); };
+    ctx.strokeStyle='rgba(255,80,80,0.95)'; ctx.lineWidth=1.4;   // COLLISION (авторитет)
     ctx.beginPath(); for(let i=i0;i<=i1;i++){ if(terr[i]&&!terr[i].gap){ const X=terr[i].x, Y=baseY-vsHeight(X); i===i0?ctx.moveTo(X,Y):ctx.lineTo(X,Y); } } ctx.stroke();
-    ctx.strokeStyle='rgba(120,240,255,0.7)'; ctx.beginPath();   // near edge
-    for(let i=i0;i<=i1;i++){ if(terr[i]&&!terr[i].gap){ i===i0?ctx.moveTo(terr[i].x,terr[i].y):ctx.lineTo(terr[i].x,terr[i].y); } } ctx.stroke();
-    ctx.strokeStyle='rgba(160,120,255,0.7)'; ctx.beginPath();   // far edge
-    for(let i=i0;i<=i1;i++){ if(terr[i]&&!terr[i].gap){ const X=terr[i].x+DX,Y=terr[i].y-DY; i===i0?ctx.moveTo(X,Y):ctx.lineTo(X,Y); } } ctx.stroke();
-    for(let i=i0;i<=i1;i+=3){ const c=terr[i]; if(!c||c.gap)continue;   // нормали + поперечники
-      const a2=terr[Math.max(0,i-1)], b2=terr[Math.min(terr.length-1,i+1)], ang=Math.atan2(b2.y-a2.y,b2.x-a2.x);
-      ctx.strokeStyle='rgba(255,220,120,0.5)'; ctx.beginPath(); ctx.moveTo(c.x,c.y); ctx.lineTo(c.x-Math.sin(ang)*10,c.y+Math.cos(ang)*10); ctx.stroke();
-      ctx.strokeStyle='rgba(150,170,230,0.35)'; ctx.beginPath(); ctx.moveTo(c.x,c.y); ctx.lineTo(c.x+DX,c.y-DY); ctx.stroke(); }
-    if(bike){ const ca=Math.cos(bike.ang), DXp=(typeof PHYS!=='undefined'?PHYS.DX:26), DYp=(typeof PHYS!=='undefined'?PHYS.DY:27.5), sa=Math.sin(bike.ang);
-      for(const off of [-1,1]){ const wx=bike.x+off*DXp*ca+DYp*(-sa*off/Math.abs(off||1))*0, gy=terrainAt(bike.x+off*DXp*ca).y;
-        const cx2=bike.x+off*DXp*ca; const err=Math.abs((bike.y+DYp)-terrainAt(cx2).y);
-        ctx.fillStyle=(off<0)?'rgba(120,240,255,0.95)':'rgba(255,140,200,0.95)';
+    ctx.strokeStyle='rgba(120,240,255,0.8)'; ctx.beginPath();   // NEAR
+    for(let i=i0;i<=i1;i++){ if(terr[i]&&!terr[i].gap){ const n=N(i); i===i0?ctx.moveTo(n[0],n[1]):ctx.lineTo(n[0],n[1]); } } ctx.stroke();
+    ctx.strokeStyle='rgba(180,140,255,0.8)'; ctx.beginPath();   // FAR
+    for(let i=i0;i<=i1;i++){ if(terr[i]&&!terr[i].gap){ const f=F(i); i===i0?ctx.moveTo(f[0],f[1]):ctx.lineTo(f[0],f[1]); } } ctx.stroke();
+    ctx.strokeStyle='rgba(255,150,90,0.8)'; ctx.beginPath();   // SIDE BOTTOM
+    for(let i=i0;i<=i1;i++){ if(terr[i]&&!terr[i].gap){ const bb=B(i); i===i0?ctx.moveTo(bb[0],bb[1]):ctx.lineTo(bb[0],bb[1]); } } ctx.stroke();
+    // DEPTH VECTOR стрелка + подписи у байка
+    if(bike){ const n=[bike.x,terrainAt(bike.x).y]; ctx.strokeStyle='rgba(255,240,120,0.95)'; ctx.lineWidth=2;
+      ctx.beginPath(); ctx.moveTo(n[0],n[1]); ctx.lineTo(n[0]+DVX,n[1]+DVY); ctx.stroke();
+      lbl('DEPTH',(255,240,120),n[0]+DVX+3,n[1]+DVY);
+      lbl('COLLISION','rgba(255,80,80,1)',bike.x-40,terrainAt(bike.x).y-40);
+      lbl('NEAR','rgba(120,240,255,1)',bike.x-40,terrainAt(bike.x).y-28);
+      lbl('FAR','rgba(180,140,255,1)',bike.x+DVX-10,terrainAt(bike.x).y+DVY-4);
+      lbl('SIDE','rgba(255,150,90,1)',bike.x+SDX-24,terrainAt(bike.x).y+SDY+4);
+      const ca=Math.cos(bike.ang), DXp=(typeof PHYS!=='undefined'?PHYS.DX:26);
+      for(const off of [-1,1]){ const cx2=bike.x+off*DXp*ca; ctx.fillStyle=(off<0)?'rgba(120,240,255,0.95)':'rgba(255,140,200,0.95)';
         ctx.beginPath(); ctx.arc(cx2, terrainAt(cx2).y, 3.2, 0, 6.2832); ctx.fill(); } }
   }
 }
 window.drawVSliceRoad=drawVSliceRoad;
+// C1B-VC: численные debug-гейты глубины/ошибки/композиции
+window.__vsDebugStats=function(i0,i1){
+  const DVX=VSD.dvx, DVY=VSD.dvy;
+  let sumDx=0, sumDy=0, minDx=1e9, nn=0, maxErr=0;
+  for(let i=Math.max(0,i0);i<=Math.min(terr.length-1,i1);i++){ const c=terr[i]; if(!c||c.gap||c.x>VS.END)continue;
+    sumDx+=DVX; sumDy+=DVY; minDx=Math.min(minDx,DVX); nn++;
+    const e=Math.abs(terrainAt(c.x).y-(baseY-vsHeight(c.x))); if(e>maxErr)maxErr=e; }
+  const topW=Math.hypot(DVX,DVY);
+  const sxRatio = bike? (bike.x-cam.x)/W : 0;
+  return { avgDepthX:+(sumDx/Math.max(1,nn)).toFixed(1), avgDepthY:+(sumDy/Math.max(1,nn)).toFixed(1),
+    minDepthX:+minDx.toFixed(1), topWidthPx:+topW.toFixed(1), collisionErrPx:+maxErr.toFixed(2),
+    bikeScreenXRatio:+sxRatio.toFixed(3), depthHorizGtVert:(Math.abs(DVX)>Math.abs(DVY)) }; };
 // --- чекпоинты и рестарт ---
 let _vsCP=-1, _vsCPState=null, _vsT0=0, _vsDone=false, _vsTime=0, _vsLead=0, _vsCpFxT=0, _vsHint='', _vsHintT=0, _vsFinT=0, _vsWinT=0;
 function vsSnapshot(){ const B=bike; const o={t:_vsTime};
@@ -4051,12 +4082,12 @@ function draw(){
     ctx.textAlign='left'; UI.boost={x:bx-12,y:by-24,w:bw+24,h:42}; }
   else UI.boost=null;
   // new-zone (biome) banner — b58: un-gated from CORE_TEST_MODE (biomes are core ATMOSPHERE/progression-feel, not meta bloat) → the market-era is announced as you ride deeper
-  if(biomeBannerT>0 && (screen==='play'||screen==='paused')){ const a=clamp(Math.min(biomeBannerT*3,(1-biomeBannerT)*5+0.3,1),0,1); ctx.globalAlpha=a; ctx.textAlign='center';
+  if(biomeBannerT>0 && (screen==='play'||screen==='paused') && !(typeof VSLICE!=='undefined'&&VSLICE)){ const a=clamp(Math.min(biomeBannerT*3,(1-biomeBannerT)*5+0.3,1),0,1); ctx.globalAlpha=a; ctx.textAlign='center';
     ctx.fillStyle='#9fb0d0'; ctx.font='600 10px ui-monospace,monospace'; ctx.fillText('▲ НОВАЯ ЭПОХА',W/2,H*0.25-20);
     ctx.fillStyle='#eafaff'; ctx.font='800 23px ui-monospace,monospace'; ctx.shadowColor='rgba(130,200,255,0.6)'; ctx.shadowBlur=12; ctx.fillText(biomeBanner,W/2,H*0.25+7); ctx.shadowBlur=0; ctx.globalAlpha=1; ctx.textAlign='left'; }
   // market-event screen tint (top+bottom bars in the event colour) + big telegraph banner
   if(evGlow>0.02 && screen==='play'){ const a=evGlow*0.2, eg=ctx.createLinearGradient(0,0,0,H); eg.addColorStop(0,'rgba('+evColor+','+a+')'); eg.addColorStop(0.42,'rgba('+evColor+',0)'); eg.addColorStop(0.58,'rgba('+evColor+',0)'); eg.addColorStop(1,'rgba('+evColor+','+a+')'); ctx.fillStyle=eg; ctx.fillRect(0,0,W,H); }
-  if(evBannerT>0 && (screen==='play'||screen==='paused')){ const a=clamp(Math.min(evBannerT*4,(1-evBannerT)*6+0.2,1),0,1); ctx.globalAlpha=a; ctx.textAlign='center';
+  if(evBannerT>0 && (screen==='play'||screen==='paused') && !(typeof VSLICE!=='undefined'&&VSLICE)){ const a=clamp(Math.min(evBannerT*4,(1-evBannerT)*6+0.2,1),0,1); ctx.globalAlpha=a; ctx.textAlign='center';
     ctx.fillStyle='rgba('+evColor+',1)'; ctx.font='800 27px ui-monospace,monospace'; ctx.shadowColor='rgba('+evColor+',0.9)'; ctx.shadowBlur=18; ctx.fillText(evBanner,W/2,H*0.305); ctx.shadowBlur=0; ctx.globalAlpha=1; ctx.textAlign='left'; }
   // onboarding coach hint — calm pill, distinct from the loud event banners
   if(tutT>0 && screen==='play'){ const a=clamp(Math.min(tutT*5,(1-tutT)*8+0.2,1),0,1); ctx.save(); ctx.globalAlpha=a; ctx.textAlign='center'; ctx.font='700 13px ui-monospace,monospace';
@@ -4091,6 +4122,12 @@ function draw(){
     if(_vsCpFxT>0){ _vsCpFxT-=0.02; ctx.save(); ctx.globalAlpha=clamp(_vsCpFxT,0,1); ctx.textAlign='center';
       ctx.font='800 20px ui-monospace,monospace'; ctx.fillStyle='rgba(120,255,170,0.95)'; ctx.fillText('✓ ЧЕКПОИНТ', W/2, H*0.3); ctx.restore(); ctx.textAlign='left'; }
     // финиш
+    if(typeof VSDBG!=='undefined' && VSDBG){ const st=window.__vsDebugStats(Math.floor(cam.x/STEP)-2,Math.floor((cam.x+W)/STEP)+2);
+      ctx.textAlign='left'; ctx.font='11px ui-monospace,monospace'; ctx.fillStyle='rgba(10,12,24,0.7)'; ctx.fillRect(12,64,300,92);
+      ctx.fillStyle='#9fe'; const R2=[['depthVec x/y',st.avgDepthX+' / '+st.avgDepthY],['min depthX',st.minDepthX],
+        ['top width',st.topWidthPx+'px'],['collision err',st.collisionErrPx+'px'],['bike screenX',(st.bikeScreenXRatio*100).toFixed(1)+'%'],
+        ['depth horiz>vert',st.depthHorizGtVert?'✓':'✗']];
+      R2.forEach(function(r,k){ ctx.fillText(r[0]+': '+r[1],18,80+k*13); }); }
     if(_vsDone){ ctx.save(); ctx.textAlign='center'; ctx.fillStyle='rgba(255,240,160,0.98)';
       ctx.font='800 34px ui-monospace,monospace'; ctx.fillText('🏁 ФИНИШ', W/2, H*0.4);
       ctx.font='700 18px ui-monospace,monospace'; ctx.fillStyle='rgba(200,255,220,0.95)'; ctx.fillText(_vsFinT.toFixed(2)+' с', W/2, H*0.4+34); ctx.restore(); ctx.textAlign='left'; }
