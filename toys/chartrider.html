@@ -2386,7 +2386,7 @@ let _rgcW={bikeWorldDeg:0,torsoLocalDeg:0,torsoWorldDeg:0,pelvisWorld:{x:0,y:0},
 const _CT={ F:{raw:false,filt:false,on:0,off:0,gap:0,pen:0,since:9}, R:{raw:false,filt:false,on:0,off:0,gap:0,pen:0,since:9} };
 // b280: все дуэллы/счётчики — ВРЕМЕННЫЕ аккумуляторы в секундах (airT, upInT, upOutT, fLostT, candT)
 let _ph={ state:'neutral', prevState:'neutral', prevAir:false, airT:0, sinceFirst:9, landImp:0,
-  airRun:0, grndRun:0, airLatch:false, vyLatch:0, upIn:0, upOut:0, uphillLatch:false, fLost:0, cand:'neutral', candT:0 };
+  airRun:0, grndRun:0, airLatch:false, vyLatch:0, upIn:0, upOut:0, uphillLatch:false, fLost:0, cand:'neutral', candT:0, lastGround:'neutral' };
 // b278: ТАБЛИЦА ПОЗ И ВРЕМЕННЫХ КОНСТАНТ (кадры @60fps). Живой тюн через window.PC, финальные числа — здесь.
 const PC={
   zF:0.20, zB:0.08, zU:0.19, zD:0.10,                                  // зона таза (доли Wb / wheelDia / riderH)
@@ -2783,6 +2783,11 @@ function solveRigCutout(){
     _ld.fX=lp1(_ld.fX,tX,tau(_ld.fX,tX),dt);
     _ld.fT=lp1(_ld.fT,tT,tau(_ld.fT,tT),dt); }
   // ---- разрешение состояния (приоритет: air → приземление → uphill → wheelie → neutral) ----
+  // b280.3: departurePending — оба контакта потеряны, но air ещё не подтверждён. Вместо падения
+  // в neutral на 1-2 кадра (сломанные последовательности wheelie→neutral→apex и uphill→neutral→ascend)
+  // удерживаем предыдущую наземную позу. Это НЕ общий minimum-state-duration: настоящие короткие
+  // firstContact/compression не трогаются, фильтруется только неверный промежуточный neutral.
+  const departPending = airRaw && !trulyAir;
   let st;
   // порог фаз воздуха ПРОПОРЦИОНАЛЕН полёту: 4-кадровая задержка air-латча съедает начало подъёма,
   // фикс. 2.8 съедал ascend целиком (замер: g≈0.26px/кадр², подъём ≈13 кадров)
@@ -2792,6 +2797,7 @@ function solveRigCutout(){
   else if(_land.on && _land.t<=_land.rise+_land.hold) st='compression';
   else if(_land.on) st='rebound';                                                                        // landing СТАРШЕ uphill, пока rebound не закончен
   else if(_ph.uphillLatch && (filtR||filtF) && (filtF || _ph.fLost<=PC.fLostT || !(rs<-0.35||li<-0.35))) st='uphill';  // F0R1 на склоне НЕ отменяет uphill
+  else if(departPending && _ph.lastGround) st=_ph.lastGround;                                            // b280.3: контакт потерян, воздух НЕ подтверждён → держим прежнюю наземную позу
   else if(filtR && !filtF) st='wheelie';
   else st = (rs<-0.25||li<-0.25) ? (_ph.uphillLatch?'uphill':'wheelie') : 'neutral';                      // b280: латч подъёма СТАРШЕ наклон-индуцированного вилли
   let tTrans=-1;                                                                                         // СУБКАДРОВОЕ время смены state (−1 = смены не было)
@@ -2807,6 +2813,7 @@ function solveRigCutout(){
   } else { _ph.cand=st; _ph.candT=0; }
   if(tTrans<0 && tUpCross>=0 && _ph.state==='uphill') tTrans=tUpCross;
   const state=_ph.state, onGvis=!trulyAir;
+  if(!airRaw && (state==='neutral'||state==='uphill'||state==='wheelie')) _ph.lastGround=state;           // запоминаем ПОДТВЕРЖДЁННУЮ наземную позу
   // ---- b280.1: ВИЗУАЛЬНЫЕ ФИЛЬТРЫ РАМЫ во времени. Покадровые рекуррентности переведены в
   // непрерывные системы АНАЛИТИЧЕСКИ, а не «умножением коэффициента на dt»:
   //   v←0.5v+kA(T−x); x←x+v   ⇔   V += (K(T−x) − cV)dt; x += V dt,  c=0.5/h=30/с, K=kA/h²
@@ -3078,7 +3085,7 @@ window.__rigStateReset=function(){
   _land={on:false,f:0,peak:0,rise:5,hold:2,fall:14,env:0};
   _CT.F={raw:false,filt:false,on:0,off:0,gap:0,pen:0,since:999}; _CT.R={raw:false,filt:false,on:0,off:0,gap:0,pen:0,since:999};
   _ph={ state:'neutral', prevState:'neutral', prevAir:false, airT:0, sinceFirst:9, landImp:0,
-    airRun:0, grndRun:0, airLatch:false, vyLatch:0, upIn:0, upOut:0, uphillLatch:false, fLost:0, cand:'neutral', candT:0 };
+    airRun:0, grndRun:0, airLatch:false, vyLatch:0, upIn:0, upOut:0, uphillLatch:false, fLost:0, cand:'neutral', candT:0, lastGround:'neutral' };
   _land={on:false,t:0,peak:0,rise:0.083,hold:0.0167,fall:0.2333,env:0};
   _ld={cF:0,dF:0,cB:0,dB:0,cPrev:0,cVel:0,fY:0,fX:0,fT:0,gain:1,init:false};
   _capCnt={norm:0,hard:0,total:0,joint:'',maxEx:0}; _rgcTPrev=0;
