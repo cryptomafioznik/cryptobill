@@ -76,7 +76,7 @@ function lerp(a,b,t){return a+(b-a)*t;} function clamp(v,a,b){return v<a?a:v>b?b
 // false → full game everywhere. Single switch. Systems are GATED, never deleted.
 const CORE_TEST_MODE = false;   // b70: META LIVE — building the progression spine (upgrades/bikes with teeth, career, economy) on the confirmed rigid-body core
 // build stamp — bump on every change so a phone refresh can confirm it loaded fresh code (cache!)
-const BUILD = '2026-07-23 · b282';
+const BUILD = '2026-07-23 · b283';
 
 // ---------- procedural market terrain ----------
 // height map sampled every STEP px; generated forward as we ride. Market character:
@@ -2390,7 +2390,12 @@ let _land={on:false,t:0,tStart:-1,peak:0,rise:0.083,hold:0.0167,fall:0.2333,env:
 // база (постоянное сжатие на длинном подъёме уходит сюда и НЕ смещает attack-позу навсегда),
 // fY/fX/fT — сам быстрый offset, gain — затухание в воздухе/на приземлении.
 let _ld={cF:0,dF:0,cB:0,dB:0,cPrev:0,cVel:0,fY:0,fX:0,fT:0,gain:1,init:false};
-let _capCnt={norm:0,hard:0,total:0,joint:'',maxEx:0};
+// b283.1 Б2.3: НАСТОЯЩИЙ счётчик ограничителя — по каждому срабатыванию, а не агрегат.
+let _capCnt={norm:0,hard:0,total:0,joint:'',maxEx:0,run:0,maxRun:0,log:[],byState:{},byJoint:{}};
+window.__capReport=function(){ const t=_capCnt.total||1, a=_capCnt.norm+_capCnt.hard;
+  return { totalFrames:_capCnt.total, activations:a, pct:+(100*a/t).toFixed(3),
+    normal:_capCnt.norm, hard:_capCnt.hard, maxConsecutive:_capCnt.maxRun,
+    byState:_capCnt.byState, byJoint:_capCnt.byJoint, sample:_capCnt.log.slice(0,12) }; };
 // b282.1: ИНВАРИАНТЫ landing-конвейера. Только debug-учёт, поведение не меняют.
 // Главный: rebound не может существовать для landingId, у которого не было ни одного compression-кадра.
 let _asrt={landingId:0, compFrames:0, rebFrames:0, seenIds:{}, errors:[]};
@@ -3031,9 +3036,15 @@ function solveRigCutout(){
   const dJ=(J)=>{ if(!_rgcPrevJ) return 0; let m=0,mi=0; for(let k=0;k<4;k++){ const d=Math.abs(J[k]-_rgcPrevJ[k]); if(d>m){m=d;mi=k;} } _worstJ=m; _worstName=JN[mi]; return m; };
   _capCnt.total++;
   const d0=dJ(sol.J);
+  if(d0<=capA) _capCnt.run=0;
   if(d0>capA){                                                                 // бисекция доли шага, пока Δ любого сустава не влезет в лимит
     if(hardW) _capCnt.hard++; else _capCnt.norm++;
     _capCnt.joint=_worstName; _capCnt.maxEx=Math.max(_capCnt.maxEx, d0-capA);
+    _capCnt.run++; if(_capCnt.run>_capCnt.maxRun) _capCnt.maxRun=_capCnt.run;
+    _capCnt.byState[state]=(_capCnt.byState[state]||0)+1;
+    _capCnt.byJoint[_worstName]=(_capCnt.byJoint[_worstName]||0)+1;
+    if(_capCnt.log.length<60) _capCnt.log.push({t:+_simT.toFixed(4), state:state, joint:_worstName,
+      before:+d0.toFixed(2), limit:+capA.toFixed(2), excess:+(d0-capA).toFixed(2), hard:hardW?1:0, lid:_land.id});
     let lo=0, hi=1, mid=0, best=null;
     for(let it=0; it<6; it++){ mid=(lo+hi)/2;
       const s=solvePose(p0.x+(c1.x-p0.x)*mid, p0.y+(c1.y-p0.y)*mid, p0.t+(c1.t-p0.t)*mid, p0.r+(c1.r-p0.r)*mid);
@@ -3198,7 +3209,7 @@ window.__rigStateReset=function(){
     airRun:0, grndRun:0, airLatch:false, vyLatch:0, upIn:0, upOut:0, uphillLatch:false, fLost:0, cand:'neutral', candT:0, lastGround:'neutral', gndT:0, prevVy:0, prevVy2:0, prevDt:1/60, airEpId:0 };
   _land={on:false,t:0,tStart:-1,peak:0,rise:0.083,hold:0.0167,fall:0.2333,env:0,id:0,airEp:-1,lastEp:-1,justOpened:false};
   _ld={cF:0,dF:0,cB:0,dB:0,cPrev:0,cVel:0,fY:0,fX:0,fT:0,gain:1,init:false};
-  _capCnt={norm:0,hard:0,total:0,joint:'',maxEx:0}; _rgcTPrev=0;
+  _capCnt={norm:0,hard:0,total:0,joint:'',maxEx:0,run:0,maxRun:0,log:[],byState:{},byJoint:{}}; _rgcTPrev=0;
   _rgcPrevJ=null; _rgcD={joint:0,pelvis:0,px:0,py:0,hard:false}; _rgcPose=null; _rgcXf=null;
   _rgcT=0; _bl={t0:-9,dur:0.30,fx:0,fy:0,ft:0.26,fr:0,frozen:false};
   _ev={id:0,seenId:0,rawCount:0,qualified:0,rejected:0,rejectReason:'',decisions:[],tContact:-1,wheel:'',wasAirConfirmed:false,airDuration:0,preSpeed:0,gapPrev:0,gapCur:0,pending:false};
