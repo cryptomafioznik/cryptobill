@@ -3438,6 +3438,93 @@ window.__vsRestart=vsRestart;
 // Физика между попытками не меняется — все три строят трассу одним buildVSliceTerr().
 // leanX>0 = вес ВПЕРЁД (клавиша вправо), leanX<0 = вес НАЗАД.
 function _vsSlopeAhead(dx){ const a=terrainAt(bike.x+dx); return -Math.atan2(terrainAt(bike.x+dx+30).y-a.y,30)*180/Math.PI; }
+// --- C1A-PROOF: запись входов, реплей, дребезг границ, overlay ---
+// Скриптовый пилот живёт ТОЛЬКО здесь. В обычном gameplay он не вызывается.
+window.__vsTrace=null;
+// debug-overlay: по нему видно, что смерть вызвана СОСТОЯНИЕМ байка, а не координатой
+window.__vsOverlay=function(g,inp,t){
+  const rel=bike.ang-terrainAt(bike.x).ang, hash=Object.keys(VS.physics).map(k=>VS.physics[k]).join(',');
+  const rows=[
+    't '+t.toFixed(2)+'s   трасса '+(100*bike.x/VS.END).toFixed(1)+'%   v '+bike.vx.toFixed(2),
+    'угол '+(bike.ang*180/Math.PI).toFixed(1)+'°   к поверхности '+(rel*180/Math.PI).toFixed(1)+'°   angV '+bike.angV.toFixed(3),
+    'контакт F'+(_CT.F.filt?1:0)+' R'+(_CT.R.filt?1:0)+'   воздух '+(bike.onG?'нет':'ДА'),
+    'газ '+(inp.d?'▮':'—')+'  тормоз '+(inp.b?'▮':'—')+'  нос↑ '+(inp.l?'▮':'—')+'  нос↓ '+(inp.r?'▮':'—'),
+    'PHX '+hash, screen==='dead'?('WIPEOUT: '+deathBy):''];
+  g.font='bold 12px ui-monospace,monospace'; g.textBaseline='top';
+  g.fillStyle='rgba(0,0,0,0.66)'; g.fillRect(4,4,430,rows.length*15+8);
+  rows.forEach(function(s2,k){ g.fillStyle=(k===5&&s2)?'#ff8a9a':'#9fe'; g.fillText(s2,10,8+k*15); }); };
+// ЧЕЛОВЕЧЕСКИЙ ТЕМП: решение принимается раз в TICK кадров и УДЕРЖИВАЕТСЯ до следующего.
+// Первый вариант пилота давал 204 нажатия короче 100мс из 240 — такое человек не сыграет.
+const _VS_TICK=6;                      // 6 кадров = 100мс — минимальная длительность любого нажатия
+let _vsHold={d:true,b:false,l:false,r:false};
+function _vsPolicyInputs(policy,i,slopeNow,slopeAhead,air,rel){
+  if(policy==='gas') return {d:true,b:false,l:false,r:false};
+  // RECOVERY: намеренная ошибка — держим НОС ВВЕРХ 0.5с на подходе к первому подъёму,
+  // дальше обычная техника исправляет положение. Ни смерти, ни чекпоинта.
+  // ошибка: в полёте над основным разрывом коротко даём НЕВЕРНЫЙ нос-вниз вместо коррекции —
+  // байк приходит на посадку с неправильным тангажом, но в пределах конуса; дальше техника выправляет
+  if(policy==='recovery' && !bike.onG && bike.x>6760 && bike.x<6980){ _vsHold={d:false,b:false,l:false,r:true}; return _vsHold; }
+  const J=window.__vsJitterPolicy; const ph=J?J.phase:0;
+  if(((i+ph)%_VS_TICK)!==0) return _vsHold;    // держим прошлое решение
+  let d=true,b=false,l=false,r=false;
+  if(policy==='notilt'&&policy!=='recovery'){
+    if(slopeNow>26 && bike.vx>2.4) d=(Math.floor(i/_VS_TICK)%3===0);   // дозировка газа блоками, не покадрово
+    if(slopeNow<-24 && bike.vx>9) b=true;
+  } else {
+    if(air){ const dd=terrainAt(bike.x+Math.max(24,bike.vx*11)).ang-bike.ang; d=false; r=(dd>0.10); l=(dd<-0.10); }
+    else if(rel<-0.40+(J?J.relN:0)){ d=false; b=(rel<-0.70); r=true; }                       // нос задран → сброс газа + вес вперёд
+    else if(slopeNow>20+(J?J.slopeN:0)){ r=(rel<-0.22+(J?J.relN:0)); d=(slopeNow>42)?(Math.floor(i/_VS_TICK)%4!==0):true; }   // вес вперёд ТОЛЬКО когда нос реально пошёл; иначе он глушит подъём
+    else if(slopeNow>8 && slopeAhead<-18){ d=false; r=true; }                   // подход к перегибу
+    else if(slopeNow<-18){ d=(bike.vx<6.4); b=(bike.vx>9.0); l=(rel>0.28); }    // спуск: придержать тормозом
+    else { d=true; r=(rel<-0.18); }
+  }
+  _vsHold={d:d,b:b,l:l,r:r}; return _vsHold; }
+// прогон с ЗАПИСЬЮ входов покадрово
+// ЗАМКНУТЫЙ дребезг: у пилота сдвигается ФАЗА принятия решений и слегка шумят пороги —
+// это честный аналог «человек нажал на ±80мс раньше/позже», потому что обратная связь сохраняется.
+// Разомкнутый реплей записанного трейса с дребезгом такой аналогией НЕ является: там любое
+// расхождение накапливается, потому что реагировать некому.
+window.__vsJitterPolicy=null;
+window.__vsRecord=function(policy,maxF,onFrame){
+  const _pol=(policy==='recovery')?'recovery':policy;
+  reset(); screen='play'; _vsTime=0; _vsHold={d:true,b:false,l:false,r:false}; const tr=[]; const res={policy:policy};
+  for(let i=0;i<maxF;i++){
+    const sn=_vsSlopeAhead(0), sa=_vsSlopeAhead(160), air=!bike.onG, rel=bike.ang-terrainAt(bike.x).ang;
+    const inp=_vsPolicyInputs(_pol,i,sn,sa,air,rel);
+    down=inp.d; brake=inp.b; leanKeyL=inp.l; leanKeyR=inp.r; tr.push(inp);
+    updLeanKeys(); slowTS=1; physAcc=1; update(); slowLerp=1; draw(); _vsTime+=1/60;
+    if(onFrame) onFrame(i,inp);
+    if(screen==='dead'){ res.died=true; res.deathBy=deathBy; break; }
+    if(bike.x>=VS.END){ res.finished=true; break; } }
+  res.frames=tr.length; res.seconds=+(tr.length/60).toFixed(2); res.maxX=Math.round(bike.x);
+  res.pct=+(100*bike.x/VS.END).toFixed(1); res.trace=tr; window.__vsTrace=tr; return res; };
+// реплей ЗАПИСАННЫХ входов (для jitter-теста и для видео без участия политики)
+window.__vsReplay=function(tr,maxF,onFrame){
+  reset(); screen='play'; _vsTime=0; const res={};
+  const N=Math.min(maxF||tr.length, tr.length);
+  for(let i=0;i<N;i++){ const inp=tr[i];
+    down=inp.d; brake=inp.b; leanKeyL=inp.l; leanKeyR=inp.r;
+    updLeanKeys(); slowTS=1; physAcc=1; update(); slowLerp=1; draw(); _vsTime+=1/60;
+    if(onFrame) onFrame(i,inp);
+    if(screen==='dead'){ res.died=true; res.deathBy=deathBy; break; }
+    if(bike.x>=VS.END){ res.finished=true; break; } }
+  res.frames=Math.min(N,res.frames||N); res.seconds=+((res.frames||N)/60).toFixed(2);
+  res.maxX=Math.round(bike.x); res.pct=+(100*bike.x/VS.END).toFixed(1); return res; };
+// интервалы нажатий из покадровой записи
+window.__vsIntervals=function(tr){ const keys=['d','b','l','r'], out={};
+  keys.forEach(function(k){ const iv=[]; let st=-1;
+    for(let i=0;i<=tr.length;i++){ const on=i<tr.length && tr[i][k];
+      if(on && st<0) st=i; else if(!on && st>=0){ iv.push({from:st,to:i,ms:Math.round((i-st)*1000/60)}); st=-1; } }
+    out[k]=iv; });
+  return out; };
+// дребезг: границы каждого интервала сдвигаются на ±jf кадров (детерминированно по индексу)
+window.__vsJitter=function(tr,jf,seed){ const iv=window.__vsIntervals(tr), keys=['d','b','l','r'];
+  const out=tr.map(function(){ return {d:false,b:false,l:false,r:false}; });
+  let n=seed||1; const rnd=function(){ n=(n*1103515245+12345)&0x7fffffff; return (n/0x7fffffff)*2-1; };
+  keys.forEach(function(k){ iv[k].forEach(function(e){
+    const a=Math.max(0,Math.round(e.from+rnd()*jf)), b=Math.min(tr.length,Math.round(e.to+rnd()*jf));
+    for(let i=a;i<b;i++) if(out[i]) out[i][k]=true; }); });
+  return out; };
 window.__vsRun=function(policy, maxF, onFrame){
   reset(); screen='play'; _vsTime=0;
   let deaths=0, frames=0, res={policy:policy};
