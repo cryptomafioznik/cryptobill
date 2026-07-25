@@ -3692,6 +3692,7 @@ function vsRestore(S){
   mult=1; multPulse=0; flowBoost=0; posPulse=0; _posPrev=0; coins=0; flipsTotal=0; skids.length=0;
   down=false; brake=false; leanX=0; leanKeyL=false; leanKeyR=false; activeTouches={};
   physAcc=0; slowTS=1; slowLerp=1; shake=0; flash=0; parts.length=0; dust.length=0;
+  if(typeof _tmAcc!=='undefined'){ _tmAcc=0; _tmResync=true; _tmConsumed=0; }   // 0A: рестарт с чекпоинта обязан обнулить и НОВЫЙ аккумулятор — иначе недобранный шаг протекает в следующую попытку (ровно тот класс транзиента, ради которого писался глубокий snapshot)
   cam.x=bike.x-W*VS.camXFrac; cam.y=bike.y-H*VS.camYFrac; _vsLead=0;
   _vsTime=S.t; screen='play'; deathBy=''; }
 function vsRestart(full){
@@ -5293,14 +5294,18 @@ const TM_SLOW_RATE=11.9074;    // сглаживание slowTS: 1-exp(-RATE/60)
 let _tmPrevNow=0, _tmAcc=0, _tmResync=true, _tmAlpha=1;
 // ---- счётчики телеметрии (общие для обоих режимов; растут ТОЛЬКО в точке вызова update() из цикла,
 //      поэтому скриптовые прогоны __vsRun/__vsRecord их не загрязняют) ----
-let _tmFrames=0, _tmSteps=0, _tmRealPlay=0, _tmClamped=0, _tmDropped=0, _tmVisReset=0, _tmLong=0, _tmMaxAcc=0;
+let _tmFrames=0, _tmSteps=0, _tmRealPlay=0, _tmClamped=0, _tmDropped=0, _tmVisReset=0, _tmLong=0, _tmMaxAcc=0, _tmMaxAccPost=0;
+// _tmConsumed — реальные секунды, ФАКТИЧЕСКИ превращённые в физ-шаги. Растёт ровно на
+// SIM_DT/timeScale за шаг, поэтому не зависит от того, как шаги разложены по кадрам.
+// Это и есть часы, по которым реплей подаёт записанный ввод.
+let _tmConsumed=0;
 let _tmDtLog=[], _tmSpfLog=[];                                  // кольцевые буферы: dt кадра (с) и физ-шагов на кадр
 const TM_LOG_CAP=1200;
 function _tmPush(a,v){ a.push(v); if(a.length>TM_LOG_CAP) a.shift(); }
 function _tmStat(a){ if(!a.length) return {min:0,median:0,p95:0,max:0,n:0};
   const s=a.slice().sort(function(x,y){return x-y;}), q=function(p){ return s[Math.min(s.length-1,Math.max(0,Math.round(p*(s.length-1))))]; };
   return {min:+s[0].toFixed(6), median:+q(0.5).toFixed(6), p95:+q(0.95).toFixed(6), max:+s[s.length-1].toFixed(6), n:s.length}; }
-window.__timeReset=function(){ _tmFrames=0; _tmSteps=0; _tmRealPlay=0; _tmClamped=0; _tmDropped=0; _tmVisReset=0; _tmLong=0; _tmMaxAcc=0; _tmDtLog=[]; _tmSpfLog=[]; return true; };
+window.__timeReset=function(){ _tmFrames=0; _tmSteps=0; _tmRealPlay=0; _tmClamped=0; _tmDropped=0; _tmVisReset=0; _tmLong=0; _tmMaxAcc=0; _tmMaxAccPost=0; _tmConsumed=0; _tmDtLog=[]; _tmSpfLog=[]; return true; };
 // Ресинк временной базы: следующий кадр берёт dt=0 и пустой аккумулятор → ни catch-up, ни импульса.
 function _tmResyncClock(countIt){ _tmResync=true; _tmAcc=0; if(countIt) _tmVisReset++; }
 window.__timeResync=function(){ _tmResyncClock(true); return true; };
@@ -5321,34 +5326,45 @@ function _tmAdvance(nowMs){
   _tmAcc += realDt*slowTS;
   if(_tmAcc>_tmMaxAcc) _tmMaxAcc=_tmAcc;
   let st=0;
-  while(_tmAcc>=SIM_DT && st<TM_MAX_STEPS){ if(_tmPreStep) _tmPreStep(_tmSteps); update(); _tmAcc-=SIM_DT; st++; _tmSteps++; }
+  while(_tmAcc>=SIM_DT && st<TM_MAX_STEPS){
+    if(_tmPreStep) _tmPreStep(_tmSteps,_tmConsumed);
+    update();
+    _tmConsumed += SIM_DT/(slowTS>0.001?slowTS:1);
+    if(_tmPostStep) _tmPostStep(_tmSteps,_tmConsumed);
+    _tmAcc-=SIM_DT; st++; _tmSteps++; }
   if(_tmAcc>=SIM_DT){ _tmDropped+=_tmAcc; _tmAcc=0; }                   // потолок catch-up достигнут: остаток НЕ копим (спираль смерти), а честно списываем
+  if(_tmAcc>_tmMaxAccPost) _tmMaxAccPost=_tmAcc;                        // ЭТО и есть анти-спираль: аккумулятор ПОСЛЕ слива обязан остаться < SIM_DT
   _tmRealPlay += realDt;
   _tmPush(_tmSpfLog, st);
   _tmAlpha = _tmAcc/SIM_DT;
   slowLerp = _tmAlpha;                                                  // рендер интерполирует prev→cur (в legacy это делалось только в слоумо)
   return st; }
-let _tmPreStep=null;                                                    // хук реплея: подать ввод ПЕРЕД шагом (ставит __inputTraceReplay)
+let _tmPreStep=null, _tmPostStep=null;                                  // хуки реплея/теста: подать ввод ПЕРЕД шагом и снять состояние ПОСЛЕ
 // ---- один кадр LEGACY (побитово прежняя логика; вынесен, чтобы негативный контроль гонял именно её) ----
 function _tmAdvanceLegacy(nowMs){
   const tgt = slowmo>0 ? (slowmo--, SLOWMO_SCALE) : 1;   // цель масштаба времени; slowmo декрементим тут (счётчик кадров как раньше)
   slowTS += (tgt - slowTS)*0.18;                          // плавный въезд/выезд слоумо (нет рывка 0→28) — timeScale глайдит
   physAcc += slowTS;                                      // копим дробные физ-шаги
   if(physAcc>3) physAcc=3;                                // кап от «спирали смерти» на длинном пропущенном кадре (таб-свич)
-  let _st=0; while(physAcc>=1 && _st<4){ if(_tmPreStep) _tmPreStep(_tmSteps); update(); physAcc-=1; _st++; _tmSteps++; }
+  let _st=0; while(physAcc>=1 && _st<4){ if(_tmPreStep) _tmPreStep(_tmSteps,_tmConsumed); update(); _tmConsumed+=SIM_DT/(slowTS>0.001?slowTS:1); if(_tmPostStep) _tmPostStep(_tmSteps,_tmConsumed); physAcc-=1; _st++; _tmSteps++; }
   slowLerp = (slowTS>0.985) ? 1 : physAcc;                // норма: рисуем текущий кадр (как раньше). Слоумо: дробная фаза 0..1 → интерполяция байка/камеры/3D/зума
   // телеметрия для НЕГАТИВНОГО КОНТРОЛЯ: legacy обязан показать ratio = fps/60, а не 1.000
   let rdt=(nowMs-_tmPrevNow)/1000; if(!(rdt>=0))rdt=0; if(_tmResync){ rdt=0; _tmResync=false; }
   if(rdt>TM_LONG_FRAME)_tmLong++; if(rdt>TM_MAX_FRAME_DT){ _tmDropped+=rdt-TM_MAX_FRAME_DT; _tmClamped++; rdt=TM_MAX_FRAME_DT; }
   _tmPrevNow=nowMs; _tmRealPlay+=rdt; _tmPush(_tmDtLog,rdt); _tmPush(_tmSpfLog,_st);
   return _st; }
-function loop(nowMs){ requestAnimationFrame(loop); try{
-    if(nowMs===undefined) nowMs=performance.now();
-    _tmFrames++;
-    if(screen==='clip'){ clipStep(); }
-    else if(screen==='play'){ if(TIMING_FIXED) _tmAdvance(nowMs); else _tmAdvanceLegacy(nowMs); }
-    else { _tmPrevNow=nowMs; _tmResyncClock(false); }                    // не играем — время не копим и не «догоняем» при возврате
-    draw(); musicTick(); dbgTick(); }catch(e){ if(!loop._e){loop._e=1; console.error('CHART loop error (self-healed, screen='+screen+'):',e&&e.stack||e); } } }   // b216: fixed-timestep+интерполяция (Gaffer) вместо бинарного пропуска b154 → плавное замедление, дробный slowLerp. Читатели slowLerp (байк 1916/камера 1729/3D 3113/зум _zoomD 60Гц) уже готовы к дробному.   // b65: rAF re-requested FIRST + try/catch → one bad frame can no longer permanently FREEZE the game. Первая ошибка логируется.
+// Тело кадра вынесено отдельно, чтобы тестовая оснастка гоняла ИМЕННО ЕГО (вместе с диспетчером
+// по screen), а не свою копию логики. Отличие от loop() — только отсутствие rAF-перезапроса.
+function _tmFrameBody(nowMs){
+  if(nowMs===undefined) nowMs=performance.now();
+  _tmFrames++;
+  if(screen==='clip'){ clipStep(); }
+  else if(screen==='play'){ if(TIMING_FIXED) _tmAdvance(nowMs); else _tmAdvanceLegacy(nowMs); }
+  else { _tmPrevNow=nowMs; _tmResyncClock(false); }                      // не играем — время не копим и не «догоняем» при возврате
+  draw(); musicTick(); dbgTick(); }
+window.__tmFrameBody=function(nowMs){ return _tmFrameBody(nowMs); };
+function loop(nowMs){ requestAnimationFrame(loop); try{ _tmFrameBody(nowMs);
+  }catch(e){ if(!loop._e){loop._e=1; console.error('CHART loop error (self-healed, screen='+screen+'):',e&&e.stack||e); } } }   // b216: fixed-timestep+интерполяция (Gaffer) вместо бинарного пропуска b154 → плавное замедление, дробный slowLerp. Читатели slowLerp (байк 1916/камера 1729/3D 3113/зум _zoomD 60Гц) уже готовы к дробному.   // b65: rAF re-requested FIRST + try/catch → one bad frame can no longer permanently FREEZE the game. Первая ошибка логируется.
 // ---- ОТЧЁТ ВРЕМЕНИ (debug-only). Всё поля — ИЗМЕРЕНИЯ счётчиков, ни одной константы «для галочки». ----
 window.__timeReport=function(){
   const simEl=_tmSteps*SIM_DT, realEl=_tmRealPlay;
@@ -5359,7 +5375,7 @@ window.__timeReport=function(){
     renderFPS: realEl>0 ? +(_tmSpfLog.length/realEl).toFixed(2) : null,
     physicsHz: realEl>0 ? +(_tmSteps/realEl).toFixed(2) : null,
     frameDt:_tmStat(_tmDtLog), stepsPerFrame:_tmStat(_tmSpfLog),
-    accumulator:+_tmAcc.toFixed(6), maxAccumulator:+_tmMaxAcc.toFixed(6),
+    accumulator:+_tmAcc.toFixed(6), maxAccumulator:+_tmMaxAcc.toFixed(6), maxAccumulatorPostDrain:+_tmMaxAccPost.toFixed(6), maxAccPostRaw:_tmMaxAccPost,
     clampedFrameCount:_tmClamped, droppedRealTime:+_tmDropped.toFixed(4),
     visibilityResetCount:_tmVisReset, longFrameCount:_tmLong,
     slowTS:+slowTS.toFixed(4), slowmo:+(+slowmo).toFixed(2), renderAlpha:+_tmAlpha.toFixed(4),
@@ -5368,6 +5384,164 @@ window.__timeReport=function(){
     userAgent:navigator.userAgent, currentScreen:screen,
     currentLevel:(typeof VSLICE!=='undefined'&&VSLICE)?'vertical-slice':(trackSource||'proc'),
     controlScheme:ctrlScheme, build:BUILD, simDt:SIM_DT }; };
+// ===================== 0A: РЕПЛЕЙ ЧЕЛОВЕЧЕСКОГО ТРЕЙСА + ТЕСТ FPS-НЕЗАВИСИМОСТИ =====================
+// РАЗДЕЛЕНИЕ РОЛЕЙ (правило 13 из rules-code-first-and-honesty):
+//   __vsRun / __vsRecord — СКРИПТОВЫЙ ПИЛОТ, замкнутая политика, только регрессия. Не трогаем.
+//   __inputTraceReplay   — РАЗОМКНУТОЕ воспроизведение ЧЕЛОВЕЧЕСКОГО трейса: подаёт записанные
+//                          действия по их времени и НЕ смотрит на состояние байка. Смешивать нельзя.
+window.__tmAdvance=function(nowMs){ return _tmAdvance(nowMs); };
+window.__tmAdvanceLegacy=function(nowMs){ return _tmAdvanceLegacy(nowMs); };
+window.__tmSetMode=function(m){ TIMING_FIXED=(m==='fixed'); return TIMING_FIXED?'fixed':'legacy'; };
+window.__drawOnce=function(){ draw(); return true; };   // оснастка: rAF в headless-пане приостановлен, а UI.* прямоугольники кнопок населяет именно draw()
+// Доступ к slowmo/hitstop для замеров. Из инжектированного скрипта лексическая область
+// этого <script> не видна (eval('slowmo') создаёт ГЛОБАЛЬНУЮ переменную и меряет пустоту),
+// поэтому сеттер/геттер нужен явный — иначе замер длительности слоумо был бы тавтологией.
+window.__tmSlowmo=function(v){ if(v!==undefined) slowmo=v; return slowmo; };
+window.__tmHitstop=function(v){ if(v!==undefined) hitstop=v; return hitstop; };
+window.__tmSimTReset=function(){ _simT=0; _cev.length=0; _cevId=0; _wPen[0]=-1; _wPen[1]=-1; return true; };
+let _itLoaded=null;
+window.__inputTraceLoad=function(json){ _itLoaded=(typeof json==='string')?JSON.parse(json):json;
+  if(!_itLoaded||!_itLoaded.resolved) throw new Error('trace: нет resolved[]');
+  return {meta:_itLoaded.meta, raw:_itLoaded.raw?_itLoaded.raw.length:0, resolved:_itLoaded.resolved.length}; };
+// Применить одно resolved-состояние к игре. Только ввод — состояние байка не трогаем (open-loop).
+function _itApply(e){ down=!!e.d; brake=!!e.b; leanX=+e.lx||0;
+  leanKeyL=(leanX<-0.05); leanKeyR=(leanX>0.05);                       // клавиатурные зеркала, чтобы updLeanKeys() не перетёр
+  if(e.jr>0) jumpReq=e.jr; }
+// ПОЛНЫЙ детерминированный сброс перед прогоном: физика, риг, contact-очередь, транзиенты, время.
+function _tmHardReset(){
+  if(typeof window.__rigStateReset==='function') window.__rigStateReset();
+  reset(); screen='play';
+  window.__tmSimTReset(); window.__timeReset();
+  if(typeof _vsTime!=='undefined') _vsTime=0;
+  window.__cevLog=[];
+  down=false; brake=false; leanX=0; leanKeyL=false; leanKeyR=false; activeTouches={}; jumpReq=0;
+  slowmo=0; slowTS=1; slowLerp=1; physAcc=0; _tmAcc=0; _tmResync=true; _tmPrevNow=0; }
+// Один синтетический прогон. Гоняет ТУ ЖЕ функцию кадра, что и rAF (_tmAdvance/_tmAdvanceLegacy),
+// поэтому меряет production-код, а не свою копию логики.
+function _tmSynthRun(o){
+  const mode=o.mode||'fixed', fps=o.fps||60, secs=o.seconds||10, res=(o.trace&&o.trace.resolved)||[],
+        jitter=o.jitter||0, gapAtMs=o.gapAtMs||-1, gapMs=o.gapMs||0, sampleEvery=o.sampleEvery||1;
+  window.__tmSetMode(mode); _tmHardReset();
+  let ptr=0, applied=[];
+  _tmPreStep=function(stepIdx, consumed){
+    while(ptr<res.length && res[ptr].rt<=consumed*1000){ _itApply(res[ptr]); applied.push({i:ptr,step:stepIdx,rt:res[ptr].rt}); ptr++; } };
+  const samples=[];
+  _tmPostStep=function(stepIdx){
+    if(stepIdx%sampleEvery!==0) return;
+    samples.push({ step:stepIdx, simT:+_simT.toFixed(6),
+      x:+bike.x.toFixed(6), y:+bike.y.toFixed(6), vx:+bike.vx.toFixed(6), vy:+bike.vy.toFixed(6),
+      ang:+bike.ang.toFixed(6), angV:+bike.angV.toFixed(6), rShift:+bike.rShift.toFixed(6),
+      cF:_CT.F.filt?1:0, cR:_CT.R.filt?1:0, onG:bike.onG?1:0,
+      cev:_cevId, d:down?1:0, b:brake?1:0, lx:+(+leanX).toFixed(3) }); };
+  let now=0, rnd=12345, frames=0, gapDone=false;
+  const rand=function(){ rnd=(rnd*1103515245+12345)&0x7fffffff; return rnd/0x7fffffff; };
+  const budget=secs*1000;
+  while(now<budget && frames<20000){
+    let dt=1000/fps;
+    if(jitter>0) dt=Math.max(1, dt*(1+(rand()*2-1)*jitter));
+    if(gapAtMs>=0 && !gapDone && now>=gapAtMs){ dt=gapMs; gapDone=true; }
+    now+=dt; frames++;
+    if(mode==='fixed') _tmAdvance(now); else _tmAdvanceLegacy(now);
+    if(screen==='dead'||screen==='clip') break; }
+  _tmPreStep=null; _tmPostStep=null;
+  const rep=window.__timeReport();
+  return { mode:mode, fps:fps, jitter:jitter, gapMs:gapDone?gapMs:0, frames:frames, realMs:+now.toFixed(1),
+    steps:rep.physicsSteps, simElapsed:rep.simElapsed, realElapsed:rep.realElapsed,
+    simToRealRatio:rep.simToRealRatio, stepsPerFrame:rep.stepsPerFrame, frameDt:rep.frameDt,
+    clampedFrameCount:rep.clampedFrameCount, droppedRealTime:rep.droppedRealTime, longFrameCount:rep.longFrameCount,
+    maxAccumulator:rep.maxAccumulator, maxAccumulatorPostDrain:rep.maxAccumulatorPostDrain, maxAccPostRaw:rep.maxAccPostRaw,
+    outcome:{ screen:screen, deathBy:deathBy||'', x:+bike.x.toFixed(3), cp:(typeof _vsCP!=='undefined')?_vsCP:null },
+    cevCount:(window.__cevLog||[]).length,
+    cevOrder:(window.__cevLog||[]).map(function(e){ return e.wheel; }).join(''),
+    inputsApplied:applied.length, lastInputStep:applied.length?applied[applied.length-1].step:-1,
+    samples:samples }; }
+window.__inputTraceReplay=function(opts){ opts=opts||{};
+  const tr=opts.trace||_itLoaded; if(!tr) throw new Error('сначала __inputTraceLoad(json)');
+  return _tmSynthRun({mode:opts.mode||'fixed', fps:opts.fps||60, seconds:opts.seconds||((tr.meta&&tr.meta.durationRealMs||10000)/1000),
+    trace:tr, jitter:opts.jitter||0, gapAtMs:opts.gapAtMs!==undefined?opts.gapAtMs:-1, gapMs:opts.gapMs||0, sampleEvery:opts.sampleEvery||1}); };
+window.__inputTraceReport=function(tr){ return window.__inputTraceValidate(tr||_itLoaded||undefined); };
+// Сравнение двух прогонов НА ОДИНАКОВОМ sim-тике (не на одинаковом кадре).
+function _tmCompare(a,b){
+  const n=Math.min(a.samples.length,b.samples.length), keys=['x','y','vx','vy','ang','angV','rShift','cF','cR','onG','cev','d','b','lx'];
+  let firstDiv=null, worst={}; keys.forEach(function(k){ worst[k]=0; });
+  for(let i=0;i<n;i++){ const s=a.samples[i], t=b.samples[i];
+    if(s.step!==t.step) { if(!firstDiv) firstDiv={step:s.step,key:'stepIndexMismatch'}; break; }
+    for(const k of keys){ const d=Math.abs((+s[k])-(+t[k])); if(d>worst[k]) worst[k]=+d.toFixed(9);
+      if(d>0 && !firstDiv) firstDiv={step:s.step, simT:s.simT, key:k, a:s[k], b:t[k]}; } }
+  return { comparedTicks:n, bitExact:firstDiv===null, firstDivergence:firstDiv, worstAbsDiff:worst,
+    stepsDiff:Math.abs(a.steps-b.steps),
+    cevCountDiff:Math.abs(a.cevCount-b.cevCount), cevOrderSame:a.cevOrder===b.cevOrder,
+    outcomeSame:(a.outcome.screen===b.outcome.screen && a.outcome.deathBy===b.outcome.deathBy),
+    lastInputStepDiff:Math.abs(a.lastInputStep-b.lastInputStep) }; }
+window.__tmCompare=_tmCompare;
+// ГЛАВНЫЙ АВТОТЕСТ. Гоняет один и тот же трейс при 30/45/60/120 + jitter + один gap 150-300мс.
+window.__timingTest=function(opts){ opts=opts||{};
+  const tr=opts.trace||_itLoaded||{resolved:[{rt:0,d:true,b:false,lx:0,jr:0}]};   // без трейса — «зажатый газ» как минимальный сценарий
+  const secs=opts.seconds||10, se=opts.sampleEvery||1, runs={}, out={ trace:(opts.trace||_itLoaded)?'human':'synthetic-gas', seconds:secs, sampleEvery:se };
+  [30,45,60,120].forEach(function(f){ runs[f]=_tmSynthRun({mode:'fixed',fps:f,seconds:secs,trace:tr,sampleEvery:se}); });
+  runs.jitter=_tmSynthRun({mode:'fixed',fps:60,seconds:secs,trace:tr,jitter:0.5,sampleEvery:se});
+  runs.gap   =_tmSynthRun({mode:'fixed',fps:60,seconds:secs,trace:tr,gapAtMs:Math.round(secs*1000*0.35),gapMs:220,sampleEvery:se});
+  out.runs={}; Object.keys(runs).forEach(function(k){ const r=runs[k];
+    out.runs[k]={fps:r.fps,jitter:r.jitter,gapMs:r.gapMs,frames:r.frames,steps:r.steps,
+      simElapsed:r.simElapsed,realElapsed:r.realElapsed,simToRealRatio:r.simToRealRatio,
+      stepsPerFrame:r.stepsPerFrame,clamped:r.clampedFrameCount,dropped:r.droppedRealTime,
+      longFrames:r.longFrameCount,maxAcc:r.maxAccumulator,maxAccPost:r.maxAccumulatorPostDrain,maxAccPostRaw:r.maxAccPostRaw,outcome:r.outcome,cev:r.cevCount,cevOrder:r.cevOrder}; });
+  out.compare={}; ['30','45','120','jitter','gap'].forEach(function(k){ out.compare[k+'_vs_60']=_tmCompare(runs[k],runs[60]); });
+  // ГЕЙТЫ. Каждый — сравнение ИЗМЕРЕНИЙ, а не литералов; каждый способен провалиться.
+  const base=runs[60], G=[];
+  const ratioOK=function(r){ return r.simToRealRatio!==null && Math.abs(r.simToRealRatio-1)<=0.005; };
+  G.push({gate:'simToRealRatio 1.000±0.005 @30/45/60/120', pass:[30,45,60,120].every(function(f){return ratioOK(runs[f]);}),
+    detail:[30,45,60,120].map(function(f){return f+':'+runs[f].simToRealRatio;}).join(' ')});
+  G.push({gate:'physicsSteps совпадает ±1', pass:[30,45,120].every(function(f){ return Math.abs(runs[f].steps-base.steps)<=1; }),
+    detail:[30,45,60,120].map(function(f){return f+':'+runs[f].steps;}).join(' ')});
+  G.push({gate:'порядок contact events совпадает', pass:[30,45,120,'jitter'].every(function(f){ return runs[f].cevOrder===base.cevOrder; }),
+    detail:'60:'+base.cevCount+' events · '+[30,45,120].map(function(f){return f+':'+runs[f].cevCount;}).join(' ')});
+  G.push({gate:'исход (death/finish) совпадает', pass:[30,45,120,'jitter','gap'].every(function(f){ return runs[f].outcome.screen===base.outcome.screen && runs[f].outcome.deathBy===base.outcome.deathBy; }),
+    detail:JSON.stringify(base.outcome)});
+  G.push({gate:'момент ввода расходится ≤1 SIM_DT', pass:[30,45,120].every(function(f){ return out.compare[f+'_vs_60'].lastInputStepDiff<=1; }),
+    detail:[30,45,120].map(function(f){return f+':'+out.compare[f+'_vs_60'].lastInputStepDiff;}).join(' ')});
+  G.push({gate:'состояние побитово совпадает на одинаковом тике', pass:[30,45,120].every(function(f){ return out.compare[f+'_vs_60'].bitExact; }),
+    detail:[30,45,120].map(function(f){ const c=out.compare[f+'_vs_60']; return f+':'+(c.bitExact?'exact':JSON.stringify(c.firstDivergence)); }).join(' | ')});
+  G.push({gate:'gap: clamp/drop зарегистрирован, ложных контактов нет', pass:(runs.gap.clampedFrameCount>0||runs.gap.longFrameCount>0) && runs.gap.cevOrder===base.cevOrder,
+    detail:'clamped '+runs.gap.clampedFrameCount+' long '+runs.gap.longFrameCount+' dropped '+runs.gap.droppedRealTime+'s · cev '+runs.gap.cevCount+'/'+base.cevCount});
+  // Анти-спираль меряется аккумулятором ПОСЛЕ слива: пик ДО слива законно равен длине кадра
+  // (на gap 220мс это 0.22с) и ничего о спирали не говорит. Растущий пик ПОСЛЕ слива = спираль.
+  G.push({gate:'нет спирали смерти: accumulator после слива < SIM_DT', pass:Object.keys(runs).every(function(k){ return runs[k].maxAccPostRaw < SIM_DT; }),
+    detail:Object.keys(runs).map(function(k){return k+':post '+runs[k].maxAccumulatorPostDrain+'/pre '+runs[k].maxAccumulator;}).join(' ')});
+  G.push({gate:'catch-up за кадр ограничен TM_MAX_STEPS', pass:Object.keys(runs).every(function(k){ return runs[k].stepsPerFrame.max<=TM_MAX_STEPS; }),
+    detail:Object.keys(runs).map(function(k){return k+':'+runs[k].stepsPerFrame.max;}).join(' ')});
+  G.push({gate:'сравнение шло ПО КАЖДОМУ тику (sampleEvery=1)', pass:se===1,
+    detail:'sampleEvery='+se+' · сравнено тиков: '+out.compare['30_vs_60'].comparedTicks});
+  out.gates=G; out.allPass=G.every(function(g){return g.pass;});
+  return out; };
+// НЕГАТИВНЫЕ КОНТРОЛЬНЫЕ ПРОГОНЫ. Если они «зелёные» — тест ничего не проверяет.
+window.__timingNegativeControls=function(opts){ opts=opts||{};
+  const tr=opts.trace||_itLoaded||{resolved:[{rt:0,d:true,b:false,lx:0,jr:0}]}, secs=opts.seconds||10, out=[];
+  // NC1: legacy при 30 FPS обязан показать ratio ≈0.5, а не 1.000
+  const l30=_tmSynthRun({mode:'legacy',fps:30,seconds:secs,trace:tr}), l60=_tmSynthRun({mode:'legacy',fps:60,seconds:secs,trace:tr});
+  out.push({control:'NC1 legacy@30 показывает замедление', expect:'ratio≈0.5',
+    got:{legacy30:l30.simToRealRatio, legacy60:l60.simToRealRatio, steps30:l30.steps, steps60:l60.steps},
+    detects: l30.simToRealRatio!==null && Math.abs(l30.simToRealRatio-0.5)<0.05 && Math.abs(l60.simToRealRatio-1)<0.05 });
+  // NC2: копия трейса без одного touchend обязана дать «залипшее действие»
+  const full=opts.trace||_itLoaded;
+  if(full && full.raw && full.raw.length){
+    const idx=full.raw.map(function(e,i){return e.k==='end'?i:-1;}).filter(function(i){return i>=0;});
+    if(idx.length){ const broken=JSON.parse(JSON.stringify(full)); const cut=broken.raw.splice(idx[idx.length-1],1)[0];
+      // соответствующее resolved-освобождение тоже убираем: имитируем «система не увидела отпускание»
+      broken.resolved=broken.resolved.filter(function(r){ return r.rt<=cut.rt || r.d||r.b||Math.abs(r.lx)>0.01; });
+      if(broken.resolved.length) broken.resolved[broken.resolved.length-1]=Object.assign({},broken.resolved[broken.resolved.length-1],{d:true});
+      const v=window.__inputTraceValidate(broken);
+      out.push({control:'NC2 трейс без одного touchend', expect:'unclosedTouch / stuckAction',
+        got:v.issues.slice(0,4), detects: !v.ok && v.issues.some(function(i){return i.type==='unclosedTouch'||i.type==='stuckAction';}) }); }
+    else out.push({control:'NC2 трейс без одного touchend', expect:'unclosedTouch / stuckAction', got:'в трейсе нет ни одного touchend', detects:null});
+  } else out.push({control:'NC2 трейс без одного touchend', expect:'unclosedTouch / stuckAction', got:'нет человеческого трейса — загрузите __inputTraceLoad', detects:null});
+  // NC3: большой frame gap обязан быть зарегистрирован (clamp/drop/long)
+  const clean=_tmSynthRun({mode:'fixed',fps:60,seconds:secs,trace:tr});
+  const gap=_tmSynthRun({mode:'fixed',fps:60,seconds:secs,trace:tr,gapAtMs:Math.round(secs*1000*0.35),gapMs:1200});
+  out.push({control:'NC3 frame gap 1200мс', expect:'clamped>0, dropped>0, без catch-up-взрыва',
+    got:{cleanClamped:clean.clampedFrameCount, cleanDropped:clean.droppedRealTime, gapClamped:gap.clampedFrameCount, gapDropped:gap.droppedRealTime, gapMaxAccPost:gap.maxAccumulatorPostDrain, gapMaxAccPostRaw:gap.maxAccPostRaw, gapStepsPerFrameMax:gap.stepsPerFrame.max},
+    detects: clean.clampedFrameCount===0 && gap.clampedFrameCount>0 && gap.droppedRealTime>0 });
+  return { controls:out, allDetect: out.every(function(c){ return c.detects===true; }) }; };
 // ---------- 0A: ПАНЕЛЬ ЭКСПОРТА ТРЕЙСА НА ТЕЛЕФОНЕ (без DevTools, только &inputTrace=1) ----------
 (function(){
   const box=document.getElementById('itui'); if(!box) return;
