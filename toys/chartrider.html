@@ -54,6 +54,20 @@
   #dbg b{color:#eafaff;font-weight:800;}
   #dbg .lab{color:#8595b8;font-weight:600;}
   #dbg .w-ok{color:#7ef0b0;} #dbg .w-warn{color:#ffd070;} #dbg .w-bad{color:#ff8a9a;font-weight:800;}
+  /* ---- 0A: панель записи трейса (&inputTrace=1). Живёт в ПУСТОМ НЕБЕ (top 96px):
+         не перекрывает ни HUD среза (y≤56), ни блок игровых кнопок (y ≥ H-246 на 430×932,
+         H-246=322 на SE 320×568). ---- */
+  #itui{display:none;position:fixed;top:96px;left:8px;right:8px;z-index:70;
+    font:700 11px/1.35 ui-monospace,SFMono-Regular,Menlo,monospace;color:#dfe9ff;
+    background:rgba(8,10,22,0.82);border:1px solid rgba(120,180,230,0.35);border-radius:10px;
+    padding:6px 8px;pointer-events:auto;-webkit-user-select:none;user-select:none;}
+  #itui .row{display:flex;gap:6px;margin-top:5px;}
+  #itui button{flex:1;font:800 11px ui-monospace,monospace;color:#dfe9ff;background:rgba(40,60,110,0.75);
+    border:1px solid rgba(140,190,240,0.5);border-radius:7px;padding:7px 2px;-webkit-appearance:none;}
+  #itui button.on{background:rgba(200,60,70,0.8);border-color:rgba(255,150,150,0.8);}
+  #itui .st{color:#ffd070;font-weight:800;} #itui .st.rec{color:#ff8a9a;} #itui .st.exp{color:#7ef0b0;}
+  #itui .num{color:#9fe;} #itui textarea{width:100%;height:52px;margin-top:5px;font:600 9px ui-monospace,monospace;
+    color:#cfe;background:rgba(0,0,0,0.5);border:1px solid rgba(120,180,230,0.3);border-radius:6px;display:none;}
 </style>
 </head>
 <body>
@@ -62,6 +76,9 @@
 <div id="spd"><div id="mood">— bull run —</div><div><b id="kmh">0</b> km/h</div></div>
 <div id="hint"></div>
 <div id="dbg"></div>
+<div id="itui"><div id="itstat">TRACE</div>
+  <div class="row"><button id="itrec">● ЗАПИСЬ</button><button id="itdl">⬇ JSON</button><button id="itcp">⧉ КОПИЯ</button></div>
+  <textarea id="ittxt" readonly></textarea></div>
 <a id="physlink" href="physlab.html" style="position:fixed;left:50%;transform:translateX(-50%);top:env(safe-area-inset-top,4px);z-index:60;padding:4px 12px;background:rgba(44,30,60,0.85);color:#d3bcff;font:700 11px ui-monospace,monospace;border:1px solid rgba(160,120,220,0.55);border-radius:9px;text-decoration:none;white-space:nowrap;">🧪 ТЕСТ НОВОЙ ФИЗИКИ →</a>
 <script>document.getElementById('physlink').href=location.pathname.indexOf('/toys/')>=0?'physlab.html':'toys/physlab.html';</script>
 <script>
@@ -76,7 +93,13 @@ function lerp(a,b,t){return a+(b-a)*t;} function clamp(v,a,b){return v<a?a:v>b?b
 // false → full game everywhere. Single switch. Systems are GATED, never deleted.
 const CORE_TEST_MODE = false;   // b70: META LIVE — building the progression spine (upgrades/bikes with teeth, career, economy) on the confirmed rigid-body core
 // build stamp — bump on every change so a phone refresh can confirm it loaded fresh code (cache!)
-const BUILD = '2026-07-24 · C1B-VC';
+const BUILD = '2026-07-25 · 0A-TIME';
+// ===================== ЭТАП 0A: ФЛАГИ ВРЕМЕНИ И ТРЕЙСА =====================
+// timing=legacy (ДЕФОЛТ) — прежний цикл «1 кадр = 1 update», без единого скрытого исправления.
+// timing=fixed          — кандидат: фиксированный шаг SIM_DT по РЕАЛЬНОМУ времени rAF-timestamp.
+// Дефолт НЕ меняется в 0A: новый режим включается явно (&timing=fixed).
+let TIMING_FIXED=false; try{ if(/[?&]timing=fixed/.test(location.search))TIMING_FIXED=true; else if(/[?&]timing=legacy/.test(location.search))TIMING_FIXED=false; }catch(e){}
+let TRACE_ON=false;     try{ TRACE_ON=/[?&]inputTrace=1/.test(location.search); }catch(e){}   // debug-рекордер ввода + панель экспорта
 
 // ---------- procedural market terrain ----------
 // height map sampled every STEP px; generated forward as we ride. Market character:
@@ -1284,17 +1307,22 @@ addEventListener('keydown',e=>{
     e.preventDefault(); }   // b158/159: десктоп-трюки — 1 СУПЕРМЕН 2 ЦУНАМИ 3 COFFIN 4 NO HANDER 5 SEAT GRAB 6 HEART ATTACK 7 HEEL CLICKER
 });
 addEventListener('keyup',e=>{ const k=e.key; if(GAS_KEYS[k])down=false; else if(BRK_KEYS[k])brake=false; else if(LEANL_KEYS[k]){leanKeyL=false;updLeanKeys();} else if(LEANR_KEYS[k]){leanKeyR=false;updLeanKeys();} else if(k===trickKey){ if(trickGrip!=='sticky')trickHeld=false; trickKey=''; } });
-document.addEventListener('visibilitychange',()=>{ if(document.hidden && screen==='play'){ screen='paused'; down=false; brake=false; leanX=0; activeTouches={}; trickHeld=false; } });   // b162 АВТО-ПАУЗА: звонок/сворачивание не скармливает байк волне (аудит; для App Store важно)
+document.addEventListener('visibilitychange',()=>{ if(document.hidden && screen==='play'){ screen='paused'; down=false; brake=false; leanX=0; activeTouches={}; trickHeld=false; _itResolved('visibility:hidden'); }
+  if(typeof _tmResyncClock==='function') _tmResyncClock(true); });   // b162 АВТО-ПАУЗА: звонок/сворачивание не скармливает байк волне (аудит; для App Store важно). 0A: и там и там сбрасываем временную базу — возврат из фона не даёт catch-up-импульса
+addEventListener('pageshow',()=>{ if(typeof _tmResyncClock==='function') _tmResyncClock(true); });   // 0A: bfcache-возврат (iOS Safari) — тот же ресинк
 addEventListener('mousedown',e=>{ const p=ptFromEvent(e),z=pointerDown(p);
   if(ctrlScheme==='gestures'){ if(z==='ctrl'){ down=true; ctrlId='mouse'; ctrlOX=p.x; leanX=0; } }
   else if(z==='gas'||z==='brake'||z==='leanL'||z==='leanR'){ activeTouches['mouse']=z; recompute(); } });
 addEventListener('mousemove',e=>{ if(ctrlScheme==='gestures'&&ctrlId==='mouse'){ const p=ptFromEvent(e); leanX=clamp((p.x-ctrlOX)/LEANRANGE,-1,1); } });
 addEventListener('mouseup',()=>{ if(ctrlScheme==='gestures'){ if(ctrlId==='mouse')ctrlId=null; down=false; leanX=0; brake=false; } else { delete activeTouches['mouse']; recompute(); } });
 addEventListener('touchstart',e=>{ for(const tch of e.changedTouches){ const r=cv.getBoundingClientRect(),p={x:tch.clientX-r.left,y:tch.clientY-r.top},z=pointerDown(p); touchLowY[tch.identifier]=p.y; touchSX[tch.identifier]=p.x; touchSY[tch.identifier]=p.y;   /* b158: старт-точка для трюк-свайпа */
+    _itRawPush('start',tch,z);                                     // 0A: z — РЕАЛЬНЫЙ результат pointerDown (не повторный вызов: у него побочные эффекты)
     if(ctrlScheme==='gestures'){ if(z==='ctrl'){ if(ctrlId===null){ ctrlId=tch.identifier; ctrlOX=p.x; leanX=0; } down=true; } }   // hold anywhere = gas; first finger = the lean stick
     else if(z==='gas'||z==='brake'||z==='leanL'||z==='leanR'){ activeTouches[tch.identifier]=z; recompute(); } }   // button schemes: a finger holds a control button
+  _itResolved('touchstart');
   e.preventDefault(); },{passive:false});
 addEventListener('touchmove',e=>{ for(const tch of e.changedTouches){ const r=cv.getBoundingClientRect(), cx=tch.clientX-r.left, cy=tch.clientY-r.top, id=tch.identifier;
+    _itRawPush('move',tch);                                        // 0A: зона считается ЧИСТЫМ hit-тестом → видно «палец соскользнул с ГАЗа», а игра этого не заметила
     if(ctrlScheme==='gestures'){
       if(touchLowY[id]!==undefined){ if(cy>touchLowY[id]) touchLowY[id]=cy; else if(touchLowY[id]-cy>TUNE.swipeJump && bike && bike.onG){ requestJump(); touchLowY[id]=cy; } }   // swipe up = jump ТОЛЬКО с земли (b158: в воздухе свайп-вверх = ЦУНАМИ, не буфер прыжка)
       if(id===ctrlId){ leanX=clamp((cx-ctrlOX)/LEANRANGE,-1,1); } }
@@ -1312,21 +1340,104 @@ addEventListener('touchmove',e=>{ for(const tch of e.changedTouches){ const r=cv
       if(Math.hypot(dx,dy)>26){ const idT=Math.abs(dy)>Math.abs(dx) ? (dy<0?2:3) : (dx<0?1:4);
         if(idT===(TRICK_BASE[trick]||trick)){ trickHeld=false; touchSX[id]=undefined; }
         else { trick=idT; trickHeld=true; trickT=0; trickTouch=id; popText('🤸 '+TRICK_NAMES[idT]); sfxTrick(idT); buzz(12); } } } }
+  _itResolved('touchmove');
   e.preventDefault(); },{passive:false});
-addEventListener('touchend',e=>{ for(const tch of e.changedTouches){ const id=tch.identifier;
+addEventListener('touchend',e=>{ for(const tch of e.changedTouches){ const id=tch.identifier; _itRawPush('end',tch);
     { const r2=cv.getBoundingClientRect(), ex=tch.clientX-r2.left, ey=tch.clientY-r2.top, sx=touchSX[id], sy=touchSY[id];   // b171 ЗАЛИПАНИЕ: ТАП свободным пальцем в полёте при живой позе = отпустить (вернуться в седло до посадки)
       if(trickGrip==='sticky' && trick && trickHeld && screen==='play' && bike && !bike.onG && id!==trickTouch && id!==ctrlId && activeTouches[id]===undefined && sx!==undefined && Math.hypot(ex-sx,ey-sy)<12) trickHeld=false; }
     delete touchLowY[id]; delete touchSX[id]; delete touchSY[id];
     if(id===trickTouch){ if(trickGrip!=='sticky') trickHeld=false; trickTouch=-1; }   // b158 «держать»: отпустил палец → в седло; b171 «залипает»: поза живёт дальше
     if(ctrlScheme==='gestures'){ if(id===ctrlId){ ctrlId=null; leanX=0; } }
     else if(activeTouches[id]){ delete activeTouches[id]; recompute(); } }
-  if(ctrlScheme==='gestures') down=(ctrlId!==null); e.preventDefault(); },{passive:false});
-addEventListener('touchcancel',e=>{ for(const tch of e.changedTouches){ delete touchLowY[tch.identifier]; delete touchSX[tch.identifier]; delete touchSY[tch.identifier];
+  if(ctrlScheme==='gestures') down=(ctrlId!==null); _itResolved('touchend'); e.preventDefault(); },{passive:false});
+addEventListener('touchcancel',e=>{ for(const tch of e.changedTouches){ _itRawPush('cancel',tch); delete touchLowY[tch.identifier]; delete touchSX[tch.identifier]; delete touchSY[tch.identifier];
     if(tch.identifier===trickTouch){ if(trickGrip!=='sticky') trickHeld=false; trickTouch=-1; }
     if(ctrlScheme==='gestures'){ if(tch.identifier===ctrlId){ ctrlId=null; leanX=0; } }
     else if(activeTouches[tch.identifier]){ delete activeTouches[tch.identifier]; recompute(); } }
-  if(ctrlScheme==='gestures') down=(ctrlId!==null); },{passive:false});
+  if(ctrlScheme==='gestures') down=(ctrlId!==null); _itResolved('touchcancel'); },{passive:false});
+// 0A: слушатели-«хвосты» — регистрируются ПОСЛЕ основных, поэтому срабатывают после них и
+// видят уже разрешённое состояние. Ни один обработчик игры не тронут. Текст клавиш НЕ пишется —
+// только факт изменения игрового действия.
+addEventListener('keydown',()=>{ _itResolved('keydown'); });
+addEventListener('keyup',  ()=>{ _itResolved('keyup'); });
+addEventListener('mousedown',()=>{ _itResolved('mousedown'); });
+addEventListener('mousemove',()=>{ _itResolved('mousemove'); });
+addEventListener('mouseup',  ()=>{ _itResolved('mouseup'); });
 
+// ===================== 0A: РЕКОРДЕР ВВОДА (debug-only, &inputTrace=1) =====================
+// Существующий inpLog пишет ТОЛЬКО итоговую битовую маску раз в sim-кадр — по нему нельзя
+// отличить «игрок отпустил газ» от «палец соскользнул с кнопки». Пишем ДВА слоя:
+//   RAW      — сырые DOM-события касаний (что сделал палец);
+//   RESOLVED — состояние игровых действий (что из этого поняла игра) + ПРИЧИНА изменения.
+// Персональных данных не пишем: ни текста ввода, ни cookies, ни localStorage — только координаты
+// касаний внутри канваса и состояние игровых действий.
+const IT_VERSION=1, IT_CAP=24000;
+let _itRec=false, _itRaw=[], _itRes=[], _itT0=0, _itSig='', _itLastRect='', _itSaved=null, _itStat='STOPPED';
+function _itNow(){ return +(performance.now()-_itT0).toFixed(2); }
+// ЧИСТЫЙ hit-тест (без побочных эффектов pointerDown) — только для диагностики: над какой кнопкой палец СЕЙЧАС.
+function _itHitZone(p){
+  if(hit(p,UI.gasBtn))return'gas'; if(hit(p,UI.brkBtn))return'brake';
+  if(hit(p,UI.leanLBtn))return'leanL'; if(hit(p,UI.leanRBtn))return'leanR';
+  if(hit(p,UI.jumpBtn))return'jump'; if(hit(p,UI.pumpBtn))return'pump';
+  if(hit(p,UI.pause))return'pause'; return'none'; }
+function _itRawPush(kind,tch,zone){
+  if(!_itRec||_itRaw.length>=IT_CAP) return;
+  const r=cv.getBoundingClientRect(), cx=(tch.clientX||0), cy=(tch.clientY||0), kx=cx-r.left, ky=cy-r.top;
+  const e={k:kind, id:tch.identifier, rt:_itNow(), st:+_simT.toFixed(5),
+    cx:+cx.toFixed(1), cy:+cy.toFixed(1), kx:+kx.toFixed(1), ky:+ky.toFixed(1),
+    z:zone!==undefined?zone:_itHitZone({x:kx,y:ky}), n:Object.keys(activeTouches).length, sc:screen};
+  const rs=[r.left,r.top,r.width,r.height].map(function(v){return Math.round(v*10)/10;}).join(',');
+  if(rs!==_itLastRect){ e.r=rs.split(',').map(Number); _itLastRect=rs; e.or=_itOrient(); }   // rect пишем при изменении (поворот/resize), не каждый кадр
+  _itRaw.push(e); }
+function _itOrient(){ try{ const o=window.screen&&window.screen.orientation; return o?o.type:((window.orientation===0||window.orientation===180)?'portrait':(window.orientation===undefined?'unknown':'landscape')); }catch(e){ return 'unknown'; } }
+// RESOLVED: пишем ТОЛЬКО при изменении набора действий; reason = что именно его изменило.
+function _itResolved(reason){
+  if(!_itRec||_itRes.length>=IT_CAP) return;
+  const at={}; for(const k in activeTouches) at[k]=activeTouches[k];
+  const sig=[down?1:0,brake?1:0,(+leanX).toFixed(3),jumpReq>0?1:0,boosting>0?1:0,trick|0,trickHeld?1:0,ctrlId===null?'-':String(ctrlId),JSON.stringify(at)].join('|');
+  if(sig===_itSig) return; _itSig=sig;
+  _itRes.push({rt:_itNow(), st:+_simT.toFixed(5), f:_tmSteps,
+    d:!!down, b:!!brake, lx:+(+leanX).toFixed(3), jr:jumpReq|0, bo:boosting|0,
+    tk:trick|0, th:!!trickHeld, ci:ctrlId===null?null:String(ctrlId), cs:ctrlScheme,
+    at:at, why:reason||'?'}); }
+function _itMeta(){
+  const r=cv.getBoundingClientRect();
+  return { formatVersion:IT_VERSION, build:BUILD, commit:(window.__COMMIT||'uncommitted'),
+    timingMode:TIMING_FIXED?'fixed':'legacy', simDt:SIM_DT,
+    viewportCss:[W,H], canvasBacking:[cv.width,cv.height], canvasRect:[+r.left.toFixed(1),+r.top.toFixed(1),+r.width.toFixed(1),+r.height.toFixed(1)],
+    devicePixelRatio:(window.devicePixelRatio||1), effectiveDPR:DPR,
+    device:navigator.userAgent, orientation:_itOrient(),
+    level:(typeof VSLICE!=='undefined'&&VSLICE)?'vertical-slice':(trackSource||'proc'),
+    query:location.search, ctrlScheme:ctrlScheme, pumpSide:pumpSide,
+    recordedAt:new Date().toISOString(),
+    initial:{ x:bike?+bike.x.toFixed(4):null, y:bike?+bike.y.toFixed(4):null, ang:bike?+bike.ang.toFixed(5):null,
+              vx:bike?+bike.vx.toFixed(5):null, vy:bike?+bike.vy.toFixed(5):null, simT:+_simT.toFixed(5),
+              vsCP:(typeof _vsCP!=='undefined')?_vsCP:null, screen:screen } }; }
+window.__inputTraceStart=function(){ _itRaw=[]; _itRes=[]; _itSig=''; _itLastRect=''; _itT0=performance.now(); _itRec=true; _itStat='RECORDING';
+  window.__timeReset(); _itRes.push({rt:0, st:+_simT.toFixed(5), f:_tmSteps, d:!!down,b:!!brake,lx:+(+leanX).toFixed(3),jr:jumpReq|0,bo:boosting|0,tk:trick|0,th:!!trickHeld,ci:null,cs:ctrlScheme,at:{},why:'record:start'});
+  _itSaved=_itMeta(); return true; };
+window.__inputTraceStop=function(){ if(!_itRec) return false; _itRec=false; _itStat='STOPPED'; _itPersist(); return true; };
+window.__inputTraceGet=function(){
+  const m=_itSaved||_itMeta(); m.stoppedAt=new Date().toISOString(); m.durationRealMs=_itNow();
+  return { meta:m, timeReport:window.__timeReport(), raw:_itRaw.slice(), resolved:_itRes.slice() }; };
+function _itPersist(){ try{ const s=JSON.stringify(window.__inputTraceGet()); if(s.length<2500000) localStorage.setItem('cb_itrace',s); }catch(e){} }
+window.__inputTraceLast=function(){ try{ const s=localStorage.getItem('cb_itrace'); return s?JSON.parse(s):null; }catch(e){ return null; } };
+// ВАЛИДАТОР ТРЕЙСА — способен провалиться (см. негативный контроль №2: удалённый touchend).
+// Ищет: незакрытые касания, resolved-действие, залипшее до конца записи, и действие,
+// которое держится без единого удерживающего касания.
+window.__inputTraceValidate=function(tr){
+  tr=tr||window.__inputTraceGet(); const issues=[], open={};
+  for(const e of tr.raw){ if(e.k==='start') open[e.id]=e; else if(e.k==='end'||e.k==='cancel') delete open[e.id]; }
+  for(const id in open) issues.push({type:'unclosedTouch', id:+id, startedAtMs:open[id].rt, zone:open[id].z});
+  const last=tr.resolved[tr.resolved.length-1];
+  if(last){ if(last.d) issues.push({type:'stuckAction', action:'down', sinceMs:last.rt, why:last.why});
+    if(last.b) issues.push({type:'stuckAction', action:'brake', sinceMs:last.rt, why:last.why});
+    if(Math.abs(last.lx)>0.01) issues.push({type:'stuckAction', action:'leanX', value:last.lx, sinceMs:last.rt, why:last.why}); }
+  for(const r of tr.resolved){ const held=Object.keys(r.at).length;
+    if(r.d && held===0 && r.cs!=='btn2' && r.cs!=='gestures') issues.push({type:'actionWithoutTouch', action:'down', atMs:r.rt, why:r.why}); }
+  const dur=tr.meta&&tr.meta.durationRealMs||0;
+  return { ok:issues.length===0, issues:issues, rawEvents:tr.raw.length, resolvedChanges:tr.resolved.length, durationMs:dur }; };
+window.__inputTraceCounts=function(){ return {status:_itStat, raw:_itRaw.length, resolved:_itRes.length, ms:_itRec?_itNow():0}; };
 // === RIGID-BODY STEP (b68): one frame of the real bike physics over the price line (terrainAt = ground). ===
 function rigidStep(){
   const R=RB, sdt=1/R.subSteps;
@@ -1435,6 +1546,7 @@ function update(){
   if(ctrlScheme==='btn2'){ down=!brake; }   // b56: AUTO-GAS — always driving unless you press brake (lean comes from the НОС↑/НОС↓ buttons, like btn4)
   t++; daycycle+=0.0009;
   { const _is=(down?1:0)|(brake?2:0)|(leanX<-0.3?4:leanX>0.3?8:0)|((trick||0)<<4); if(_is!==_inpPrev&&inpLog.length<12000){ inpLog.push([t,_is]); _inpPrev=_is; } }   // b161: дельта-лог ввода (реплеи/анти-чит)
+  _itResolved('step');   // 0A: страховка — ловим изменения, которые пришли не от DOM-события (btn2 автогаз, распад jumpReq/boosting). Дедуп внутри: без изменения записи нет
   bike._px=bike.x; bike._py=bike.y; bike._pa=bike.ang; bike._pw=bike.wheel; if(cam){cam._px=cam.x; cam._py=cam.y;}   // b154/b157: поза байка И КАМЕРЫ прошлого кадра — интерполяция рендера в слоумо (b154 интерполировал только байк — мир дёргался, юзер «подлагивает»)
   // physics
   const P=PHYS, DX=P.DX, DY=P.DY, wasG=bike.onG;
@@ -5168,14 +5280,135 @@ function dbgTick(){
     +'<b>'+(dist||0)+'</b>m · дамп <span class="'+wc+'">'+gapM+'m</span><br>'
     +'<span class="lab">'+state+' · CORE '+(CORE_TEST_MODE?'ON':'OFF')+' · '+BUILD+'</span>';
 }
-function loop(){ requestAnimationFrame(loop); try{ if(screen==='clip'){ clipStep(); } else if(screen==='play'){
-      const tgt = slowmo>0 ? (slowmo--, SLOWMO_SCALE) : 1;   // цель масштаба времени; slowmo декрементим тут (счётчик кадров как раньше)
-      slowTS += (tgt - slowTS)*0.18;                          // плавный въезд/выезд слоумо (нет рывка 0→28) — timeScale глайдит
-      physAcc += slowTS;                                      // копим дробные физ-шаги
-      if(physAcc>3) physAcc=3;                                // кап от «спирали смерти» на длинном пропущенном кадре (таб-свич)
-      let _st=0; while(physAcc>=1 && _st<4){ update(); physAcc-=1; _st++; }
-      slowLerp = (slowTS>0.985) ? 1 : physAcc;                // норма: рисуем текущий кадр (как раньше). Слоумо: дробная фаза 0..1 → интерполяция байка/камеры/3D/зума
-    } draw(); musicTick(); dbgTick(); }catch(e){ if(!loop._e){loop._e=1; console.error('CHART loop error (self-healed, screen='+screen+'):',e&&e.stack||e); } } }   // b216: fixed-timestep+интерполяция (Gaffer) вместо бинарного пропуска b154 → плавное замедление, дробный slowLerp. Читатели slowLerp (байк 1916/камера 1729/3D 3113/зум _zoomD 60Гц) уже готовы к дробному.   // b65: rAF re-requested FIRST + try/catch → one bad frame can no longer permanently FREEZE the game. Первая ошибка логируется.
+// ===================== 0A: ВРЕМЕННАЯ БАЗА =====================
+// СТАРО (timing=legacy): physAcc += slowTS, где slowTS безразмерен → 1 кадр = 1 update()
+//   ⇒ _simT идёт со скоростью refreshRate/60 от реального времени (45 Гц = 0.75×, измерено аудитом).
+// НОВО (timing=fixed):  accumulator += realDt (СЕКУНДЫ из rAF-timestamp) × timeScale,
+//   while(accumulator>=SIM_DT){ update(); accumulator-=SIM_DT }  ⇒ число update() задаёт реальное
+//   время, а не дисплей. renderAlpha = accumulator/SIM_DT → рендер интерполирует prev→cur.
+const TM_MAX_FRAME_DT=0.25;    // кадр длиннее 250 мс = не «медленный кадр», а провал (таб/звонок): зажимаем, остаток честно списываем в droppedRealTime
+const TM_MAX_STEPS=5;          // потолок catch-up за кадр (5×16.7мс = 83мс симуляции): анти-«спираль смерти»
+const TM_LONG_FRAME=0.05;      // >50 мс = длинный кадр, регистрируется отдельно
+const TM_SLOW_RATE=11.9074;    // сглаживание slowTS: 1-exp(-RATE/60)=0.18 → при 60 FPS совпадает с legacy покадрово, но не зависит от FPS
+let _tmPrevNow=0, _tmAcc=0, _tmResync=true, _tmAlpha=1;
+// ---- счётчики телеметрии (общие для обоих режимов; растут ТОЛЬКО в точке вызова update() из цикла,
+//      поэтому скриптовые прогоны __vsRun/__vsRecord их не загрязняют) ----
+let _tmFrames=0, _tmSteps=0, _tmRealPlay=0, _tmClamped=0, _tmDropped=0, _tmVisReset=0, _tmLong=0, _tmMaxAcc=0;
+let _tmDtLog=[], _tmSpfLog=[];                                  // кольцевые буферы: dt кадра (с) и физ-шагов на кадр
+const TM_LOG_CAP=1200;
+function _tmPush(a,v){ a.push(v); if(a.length>TM_LOG_CAP) a.shift(); }
+function _tmStat(a){ if(!a.length) return {min:0,median:0,p95:0,max:0,n:0};
+  const s=a.slice().sort(function(x,y){return x-y;}), q=function(p){ return s[Math.min(s.length-1,Math.max(0,Math.round(p*(s.length-1))))]; };
+  return {min:+s[0].toFixed(6), median:+q(0.5).toFixed(6), p95:+q(0.95).toFixed(6), max:+s[s.length-1].toFixed(6), n:s.length}; }
+window.__timeReset=function(){ _tmFrames=0; _tmSteps=0; _tmRealPlay=0; _tmClamped=0; _tmDropped=0; _tmVisReset=0; _tmLong=0; _tmMaxAcc=0; _tmDtLog=[]; _tmSpfLog=[]; return true; };
+// Ресинк временной базы: следующий кадр берёт dt=0 и пустой аккумулятор → ни catch-up, ни импульса.
+function _tmResyncClock(countIt){ _tmResync=true; _tmAcc=0; if(countIt) _tmVisReset++; }
+window.__timeResync=function(){ _tmResyncClock(true); return true; };
+// ОДИН кадр времени. Это ЕДИНСТВЕННАЯ реализация — и rAF, и синтетические тесты 30/45/60/120
+// зовут именно её, поэтому тест меряет production-код, а не свою копию.
+function _tmAdvance(nowMs){
+  let realDt;
+  if(_tmResync){ realDt=0; _tmResync=false; }
+  else { realDt=(nowMs-_tmPrevNow)/1000;
+    if(!(realDt>=0)) realDt=0;                                          // защита от нулевого/обратного хода часов
+    if(realDt>TM_LONG_FRAME) _tmLong++;
+    if(realDt>TM_MAX_FRAME_DT){ _tmDropped+=realDt-TM_MAX_FRAME_DT; _tmClamped++; realDt=TM_MAX_FRAME_DT; } }
+  _tmPrevNow=nowMs;
+  _tmPush(_tmDtLog, realDt);
+  const tgt = slowmo>0 ? SLOWMO_SCALE : 1;                              // цель масштаба времени
+  slowTS += (tgt - slowTS)*(1-Math.exp(-TM_SLOW_RATE*realDt));          // сглаживание ПО ВРЕМЕНИ (legacy: 0.18 за кадр)
+  if(slowmo>0){ slowmo-=realDt*60; if(slowmo<0) slowmo=0; }             // slowmo в «кадрах при 60» → реальные секунды: та же длительность, что legacy@60
+  _tmAcc += realDt*slowTS;
+  if(_tmAcc>_tmMaxAcc) _tmMaxAcc=_tmAcc;
+  let st=0;
+  while(_tmAcc>=SIM_DT && st<TM_MAX_STEPS){ if(_tmPreStep) _tmPreStep(_tmSteps); update(); _tmAcc-=SIM_DT; st++; _tmSteps++; }
+  if(_tmAcc>=SIM_DT){ _tmDropped+=_tmAcc; _tmAcc=0; }                   // потолок catch-up достигнут: остаток НЕ копим (спираль смерти), а честно списываем
+  _tmRealPlay += realDt;
+  _tmPush(_tmSpfLog, st);
+  _tmAlpha = _tmAcc/SIM_DT;
+  slowLerp = _tmAlpha;                                                  // рендер интерполирует prev→cur (в legacy это делалось только в слоумо)
+  return st; }
+let _tmPreStep=null;                                                    // хук реплея: подать ввод ПЕРЕД шагом (ставит __inputTraceReplay)
+// ---- один кадр LEGACY (побитово прежняя логика; вынесен, чтобы негативный контроль гонял именно её) ----
+function _tmAdvanceLegacy(nowMs){
+  const tgt = slowmo>0 ? (slowmo--, SLOWMO_SCALE) : 1;   // цель масштаба времени; slowmo декрементим тут (счётчик кадров как раньше)
+  slowTS += (tgt - slowTS)*0.18;                          // плавный въезд/выезд слоумо (нет рывка 0→28) — timeScale глайдит
+  physAcc += slowTS;                                      // копим дробные физ-шаги
+  if(physAcc>3) physAcc=3;                                // кап от «спирали смерти» на длинном пропущенном кадре (таб-свич)
+  let _st=0; while(physAcc>=1 && _st<4){ if(_tmPreStep) _tmPreStep(_tmSteps); update(); physAcc-=1; _st++; _tmSteps++; }
+  slowLerp = (slowTS>0.985) ? 1 : physAcc;                // норма: рисуем текущий кадр (как раньше). Слоумо: дробная фаза 0..1 → интерполяция байка/камеры/3D/зума
+  // телеметрия для НЕГАТИВНОГО КОНТРОЛЯ: legacy обязан показать ratio = fps/60, а не 1.000
+  let rdt=(nowMs-_tmPrevNow)/1000; if(!(rdt>=0))rdt=0; if(_tmResync){ rdt=0; _tmResync=false; }
+  if(rdt>TM_LONG_FRAME)_tmLong++; if(rdt>TM_MAX_FRAME_DT){ _tmDropped+=rdt-TM_MAX_FRAME_DT; _tmClamped++; rdt=TM_MAX_FRAME_DT; }
+  _tmPrevNow=nowMs; _tmRealPlay+=rdt; _tmPush(_tmDtLog,rdt); _tmPush(_tmSpfLog,_st);
+  return _st; }
+function loop(nowMs){ requestAnimationFrame(loop); try{
+    if(nowMs===undefined) nowMs=performance.now();
+    _tmFrames++;
+    if(screen==='clip'){ clipStep(); }
+    else if(screen==='play'){ if(TIMING_FIXED) _tmAdvance(nowMs); else _tmAdvanceLegacy(nowMs); }
+    else { _tmPrevNow=nowMs; _tmResyncClock(false); }                    // не играем — время не копим и не «догоняем» при возврате
+    draw(); musicTick(); dbgTick(); }catch(e){ if(!loop._e){loop._e=1; console.error('CHART loop error (self-healed, screen='+screen+'):',e&&e.stack||e); } } }   // b216: fixed-timestep+интерполяция (Gaffer) вместо бинарного пропуска b154 → плавное замедление, дробный slowLerp. Читатели slowLerp (байк 1916/камера 1729/3D 3113/зум _zoomD 60Гц) уже готовы к дробному.   // b65: rAF re-requested FIRST + try/catch → one bad frame can no longer permanently FREEZE the game. Первая ошибка логируется.
+// ---- ОТЧЁТ ВРЕМЕНИ (debug-only). Всё поля — ИЗМЕРЕНИЯ счётчиков, ни одной константы «для галочки». ----
+window.__timeReport=function(){
+  const simEl=_tmSteps*SIM_DT, realEl=_tmRealPlay;
+  return { timingMode: TIMING_FIXED?'fixed':'legacy',
+    realElapsed:+realEl.toFixed(4), simElapsed:+simEl.toFixed(4),
+    simToRealRatio: realEl>0 ? +(simEl/realEl).toFixed(4) : null,
+    renderFrames:_tmFrames, physicsSteps:_tmSteps,
+    renderFPS: realEl>0 ? +(_tmSpfLog.length/realEl).toFixed(2) : null,
+    physicsHz: realEl>0 ? +(_tmSteps/realEl).toFixed(2) : null,
+    frameDt:_tmStat(_tmDtLog), stepsPerFrame:_tmStat(_tmSpfLog),
+    accumulator:+_tmAcc.toFixed(6), maxAccumulator:+_tmMaxAcc.toFixed(6),
+    clampedFrameCount:_tmClamped, droppedRealTime:+_tmDropped.toFixed(4),
+    visibilityResetCount:_tmVisReset, longFrameCount:_tmLong,
+    slowTS:+slowTS.toFixed(4), slowmo:+(+slowmo).toFixed(2), renderAlpha:+_tmAlpha.toFixed(4),
+    viewportCssW:W, viewportCssH:H, canvasBackingW:cv.width, canvasBackingH:cv.height,
+    devicePixelRatio:(window.devicePixelRatio||1), effectiveDPR:DPR,
+    userAgent:navigator.userAgent, currentScreen:screen,
+    currentLevel:(typeof VSLICE!=='undefined'&&VSLICE)?'vertical-slice':(trackSource||'proc'),
+    controlScheme:ctrlScheme, build:BUILD, simDt:SIM_DT }; };
+// ---------- 0A: ПАНЕЛЬ ЭКСПОРТА ТРЕЙСА НА ТЕЛЕФОНЕ (без DevTools, только &inputTrace=1) ----------
+(function(){
+  const box=document.getElementById('itui'); if(!box) return;
+  if(!TRACE_ON){ box.style.display='none'; return; }
+  box.style.display='block';
+  const stEl=document.getElementById('itstat'), bRec=document.getElementById('itrec'),
+        bDl=document.getElementById('itdl'), bCp=document.getElementById('itcp'), txt=document.getElementById('ittxt');
+  let exported=false, deadSaved=false;
+  // ЛОВУШКА (память mobile-touch-buttons): игра гасит click через window-touchstart preventDefault.
+  // Поэтому вешаем ПРЯМОЙ touchend + stopPropagation, иначе кнопка молчит на телефоне.
+  function tap(el,fn){ el.addEventListener('touchstart',e=>{ e.stopPropagation(); },{passive:false});
+    el.addEventListener('touchend',e=>{ e.stopPropagation(); e.preventDefault(); fn(); },{passive:false});
+    el.addEventListener('click',e=>{ e.stopPropagation(); fn(); }); }
+  box.addEventListener('touchstart',e=>{ e.stopPropagation(); },{passive:false});
+  box.addEventListener('touchmove', e=>{ e.stopPropagation(); },{passive:false});
+  box.addEventListener('touchend',  e=>{ e.stopPropagation(); },{passive:false});
+  function payload(){ return JSON.stringify(window.__inputTraceGet()); }
+  tap(bRec,function(){ if(_itRec){ window.__inputTraceStop(); } else { window.__inputTraceStart(); exported=false; deadSaved=false; txt.style.display='none'; } paint(); });
+  tap(bDl,function(){ if(_itRec) window.__inputTraceStop();
+    try{ const s=payload(), b=new Blob([s],{type:'application/json'}), u=URL.createObjectURL(b), a=document.createElement('a');
+      a.href=u; a.download='trace-0a-'+new Date().toISOString().replace(/[:.]/g,'-')+'.json';
+      document.body.appendChild(a); a.click(); setTimeout(function(){ URL.revokeObjectURL(u); a.remove(); },4000);
+      exported=true; _itStat='EXPORTED'; }catch(e){ stEl.textContent='DOWNLOAD FAIL: '+e; }
+    paint(); });
+  tap(bCp,function(){ if(_itRec) window.__inputTraceStop();
+    const s=payload();
+    try{ if(navigator.clipboard&&navigator.clipboard.writeText){ navigator.clipboard.writeText(s).then(function(){ exported=true; _itStat='EXPORTED'; paint(); },function(){ show(s); }); } else show(s); }catch(e){ show(s); }
+    function show(v){ txt.style.display='block'; txt.value=v; txt.readOnly=false; txt.focus(); txt.setSelectionRange(0,v.length); } });
+  function paint(){
+    const c=window.__inputTraceCounts(), tr=window.__timeReport();
+    const cls=_itRec?'rec':(exported?'exp':'');
+    stEl.innerHTML='<span class="st '+cls+'">'+_itStat+'</span> · raw <span class="num">'+c.raw+'</span>'
+      +' · res <span class="num">'+c.resolved+'</span> · <span class="num">'+(c.ms/1000).toFixed(1)+'</span>s<br>'
+      +tr.timingMode+' · ratio <span class="num">'+(tr.simToRealRatio===null?'—':tr.simToRealRatio.toFixed(3))+'</span>'
+      +' · fps <span class="num">'+(tr.renderFPS===null?'—':tr.renderFPS.toFixed(0))+'</span>'
+      +' · steps <span class="num">'+tr.physicsSteps+'</span>';
+    bRec.textContent=_itRec?'■ СТОП':'● ЗАПИСЬ'; bRec.className=_itRec?'on':''; }
+  setInterval(function(){ if(_itRec && screen==='dead' && !deadSaved){ deadSaved=true; _itPersist(); }   // трейс переживает экран смерти: снимок в localStorage сразу при гибели
+    if(_itRec && screen!=='dead') deadSaved=false; paint(); },250);
+  paint();
+})();
 function shakeApply(){} // (shake folded into camera draw via translate jitter)
 // ===================== b192 ФАЗА 2: МОСТ ФИЗИКА → 3D-РЕНДЕР =====================
 // Three.js-модуль (внизу файла, type=module) не видит let/const этого классического скрипта.
