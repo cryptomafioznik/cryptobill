@@ -708,10 +708,15 @@ const RB={
   angDamp:0.992, avMax:0.42, subSteps:6 };    // угл.демпфер / КАП скорости вращения (контролируемое сальто, не блюр) / под-шаги
 
 // ---------- meta: gem bank, bikes, missions ----------
-let bank=0, owned=[0], selBike=0, muted=false, flipsTotal=0, topKmh=0, lastLandDiff=0;
+const START_BIKE=4;   // 0V: КРОСС 250. Игра стартовала на ВЕЛИКЕ (cost 0) — отсюда «байк какой-то
+// старый советский Иж или Планета» (юзер, дважды). Это буквально был велосипед: type:'bike',
+// светлые трубы MTB-рамы. Мотокросс стоил 1800 и игрок его не видел. Прогрессия остаётся —
+// она теперь про ЛУЧШИЕ кроссы, а не про «доехать до мотоцикла».
+let bank=0, owned=[START_BIKE], selBike=START_BIKE, muted=false, flipsTotal=0, topKmh=0, lastLandDiff=0;
 try{bank=+localStorage.getItem('cipher_bank')||0;}catch(e){}
-try{owned=JSON.parse(localStorage.getItem('cipher_owned')||'[0]')||[0];}catch(e){owned=[0];}
-try{selBike=+localStorage.getItem('cipher_bike')||0;}catch(e){}
+try{owned=JSON.parse(localStorage.getItem('cipher_owned')||JSON.stringify([START_BIKE]))||[START_BIKE];}catch(e){owned=[START_BIKE];}
+if(owned.indexOf(START_BIKE)<0) owned.push(START_BIKE);   // старым сейвам тоже выдаём кросс: иначе они остаются на велосипеде
+try{ const _sb=localStorage.getItem('cipher_bike'); selBike=(_sb===null||_sb==='0')?START_BIKE:(+_sb||START_BIKE); }catch(e){ selBike=START_BIKE; }   // 0V: сейв с велосипедом (0) поднимаем на кросс — иначе старый игрок остаётся на велике
 try{muted=localStorage.getItem('cipher_muted')==='1';}catch(e){}
 let pumpSide='left', settingsRet='title', garageRet='career', eventsRet='path', careerDeathGems=0;   // b137: eventsRet — боссы открываются и с титула, и с Пути → назад возвращает откуда пришёл   // PUMP button side (right-hander → left, configurable for lefties); settingsRet/garageRet = screen to return to; careerDeathGems = consolation gems from the last failed career run
 try{pumpSide=localStorage.getItem('cipher_pumpside')||'left';}catch(e){}
@@ -791,6 +796,11 @@ window.__lbSet=function(on){ LB_ON=!!on; LB=LB_ON?LB_TUNE:LB_OFF; try{ sprCache=
   try{ _trkBodyG=null; _trkShadG=null; _trkBodyGold=null; }catch(e){} return LB_ON; };
 window.__lbTune=function(patch){ if(patch) for(const k in patch) LB_TUNE[k]=patch[k]; if(LB_ON){LB=LB_TUNE;} try{ sprCache={}; }catch(e){} try{ _trkBodyG=null;_trkShadG=null;_trkBodyGold=null; }catch(e){} return JSON.parse(JSON.stringify(LB_TUNE)); };
 function lbA(a,k){ const v=a*(LB[k]||1); return (v<0?0:v>1?1:v).toFixed(3); }   // альфа с клампом в [0,1]
+// 0V РАЗМЕР ГЕРОЯ. ИЗМЕРЕНО: байк+райдер = 64 px на экране 775 = 8.3 %.
+// Критерий из аудита, утверждённый юзером: НЕ МЕНЬШЕ 12 % высоты экрана —
+// иначе признаки силуэта (крыло, дефлекторы, табличка) получают по 5-8 px и не видны.
+// Физику (PHYS.DX=26) не трогаем: это ТОЛЬКО рендер-зум вокруг байка.
+const HERO_Z = 1.45;
 function lbRim(trip){ const m=LB.bikeNeon||1; if(m===1) return trip; return trip.split(',').map(function(v){ return Math.round(+v*m); }).join(','); }   // ободья/акценты байка — НЕ данные и НЕ золото: гасим, чтобы рама читалась силуэтом
 function lbC(r,g,b,k,a){ const m=LB[k]||1; return 'rgba('+Math.round(r*m)+','+Math.round(g*m)+','+Math.round(b*m)+','+a+')'; }   // затемнение МАССЫ (это не альфа: силуэт должен стать тёмным, а не прозрачным)
 let _zoomD=1;   // b206: отображаемый зум — сглаживается в draw на каждом кадре (60Гц), лечит ступеньки зума при 30Гц-слоумо (сальто-синема)
@@ -1193,7 +1203,7 @@ function shareDailyCard(txt){ dailyCardBlob(function(b){
 let resetArm=0;   // b95: 2-тап подтверждение сброса прогресса (кадры)
 function resetProgress(){   // b95: чистый старт для анализа — стирает ПРОГРЕСС (банк/апгрейды/ранг/байки/рекорды/онбординг), сохраняет НАСТРОЙКИ (звук/управление)
   try{ const keep={cipher_muted:1,cipher_ctrlscheme:1,cipher_pumpside:1,cipher_dbg:1}; for(let i=localStorage.length-1;i>=0;i--){ const k=localStorage.key(i); if(k&&k.indexOf('cipher_')===0&&!keep[k])localStorage.removeItem(k); } }catch(e){}
-  bank=0; allUpg={}; useBikeUpg(); owned=[0]; selBike=0; useBikeUpg(); leverage=2; career=0; best=0; bestPnl=0; careerMax=0; careerTrack=0; seenTut={}; rankMul=1; rankedUp=null; resetArm=0;
+  bank=0; allUpg={}; useBikeUpg(); owned=[START_BIKE]; selBike=START_BIKE; useBikeUpg(); leverage=2; career=0; best=0; bestPnl=0; careerMax=0; careerTrack=0; seenTut={}; rankMul=1; rankedUp=null; resetArm=0;
   popText('✅ ПРОГРЕСС ОБНУЛЁН'); sfxLev(); settingsRet='title'; screen='title'; }
 const UI={}; // button rects in screen space, refreshed each draw for hit-testing
 function hit(p,r){ return r&&p.x>=r.x&&p.x<=r.x+r.w&&p.y>=r.y&&p.y<=r.y+r.h; }
@@ -3968,8 +3978,12 @@ function draw(){
 
   // ---- the track: a real CANDLESTICK chart the bike rides across ----
   const zoomT=1-(rush||0)*0.04-(camAir||0)*0.40*(1-(trickZoom||0))+(trickZoom||0)*0.48+(boosting>0?0.045:0)+((megaAir&&bike&&!bike.onG)?0.12:0);   // b234 мега-вылет = ещё ближе камера (кинематограф). b150 ТРИК-КАМЕРА: зум К БАЙКУ на полёте; b223 вклад 0.34→0.48 = ЕЩЁ БЛИЖЕ на сальто (юзер «больше зума, флипы круче»); b183: +зум-пульс буста
-  _zoomD+=(zoomT-_zoomD)*0.14; const zoom=_zoomD;   // b214 ПЛАВНОСТЬ: сглаживание зума 0.42→0.14 (мягче наезд/отъезд камеры, кинематографично — юзер «сглажено и плавно»). b206: зум доезжает на КАЖДОМ кадре 60Гц (не ступеньками в слоумо 30Гц)
-  ctx.save(); ctx.translate(W/2,H/2); ctx.scale(zoom,zoom); ctx.translate(-W/2,-H/2);
+  _zoomD+=(zoomT-_zoomD)*0.14; const zoom=_zoomD*HERO_Z;   // b214 ПЛАВНОСТЬ: сглаживание зума 0.42→0.14 (мягче наезд/отъезд камеры, кинематографично — юзер «сглажено и плавно»). b206: зум доезжает на КАЖДОМ кадре 60Гц (не ступеньками в слоумо 30Гц)
+  // 0V РАЗМЕР ГЕРОЯ: зум ВОКРУГ БАЙКА, а не вокруг центра экрана. Иначе базовый зум
+  // выталкивает героя из кадра, и «сделали больше» превращается в «уехал за край».
+  // Совпадает с исходным замыслом трик-камеры (b150: «зум К БАЙКУ»).
+  const _zx = bike ? clamp(bike.x-cam.x, 0, W) : W/2, _zy = bike ? clamp(bike.y-cam.y, 0, H) : H/2;
+  ctx.save(); ctx.translate(_zx,_zy); ctx.scale(zoom,zoom); ctx.translate(-_zx,-_zy);
   ctx.save(); ctx.translate(-cam.x,-cam.y); pspSet();   // b254: якоря ракурса-¾ на кадр (pivot=байк, горизонт)
   const x0=cam.x-STEP, x1=cam.x+W*(PSP_ON?3.2:1)+STEP;   // b257: в ¾ рисуем ВГЛУБЬ дальше (перспектива сжимает мир: d=3.2W → дорога дотягивается до точки схода, не обрывается на 60% экрана)
   const i0=Math.max(0,Math.floor(x0/STEP)), i1=Math.min(terr.length-1,Math.ceil(x1/STEP));
