@@ -4595,6 +4595,42 @@ function spWheel(B,kind,R,front){ const BOX=(R+3)*2;
     spDot(g,0,0,2.3,spLin(g,-2,-2,2,2,[[0,'#48536a'],[1,'#10141f']])); spDot(g,0,0,0.8,'#04060b');
     for(let k=0;k<4;k++){ const a=k/4*6.2832+0.4; spDot(g,Math.cos(a)*1.5,Math.sin(a)*1.5,0.28,'rgba(220,232,250,0.7)'); }
   }); }
+// ===== 0V СИЛУЭТ MX ОДНОЙ ФОРМОЙ =====
+// Порядок работы изменён: СНАЧАЛА силуэт, проверка чёрным, потом цвет и детали.
+// Опорные точки взяты из реальной геометрии (YZ250F, 1 px = 27.2 мм при базе 54):
+//   земля y=28.5 · ось колеса y=15.5 · седло 983мм -> y=-7.6 · верх бака 1150мм -> y=-13.8
+//   руль 1200мм -> y=-15.6 · низ мотора (клиренс 335мм) -> y=16.2 · ход вилки 300мм = 11 px
+// Форма кросса = ОДИН контур: хвост задран -> плоское седло -> высокая узкая масса бака/шрауда
+// -> вниз по шрауду -> НАЗАД под седло (открытый треугольник рамы) -> мотор низкой массой
+// -> вверх к подседельной трубе. Мотор НЕ отдельная коробка: он часть того же контура.
+function spDirtSil(g){
+  g.beginPath();
+  g.moveTo(-27.4,-14.6);  g.lineTo(-20.0,-12.4);  g.lineTo(-13.0,-11.0);   // задранный хвост
+  g.lineTo(-3.0,-11.6);   g.lineTo(2.0,-12.6);                              // плоское седло
+  g.lineTo(7.0,-13.8);    g.lineTo(12.4,-13.6);   g.lineTo(15.6,-12.0);     // бак: верхняя грань
+  g.lineTo(16.8,-7.0);    g.lineTo(15.0,-1.6);    g.lineTo(11.0,1.2);       // передняя грань шрауда вниз
+  g.lineTo(8.6,5.2);      g.lineTo(8.0,11.6);     g.lineTo(4.0,16.2);       // мотор: перед и низ (клиренс)
+  g.lineTo(-6.0,16.0);    g.lineTo(-9.0,11.0);    g.lineTo(-8.4,4.0);       // мотор: низ и зад
+  g.lineTo(-6.2,-1.0);    g.lineTo(-4.6,-6.0);    g.lineTo(-6.0,-9.4);      // подседельная труба вверх
+  g.lineTo(-14.0,-8.4);   g.lineTo(-21.0,-9.2);   g.lineTo(-27.0,-11.0);    // низ хвоста
+  g.closePath();
+}
+// ОТКРЫТЫЙ ТРЕУГОЛЬНИК РАМЫ — у кросса это большая заметная дыра между рулевой,
+// мотором и низом седла. Без неё силуэт читается как сплошной комок (проверено тестом).
+function spDirtHole(g){
+  g.beginPath();
+  g.moveTo(13.6,-9.4); g.lineTo(9.2,-0.6); g.lineTo(1.0,3.0);
+  g.lineTo(-3.6,-2.0); g.lineTo(-3.0,-8.0); g.lineTo(6.0,-10.0);
+  g.closePath();
+}
+window.__silTest=function(bi){ const B=BIKES[bi||4];
+  const c=document.createElement('canvas'); c.width=760; c.height=560;
+  const q=c.getContext('2d'); q.setTransform(5,0,0,5,380,300);
+  q.fillStyle='#eaf2ff'; spDirtSil(q); q.fill();
+  q.globalCompositeOperation='destination-out'; spDirtHole(q); q.fill();
+  q.globalCompositeOperation='source-over';
+  q.fillStyle='#eaf2ff'; q.beginPath(); q.arc(-27,15.5,13,0,7); q.fill(); q.beginPath(); q.arc(27,15.5,13,0,7); q.fill();
+  return c; };
 function spDirt(g,B,plate){ const bod=B.body, ACC='rgba('+lbRim(B.accent)+',';
   const F=B.frame||'cross', isCross=F==='cross', isEnduro=F==='enduro', isMotard=F==='motard';   // b244 РАЗНЫЕ РАМЫ: кросс=клюв+плейт+без фары, эндуро=фара+бак+защита, мотард=низкое крыло+уличный акцент
   spAO(g,0,9,14,5,0.5); spAO(g,-17,12,8,3.5,0.4); spAO(g,9,-2,7,3,0.3);
