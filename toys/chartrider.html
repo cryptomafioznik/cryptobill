@@ -708,15 +708,15 @@ const RB={
   angDamp:0.992, avMax:0.42, subSteps:6 };    // угл.демпфер / КАП скорости вращения (контролируемое сальто, не блюр) / под-шаги
 
 // ---------- meta: gem bank, bikes, missions ----------
-const START_BIKE=4;   // 0V: КРОСС 250. Игра стартовала на ВЕЛИКЕ (cost 0) — отсюда «байк какой-то
+const START_BIKE=0;   // 0V: КРОСС 250. Игра стартовала на ВЕЛИКЕ (cost 0) — отсюда «байк какой-то
 // старый советский Иж или Планета» (юзер, дважды). Это буквально был велосипед: type:'bike',
 // светлые трубы MTB-рамы. Мотокросс стоил 1800 и игрок его не видел. Прогрессия остаётся —
 // она теперь про ЛУЧШИЕ кроссы, а не про «доехать до мотоцикла».
 let bank=0, owned=[START_BIKE], selBike=START_BIKE, muted=false, flipsTotal=0, topKmh=0, lastLandDiff=0;
 try{bank=+localStorage.getItem('cipher_bank')||0;}catch(e){}
 try{owned=JSON.parse(localStorage.getItem('cipher_owned')||JSON.stringify([START_BIKE]))||[START_BIKE];}catch(e){owned=[START_BIKE];}
-if(owned.indexOf(START_BIKE)<0) owned.push(START_BIKE);   // старым сейвам тоже выдаём кросс: иначе они остаются на велосипеде
-try{ const _sb=localStorage.getItem('cipher_bike'); selBike=(_sb===null||_sb==='0')?START_BIKE:(+_sb||START_BIKE); }catch(e){ selBike=START_BIKE; }   // 0V: сейв с велосипедом (0) поднимаем на кросс — иначе старый игрок остаётся на велике
+// 0V ОТКАТ: старт с ВЕЛИКА — это замысел юзера (зарабатываешь на байки), а не дефект. Ничего не выдаём.
+try{selBike=+localStorage.getItem('cipher_bike')||0;}catch(e){}
 try{muted=localStorage.getItem('cipher_muted')==='1';}catch(e){}
 let pumpSide='left', settingsRet='title', garageRet='career', eventsRet='path', careerDeathGems=0;   // b137: eventsRet — боссы открываются и с титула, и с Пути → назад возвращает откуда пришёл   // PUMP button side (right-hander → left, configurable for lefties); settingsRet/garageRet = screen to return to; careerDeathGems = consolation gems from the last failed career run
 try{pumpSide=localStorage.getItem('cipher_pumpside')||'left';}catch(e){}
@@ -800,7 +800,7 @@ function lbA(a,k){ const v=a*(LB[k]||1); return (v<0?0:v>1?1:v).toFixed(3); }   
 // Критерий из аудита, утверждённый юзером: НЕ МЕНЬШЕ 12 % высоты экрана —
 // иначе признаки силуэта (крыло, дефлекторы, табличка) получают по 5-8 px и не видны.
 // Физику (PHYS.DX=26) не трогаем: это ТОЛЬКО рендер-зум вокруг байка.
-const HERO_Z = 1.45;
+const HERO_Z = 1.0;   // 0V ОТКАТ: 1.45 = «слишком крупно, раньше было лучше» (юзер). Зум вокруг байка оставлен — он сам по себе не вредит.
 function lbRim(trip){ const m=LB.bikeNeon||1; if(m===1) return trip; return trip.split(',').map(function(v){ return Math.round(+v*m); }).join(','); }   // ободья/акценты байка — НЕ данные и НЕ золото: гасим, чтобы рама читалась силуэтом
 function lbC(r,g,b,k,a){ const m=LB[k]||1; return 'rgba('+Math.round(r*m)+','+Math.round(g*m)+','+Math.round(b*m)+','+a+')'; }   // затемнение МАССЫ (это не альфа: силуэт должен стать тёмным, а не прозрачным)
 let _zoomD=1;   // b206: отображаемый зум — сглаживается в draw на каждом кадре (60Гц), лечит ступеньки зума при 30Гц-слоумо (сальто-синема)
