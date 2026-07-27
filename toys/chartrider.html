@@ -722,12 +722,12 @@ const SCHEME_NAME={gestures:'ЖЕСТЫ',btn2:'АВТО-ГАЗ',btn4:'4 КНОП
 const SCHEME_DESC={gestures:'держишь = газ · драг = наклон · свайп↑ = прыжок',btn2:'газ САМ · тормоз + НОС↑/НОС↓ + прыжок/памп',btn4:'газ/тормоз + кнопки наклона НОС↑ / НОС↓ + прыжок/памп',tilt:'газ/тормоз + наклон ТЕЛЕФОНА (гироскоп)'};
 let trickGrip='sticky'; try{ const _tg=localStorage.getItem('cipher_trickgrip'); if(_tg==='hold'||_tg==='sticky')trickGrip=_tg; }catch(e){}   // b171 ТРЮК-ХВАТ (юзер: «неудобны в управлении»): ЗАЛИПАЕТ (дефолт) = свайп задал позу, она ДЕРЖИТСЯ сама; тап свободным пальцем = отпустить; свайп в другую сторону = СМЕНА позы в полёте. ДЕРЖАТЬ = старый b158 (палец на экране)
 function saveTrickGrip(){ try{localStorage.setItem('cipher_trickgrip',trickGrip);}catch(e){} }
-let worldNew=true; try{ const _wn=localStorage.getItem('cipher_world'); if(_wn==='0')worldNew=false; }catch(e){}   // b184 ПРЕМИУМ-МИР (фон за реальным графиком/байком, только отрисовка): НОВЫЙ = город-из-свечей + глубина/дымка/god-rays; КЛАССИКА = старые синус-силуэты. Тумблер в настройках, дефолт НОВЫЙ. Физика/калибровка НЕ трогаются
-function saveWorld(){ try{localStorage.setItem('cipher_world',worldNew?'1':'0');}catch(e){} }
+const worldNew=true;   // 0V: ПРЕМИУМ-МИР — решение принято, тумблер убран. Игрок не выбирает между двумя версиями мира: это было наше нерешённое решение, вынесенное ему в настройки   // b184 ПРЕМИУМ-МИР (фон за реальным графиком/байком, только отрисовка): НОВЫЙ = город-из-свечей + глубина/дымка/god-rays; КЛАССИКА = старые синус-силуэты. Тумблер в настройках, дефолт НОВЫЙ. Физика/калибровка НЕ трогаются
+// saveWorld() удалён вместе с тумблером премиум-мира (0V)
 let coinAsset=true; try{ if(localStorage.getItem('cb_coin')==='0')coinAsset=false; }catch(e){}   // b217: премиум-СПРАЙТ монеты (assets/coin.png — золото=деньги, единственный ассет-класс что не фон и не ломает «светятся только данные») ↔ КЛАССИКА процедурный кружок. Тумблер в настройках, откат если картинка не загрузилась
 function saveCoin(){ try{localStorage.setItem('cb_coin',coinAsset?'1':'0');}catch(e){} }
-let depthNew=true; try{ if(localStorage.getItem('cb_depth')==='0')depthNew=false; }catch(e){}   // b222: golden-hour атмосфера = ДЕФОЛТ-тема (юзер: «переделать тему», не робкий пробник). Тумблер оставлен для сравнения с классикой   // b219: ГЛУБИНА ФОНА — далёкий силуэт-скайлайн (твой IMG_8006) вместо вялой синус-гряды, медленный параллакс+дымка. Дефолт ВЫКЛ = текущий мир не трогается
-function saveDepth(){ try{localStorage.setItem('cb_depth',depthNew?'1':'0');}catch(e){} }
+const depthNew=true;   // 0V: GOLDEN HOUR — дефолт-тема без тумблера. ТРЕБУЕТ РАЗВИТИЯ: по факту меняет мало (юзер), см. docs   // b222: golden-hour атмосфера = ДЕФОЛТ-тема (юзер: «переделать тему», не робкий пробник). Тумблер оставлен для сравнения с классикой   // b219: ГЛУБИНА ФОНА — далёкий силуэт-скайлайн (твой IMG_8006) вместо вялой синус-гряды, медленный параллакс+дымка. Дефолт ВЫКЛ = текущий мир не трогается
+// saveDepth() удалён вместе с тумблером атмосферы (0V)
 let _skyImg=null,_skyRdy=false; try{ const _si=new Image(); _si.onload=()=>{ const w=_si.naturalWidth,h=_si.naturalHeight,cc=document.createElement('canvas'); cc.width=w; cc.height=h; const cg=cc.getContext('2d'); cg.drawImage(_si,0,0);   // b219 LUMINANCE-KEY: у исходника нет альфы (прозрачность запечена серой шахматкой) → делаю серый-светлый прозрачным, тёмные здания+окна остаются
     try{ const id=cg.getImageData(0,0,w,h),d=id.data; for(let i=0;i<d.length;i+=4){ const r=d[i],g=d[i+1],b=d[i+2]; if(Math.min(r,g,b)>150 && Math.max(r,g,b)-Math.min(r,g,b)<40) d[i+3]=0; } cg.putImageData(id,0,0); }catch(e){}
     _skyImg=cc; _skyRdy=true; }; _si.src=(location.pathname.indexOf('/toys/')>=0?'':'toys/')+'assets/skyline.png'; }catch(e){}
@@ -741,9 +741,11 @@ let _coinImg=null,_coinRdy=false; try{ const _im=new Image(); _im.onload=()=>{ c
 // + отсвет набережной), см. drawCityWorld. Файлы toys/assets/world/vice/* остаются в репо как АРТ-РЕФЕРЕНС палитр (в игре не грузятся).
 const TDECK=34;   // b208: ВЕРТИКАЛЬНЫЙ размах ленты (косоугольная проекция: низ = верх + константный вектор (TRV_X,TDECK); ось = линия езды, байк по центру). Knob: лента + посадка свечей-колонн
 // ===== b258 ДОРОГА-ПОВЕРХНОСТЬ 2.5D (TrackRenderer25D, псевдо-3D OutRun — вердикт юзера на b254-257: «растянутая наша трасса, нужен НОВЫЙ рендерер дороги»). Дорога = ПОВЕРХНОСТЬ с ЛЕВЫМ и ПРАВЫМ краем ПОПЕРЁК движения: широкая у крупного ¾-байка внизу, сужается к точке схода у горизонта; рельеф графика = ВОЛНЫ дороги в глубину. ФИЗИКА НЕ ТРОНУТА — проекция только на выводе. Тумблер в настройках =====
-let PSP_ON=true; try{ if(localStorage.getItem('cb_psp')==='0')PSP_ON=false; }catch(e){}
-try{ if(/[?&]camera=side/.test(location.search))PSP_ON=false; else if(/[?&]camera=25d/.test(location.search))PSP_ON=true; }catch(e){}   // b256: query-режимы сравнения (не персистится)
-function savePsp(){ try{localStorage.setItem('cb_psp',PSP_ON?'1':'0');}catch(e){} }
+const PSP_ON=false;   // 0V: РАКУРС ¾ ВЫРЕЗАН (решение юзера 2026-07-27: «убрать, поскольку мы не смогли его реализовать как хотелось бы»).
+// Был ДЕФОЛТОМ true — то есть обычная игра включала перспективную дорогу, если localStorage не сказал иначе.
+// Тела drawTrack25D/drawMachine34/mat4-калибровки пока оставлены как dormant (решение юзера №8), но недостижимы.
+// camera=side / camera=25d удалены: выбора ракурса больше нет (0V)   // b256: query-режимы сравнения (не персистится)
+// savePsp() удалён вместе с тумблером ракурса (0V)
 // b258 ФОРМУЛА: узел d=x−байк; s=F/(F+d) (1 у байка→0 в VP). Центр Xc=VPX+(CAMX−VPX)·s (свип к точке схода). Yc=VPY+(CY0+(y−refH)·HS)·s (ВСЁ ×s = настоящая перспектива; refH=terrain под байком). Латеральные края Xл=Xc−HW·s, Xп=Xc+HW·s (HW = ПОПЕРЕЧНАЯ полуширина — вот чего не было в b254-257!). ШОВ: NCX≡CAMX и VPY+CY0≡CAMY и HS≈1 → у байка (s=1) проекция = мировые коорд. → identity-хвост стыкуется без шва.
 const PSP={F:300, VPX:0.72, VPY:0.40, CY0:0.24, HW:0.30, HS:1.0, BS:1.30, CAMX:0.26, CAMY:0.64};   // F=фокус (МЕНЬШЕ=круче перспектива) · VPX/VPY=точка схода (%W/%H) · CY0=дорога ниже горизонта у камеры (%H; VPY+CY0=CAMY для шва) · HW=поперечная полуширина у камеры (%W) · HS=масштаб рельефа графика · BS=герой · CAMX/CAMY=якорь байка
 let _pspPX=0,_pspCX=0,_pspCY=0,_pspRefY=0,_vpX=0,_horY=0,_cy0=0,_ncxPx=0,_hwPx=0;
@@ -1283,10 +1285,7 @@ function pointerDown(p){
     if(hit(p,UI.setMute)){ toggleMute(); sfxClick(); return; }
     if(UI.setWassist && hit(p,UI.setWassist)){ wheelieAssist=!wheelieAssist; saveWassist(); sfxClick(); return; }   // b147: тумблер вилли-помощника
     if(UI.setTgrip && hit(p,UI.setTgrip)){ trickGrip=trickGrip==='sticky'?'hold':'sticky'; saveTrickGrip(); sfxClick(); return; }   // b171: хват трюка
-    if(UI.setWorld && hit(p,UI.setWorld)){ worldNew=!worldNew; saveWorld(); sfxClick(); return; }   // b184: тумблер премиум-мира
     if(UI.setCoin && hit(p,UI.setCoin)){ coinAsset=!coinAsset; saveCoin(); sfxClick(); return; }   // b217: тумблер спрайт-монеты
-    if(UI.setDepth && hit(p,UI.setDepth)){ depthNew=!depthNew; saveDepth(); sfxClick(); return; }   // b219: тумблер глубины фона
-    if(UI.setPsp && hit(p,UI.setPsp)){ PSP_ON=!PSP_ON; savePsp(); sfxClick(); return; }   // b254: тумблер ракурса ¾
     if(UI.setReset && hit(p,UI.setReset)){ if(resetArm>0){ resetProgress(); } else { resetArm=180; sfxClick(); } return; }   // b95: первый тап «взводит», второй (в течение ~3с) обнуляет
     if(hit(p,UI.setBack)){ resetArm=0; screen=settingsRet||'title'; sfxClick(); return; }
     return;
@@ -2080,7 +2079,7 @@ function drawCityWorld(){ const hz=H*0.6;   // b204: ЕДИНЫЙ КОД-ЯЗЫ�
 // Экранные screenX/screenY НЕ используются как источник перспективы.
 // Этап 7: пока только калибровочная сцена (?camera=25d&calibration=1).
 // ============================================================================
-let CALIB25=false; try{ CALIB25=/[?&]calibration=1/.test(location.search); }catch(e){}
+const CALIB25=false;   // 0V: калибровочная сцена b259 вырезана (мёртвый mat4-3D)
 const CAM25={ fov:63, near:0.2, far:240, back:8.4, side:4.7, height:5.4, lookAhead:16.5, targetLift:1.5, targetX:-4.3, sideSign:-1, roadW:4.6,
   wheelR:0.36, bikeS:12, roadLen:120 };   // b260: калибровка под ВЫРАЖЕННЫЙ ¾-бок (side-angle 29.2°, вердикт юзера: 8.7° мало). side=позиция камеры даёт ¾-угол; targetX=−4.3=панорама держит байк в нижне-левой трети (bikeCx 21%). Проходит ВСЕ 15 гейтов на 390×844 (a20right/a20up переопределены юзером под диагональ 3/4: a20right 40-65, a20up 12-25)   // back/side/height=позиция камеры отн. базиса трассы · lookAhead=точка взгляда впереди · sideSign=зеркало Л/П · roadW=ширина дороги (ед.)
 // --- vec3 ---
@@ -2225,14 +2224,13 @@ function f2(v){ return (v==null)?'—':v.toFixed(2); }
 // (front/back линии + верх.грань + боковая грань, magenta/cyan края) · глубина убывает
 // на дальних точках и НЕ входит в физику/коллизии. Порядок слоёв = хендоф.
 // ============================================================================
-let TRIALS25=false; try{
-  if(/[?&]render=trials25d/.test(location.search)){ TRIALS25=true; try{localStorage.setItem('cb_render','trials25d');}catch(e){} }
-  else if(/[?&]render=(game|off|normal)/.test(location.search)){ try{localStorage.removeItem('cb_render');}catch(e){} }
-  else { try{ if(localStorage.getItem('cb_render')==='trials25d')TRIALS25=true; }catch(e){} }
-}catch(e){ TRIALS25=/[?&]render=trials25d/.test(location.search); }   // «липкий» (localStorage) — PWA сбрасывает query. Выход: ?render=game
+const TRIALS25=false;   // 0V: скин trials25d вырезан.
+// «Липкий» ключ cb_render писался в localStorage и переживал обновление страницы — снимаем его
+// принудительно, иначе у игрока, кто хоть раз открыл ?render=trials25d, скин остался бы навсегда.
+try{ localStorage.removeItem('cb_render'); }catch(e){}
 let CALIBDBG=false; try{ CALIBDBG=/[?&]debug=1/.test(location.search); }catch(e){}
-let ACCEPT25=false; try{ ACCEPT25=/[?&]track=acceptance25d/.test(location.search); }catch(e){}   // debug-level: подъём 65-80°, вершина, V, 2 разрыва, большой прыжок + сложная посадка
-if(ACCEPT25){ TRIALS25=true; }   // debug-level рендерится в полубоковой геометрии (её и проверяем)
+const ACCEPT25=false;   // 0V: debug-уровень acceptance25d вырезан   // debug-level: подъём 65-80°, вершина, V, 2 разрыва, большой прыжок + сложная посадка
+// 0V: acceptance25d вырезан   // debug-level рендерится в полубоковой геометрии (её и проверяем)
 // b268 trialsPhysicsV2 (feature flag): настоящий 2-колёсный rigid-body под GD-крутизну 65-80°. Legacy (rigidStep) сохранён. По умолчанию V2 ТОЛЬКО на acceptance-трассе; ?physics=legacy = сравнение, ?physics=v2 = принудительно.
 let PHYSV2=false; try{ if(/[?&]physics=v2/.test(location.search))PHYSV2=true; else if(/[?&]physics=legacy/.test(location.search))PHYSV2=false; else PHYSV2=ACCEPT25; }catch(e){ PHYSV2=ACCEPT25; }
 // --- preload всех PNG ОДИН раз (никаких new Image() в игровом цикле) ---
@@ -2243,9 +2241,9 @@ if(TRIALS25) preloadA25();
 // b270 articulated-риг v2 (asset-pack v2): раздельные части, joint-точки, rigDebug
 let RIGDEBUG=false; try{ RIGDEBUG=/[?&]rigDebug=1/.test(location.search); }catch(e){}
 // b271: articulated-риг в НАСТОЯЩЕЙ ИГРЕ (side-камера, legacy-физика). Гейт: ?render=game&camera=side&rig=articulated
-let RIG_ART=false; try{ RIG_ART=/[?&]rig=articulated/.test(location.search); }catch(e){}
+const RIG_ART=false;   // 0V: articulated-риг вырезан
 // b273: cutout-райдер v3 (rider-only PNG-части + неизменная рама). Гейт: ?render=game&camera=side&rig=cutout
-let RIG_CUT=false; try{ RIG_CUT=/[?&]rig=cutout/.test(location.search); }catch(e){}
+const RIG_CUT=false;   // 0V: cutout-риг вырезан (он и разваливался). Тела функций dormant, но недостижимы
 let RIG_SIL=false; try{ RIG_SIL=/[?&]rigSilhouette=1/.test(location.search); }catch(e){}   // b275: серый байк + чёрный райдер (сравнение поз)
 const A25V2={}, A25V2SRC={ body:'assets/trials25d_v2/bike/body_poses_atlas_3x2.png', wf:'assets/trials25d_v2/bike/wheel_front_384.png', wr:'assets/trials25d_v2/bike/wheel_rear_384.png', fork:'assets/trials25d_v2/bike/fork_front_512.png', swing:'assets/trials25d_v2/bike/swingarm_rear_512.png' };
 let A25V2ready=false,_v2n=0; const _v2keys=Object.keys(A25V2SRC);
@@ -5271,19 +5269,9 @@ function drawMenus(){
     ctx.fillStyle='#9fb6dc'; ctx.font='700 10px ui-monospace,monospace'; ctx.fillText('ТРЮК-ХВАТ  (FMX-позы в полёте)',cx,y+19);
     ctx.fillStyle=trickGrip==='sticky'?'#ffd678':'#9ff0c8'; ctx.font='800 13px ui-monospace,monospace';
     ctx.fillText(trickGrip==='sticky'?'ЗАЛИПАЕТ: свайп = поза · тап = отпуск':'ДЕРЖАТЬ: палец на экране = поза',cx,y+41);
-    y+=58; UI.setWorld={x:cx-cw/2,y:y,w:cw,h:54}; panel(UI.setWorld.x,UI.setWorld.y,cw,54,'rgba(150,110,255,0.55)');   // b184: премиум-мир (фон)
-    ctx.fillStyle='#9fb6dc'; ctx.font='700 10px ui-monospace,monospace'; ctx.fillText('МИР  (фон за графиком)',cx,y+19);
-    ctx.fillStyle=worldNew?'#c9b0ff':'#9ff0c8'; ctx.font='800 14px ui-monospace,monospace'; ctx.fillText(worldNew?'НОВЫЙ: город-из-свечей + глубина':'КЛАССИКА',cx,y+41);
     y+=58; UI.setCoin={x:cx-cw/2,y:y,w:cw,h:54}; panel(UI.setCoin.x,UI.setCoin.y,cw,54,'rgba(255,200,90,0.5)');   // b217: спрайт монеты ↔ классика
     ctx.fillStyle='#9fb6dc'; ctx.font='700 10px ui-monospace,monospace'; ctx.fillText('МОНЕТЫ',cx,y+19);
     ctx.fillStyle=coinAsset?'#ffd678':'#9ff0c8'; ctx.font='800 14px ui-monospace,monospace'; ctx.fillText(coinAsset?'ПРЕМИУМ-СПРАЙТ':'КЛАССИКА (кружок $)',cx,y+41);
-    y+=58; UI.setDepth={x:cx-cw/2,y:y,w:cw,h:54}; panel(UI.setDepth.x,UI.setDepth.y,cw,54,'rgba(120,150,255,0.5)');   // b219: глубина фона (дальний скайлайн)
-    ctx.fillStyle='#9fb6dc'; ctx.font='700 10px ui-monospace,monospace'; ctx.fillText('АТМОСФЕРА  (закат-свет + глубина)',cx,y+19);
-    ctx.fillStyle=depthNew?'#ffcf8a':'#9ff0c8'; ctx.font='800 14px ui-monospace,monospace'; ctx.fillText(depthNew?'ВКЛ: GOLDEN HOUR':'ВЫКЛ (тёмная классика)',cx,y+41);
-    y+=58; UI.setPsp={x:cx-cw/2,y:y,w:cw,h:54}; panel(UI.setPsp.x,UI.setPsp.y,cw,54,'rgba(120,220,255,0.5)');   // b254: ракурс ¾
-    ctx.fillStyle='#9fb6dc'; ctx.font='700 10px ui-monospace,monospace'; ctx.fillText('РАКУРС ¾  (трасса уходит вперёд)',cx,y+19);
-    ctx.fillStyle=PSP_ON?'#8ce6ff':'#9ff0c8'; ctx.font='800 14px ui-monospace,monospace'; ctx.fillText(PSP_ON?'ВКЛ: лёгкая перспектива':'ВЫКЛ (плоский вид-график)',cx,y+41);
-    // b220 БАГФИКС: сброс+НАЗАД ЯКОРЕНЫ к низу с явным зазором — раньше setReset «утекал» вниз и налезал на НАЗАД (юзер жал Назад → попадал в обнуление → потерял прогресс). Теперь НАЗАД НИКОГДА не над сбросом.
     if(resetArm>0)resetArm--; UI.setReset={x:cx-cw/2,y:Math.max(H-150,y+72),w:cw,h:46}; const armed=resetArm>0;   // b95 СБРОС (2-тап); b254: якорь = низ ИЛИ под последним рядом (рядов стало 8 — на низких экранах не налезает)
     panel(UI.setReset.x,UI.setReset.y,cw,46, armed?'rgba(255,110,90,0.95)':'rgba(255,150,120,0.45)', armed?'rgba(60,20,16,0.66)':'rgba(30,18,16,0.4)');
     ctx.fillStyle=armed?'#ff9a7a':'#e0a890'; ctx.font='800 14px ui-monospace,monospace'; ctx.fillText(armed?'⟲ ТОЧНО? ЖМИ ЕЩЁ РАЗ':'⟲ ОБНУЛИТЬ ПРОГРЕСС',cx,UI.setReset.y+28);
@@ -5632,12 +5620,12 @@ window.CRS = {
   marketBias(){ if(!terr||terr.length<6)return 0.5; const i1=Math.min(terr.length-1,Math.floor(bike.x/STEP)+2), i0=Math.max(1,i1-26); let up=0,n=0; for(let i=i0;i<=i1;i++){ if(terr[i]&&!terr[i].gap){ n++; if(terr[i].up)up++; } } return n?up/n:0.5; }
 };
 toTitle();
-if(TRIALS25){ try{ PSP_ON=false; }catch(e){} }   // b266: trials25d = ТОЛЬКО визуальный скин; меню/режимы/старая игра НЕ трогаются (авто-старт убран — он и прятал режимы). Плоская геометрия трассы (скин поверх). Откат: ?render=game
-if(ACCEPT25){ try{ PSP_ON=false; trackSource='proc'; gameMode='endless'; reset(); screen='play'; }catch(e){ console.error('acceptance25d',e); } }
+// 0V: trials25d-скин вырезан   // b266: trials25d = ТОЛЬКО визуальный скин; меню/режимы/старая игра НЕ трогаются (авто-старт убран — он и прятал режимы). Плоская геометрия трассы (скин поверх). Откат: ?render=game
+// 0V: acceptance25d вырезан
 // C1: вертикальный срез — ДИЗАЙН-трасса (trackSource='proc'), иначе b232 designHard/power-loop выключены
-if(typeof VSLICE!=='undefined' && VSLICE){ try{ PSP_ON=false; trackSource='proc'; gameMode='endless'; reset(); screen='play'; }catch(e){ console.error('vertical-slice',e); } }   // b267: авто-старт DEBUG-уровня (только под ?track=acceptance25d)
-if(RIG_ART){ try{ PSP_ON=false; trackSource='proc'; gameMode='endless'; reset(); screen='play'; }catch(e){ console.error('rig=articulated',e); } }   // b271: авто-старт настоящей игры на тест-трассе с articulated-ригом (side, legacy-физика)
-if(RIG_CUT){ try{ PSP_ON=false; trackSource='proc'; gameMode='endless'; reset(); screen='play'; }catch(e){ console.error('rig=cutout',e); } }   // b273: авто-старт тест-трассы с cutout-райдером
+if(typeof VSLICE!=='undefined' && VSLICE){ try{ trackSource='proc'; gameMode='endless'; reset(); screen='play'; }catch(e){ console.error('vertical-slice',e); } }   // остаётся: это физический регресс-стенд, не режим игры   // b267: авто-старт DEBUG-уровня (только под ?track=acceptance25d)
+// 0V: rig=articulated вырезан   // b271: авто-старт настоящей игры на тест-трассе с articulated-ригом (side, legacy-физика)
+// 0V: rig=cutout вырезан — это он разваливался на части в видео 27.07   // b273: авто-старт тест-трассы с cutout-райдером
 // apply shake in draw by jittering before skyGrad
 const _draw=draw; draw=function(){ if(screen!=='play'){ if(shake>0.01)shake*=0.8; if(flash>0.01)flash*=0.85; if(gflash>0.01)gflash*=0.85; }   // b74 FIX «трясучка»: shake/flash/gflash затухали только в update() (а он не идёт вне игры) → на dead/garage тряслось вечно. Теперь гасим и вне игры
   if(shake>0.3){ctx.save();ctx.translate((Math.random()-0.5)*shake,(Math.random()-0.5)*shake);_draw();ctx.restore();}else _draw(); };
