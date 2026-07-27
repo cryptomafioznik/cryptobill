@@ -93,7 +93,7 @@ function lerp(a,b,t){return a+(b-a)*t;} function clamp(v,a,b){return v<a?a:v>b?b
 // false → full game everywhere. Single switch. Systems are GATED, never deleted.
 const CORE_TEST_MODE = false;   // b70: META LIVE — building the progression spine (upgrades/bikes with teeth, career, economy) on the confirmed rigid-body core
 // build stamp — bump on every change so a phone refresh can confirm it loaded fresh code (cache!)
-const BUILD = '2026-07-27 · 0V-REV';
+const BUILD = '2026-07-27 · 0B-DRV';
 // ===================== ЭТАП 0A: ФЛАГИ ВРЕМЕНИ И ТРЕЙСА =====================
 // timing=legacy (ДЕФОЛТ) — прежний цикл «1 кадр = 1 update», без единого скрытого исправления.
 // timing=fixed          — кандидат: фиксированный шаг SIM_DT по РЕАЛЬНОМУ времени rAF-timestamp.
@@ -510,7 +510,26 @@ function flow(a){ if(typeof VSLICE!=='undefined'&&VSLICE&&VS.gameplay&&!VS.gamep
 // раз в update() и эмитится read-only событием. Анимация их ПОТРЕБЛЯЕТ и больше не переоткрывает
 // столкновение из разреженных render-сэмплов (это давало tContact ±21мс и разное число событий 2/2/1).
 // Силы, collision response и траектория байка не затрагиваются.
-let _simT=0, _cevId=0, _cev=[], _wPen=[-1,-1], _wOffT=[9,9];
+let _simT=0, _cevId=0, _cev=[], _wPen=[-1,-1], _wOffT=[9,9], _wFnS=[0,0];
+// ===================== 0B: ТЯГА ОТ РЕАЛЬНОГО ПРИЖИМА =====================
+// БЫЛО: FnDrive = max(Fn, 0.85*mg) — ПОЛ нагрузки. b100 поставил его, чтобы убрать
+// дёрготню: Fn пульсирует на кочках, тяга проваливалась. Но пол развязал тягу с
+// реальным прижимом: на подъёме 45° реальный Fn ~0.184, а тяга остаётся ~0.704 ->
+// опрокидывающий момент превышает удерживающий в 2.3x. Вилли на газу = арифметика,
+// а не риск (аудит §6.5). Живой игрок 22 % трассы против 41.6 % у бота на одном газе.
+// СТАЛО: тяга опирается на СГЛАЖЕННЫЙ РЕАЛЬНЫЙ Fn. Фильтр убирает ту же дёрготню,
+// ради которой ставили пол, но НЕ врёт про величину прижима.
+// Следствия, ради которых это делается:
+//   - газ на крутом подъёме больше не поднимает нос сам собой -> газ стал РИСКОМ;
+//   - вес НАЗАД грузит заднее колесо -> больше тяги -> дозировка веса стала НАВЫКОМ;
+//   - скорость теперь добывается управлением, а не удержанием кнопки.
+const DRV_TUNE={ fnSmooth:0.22, floorFrac:0.10 };   // постоянная фильтра за под-шаг; остаточный пол (10 % mg) чтобы байк не глох на ровном
+// ДЕФОЛТ = legacy. Замер показал, что одной этой правки НЕДОСТАТОЧНО (см. коммит 0B(1)):
+// gas-only 22.1 -> 21.8 % (в пределах шума), преимущества переноса веса не появилось,
+// а técnico-прогон рухнул со 100 % финиша до 15.2 % с endo. Кандидат остаётся под ?drive=real.
+let DRV_ON=false; try{ DRV_ON=/[?&]drive=real/.test(location.search); }catch(e){}
+window.__drvSet=function(on){ DRV_ON=!!on; _wFnS[0]=0; _wFnS[1]=0; return DRV_ON; };
+window.__drvTune=function(pt){ if(pt) for(const k in pt) DRV_TUNE[k]=pt[k]; return JSON.parse(JSON.stringify(DRV_TUNE)); };
 const SIM_DT=1/60;                                              // один update() = один фикс-шаг
 function _emitContact(wi,tAbs,wx,wy,nx,ny,vpx,vpy,vn,pen,prevPen){
   _cev.push({ id:++_cevId, simTime:tAbs, wheel:wi?'F':'R', cx:wx, cy:wy, nx:nx, ny:ny,
@@ -1533,7 +1552,10 @@ function rigidStep(){
         const vt=vpx*tx+vpy*ty;
         let Ft=-vt*(onMud?R.mudRoll:R.rollResist);          // wheel ROLLS (slight resistance; mud = more = sap)
         const maxF=muEff*Fn;                                // боковой/тормоз cone — мгновенный Fn (физика приземления/стабильности цела)
-        let FnDrive=Math.max(Fn, R.mass*R.grav*0.85);   // b100: ТЯГА вперёд опирается на СТАБИЛЬНУЮ нагрузку (floor). Корень «залипания»: Fn пульсирует на неровностях (колесо разгружается на гребнях) → maxF дёргался → тяга проваливалась. Floor убирает дёрготню = лезет РОВНО
+        let FnDrive;
+        if(DRV_ON){ _wFnS[wi] += (Fn-_wFnS[wi])*DRV_TUNE.fnSmooth;                       // 0B: сглаженный РЕАЛЬНЫЙ прижим
+          FnDrive=Math.max(_wFnS[wi], R.mass*R.grav*DRV_TUNE.floorFrac); }
+        else FnDrive=Math.max(Fn, R.mass*R.grav*0.85);   // b100: ТЯГА вперёд опирается на СТАБИЛЬНУЮ нагрузку (floor). Корень «залипания»: Fn пульсирует на неровностях (колесо разгружается на гребнях) → maxF дёргался → тяга проваливалась. Floor убирает дёрготню = лезет РОВНО
         if(drive){ const up=-ta.ang; if(up>R.climbFrom){ FnDrive *= 1 + Math.min(1,(up-R.climbFrom)/R.climbSpan)*R.climbGrip*PHX.climbTraction; } }   // b213 ЭНДУРО-СЦЕПЛЕНИЕ на крутом подъёме (баг «не заехать ни на одном байке»): зубастая резина/1-я передача цепляется → крутой склон (памп-рампа до 40°) берётся ТЯГОЙ уверенно, не только скоростью. muEff уже ×(стат grip)×(апгрейд СЦЕПЛЕНИЕ) → байк/прокачка РАСШИРЯЮТ предел проходимости
         const maxFd=muEff*FnDrive;
         if(drive&&thr>0.02){ const want=R.engine*engScale*thr*PHX.throttleTorque; Ft += Math.min(want, maxFd); spun=want>maxFd*1.2; }   // b100: тяга до стабильного предела — букс МЯГКИЙ (юзер: «залипание/торможение мешает, особ. с волной — убрать»)
@@ -3723,7 +3745,7 @@ function vsRestore(S){
   wave=S.wave; waveSpd=S.waveSpd; boost=S.boost; boosting=S.boosting;
   if(typeof window.__rigStateReset==='function') window.__rigStateReset();   // риг + очереди contact events
   if(typeof _cev!=='undefined') _cev.length=0; if(typeof _cevId!=='undefined') _cevId=0;
-  if(typeof _wPen!=='undefined'){ _wPen[0]=-1; _wPen[1]=-1; } if(typeof _simT!=='undefined') _simT=0;
+  if(typeof _wPen!=='undefined'){ _wPen[0]=-1; _wPen[1]=-1; } if(typeof _wFnS!=='undefined'){ _wFnS[0]=0; _wFnS[1]=0; } if(typeof _simT!=='undefined') _simT=0;
   if(typeof _rgcTPrev!=='undefined') _rgcTPrev=0; if(typeof _phxFail!=='undefined') _phxFail=0;
   _rgcInit=false;                                                          // визуальный угол рамы пересчитается от нуля
   _vsHold={d:true,b:false,l:false,r:false};
@@ -5471,7 +5493,7 @@ window.__drawOnce=function(){ draw(); return true; };   // оснастка: rAF
 // поэтому сеттер/геттер нужен явный — иначе замер длительности слоумо был бы тавтологией.
 window.__tmSlowmo=function(v){ if(v!==undefined) slowmo=v; return slowmo; };
 window.__tmHitstop=function(v){ if(v!==undefined) hitstop=v; return hitstop; };
-window.__tmSimTReset=function(){ _simT=0; _cev.length=0; _cevId=0; _wPen[0]=-1; _wPen[1]=-1; return true; };
+window.__tmSimTReset=function(){ _simT=0; _cev.length=0; _cevId=0; _wPen[0]=-1; _wPen[1]=-1; _wFnS[0]=0; _wFnS[1]=0; return true; };
 let _itLoaded=null;
 window.__inputTraceLoad=function(json){ _itLoaded=(typeof json==='string')?JSON.parse(json):json;
   if(!_itLoaded||!_itLoaded.resolved) throw new Error('trace: нет resolved[]');
