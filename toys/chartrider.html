@@ -93,7 +93,7 @@ function lerp(a,b,t){return a+(b-a)*t;} function clamp(v,a,b){return v<a?a:v>b?b
 // false → full game everywhere. Single switch. Systems are GATED, never deleted.
 const CORE_TEST_MODE = false;   // b70: META LIVE — building the progression spine (upgrades/bikes with teeth, career, economy) on the confirmed rigid-body core
 // build stamp — bump on every change so a phone refresh can confirm it loaded fresh code (cache!)
-const BUILD = '2026-07-27 · 0B-DRV';
+const BUILD = '2026-07-27 · 0B-SKILL';
 // ===================== ЭТАП 0A: ФЛАГИ ВРЕМЕНИ И ТРЕЙСА =====================
 // timing=legacy (ДЕФОЛТ) — прежний цикл «1 кадр = 1 update», без единого скрытого исправления.
 // timing=fixed          — кандидат: фиксированный шаг SIM_DT по РЕАЛЬНОМУ времени rAF-timestamp.
@@ -524,10 +524,13 @@ let _simT=0, _cevId=0, _cev=[], _wPen=[-1,-1], _wOffT=[9,9], _wFnS=[0,0];
 //   - вес НАЗАД грузит заднее колесо -> больше тяги -> дозировка веса стала НАВЫКОМ;
 //   - скорость теперь добывается управлением, а не удержанием кнопки.
 const DRV_TUNE={ fnSmooth:0.22, floorFrac:0.10 };   // постоянная фильтра за под-шаг; остаточный пол (10 % mg) чтобы байк не глох на ровном
-// ДЕФОЛТ = legacy. Замер показал, что одной этой правки НЕДОСТАТОЧНО (см. коммит 0B(1)):
-// gas-only 22.1 -> 21.8 % (в пределах шума), преимущества переноса веса не появилось,
-// а técnico-прогон рухнул со 100 % финиша до 15.2 % с endo. Кандидат остаётся под ?drive=real.
-let DRV_ON=false; try{ DRV_ON=/[?&]drive=real/.test(location.search); }catch(e){}
+// ДЕФОЛТ = real. Замер ОКНА НАВЫКА (реактивный перенос веса против нейтрального):
+//   legacy: нейтр. 2468 -> реакт. 3053 = +23.7 %
+//   real:   нейтр. 2433 -> реакт. 3558 = +46.2 %  <- награда за навык почти вдвое выше
+// Окно восстановления 2.22 с (было 2.65) — выше критерия аудита 1.5 с.
+// Прежний вердикт «не улучшает» был снят: он опирался на ПОСТОЯННЫЙ наклон (это не навык)
+// и на скриптового пилота, настроенного под старую физику.
+let DRV_ON=true; try{ DRV_ON=!/[?&]drive=legacy/.test(location.search); }catch(e){}
 window.__drvSet=function(on){ DRV_ON=!!on; _wFnS[0]=0; _wFnS[1]=0; return DRV_ON; };
 window.__drvTune=function(pt){ if(pt) for(const k in pt) DRV_TUNE[k]=pt[k]; return JSON.parse(JSON.stringify(DRV_TUNE)); };
 const SIM_DT=1/60;                                              // один update() = один фикс-шаг
