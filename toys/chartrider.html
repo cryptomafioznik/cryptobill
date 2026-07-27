@@ -93,7 +93,7 @@ function lerp(a,b,t){return a+(b-a)*t;} function clamp(v,a,b){return v<a?a:v>b?b
 // false → full game everywhere. Single switch. Systems are GATED, never deleted.
 const CORE_TEST_MODE = false;   // b70: META LIVE — building the progression spine (upgrades/bikes with teeth, career, economy) on the confirmed rigid-body core
 // build stamp — bump on every change so a phone refresh can confirm it loaded fresh code (cache!)
-const BUILD = '2026-07-27 · 0V-LIGHT';
+const BUILD = '2026-07-27 · 0V-MX';
 // ===================== ЭТАП 0A: ФЛАГИ ВРЕМЕНИ И ТРЕЙСА =====================
 // timing=legacy (ДЕФОЛТ) — прежний цикл «1 кадр = 1 update», без единого скрытого исправления.
 // timing=fixed          — кандидат: фиксированный шаг SIM_DT по РЕАЛЬНОМУ времени rAF-timestamp.
@@ -4595,44 +4595,95 @@ function spWheel(B,kind,R,front){ const BOX=(R+3)*2;
     spDot(g,0,0,2.3,spLin(g,-2,-2,2,2,[[0,'#48536a'],[1,'#10141f']])); spDot(g,0,0,0.8,'#04060b');
     for(let k=0;k<4;k++){ const a=k/4*6.2832+0.4; spDot(g,Math.cos(a)*1.5,Math.sin(a)*1.5,0.28,'rgba(220,232,250,0.7)'); }
   }); }
-// ===== 0V СИЛУЭТ MX ОДНОЙ ФОРМОЙ =====
-// Порядок работы изменён: СНАЧАЛА силуэт, проверка чёрным, потом цвет и детали.
-// Опорные точки взяты из реальной геометрии (YZ250F, 1 px = 27.2 мм при базе 54):
-//   земля y=28.5 · ось колеса y=15.5 · седло 983мм -> y=-7.6 · верх бака 1150мм -> y=-13.8
-//   руль 1200мм -> y=-15.6 · низ мотора (клиренс 335мм) -> y=16.2 · ход вилки 300мм = 11 px
-// Форма кросса = ОДИН контур: хвост задран -> плоское седло -> высокая узкая масса бака/шрауда
-// -> вниз по шрауду -> НАЗАД под седло (открытый треугольник рамы) -> мотор низкой массой
-// -> вверх к подседельной трубе. Мотор НЕ отдельная коробка: он часть того же контура.
-function spDirtSil(g){
+// ===== 0V СИЛУЭТ MX: ПОЛНАЯ ФОРМА =====
+// Порядок: СНАЧАЛА силуэт целиком, проверка чёрным, потом цвет и детали.
+// Опорные точки из реальной геометрии (YZ250F, 1 px = 27.2 мм при базе 54):
+//   земля 28.5 · ось 15.5 · седло 983мм -> -7.6 · верх бака 1150мм -> -13.8
+//   руль 1200мм -> -15.6 · клиренс 335мм -> 16.2 · ход вилки 300мм = 11 px зазора под крылом.
+// В силуэт входит ВСЁ, что видит глаз: кузов, мотор, вилка, руль, переднее крыло,
+// табличка, маятник, глушитель. Тест половины силуэта ничего не доказывает.
+function spMXBody(g){            // кузов+мотор одним контуром: хвост -> седло -> бак -> шрауд -> мотор -> подрамник
   g.beginPath();
-  g.moveTo(-27.4,-14.6);  g.lineTo(-20.0,-12.4);  g.lineTo(-13.0,-11.0);   // задранный хвост
-  g.lineTo(-3.0,-11.6);   g.lineTo(2.0,-12.6);                              // плоское седло
-  g.lineTo(7.0,-13.8);    g.lineTo(12.4,-13.6);   g.lineTo(15.6,-12.0);     // бак: верхняя грань
-  g.lineTo(16.8,-7.0);    g.lineTo(15.0,-1.6);    g.lineTo(11.0,1.2);       // передняя грань шрауда вниз
-  g.lineTo(8.6,5.2);      g.lineTo(8.0,11.6);     g.lineTo(4.0,16.2);       // мотор: перед и низ (клиренс)
-  g.lineTo(-6.0,16.0);    g.lineTo(-9.0,11.0);    g.lineTo(-8.4,4.0);       // мотор: низ и зад
-  g.lineTo(-6.2,-1.0);    g.lineTo(-4.6,-6.0);    g.lineTo(-6.0,-9.4);      // подседельная труба вверх
-  g.lineTo(-14.0,-8.4);   g.lineTo(-21.0,-9.2);   g.lineTo(-27.0,-11.0);    // низ хвоста
-  g.closePath();
-}
-// ОТКРЫТЫЙ ТРЕУГОЛЬНИК РАМЫ — у кросса это большая заметная дыра между рулевой,
-// мотором и низом седла. Без неё силуэт читается как сплошной комок (проверено тестом).
-function spDirtHole(g){
+  g.moveTo(-28.6,-17.2); g.lineTo(-24.0,-15.4); g.lineTo(-18.0,-13.6);      // заднее крыло, задрано
+  g.lineTo(-11.0,-12.6); g.lineTo(-2.0,-13.2);                               // седло, плоское и ТОЛСТОЕ
+  g.lineTo(4.0,-15.0);   g.lineTo(10.6,-14.8);  g.lineTo(15.4,-13.0);        // бак: крупная масса
+  g.lineTo(17.8,-8.2);   g.lineTo(17.0,-2.0);   g.lineTo(13.6,2.0);          // шрауд вниз к мотору
+  g.lineTo(10.6,6.0);    g.lineTo(9.4,12.0);    g.lineTo(6.4,16.2);          // мотор: перед и низ по клиренсу
+  g.lineTo(-5.0,16.2);   g.lineTo(-8.6,11.0);   g.lineTo(-8.2,3.0);          // мотор: низ и зад
+  g.lineTo(-6.0,-2.6);   g.lineTo(-5.0,-7.6);                                 // подседельная труба
+  g.lineTo(-11.0,-9.0);  g.lineTo(-19.5,-10.4); g.lineTo(-27.8,-13.0);       // низ хвоста
+  g.closePath(); }
+function spMXHole(g){            // ОТКРЫТЫЙ ТРЕУГОЛЬНИК РАМЫ — без него силуэт = сплошной комок
   g.beginPath();
-  g.moveTo(13.6,-9.4); g.lineTo(9.2,-0.6); g.lineTo(1.0,3.0);
-  g.lineTo(-3.6,-2.0); g.lineTo(-3.0,-8.0); g.lineTo(6.0,-10.0);
-  g.closePath();
+  g.moveTo(13.8,-10.2); g.lineTo(10.0,-1.6); g.lineTo(2.4,2.2);
+  g.lineTo(-2.8,-1.6);  g.lineTo(-2.2,-8.4); g.lineTo(6.6,-10.6);
+  g.closePath(); }
+function spMXParts(g){           // остальные массы силуэта
+  const cap=g.lineCap, jn=g.lineJoin; g.lineCap='round'; g.lineJoin='round';
+  g.beginPath(); g.moveTo(15.8,-10.8); g.lineTo(28.7,13.4); g.lineWidth=5.4; g.stroke();      // вилка, rake 28°
+  g.beginPath(); g.moveTo(13.4,-12.6); g.lineTo(19.8,-19.0); g.lineWidth=3.0; g.stroke();     // руль
+  g.beginPath(); g.moveTo(-7.4,9.4);  g.lineTo(-27.0,15.5); g.lineWidth=4.4; g.stroke();      // маятник
+  g.beginPath(); g.moveTo(-11.0,-5.6); g.lineTo(-22.4,-8.2); g.lineWidth=5.0; g.stroke();     // глушитель, высоко у хвоста
+  g.beginPath(); g.moveTo(6.6,3.0); g.bezierCurveTo(12.4,-2.0,8.0,-6.6,2.0,-8.0); g.lineWidth=2.4; g.stroke();  // труба вверх-назад
+  g.lineWidth=1;
+  g.beginPath();                                                                              // переднее крыло: ВИСИТ над колесом (ход вилки)
+  g.moveTo(19.8,-9.0); g.quadraticCurveTo(27.0,-13.4,34.6,-8.0);
+  g.lineTo(33.4,-5.0); g.quadraticCurveTo(26.6,-9.8,20.2,-6.0); g.closePath(); g.fill();
+  g.beginPath();                                                                              // номерная табличка СПЕРЕДИ на вилке
+  g.moveTo(17.6,-12.4); g.lineTo(23.2,-13.6); g.lineTo(25.6,-6.4); g.lineTo(19.6,-5.0); g.closePath(); g.fill();
+  g.lineCap=cap; g.lineJoin=jn; }
+// Полный силуэт в один вызов: заливка + вырез треугольника рамы + части + колёса.
+function spMXSil(g,col,R){
+  g.save(); g.fillStyle=col; g.strokeStyle=col;
+  spMXBody(g); g.fill();
+  spMXParts(g);
+  g.globalCompositeOperation='destination-out'; spMXHole(g); g.fill();
+  g.globalCompositeOperation='source-over'; g.fillStyle=col;
+  g.beginPath(); g.arc(-27,15.5,R||13,0,7); g.fill();
+  g.beginPath(); g.arc( 27,15.5,R||13,0,7); g.fill();
+  g.restore(); }
+window.__silTest=function(){ const c=document.createElement('canvas'); c.width=820; c.height=620;
+  const q=c.getContext('2d'); q.setTransform(5.4,0,0,5.4,410,350);
+  spMXSil(q,'#eaf2ff',13); return c; };
+// РЕНДЕР КРОССА НА БАЗЕ СИЛУЭТА: сначала форма (та, что прошла чёрный тест),
+// потом цвет и детали ПОВЕРХ неё. Обратный порядок (детали -> форма) и давал
+// «30 правдоподобных полигонов, которые вместе не мотоцикл».
+function spDirtMX(g,B,plate){
+  const bod=B.body, ACC='rgba('+lbRim(B.accent)+',';
+  spAO(g,0,11,15,5,0.5); spAO(g,-18,13,8,3.5,0.4);
+  // 1) ТЁМНЫЕ МАССЫ: вилка, руль, маятник, глушитель, труба, крыло, табличка
+  g.save(); g.fillStyle='#161c28'; g.strokeStyle='#161c28'; spMXParts(g); g.restore();
+  // 2) КУЗОВ одной формой + вырез треугольника рамы
+  g.save();
+  g.fillStyle=spLin(g,0,-17,0,17,[[0,spSh(bod[0],0.16)],[0.42,bod[0]],[0.72,bod[1]],[1,bod[2]]]);
+  spMXBody(g); g.fill();
+  g.globalCompositeOperation='destination-out'; spMXHole(g); g.fill(); g.restore();
+  // 3) ДЕТАЛИ ПОВЕРХ ФОРМЫ
+  g.save(); g.beginPath(); spMXBody(g); g.clip();
+  g.fillStyle='rgba(6,8,14,0.55)'; g.fillRect(-30,2,42,18);                                   // мотор темнее кузова
+  for(let e=0;e<4;e++) spLine(g,-7.0,5.0+e*2.4,5.0,5.0+e*2.4,'rgba(200,215,235,'+(e?0.13:0.26)+')',0.8);   // рёбра цилиндра
+  g.fillStyle='#0e121b'; g.beginPath(); g.moveTo(-2.0,-13.2); g.lineTo(-11.0,-12.6); g.lineTo(-18.0,-13.6);
+    g.lineTo(-18.6,-10.6); g.lineTo(-10.6,-9.6); g.lineTo(-1.6,-10.4); g.closePath(); g.fill();  // седло
+  g.strokeStyle=ACC+'0.75)'; g.lineWidth=1.1; g.beginPath(); g.moveTo(-17.4,-11.0); g.lineTo(-2.2,-11.6); g.stroke();
+  g.strokeStyle='rgba(240,248,255,0.30)'; g.lineWidth=0.9; g.beginPath();
+    g.moveTo(-1.0,-13.6); g.quadraticCurveTo(6,-15.4,14.6,-13.2); g.stroke();                  // блик по баку
+  spPoly(g,[[6.0,-6.0],[14.6,-10.2],[17.2,-8.2],[13.6,-1.0],[7.2,1.4]], ACC+'0.28)');          // графика на шрауде
+  g.restore();
+  spDot(g,0.6,10.4,3.2,spLin(g,-2,7,2,13,[[0,'#4a5468'],[1,'#141926']]));                      // сцепление
+  spDot(g,0.6,10.4,3.2,null,'rgba(220,232,248,0.22)',0.7);
+  spLine(g,16.4,-9.6,22.6,2.1,'#c9a54a',2.4);                                                  // ЗОЛОТАЯ нога вилки
+  spLine(g,18.2,-12.0,23.4,-1.6,'rgba(255,241,190,0.5)',0.8);
+  spDot(g,-6.6,7.6,1.5,'#414a5e'); spDot(g,-6.6,7.6,0.5,'#d6e2f2');                            // звезда
+  g.setLineDash([1.5,1.7]); spLine(g,-25.8,14.2,-6.4,8.6,'rgba(185,200,220,0.26)',0.9); g.setLineDash([]);   // цепь
+  // ТАБЛИЧКА СПЕРЕДИ (у MX она на вилке, а не сзади)
+  g.save(); g.translate(21.4,-9.4); g.rotate(-0.21);
+  spRR(g,-3.4,-3.0,6.8,5.6,1.2,'#e9edf4'); spRR(g,-3.4,-3.0,6.8,5.6,1.2,null,'rgba(10,14,24,0.5)',0.6);
+  g.fillStyle='#0d1220'; g.font='700 3.6px ui-monospace,monospace'; g.textAlign='center';
+  g.fillText(plate||'CB',0,1.3); g.textAlign='left'; g.restore();
 }
-window.__silTest=function(bi){ const B=BIKES[bi||4];
-  const c=document.createElement('canvas'); c.width=760; c.height=560;
-  const q=c.getContext('2d'); q.setTransform(5,0,0,5,380,300);
-  q.fillStyle='#eaf2ff'; spDirtSil(q); q.fill();
-  q.globalCompositeOperation='destination-out'; spDirtHole(q); q.fill();
-  q.globalCompositeOperation='source-over';
-  q.fillStyle='#eaf2ff'; q.beginPath(); q.arc(-27,15.5,13,0,7); q.fill(); q.beginPath(); q.arc(27,15.5,13,0,7); q.fill();
-  return c; };
 function spDirt(g,B,plate){ const bod=B.body, ACC='rgba('+lbRim(B.accent)+',';
-  const F=B.frame||'cross', isCross=F==='cross', isEnduro=F==='enduro', isMotard=F==='motard';   // b244 РАЗНЫЕ РАМЫ: кросс=клюв+плейт+без фары, эндуро=фара+бак+защита, мотард=низкое крыло+уличный акцент
+  const F=B.frame||'cross', isCross=F==='cross', isEnduro=F==='enduro', isMotard=F==='motard';
+  if(isCross){ spDirtMX(g,B,plate); return; }   // 0V: кросс рисуется от СИЛУЭТА (эндуро/мотард пока по-старому)   // b244 РАЗНЫЕ РАМЫ: кросс=клюв+плейт+без фары, эндуро=фара+бак+защита, мотард=низкое крыло+уличный акцент
   spAO(g,0,9,14,5,0.5); spAO(g,-17,12,8,3.5,0.4); spAO(g,9,-2,7,3,0.3);
   spPoly(g,[[-27.5,13.6],[-7,5],[-4.4,10],[-25.2,18.4]], spLin(g,0,5,0,18.5,[[0,'#333b4d'],[0.5,'#1a2030'],[1,'#0a0d15']]));   // маятник
   spLine(g,-27.2,13.9,-7.4,5.4,'rgba(215,232,255,0.26)',0.9);
