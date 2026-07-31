@@ -1,0 +1,29 @@
+<!doctype html>
+<html lang="ru">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+  <meta name="theme-color" content="#101124">
+  <title>CRYPTOBILL — Visual V0.5 Lab</title>
+  <link rel="stylesheet" href="visual-v05/styles.css">
+</head>
+<body>
+  <canvas id="scene" aria-label="CRYPTOBILL Visual V0.5 Canvas 2D"></canvas>
+  <div class="lab-panel" aria-label="Visual V0.5 controls">
+    <div class="lab-title">V0.5 · ELEVATED CHART TRACK</div>
+    <div class="lab-row modes">
+      <button data-mode="static">FIXED FRAME</button>
+      <button data-mode="loop">10s LOOP</button>
+      <button data-debug>STRUCTURE</button>
+    </div>
+    <div class="lab-row states">
+      <button data-state="flat">FLAT</button>
+      <button data-state="climb">CLIMB</button>
+      <button data-state="air">AIR</button>
+      <button data-state="compression">LAND</button>
+    </div>
+  </div>
+  <div id="assetStatus">Загрузка существующих PNG…</div>
+  <script type="module" src="visual-v05/app.js"></script>
+</body>
+</html>
