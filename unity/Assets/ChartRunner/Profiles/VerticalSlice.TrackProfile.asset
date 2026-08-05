@@ -1,0 +1,129 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 67bb4aafdf40044e8a809a011cb3272b, type: 3}
+  m_Name: VerticalSlice.TrackProfile
+  m_EditorClassIdentifier: ChartRunner.Runtime::ChartRunner.Track.TrackProfile
+  nodesPx:
+  - {x: 0, y: 0}
+  - {x: 950, y: 0}
+  - {x: 1200, y: 54}
+  - {x: 1450, y: 0}
+  - {x: 1700, y: 74}
+  - {x: 1950, y: 0}
+  - {x: 2200, y: 96}
+  - {x: 2450, y: 0}
+  - {x: 2700, y: 120}
+  - {x: 2950, y: 0}
+  - {x: 3150, y: 0}
+  - {x: 3400, y: 150}
+  - {x: 4150, y: 900}
+  - {x: 4320, y: 1010}
+  - {x: 4460, y: 1030}
+  - {x: 4700, y: 880}
+  - {x: 5150, y: 470}
+  - {x: 5400, y: 300}
+  - {x: 5650, y: 340}
+  - {x: 5850, y: 360}
+  - {x: 6450, y: 360}
+  - {x: 6750, y: 470}
+  - {x: 7090, y: 470}
+  - {x: 7650, y: 150}
+  - {x: 7900, y: 110}
+  - {x: 8150, y: 190}
+  - {x: 8350, y: 110}
+  - {x: 8600, y: 150}
+  - {x: 8850, y: 150}
+  - {x: 9100, y: 240}
+  - {x: 9420, y: 560}
+  - {x: 10120, y: 1330}
+  - {x: 10380, y: 1400}
+  - {x: 10900, y: 1400}
+  - {x: 11400, y: 1400}
+  gapsPx:
+  - fromPx: 6750
+    toPx: 7090
+  endPx: 11150
+  checkpoints:
+  - xPx: 6100
+    name: "\u043F\u0435\u0440\u0435\u0434 \u043F\u0440\u044B\u0436\u043A\u043E\u043C"
+  - xPx: 8800
+    name: "\u043F\u0435\u0440\u0435\u0434 \u0444\u0438\u043D\u0430\u043B\u044C\u043D\u044B\u043C
+      \u043F\u043E\u0434\u044A\u0451\u043C\u043E\u043C"
+  nodeStepPx: 26
+  sections:
+  - name: "1 \u0441\u0442\u0430\u0440\u0442 \u0438 \u0440\u0430\u0437\u0433\u043E\u043D"
+    fromPx: 0
+    toPx: 950
+    knownDefect: 
+  - name: "2 \u0432\u0443\u043F\u0441\u044B \xD74"
+    fromPx: 950
+    toPx: 3150
+    knownDefect: "\u0418\u041D\u0412\u0415\u0420\u0422\u0418\u0420\u041E\u0412\u0410\u041D\u041D\u0410\u042F
+      \u041A\u0420\u0418\u0412\u0410\u042F: \u043E\u0431\u0443\u0447\u0430\u044E\u0449\u0430\u044F
+      \u0441\u0435\u043A\u0446\u0438\u044F \u043D\u0430\u0441\u044B\u0449\u0430\u0435\u0442
+      \u0436\u0451\u0441\u0442\u043A\u0438\u0439 \u0440\u0435\u0436\u0438\u043C \u043F\u043E\u043C\u043E\u0449\u043D\u0438\u043A\u043E\u0432
+      \u043F\u0440\u0438 33.2\xB0, \u0430 \u0438\u043C\u0435\u0435\u0442 35.6\xB0.
+      \u041F\u0435\u0440\u0432\u0430\u044F \u0436\u0435 \u043D\u0435\u0442\u0440\u0438\u0432\u0438\u0430\u043B\u044C\u043D\u0430\u044F
+      \u0441\u0435\u043A\u0446\u0438\u044F \u0441\u0430\u043C\u0430\u044F \u043D\u0430\u043A\u0430\u0437\u044B\u0432\u0430\u044E\u0449\u0430\u044F.
+      \u041F\u043E\u0440\u044F\u0434\u043E\u043A \u0441\u0435\u043A\u0446\u0438\u0439
+      \u2014 \u0440\u0435\u0448\u0435\u043D\u0438\u0435 \u043F\u043E\u043B\u044C\u0437\u043E\u0432\u0430\u0442\u0435\u043B\u044F
+      (\u0430\u0443\u0434\u0438\u0442 \xA76.4, \xA78)."
+  - name: "3 \u0442\u0435\u0445\u043D\u0438\u0447\u0435\u0441\u043A\u0438\u0439 \u043F\u043E\u0434\u044A\u0451\u043C"
+    fromPx: 3150
+    toPx: 4320
+    knownDefect: 
+  - name: "4 \u043E\u0441\u0442\u0440\u044B\u0439 \u043F\u0435\u0440\u0435\u043B\u043E\u043C
+      \u0432\u0435\u0440\u0448\u0438\u043D\u044B"
+    fromPx: 4320
+    toPx: 4460
+    knownDefect: 
+  - name: "5 \u0441\u043F\u0443\u0441\u043A"
+    fromPx: 4460
+    toPx: 5400
+    knownDefect: 
+  - name: "6 \u044F\u043C\u0430 (\u043A\u043E\u043C\u043F\u0440\u0435\u0441\u0441\u0438\u044F)"
+    fromPx: 5400
+    toPx: 5850
+    knownDefect: 
+  - name: "7 \u0440\u0430\u0437\u0433\u043E\u043D\u043D\u0430\u044F \u043F\u043E\u043B\u043E\u0441\u0430"
+    fromPx: 5850
+    toPx: 6450
+    knownDefect: 
+  - name: "8 \u043B\u0438\u043F + \u0433\u044D\u043F"
+    fromPx: 6450
+    toPx: 7090
+    knownDefect: "\u041E\u0448\u0438\u0431\u043A\u0430 \u043D\u0435\u043E\u0431\u0440\u0430\u0442\u0438\u043C\u0430
+      (\u0430\u0443\u0434\u0438\u0442 \xA78): \u0432\u043E\u0441\u0441\u0442\u0430\u043D\u043E\u0432\u043B\u0435\u043D\u0438\u044F
+      \u043D\u0435\u0442."
+  - name: "9 \u043F\u043E\u0441\u0430\u0434\u043A\u0430 \u043F\u043E\u0434 \u0443\u043A\u043B\u043E\u043D"
+    fromPx: 7090
+    toPx: 7900
+    knownDefect: 
+  - name: "10 \u0442\u0435\u0445\u043D\u0438\u0447\u0435\u0441\u043A\u0430\u044F
+      \u0437\u043E\u043D\u0430"
+    fromPx: 7900
+    toPx: 8600
+    knownDefect: 
+  - name: "11 \u043A\u043E\u0440\u043E\u0442\u043A\u0438\u0439 \u0440\u0430\u0437\u0433\u043E\u043D"
+    fromPx: 8600
+    toPx: 9100
+    knownDefect: 
+  - name: "12 \u0444\u0438\u043D\u0430\u043B\u044C\u043D\u044B\u0439 \u043F\u043E\u0434\u044A\u0451\u043C"
+    fromPx: 8850
+    toPx: 10380
+    knownDefect: "\u041E\u0448\u0438\u0431\u043A\u0430 \u043D\u0435\u043E\u0431\u0440\u0430\u0442\u0438\u043C\u0430
+      (\u0430\u0443\u0434\u0438\u0442 \xA78)."
+  - name: "13 \u0444\u0438\u043D\u0438\u0448\u043D\u0430\u044F \u043F\u043B\u043E\u0449\u0430\u0434\u043A\u0430"
+    fromPx: 10380
+    toPx: 11400
+    knownDefect: 
+  flowBoostEnabled: 0

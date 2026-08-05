@@ -1,0 +1,69 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: bc958d2f83007490bbb73338197f0bba, type: 3}
+  m_Name: Default.CandleTerrainProfile
+  m_EditorClassIdentifier: ChartRunner.Runtime::ChartRunner.Track.CandleTerrainProfile
+  pumpSteep: 1.6
+  dumpSteep: 1.6
+  volatilityJag: 1.6
+  calmFlat: 0.5
+  climbCapRad: 0.6
+  difficultyRampM: 1400
+  volatilityRampGain: 0.65
+  steepEarly: 0.85
+  terrainSteep: 0.85
+  steepRampM: 1100
+  mountain: 0.8
+  regimes:
+  - regime: 0
+    driftMin: -1.5
+    driftMax: 1.5
+    volatility: 4
+    lengthMin: 6
+    lengthMax: 11
+    pickWeight: 0
+  - regime: 1
+    driftMin: -2.5
+    driftMax: 2.5
+    volatility: 4
+    lengthMin: 9
+    lengthMax: 16
+    pickWeight: 0.1
+  - regime: 2
+    driftMin: -29
+    driftMax: -16
+    volatility: 5
+    lengthMin: 11
+    lengthMax: 22
+    pickWeight: 0.42
+  - regime: 3
+    driftMin: 15
+    driftMax: 27
+    volatility: 5
+    lengthMin: 10
+    lengthMax: 21
+    pickWeight: 0.3
+  - regime: 4
+    driftMin: -34
+    driftMax: -24
+    volatility: 5
+    lengthMin: 6
+    lengthMax: 11
+    pickWeight: 0.16
+  - regime: 5
+    driftMin: 22
+    driftMax: 32
+    volatility: 8
+    lengthMin: 6
+    lengthMax: 11
+    pickWeight: 0.12
+  rockGardenShare: 0.1

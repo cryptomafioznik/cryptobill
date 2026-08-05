@@ -1,0 +1,29 @@
+%YAML 1.1
+%TAG !u! tag:unity3d.com,2011:
+--- !u!114 &11400000
+MonoBehaviour:
+  m_ObjectHideFlags: 0
+  m_CorrespondingSourceObject: {fileID: 0}
+  m_PrefabInstance: {fileID: 0}
+  m_PrefabAsset: {fileID: 0}
+  m_GameObject: {fileID: 0}
+  m_Enabled: 1
+  m_EditorHideFlags: 0
+  m_Script: {fileID: 11500000, guid: 6f2127b529e41407881ce791595c0691, type: 3}
+  m_Name: Stock.LevelPhysicsOverride
+  m_EditorClassIdentifier: ChartRunner.Runtime::ChartRunner.Tuning.LevelPhysicsOverride
+  groundAlign: 1
+  airAutoLevel: 1
+  airSpinDamp: 1
+  airSpinDampLean: 0
+  leanTorque: 1
+  leanTorqueAir: 1
+  throttleTorque: 1
+  climbTraction: 1
+  angDampAssist: 1
+  edgeGuard: 1
+  wheelieGuardScale: 1
+  loopAngle: 1
+  endoAngle: 1
+  failHoldSeconds: 0
+  applyDesignHard: 1
