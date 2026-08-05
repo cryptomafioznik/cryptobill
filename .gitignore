@@ -1,1 +1,48 @@
 rig-videos/
+
+# ============================ Unity (unity/) ============================
+# Генерируемое редактором. Правило: в git живут Assets/, Packages/, ProjectSettings/
+# и .meta-файлы; всё остальное Unity восстанавливает сама.
+unity/[Ll]ibrary/
+unity/[Tt]emp/
+unity/[Oo]bj/
+unity/[Bb]uild/
+unity/[Bb]uilds/
+unity/[Ll]ogs/
+unity/[Uu]ser[Ss]ettings/
+unity/[Mm]emoryCaptures/
+unity/[Rr]ecordings/
+
+# Кэш и артефакты пакетного менеджера
+unity/Packages/packages-lock.json.meta
+
+# Сгенерированные решения и проекты IDE
+unity/*.csproj
+unity/*.unityproj
+unity/*.sln
+unity/*.suo
+unity/*.tmp
+unity/*.user
+unity/*.userprefs
+unity/*.pidb
+unity/*.booproj
+unity/*.svd
+unity/*.pdb
+unity/*.mdb
+unity/*.opendb
+unity/*.VC.db
+unity/.vs/
+unity/.idea/
+unity/.vscode/
+
+# Артефакты сборки
+unity/*.apk
+unity/*.aab
+unity/*.unitypackage
+unity/*.app
+unity/crashlytics-build.properties
+
+# Крашлоги и отчёты batchmode-прогонов (отчёты кладём в docs/, не в проект)
+unity/*.log
+unity/[Tt]est[Rr]esults*.xml
+unity/sysinfo.txt
