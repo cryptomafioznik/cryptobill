@@ -1,0 +1,101 @@
+<?xml version="1.0" encoding="utf-8"?>
+<test-run id="2" testcasecount="9" result="Passed" total="9" passed="9" failed="0" inconclusive="0" skipped="0" asserts="0" engine-version="3.5.0.0" clr-version="4.0.30319.42000" start-time="2026-08-05 23:51:32Z" end-time="2026-08-05 23:52:27Z" duration="55.1655813">
+  <test-suite type="TestSuite" id="1018" name="2D_URP" fullname="2D_URP" runstate="Runnable" testcasecount="9" result="Passed" start-time="2026-08-05 23:51:32Z" end-time="2026-08-05 23:52:27Z" duration="55.165581" total="9" passed="9" failed="0" inconclusive="0" skipped="0" asserts="0">
+    <properties>
+      <property name="platform" value="PlayMode" />
+    </properties>
+    <test-suite type="Assembly" id="1012" name="ChartRunner.Tests.PlayMode.dll" fullname="/Users/macbook/project/cryptobill/unity/Library/ScriptAssemblies/ChartRunner.Tests.PlayMode.dll" runstate="Runnable" testcasecount="9" result="Passed" start-time="2026-08-05 23:51:32Z" end-time="2026-08-05 23:52:27Z" duration="55.146030" total="9" passed="9" failed="0" inconclusive="0" skipped="0" asserts="0">
+      <properties>
+        <property name="_PID" value="5998" />
+        <property name="_APPDOMAIN" value="Unity Child Domain" />
+        <property name="platform" value="PlayMode" />
+        <property name="EditorOnly" value="False" />
+      </properties>
+      <test-suite type="TestSuite" id="1013" name="ChartRunner" fullname="ChartRunner" runstate="Runnable" testcasecount="9" result="Passed" start-time="2026-08-05 23:51:32Z" end-time="2026-08-05 23:52:27Z" duration="55.143726" total="9" passed="9" failed="0" inconclusive="0" skipped="0" asserts="0">
+        <properties />
+        <test-suite type="TestSuite" id="1014" name="Tests" fullname="ChartRunner.Tests" runstate="Runnable" testcasecount="9" result="Passed" start-time="2026-08-05 23:51:32Z" end-time="2026-08-05 23:52:27Z" duration="55.143326" total="9" passed="9" failed="0" inconclusive="0" skipped="0" asserts="0">
+          <properties />
+          <test-suite type="TestFixture" id="1001" name="BikePhysicsTests" fullname="ChartRunner.Tests.BikePhysicsTests" classname="ChartRunner.Tests.BikePhysicsTests" runstate="Runnable" testcasecount="8" result="Passed" start-time="2026-08-05 23:51:32Z" end-time="2026-08-05 23:51:57Z" duration="25.015875" total="8" passed="8" failed="0" inconclusive="0" skipped="0" asserts="0">
+            <properties />
+            <test-case id="1003" name="Bike_RestsOnFlatGround_WithoutSinkingOrDrifting" fullname="ChartRunner.Tests.BikePhysicsTests.Bike_RestsOnFlatGround_WithoutSinkingOrDrifting" methodname="Bike_RestsOnFlatGround_WithoutSinkingOrDrifting" classname="ChartRunner.Tests.BikePhysicsTests" runstate="Runnable" seed="2051561558" result="Passed" start-time="2026-08-05 23:51:32Z" end-time="2026-08-05 23:51:36Z" duration="4.131057" asserts="0">
+              <properties>
+                <property name="_JOINTYPE" value="UnityCombinatorial" />
+                <property name="retryIteration" value="0" />
+                <property name="repeatIteration" value="0" />
+              </properties>
+            </test-case>
+            <test-case id="1009" name="FailHold_GivesRecoveryWindow_NotInstantDeath" fullname="ChartRunner.Tests.BikePhysicsTests.FailHold_GivesRecoveryWindow_NotInstantDeath" methodname="FailHold_GivesRecoveryWindow_NotInstantDeath" classname="ChartRunner.Tests.BikePhysicsTests" runstate="Runnable" seed="1028076022" result="Passed" start-time="2026-08-05 23:51:36Z" end-time="2026-08-05 23:51:37Z" duration="1.013582" asserts="0">
+              <properties>
+                <property name="_JOINTYPE" value="UnityCombinatorial" />
+                <property name="retryIteration" value="0" />
+                <property name="repeatIteration" value="0" />
+              </properties>
+            </test-case>
+            <test-case id="1002" name="Gravity_MatchesUnitsContract" fullname="ChartRunner.Tests.BikePhysicsTests.Gravity_MatchesUnitsContract" methodname="Gravity_MatchesUnitsContract" classname="ChartRunner.Tests.BikePhysicsTests" runstate="Runnable" seed="860219327" result="Passed" start-time="2026-08-05 23:51:37Z" end-time="2026-08-05 23:51:38Z" duration="0.511514" asserts="0">
+              <properties>
+                <property name="_JOINTYPE" value="UnityCombinatorial" />
+                <property name="retryIteration" value="0" />
+                <property name="repeatIteration" value="0" />
+              </properties>
+            </test-case>
+            <test-case id="1008" name="Reset_ClearsHiddenState_TrajectoriesMatch" fullname="ChartRunner.Tests.BikePhysicsTests.Reset_ClearsHiddenState_TrajectoriesMatch" methodname="Reset_ClearsHiddenState_TrajectoriesMatch" classname="ChartRunner.Tests.BikePhysicsTests" runstate="Runnable" seed="2081935821" result="Passed" start-time="2026-08-05 23:51:38Z" end-time="2026-08-05 23:51:46Z" duration="8.021137" asserts="0">
+              <properties>
+                <property name="_JOINTYPE" value="UnityCombinatorial" />
+                <property name="retryIteration" value="0" />
+                <property name="repeatIteration" value="0" />
+              </properties>
+            </test-case>
+            <test-case id="1004" name="RestingBike_CarriesFullWeightOnWheels" fullname="ChartRunner.Tests.BikePhysicsTests.RestingBike_CarriesFullWeightOnWheels" methodname="RestingBike_CarriesFullWeightOnWheels" classname="ChartRunner.Tests.BikePhysicsTests" runstate="Runnable" seed="1088888108" result="Passed" start-time="2026-08-05 23:51:46Z" end-time="2026-08-05 23:51:50Z" duration="4.005829" asserts="0">
+              <properties>
+                <property name="_JOINTYPE" value="UnityCombinatorial" />
+                <property name="retryIteration" value="0" />
+                <property name="repeatIteration" value="0" />
+              </properties>
+            </test-case>
+            <test-case id="1006" name="ThrottleInAir_ProducesNoForwardAcceleration" fullname="ChartRunner.Tests.BikePhysicsTests.ThrottleInAir_ProducesNoForwardAcceleration" methodname="ThrottleInAir_ProducesNoForwardAcceleration" classname="ChartRunner.Tests.BikePhysicsTests" runstate="Runnable" seed="577835963" result="Passed" start-time="2026-08-05 23:51:50Z" end-time="2026-08-05 23:51:51Z" duration="1.417660" asserts="0">
+              <properties>
+                <property name="_JOINTYPE" value="UnityCombinatorial" />
+                <property name="retryIteration" value="0" />
+                <property name="repeatIteration" value="0" />
+              </properties>
+            </test-case>
+            <test-case id="1007" name="ThrottleRamp_IsTimeBased_NotPerFrame" fullname="ChartRunner.Tests.BikePhysicsTests.ThrottleRamp_IsTimeBased_NotPerFrame" methodname="ThrottleRamp_IsTimeBased_NotPerFrame" classname="ChartRunner.Tests.BikePhysicsTests" runstate="Runnable" seed="2118501765" result="Passed" start-time="2026-08-05 23:51:51Z" end-time="2026-08-05 23:51:52Z" duration="0.600446" asserts="0">
+              <properties>
+                <property name="_JOINTYPE" value="UnityCombinatorial" />
+                <property name="retryIteration" value="0" />
+                <property name="repeatIteration" value="0" />
+              </properties>
+            </test-case>
+            <test-case id="1005" name="WeightShiftBack_IncreasesRearLoad_EmergentDriveTrade" fullname="ChartRunner.Tests.BikePhysicsTests.WeightShiftBack_IncreasesRearLoad_EmergentDriveTrade" methodname="WeightShiftBack_IncreasesRearLoad_EmergentDriveTrade" classname="ChartRunner.Tests.BikePhysicsTests" runstate="Runnable" seed="1144504505" result="Passed" start-time="2026-08-05 23:51:52Z" end-time="2026-08-05 23:51:57Z" duration="5.254534" asserts="0">
+              <properties>
+                <property name="_JOINTYPE" value="UnityCombinatorial" />
+                <property name="retryIteration" value="0" />
+                <property name="repeatIteration" value="0" />
+              </properties>
+            </test-case>
+          </test-suite>
+          <test-suite type="TestFixture" id="1010" name="SuspensionCalibrationProbe" fullname="ChartRunner.Tests.SuspensionCalibrationProbe" classname="ChartRunner.Tests.SuspensionCalibrationProbe" runstate="Runnable" testcasecount="1" result="Passed" start-time="2026-08-05 23:51:57Z" end-time="2026-08-05 23:52:27Z" duration="30.113201" total="1" passed="1" failed="0" inconclusive="0" skipped="0" asserts="0">
+            <properties />
+            <test-case id="1011" name="Probe_SagVersusFrequency" fullname="ChartRunner.Tests.SuspensionCalibrationProbe.Probe_SagVersusFrequency" methodname="Probe_SagVersusFrequency" classname="ChartRunner.Tests.SuspensionCalibrationProbe" runstate="Runnable" seed="1539703411" result="Passed" start-time="2026-08-05 23:51:57Z" end-time="2026-08-05 23:52:27Z" duration="30.098668" asserts="0">
+              <properties>
+                <property name="_JOINTYPE" value="UnityCombinatorial" />
+                <property name="retryIteration" value="0" />
+                <property name="repeatIteration" value="0" />
+              </properties>
+              <output><![CDATA[PROBE SAG vs FREQUENCY (ход 0.30 м, цель просадки ≈0.10 м)
+  f =  3 Гц  →  просадка 0.5903 м  (jointTranslation 0.5912)
+  f =  5 Гц  →  просадка 0.2550 м  (jointTranslation 0.2550)
+  f =  8 Гц  →  просадка 0.0996 м  (jointTranslation 0.0996)
+  f = 12 Гц  →  просадка 0.0443 м  (jointTranslation 0.0443)
+  f = 16 Гц  →  просадка 0.0249 м  (jointTranslation 0.0249)
+  f = 22 Гц  →  просадка 0.0132 м  (jointTranslation 0.0132)
+
+Saving results to: /Users/macbook/Library/Application Support/DefaultCompany/2D_URP/TestResults.xml
+]]></output>
+            </test-case>
+          </test-suite>
+        </test-suite>
+      </test-suite>
+    </test-suite>
+  </test-suite>
+</test-run>

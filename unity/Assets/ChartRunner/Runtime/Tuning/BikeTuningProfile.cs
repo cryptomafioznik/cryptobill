@@ -94,7 +94,7 @@ namespace ChartRunner.Tuning
         // ================= подвеска и качение =================
 
         [Header("Подвеска — ПЛЕЙСХОЛДЕРЫ: penalty-контакт исходника не переводится в ход подвески")]
-        public float suspensionFrequency = 4f;
+        public float suspensionFrequency = 8f;   // ИЗМЕРЕНО: даёт статическую просадку 0.0996 м = треть хода
         public float suspensionDamping = 0.7f;
         public float suspensionTravelM = 0.30f;
 
