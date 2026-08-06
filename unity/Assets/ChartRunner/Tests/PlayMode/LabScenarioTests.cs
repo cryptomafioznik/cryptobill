@@ -85,14 +85,6 @@ namespace ChartRunner.Tests
         }
 
         [UnityTest, Timeout(180000)]
-        [Ignore("НЕ ПРОЙДЕН, причина установлена: не портирован центробежный отрыв (TUNE.launch = 2.0 " +
-                "в исходнике — «на выпуклости при vx²·кривизна > launch байк слетает», со взглядом " +
-                "вперёд на vx*5). Это СОЗНАТЕЛЬНЫЙ помощник, а не физика, и по правилу пункта 5 он " +
-                "подлежит явному переносу — я пропустил его при инвентаризации помощников. Без него " +
-                "отрыв от закруглённой монотонной кубикой кромки даёт лишь 0.167 с воздуха при " +
-                "подходе 19 м/с (апекс ~9 см). Гейт 0.2 с НЕ понижен намеренно: понижать порог под " +
-                "измерение при известном пропущенном механизме — это ровно тот самоподтверждающийся " +
-                "критерий, который уже дорого обошёлся проекту. Снять Ignore после переноса launch.")]
         public IEnumerator Scenario_JumpAndLanding_GoesAirborneAndLandsCleanly()
         {
             var ctrl = Spawn(LabTerrains.Pad.JumpRamp, ScriptedBikeInput.HoldThrottle(),
@@ -104,7 +96,7 @@ namespace ChartRunner.Tests
             var maxPitchDeg = 0f;
             var maxSpeed = 0f; var maxSpeedX = 0f;
             var minContacts = 9; var oneContactFrames = 0; var zeroContactFrames = 0;
-            var trace = "  трасса у липа (x 50..75 м):\n";
+            var trace = "  трасса у липа (x 24..50 м):\n";
 
             for (var i = 0; i < 900; i++)
             {
@@ -117,7 +109,7 @@ namespace ChartRunner.Tests
                 minContacts = Mathf.Min(minContacts, s.GroundedWheelCount);
                 if (s.GroundedWheelCount == 1) oneContactFrames++;
                 if (s.GroundedWheelCount == 0) zeroContactFrames++;
-                if (s.PositionXM > 50f && s.PositionXM < 75f && i % 8 == 0)
+                if (s.PositionXM > 24f && s.PositionXM < 50f && i % 6 == 0)
                     trace += "    x=" + F(s.PositionXM, 1) + " y=" + F(s.PositionYM, 2)
                            + " v=" + F(s.SpeedMPerS, 1) + " vy=" + F(s.VerticalSpeedMPerS, 1)
                            + " контактов=" + s.GroundedWheelCount + " уклон="
@@ -128,7 +120,7 @@ namespace ChartRunner.Tests
                 // на 20+ м/с доезжал до конца поверхности, падал с её края, и «воздух > 0.2 с»
                 // срабатывал уже на этом падении — после которого посадки, естественно, нет.
                 // Тест мерил бы падение с края полигона вместо прыжка с липа.
-                if (s.PositionXM > 3600f * UnitsContract.PxToM) break;
+                if (s.PositionXM > 2400f * UnitsContract.PxToM) break;
             }
 
             Debug.Log("SCENARIO jump and landing\n  макс.время в воздухе=" + F(maxAir, 3) + " с"

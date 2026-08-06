@@ -60,6 +60,33 @@ namespace ChartRunner.Track
         [Header("Шаг дискретизации коллайдера, авторские px (STEP в исходнике)")]
         public float nodeStepPx = 26f;
 
+        [Header("ОСТРЫЕ узлы: индексы, где кромка не скругляется")]
+        [Tooltip("Сегменты рядом с этими узлами интерполируются линейно, поэтому угол сохраняется. " +
+                 "Нужно для липов трамплинов: кубика Фрича–Карлсона гасит касательные в нуль на любом " +
+                 "локальном максимуме, и острую кромку в этом формате иначе не выразить. Исходник делал " +
+                 "то же — не сглаживал узлы фич (gap/drop/kick/step/climb/mega), стр. 248-249.")]
+        public int[] sharpNodeIndices = Array.Empty<int>();
+
+        private bool[] _sharpMask;
+
+        /// <summary>Маска острых узлов, пересобирается при смене данных.</summary>
+        public bool[] SharpMask
+        {
+            get
+            {
+                if (_sharpMask == null || _sharpMask.Length != nodesPx.Length)
+                {
+                    _sharpMask = new bool[nodesPx.Length];
+                    for (var i = 0; i < sharpNodeIndices.Length; i++)
+                    {
+                        var k = sharpNodeIndices[i];
+                        if (k >= 0 && k < _sharpMask.Length) _sharpMask[k] = true;
+                    }
+                }
+                return _sharpMask;
+            }
+        }
+
         [Header("Секции — для отчётов и для разговора о кривой обучения")]
         public Section[] sections = Array.Empty<Section>();
 
@@ -73,7 +100,7 @@ namespace ChartRunner.Track
         public float NodeStepM => nodeStepPx * UnitsContract.PxToM;
 
         /// <summary>Высота в авторских px по монотонной кубической кривой.</summary>
-        public float HeightPx(float xPx) => MonotoneCubic.Height(xPx, nodesPx);
+        public float HeightPx(float xPx) => MonotoneCubic.Height(xPx, nodesPx, SharpMask);
 
         /// <summary>Разрыв ли в точке x (строго внутри интервала, как в исходном vsIsGap).</summary>
         public bool IsGap(float xPx)

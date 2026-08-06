@@ -169,8 +169,8 @@ namespace ChartRunner.EditorTools
             // вылет станет скрипт-подобным, а не эмерджентным — это прямо тот дефект,
             // который в исходнике чинили анатомией рампы.
             var jump = LabTerrains.CreateProfile(LabTerrains.Pad.JumpRamp);
-            var s1 = jump.GridSlopeRadAt(2250f) * Mathf.Rad2Deg;
-            var s2 = jump.GridSlopeRadAt(2450f) * Mathf.Rad2Deg;
+            var s1 = jump.GridSlopeRadAt(1140f) * Mathf.Rad2Deg;
+            var s2 = jump.GridSlopeRadAt(1270f) * Mathf.Rad2Deg;
             Check("jump_lip_is_concave", s2 > s1,
                 "уклон у основания липа " + s1.ToString("0.0") + "°, у кромки "
                 + s2.ToString("0.0") + "° — обязан РАСТИ");
