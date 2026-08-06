@@ -63,8 +63,10 @@ namespace ChartRunner.Game
         private float _spawnXM;
         private int _attempts;
         private bool _switchLatch;
+        private bool _inputCompiledOut;
         private GUIStyle _hud;
         private GUIStyle _big;
+        private GUIStyle _zone;
 
         private void Awake()
         {
@@ -149,6 +151,14 @@ namespace ChartRunner.Game
 
             // Режим съёмки кадров для приёмки композиции. В обычном запуске не включается.
             if (ScreenshotProbe.Requested) ScreenshotProbe.Attach(this, _controller, _chase);
+
+            // Если ветка ввода вырезана препроцессором, игра запустится и будет выглядеть
+            // рабочей, оставаясь неуправляемой. Молчать об этом нельзя — говорим в лог И в кадр.
+#if !ENABLE_LEGACY_INPUT_MANAGER
+            _inputCompiledOut = true;
+            Debug.LogError("PLAY: ВВОД ВЫРЕЗАН ПРЕПРОЦЕССОРОМ (ENABLE_LEGACY_INPUT_MANAGER не "
+                           + "определён). Игра неуправляема. ProjectSettings → activeInputHandler: 2");
+#endif
 
             Debug.Log("PLAY: композиция — герой " + (_chase.MeasuredHeroFraction * 100f).ToString("0.0")
                       + " % высоты, обзор впереди на верхней скорости "
@@ -267,6 +277,14 @@ namespace ChartRunner.Game
             GUI.Label(new Rect(14f, y + 8f, 220f, 20f),
                 st.WeightShift < -0.05f ? "вес НАЗАД" : st.WeightShift > 0.05f ? "вес ВПЕРЁД" : "", _hud);
 
+            DrawTouchZones(st);
+
+            if (_inputCompiledOut)
+            {
+                GUI.Label(new Rect(0f, 932f * 0.44f, 430f, 60f),
+                    "ВВОД НЕ СОБРАН\nactiveInputHandler: 2", _big);
+            }
+
             if (_controller.Halted)
             {
                 var reason = st.Failure == BikeFailure.Loop ? "ОПРОКИД НАЗАД"
@@ -280,6 +298,46 @@ namespace ChartRunner.Game
             GUI.matrix = m;
         }
 
+        /// <summary>
+        /// ВИДИМЫЕ ЗОНЫ УПРАВЛЕНИЯ. Отдельная ошибка, которую надо было чинить вместе с вводом:
+        /// раскладка «правая половина газ, левая тормоз» существовала только в моей голове и
+        /// в комментарии к коду. Игрок, впервые открывший приложение, не знает, куда нажимать,
+        /// и неотличимо от сломанного ввода получает «я жму, ничего не происходит».
+        ///
+        /// Зоны подсвечиваются В МОМЕНТ нажатия по ФАКТИЧЕСКИ приложенной команде из
+        /// BikeState, а не по факту касания экрана. Это делает панель ещё и щупом: если
+        /// подсветка не загорается при нажатии, значит команда до физики не дошла.
+        /// </summary>
+        private void DrawTouchZones(BikeState st)
+        {
+            const float h = 932f;
+            const float w = 430f;
+            var zoneTop = h * 0.62f;
+
+            var brakeOn = st.BrakeApplied > 0.01f;
+            var gasOn = st.ThrottleApplied > 0.01f;
+
+            GUI.color = new Color(1f, 1f, 1f, brakeOn ? 0.16f : 0.05f);
+            GUI.DrawTexture(new Rect(0f, zoneTop, w * 0.5f, h - zoneTop), Texture2D.whiteTexture);
+            GUI.color = new Color(1f, 1f, 1f, gasOn ? 0.16f : 0.05f);
+            GUI.DrawTexture(new Rect(w * 0.5f, zoneTop, w * 0.5f, h - zoneTop), Texture2D.whiteTexture);
+            GUI.color = Color.white;
+
+            EnsureStyles();
+            _zone.normal.textColor = new Color(0.86f, 0.93f, 0.98f, brakeOn ? 0.95f : 0.45f);
+            GUI.Label(new Rect(0f, h - 74f, w * 0.5f, 30f), "ТОРМОЗ", _zone);
+            _zone.normal.textColor = new Color(0.98f, 0.80f, 0.42f, gasOn ? 0.95f : 0.45f);
+            GUI.Label(new Rect(w * 0.5f, h - 74f, w * 0.5f, 30f), "ГАЗ", _zone);
+
+            _zone.normal.textColor = new Color(0.86f, 0.93f, 0.98f, 0.40f);
+            GUI.Label(new Rect(0f, h - 44f, w, 26f), "палец вверх/вниз — перенос веса", _zone);
+
+            // Разделитель половин: без него граница зон угадывается, а не видна.
+            GUI.color = new Color(1f, 1f, 1f, 0.10f);
+            GUI.DrawTexture(new Rect(w * 0.5f - 0.5f, zoneTop, 1f, h - zoneTop), Texture2D.whiteTexture);
+            GUI.color = Color.white;
+        }
+
         private void EnsureStyles()
         {
             if (_hud != null) return;
@@ -287,6 +345,7 @@ namespace ChartRunner.Game
             _hud.normal.textColor = new Color(0.86f, 0.93f, 0.98f, 0.92f);
             _big = new GUIStyle(GUI.skin.label) { fontSize = 26, alignment = TextAnchor.MiddleCenter };
             _big.normal.textColor = new Color(1f, 0.44f, 0.38f, 0.95f);
+            _zone = new GUIStyle(GUI.skin.label) { fontSize = 15, alignment = TextAnchor.MiddleCenter };
         }
     }
 }
