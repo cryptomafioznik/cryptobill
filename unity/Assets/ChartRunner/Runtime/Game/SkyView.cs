@@ -109,6 +109,24 @@ namespace ChartRunner.Game
         /// </summary>
         private void BuildRidges(float trackLengthM)
         {
+            // ГОРОД ИЗ СВЕЧЕЙ вместо абстрактных гряд. Это главный визуальный пробел
+            // против старой игры: там за спиной стоял город, собранный из свечей, и он
+            // делал мир этой игрой, а не обобщённым trials. Формы те же, что под колёсами,
+            // но дальше, мельче и в дымке — так работает воздушная перспектива, и заодно
+            // это связывает фон с механикой: весь мир сделан из рынка.
+            //
+            // Дальний план НЕ несёт данных — это силуэт, а не котировки. Поэтому цвет
+            // у него приглушён до оттенка неба: правило «светятся только данные» остаётся
+            // за свечами под колёсами, которыми игрок реально едет.
+            // Высоты подрезаны по снятому кадру: первая редакция (3.4 и 5.2 м) заполняла
+            // башнями весь верх экрана и не оставляла неба, а именно небо у горизонта —
+            // самое светлое место кадра, на котором и читается контражурный силуэт героя.
+            // Город обязан подпирать композицию, а не занимать её.
+            AddCandleCity("CityFar", 0.90f, 1.0f, 1.9f, 0.50f,
+                new Color(0.44f, 0.30f, 0.31f, 1f), -62, trackLengthM, 7919);
+            AddCandleCity("CityMid", 0.78f, -0.9f, 2.8f, 0.72f,
+                new Color(0.28f, 0.18f, 0.24f, 1f), -52, trackLengthM, 104729);
+
             // ВЫСОТА И РАЗМЕР ИСПРАВЛЕНЫ ПО СНЯТОМУ КАДРУ. В первой редакции дальняя гряда
             // стояла ВЫШЕ ближних (base 9.5 против 3.0) и была самой большой формой в кадре —
             // то есть перспектива работала наоборот, и самым светлым и крупным пятном
@@ -118,12 +136,66 @@ namespace ChartRunner.Game
             // и крупнее. Поэтому смещения идут от + к −, амплитуды растут к зрителю, а вся
             // группа держится узкой полосой у линии глаз: гряды обязаны подпирать силуэт
             // рельефа, а не спорить с ним за кадр.
-            AddRidge("RidgeFar", 0.90f, 2.2f, 1.5f, 0.048f, 1.7f,
-                new Color(0.62f, 0.42f, 0.38f, 1f), -60, trackLengthM);
-            AddRidge("RidgeMid", 0.76f, 0.4f, 2.3f, 0.078f, 3.1f,
-                new Color(0.38f, 0.25f, 0.30f, 1f), -50, trackLengthM);
-            AddRidge("RidgeNear", 0.58f, -1.6f, 3.1f, 0.115f, 5.3f,
-                new Color(0.19f, 0.14f, 0.21f, 1f), -40, trackLengthM);
+            // Ближняя гряда осталась грядой: город на трёх планах превращается в частокол,
+            // а земле нужен сплошной тёмный подпор под силуэтом героя.
+            AddRidge("RidgeNear", 0.58f, -1.8f, 3.1f, 0.115f, 5.3f,
+                new Color(0.17f, 0.13f, 0.20f, 1f), -42, trackLengthM);
+        }
+
+        /// <summary>
+        /// Ряд башен-свечей с фитилями. Высоты детерминированы от семени слоя: один и тот
+        /// же кадр в каждом прогоне, иначе по скриншотам нельзя сравнивать изменения.
+        /// </summary>
+        private void AddCandleCity(string name, float parallax, float baseY, float maxH,
+            float width, Color color, int order, float trackLengthM, int seed)
+        {
+            var span = trackLengthM * (1f - parallax) + 140f;
+            var pitch = width * 1.75f;
+            var v = new List<Vector3>();
+            var c = new List<Color>();
+            var t = new List<int>();
+            var bottom = -80f;
+            var st = (uint)seed;
+
+            float Rand()
+            {
+                st ^= st << 13; st ^= st >> 17; st ^= st << 5;
+                return (st & 0xFFFFFF) / 16777216f;
+            }
+
+            for (var x = -70f; x <= span; x += pitch)
+            {
+                // Высота башни: смесь низкочастотной волны (кварталы) и случая (дома).
+                // Одна случайность дала бы шум, одна волна — гребёнку.
+                var wave = 0.5f + 0.5f * Mathf.Sin(x * 0.055f + seed * 0.001f);
+                var h = maxH * (0.22f + 0.78f * (0.55f * wave + 0.45f * Rand()));
+                var w = width * (0.7f + 0.6f * Rand());
+                var top = baseY + h;
+
+                // Тело башни: к подножию темнеет, как и свечи под колёсами.
+                var dark = new Color(color.r * 0.45f, color.g * 0.45f, color.b * 0.55f, 1f);
+                var i0 = v.Count;
+                v.Add(new Vector3(x, top, 0f)); c.Add(Shapes.V(color));
+                v.Add(new Vector3(x + w, top, 0f)); c.Add(Shapes.V(color));
+                v.Add(new Vector3(x + w, bottom, 0f)); c.Add(Shapes.V(dark));
+                v.Add(new Vector3(x, bottom, 0f)); c.Add(Shapes.V(dark));
+                t.Add(i0); t.Add(i0 + 1); t.Add(i0 + 2);
+                t.Add(i0); t.Add(i0 + 2); t.Add(i0 + 3);
+
+                // Фитиль: короткая антенна над телом. Без неё башни читаются домами,
+                // а нужны СВЕЧИ — форма должна повторять ту, что под колёсами.
+                if (Rand() > 0.35f)
+                {
+                    Shapes.AddBar(v, c, t,
+                        new Vector2(x + w * 0.5f, top),
+                        new Vector2(x + w * 0.5f, top + h * (0.12f + 0.22f * Rand())),
+                        w * 0.16f, color);
+                }
+            }
+
+            var go = Shapes.Create(name, transform, Shapes.Build(name, v, c, t), order);
+            go.transform.position = new Vector3(0f, baseY, 0f);
+            _layers.Add(new Layer { T = go.transform, Parallax = parallax, BaseY = baseY });
         }
 
         private void AddRidge(string name, float parallax, float baseY, float amp,
