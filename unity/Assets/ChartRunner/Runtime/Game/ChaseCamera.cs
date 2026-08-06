@@ -76,6 +76,28 @@ namespace ChartRunner.Game
         public float FollowLerpX = 12f;
         public float FollowLerpY = 6f;
 
+        /// <summary>
+        /// ТРЯСКА ОТ УДАРА. Причинная, а не декоративная: амплитуда пропорциональна
+        /// ВЕРТИКАЛЬНОЙ скорости в момент касания, то есть силе приземления, которую
+        /// игрок и так почувствовал бы через руль на настоящем байке.
+        ///
+        /// Зачем она нужна механически, а не «для сочности»: удар — единственное событие,
+        /// у которого нет своего звука и своей анимации, и без отдачи мягкая посадка
+        /// неотличима от жёсткой. А различать их игрок обязан, потому что жёсткая ведёт
+        /// к крашу, и учиться на ней можно только если её видно.
+        /// </summary>
+        private float _shake;
+        private Vector2 _shakeOffset;
+
+        /// <summary>Вертикальная скорость, ниже которой удар не считается ударом, м/с.</summary>
+        public float ShakeFromSpeed = 3.5f;
+
+        /// <summary>Скорость, при которой тряска максимальна, м/с.</summary>
+        public float ShakeFullSpeed = 14f;
+
+        /// <summary>Максимальное смещение камеры, метры. Больше читается как поломка.</summary>
+        public float ShakeAmplitudeM = 0.42f;
+
         private Transform _target;
         private Camera _cam;
         private float _y;
@@ -157,6 +179,7 @@ namespace ChartRunner.Game
 
             if (!_snapped)
             {
+                _shakeOffset = Vector2.zero;
                 transform.position = new Vector3(wantX, wantY, -20f);
                 _y = wantY;
                 _snapped = true;
@@ -168,12 +191,44 @@ namespace ChartRunner.Game
             // тангаж байка — а тангаж здесь главный носитель информации.
             _y = Mathf.Lerp(_y, wantY, 1f - Mathf.Exp(-FollowLerpY * Time.deltaTime));
             var x = Mathf.Lerp(transform.position.x, wantX, 1f - Mathf.Exp(-FollowLerpX * Time.deltaTime));
-            transform.position = new Vector3(x, _y, -20f);
+
+            // Тряска прибавляется ПОСЛЕ сглаживания: иначе демпфер камеры её же и съест,
+            // и удар перестанет читаться.
+            UpdateShake(Time.deltaTime);
+            transform.position = new Vector3(x + _shakeOffset.x, _y + _shakeOffset.y, -20f);
         }
 
         public void Snap()
         {
             _snapped = false;
+            _shake = 0f;
+            _shakeOffset = Vector2.zero;
+        }
+
+        /// <summary>
+        /// Сообщить об ударе. Вызывается из <see cref="PlaySession"/> по факту касания
+        /// земли после полёта — то есть по СОСТОЯНИЮ физики, а не по таймеру анимации.
+        /// </summary>
+        public void Impact(float verticalSpeedMPerS)
+        {
+            var v = Mathf.Abs(verticalSpeedMPerS);
+            if (v < ShakeFromSpeed) return;
+            var k = Mathf.Clamp01((v - ShakeFromSpeed) / (ShakeFullSpeed - ShakeFromSpeed));
+            _shake = Mathf.Max(_shake, k);
+        }
+
+        /// <summary>
+        /// Затухающее дрожание. Частоты двух осей НЕСОИЗМЕРИМЫ (37 и 43 Гц), иначе
+        /// смещение ходит по прямой и читается рывком камеры, а не ударом.
+        /// </summary>
+        private void UpdateShake(float dt)
+        {
+            if (_shake <= 0.0001f) { _shakeOffset = Vector2.zero; return; }
+            _shake = Mathf.Max(0f, _shake - dt * 3.2f);
+            var t = Time.time;
+            _shakeOffset = new Vector2(
+                Mathf.Sin(t * 37f) * _shake * ShakeAmplitudeM * 0.6f,
+                Mathf.Sin(t * 43f + 1.3f) * _shake * ShakeAmplitudeM);
         }
     }
 }

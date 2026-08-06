@@ -80,6 +80,8 @@ namespace ChartRunner.Game
         private bool _switchLatch;
         private bool _inputCompiledOut;
         private float _feelBannerUntil;
+        private bool _prevAirborne;
+        private float _prevVerticalSpeed;
         private GUIStyle _hud;
         private GUIStyle _big;
         private GUIStyle _zone;
@@ -221,6 +223,14 @@ namespace ChartRunner.Game
             if (_controller == null) return;
 
             var st = _controller.State;
+
+            // УДАР: переход «в воздухе → на земле». Берём вертикальную скорость ПРОШЛОГО
+            // кадра: в кадре касания решатель её уже погасил, и по ней удар не измерить.
+            // Это тот же класс ловушки, что и «пик величины до обработки ≠ после».
+            if (st.IsGrounded && _prevAirborne) _chase.Impact(_prevVerticalSpeed);
+            _prevAirborne = !st.IsGrounded;
+            _prevVerticalSpeed = st.VerticalSpeedMPerS;
+
             var travelled = st.PositionXM;
             if (travelled > _bestDistanceM) _bestDistanceM = travelled;
 
