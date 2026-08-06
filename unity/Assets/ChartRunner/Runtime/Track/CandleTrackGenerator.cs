@@ -69,6 +69,14 @@ namespace ChartRunner.Track
         {
             public TrackProfile Profile;
             public List<Candle> Candles = new List<Candle>();
+
+            /// <summary>
+            /// Индексы узлов, лежащих внутри ПРОВАЛА. Нужны анализу честности: стенка
+            /// провала — это не подъём, который надо заехать, а край, который перелетают.
+            /// Без этого списка гейт крутизны меряет вертикальную стенку ямы как склон
+            /// и справедливо, но бессмысленно ругается на 87°.
+            /// </summary>
+            public List<int> GapNodes = new List<int>();
         }
 
         /// <summary>
@@ -234,6 +242,11 @@ namespace ChartRunner.Track
                         ? Mathf.Clamp(gapLandTopY + 50f, 70f, H * 0.95f)
                         : H * 0.99f;
                     sharp.Add(i);
+                    // Узлы ямы и по одному с каждой стороны: стенки принадлежат провалу,
+                    // а не рельефу, и мерить их крутизну как склон бессмысленно.
+                    res.GapNodes.Add(i - 1);
+                    res.GapNodes.Add(i);
+                    res.GapNodes.Add(i + 1);
                     gapLeft--;
                     if (gapLeft <= 0) { walk = gapBaseY - baseY; gapLandFlat = 10; }
                 }
@@ -309,7 +322,14 @@ namespace ChartRunner.Track
                     walk = close - baseY;
                     whoopLeft--;
                 }
+                // ПРОВЕРКА МЕСТА СНИЗУ. У кикера и подъёма в исходнике есть условие
+                // `close > H*0.5` — «нужно место СВЕРХУ под рампу». Симметричного условия
+                // снизу там нет, и оно понадобилось: разгон-спуск гэпа зажат клампом
+                // H*0.82, поэтому запуск фичи на большой глубине мгновенно ДЁРГАЕТ землю
+                // вверх до этого клампа. Замерено гейтом честности: подъём 68.4° одним
+                // узлом, одинаково на шести семенах из шести — с 722 на 656.
                 else if (!busy && i > 20 && genX >= nextGapX && genX > 2600f
+                         && close < H * 0.78f
                          && regime != CandleTerrainProfile.Regime.Pump
                          && regime != CandleTerrainProfile.Regime.Crash)
                 {
@@ -335,6 +355,7 @@ namespace ChartRunner.Track
                     nextClimbX = genX + 4200f * densK + rng.Next() * 1200f * densK;
                 }
                 else if (!busy && i > 16 && genX >= nextWhoopX && genX > 1900f
+                         && close < H * 0.82f
                          && regime != CandleTerrainProfile.Regime.Pump
                          && regime != CandleTerrainProfile.Regime.Crash)
                 {
