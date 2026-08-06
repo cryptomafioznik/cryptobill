@@ -217,8 +217,21 @@ namespace ChartRunner.Bike
                 // контакта, которое само пропорционально нормальной реакции. Именно поэтому
                 // ручной cap по µ·Fn из исходника здесь не нужен: свойство «газ на разгруженном
                 // колесе не даёт тяги» получается из физики, а не из формулы.
-                motor.motorSpeed = TargetMotorSpeed(-1f);
-                motor.maxMotorTorque = Profile.engineForceN * Profile.wheelRadiusM * _throttle;
+                var target = TargetMotorSpeed(-1f);
+
+                // МОТОР НЕ ИМЕЕТ ПРАВА ТОРМОЗИТЬ. Joint motor держит ЦЕЛЕВУЮ скорость, поэтому
+                // при вращении быстрее цели он тянет назад — то есть удержанный газ гасил бы
+                // всё, что набрала гравитация на спуске. Замерено на площадке JumpRamp: байк
+                // разгонялся до 15.30 м/с на разгонном спуске и приходил к липу снова на 6.2 м/с
+                // (ровно верхняя скорость), из-за чего не отрывался вообще — 0.017 с воздуха.
+                // Настоящий двигатель так не работает: закрытый газ даёт выбег, а открытый
+                // тем более не замедляет. Поэтому выше цели момент снимается.
+                var wheelSpeed = _rig.RearWheel.angularVelocity; // град/с, отрицательная = вперёд
+                var alreadyFaster = wheelSpeed <= target;        // «быстрее цели» в сторону движения
+                motor.motorSpeed = target;
+                motor.maxMotorTorque = alreadyFaster
+                    ? 0f
+                    : Profile.engineForceN * Profile.wheelRadiusM * _throttle;
             }
             else
             {
@@ -236,10 +249,14 @@ namespace ChartRunner.Bike
 
         private float TargetMotorSpeed(float sign)
         {
-            // Целевая угловая скорость колеса, град/с, из желаемой линейной скорости.
+            // Целевая угловая скорость колеса, град/с, из ВЕРХНЕЙ СКОРОСТИ профиля.
             // Знак: движение в +x = вращение по часовой = отрицательная угловая скорость.
-            const float targetLinearMPerS = 30f; // с запасом выше крейсера: ограничивает момент, не скорость
-            var radPerS = targetLinearMPerS / Mathf.Max(0.01f, Profile.wheelRadiusM);
+            //
+            // Именно это число задаёт крейсер на ровном, а не баланс сил: мотор перестаёт
+            // разгонять, дойдя до целевых оборотов. Физически это рев-лимит с передачей.
+            // В первой редакции здесь стояли захардкоженные 30 м/с «с запасом» — из-за чего
+            // крейсер был случайной величиной, не сверяемой ни с каким эталоном.
+            var radPerS = Profile.topSpeedMPerS / Mathf.Max(0.01f, Profile.wheelRadiusM);
             return sign * radPerS * Mathf.Rad2Deg;
         }
 

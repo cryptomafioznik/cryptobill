@@ -169,12 +169,12 @@ namespace ChartRunner.EditorTools
             var b = ScriptableObject.CreateInstance<BikeTuningProfile>();
             // Поля-плейсхолдеры перечислены явно: пока имя здесь, значение нельзя
             // предъявлять как перенесённое из исходника (docs/BIKE_PHYSICS_SPEC.md §6).
+            // Обновлено на пункте 6: engineForceN, tyreFriction, brakeForceN и
+            // suspensionFrequency ОТКАЛИБРОВАНЫ измерением на полигоне против сформулированных
+            // требований (см. docs/IMPLEMENTATION_LOG.md, итерация 6) и из списка убраны.
+            // Остаются те, для которых требование ещё не сформулировано или не измерено.
             b.pendingCalibration = new[]
             {
-                nameof(BikeTuningProfile.engineForceN),
-                nameof(BikeTuningProfile.tyreFriction),
-                nameof(BikeTuningProfile.brakeForceN),
-                nameof(BikeTuningProfile.suspensionFrequency),
                 nameof(BikeTuningProfile.suspensionDamping),
                 nameof(BikeTuningProfile.suspensionTravelM),
                 nameof(BikeTuningProfile.wheelMassKg)

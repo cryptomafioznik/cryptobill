@@ -13,10 +13,6 @@ MonoBehaviour:
   m_Name: Default.BikeTuningProfile
   m_EditorClassIdentifier: ChartRunner.Runtime::ChartRunner.Tuning.BikeTuningProfile
   pendingCalibration:
-  - engineForceN
-  - tyreFriction
-  - brakeForceN
-  - suspensionFrequency
   - suspensionDamping
   - suspensionTravelM
   - wheelMassKg
@@ -26,8 +22,9 @@ MonoBehaviour:
   chassisMassKg: 181
   wheelMassKg: 12
   chassisInertiaKgM2: 33.268593
-  engineForceN: 3000
-  tyreFriction: 1.1
+  engineForceN: 4000
+  topSpeedMPerS: 6.271
+  tyreFriction: 1.2
   throttleRampSeconds: 0.15
   normalLoadSmoothSeconds: 0.075
   driveFloorFraction: 0.1
@@ -35,11 +32,11 @@ MonoBehaviour:
   climbFromRad: 0.28
   climbSpanRad: 0.3
   driveTrade: 0.2
-  brakeForceN: 1500
+  brakeForceN: 3000
   reverseForceScale: 5.5
   reverseSpeedThresholdMPerS: 2.713846
   wheelieBrakeAuthority: 0.075
-  suspensionFrequency: 4
+  suspensionFrequency: 8
   suspensionDamping: 0.7
   suspensionTravelM: 0.3
   rollResistance: 0.05
