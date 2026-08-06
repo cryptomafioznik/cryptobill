@@ -41,6 +41,17 @@ namespace ChartRunner.Tuning
         [Tooltip("Эндуро-сцепление на подъёме. Сток 1, у slice 0.35: крутое берётся импульсом, не одной тягой.")]
         public float climbTraction = 0.35f;
 
+        [Tooltip("Секунды до полного переноса веса при удержании кнопки. Меньше = отзывчивее.")]
+        public float leanRampSeconds = 0.55f;
+
+        [Tooltip("С какого |веса| начинает гаснуть стабилизатор переда. Раньше здесь стоял " +
+                 "жёсткий порог 0.2 (выключатель), из-за чего нажатие обрывало опору, а " +
+                 "отпускание возвращало её рывком.")]
+        public float leanFadeFrom = 0.15f;
+
+        [Tooltip("На каком размахе |веса| стабилизатор гаснет полностью.")]
+        public float leanFadeSpan = 0.55f;
+
         [Header("Прощение у грани")]
         public float angDampAssist = 1f;
         public float edgeGuard = 0.25f;
@@ -73,6 +84,9 @@ namespace ChartRunner.Tuning
             o.airSpinDamp = 1f;
             o.airSpinDampLean = 0f;
             o.leanTorque = 1f;
+            o.leanRampSeconds = 0.55f;
+            o.leanFadeFrom = 0.2f;
+            o.leanFadeSpan = 0.001f;   // сток = жёсткий порог, как было
             o.leanTorqueAir = 1f;
             o.throttleTorque = 1f;
             o.climbTraction = 1f;

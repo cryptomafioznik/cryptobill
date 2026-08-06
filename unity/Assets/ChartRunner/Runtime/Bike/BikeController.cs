@@ -326,8 +326,11 @@ namespace ChartRunner.Bike
         {
             _prevWeightShift = _weightShift;
 
-            // Рампа переноса веса: в исходнике leanRampGnd 0.08 за кадр ≈ 0.55 с до полного.
-            var rate = dt / 0.55f;
+            // Рампа переноса веса. Исходник: leanRampGnd 0.08 за кадр ≈ 0.55 с до полного.
+            // Вынесена в профиль уровня, потому что это ГЛАВНАЯ ручка отзывчивости: чем
+            // короче рампа, тем сильнее ощущается короткое нажатие, то есть тем ближе
+            // управление к «любое микродвижение чувствуется».
+            var rate = dt / Mathf.Max(0.05f, Level.leanRampSeconds);
             _weightShift = Mathf.MoveTowards(_weightShift, Mathf.Clamp(lean, -1f, 1f), rate);
 
             // СДВИГ ЦЕНТРА МАСС. Это и есть перенос веса райдера: реально меняет нагрузку
@@ -389,14 +392,26 @@ namespace ChartRunner.Bike
             var I = _rig.Chassis.inertia;
             var dh = DesignHardFactor();
 
-            // 1. PD-стабилизатор переда к углу склона. Работает когда игрок НЕ наклоняет.
-            //    Гаснет на дизайн-крутом → газ реально задирает нос = power-loop возможен.
-            if (Mathf.Abs(_weightShift) < 0.2f)
+            // 1. PD-стабилизатор переда к углу склона.
+            //
+            // РАНЬШЕ ЗДЕСЬ БЫЛ ПОРОГ `|вес| < 0.2` — то есть выключатель. Любое нажатие
+            // кнопки наклона гасило стабилизатор ЦЕЛИКОМ, а отпускание возвращало его разом
+            // на полную. Для игрока это читалось так: «нажал — держать перестало, улетел;
+            // отпустил — швырнуло носом вниз». Обрыв, а не кривая, и никакого баланса на
+            // заднем колесе на таком не построить.
+            //
+            // Теперь авторитет стабилизатора УГАСАЕТ ПЛАВНО с ростом переноса веса: при
+            // малых наклонах демпфирование сохраняется (там и живёт тонкий баланс), при
+            // полном наклоне игрок получает всю власть, как и раньше.
+            var leanAuthority = 1f - Mathf.SmoothStep(0f, 1f,
+                Mathf.Clamp01((Mathf.Abs(_weightShift) - Level.leanFadeFrom)
+                              / Mathf.Max(0.01f, Level.leanFadeSpan)));
+            if (leanAuthority > 0.001f)
             {
                 var acc = -rel * Profile.frontLevel * PerFrame2ToPerS2
                           - angV * Profile.frontLevelDamp * PerFrameToPerS;
                 _rig.Chassis.AddTorque(acc * I * (1f - dh * Profile.designHardLevelAssist)
-                                       * Level.groundAlign, ForceMode2D.Force);
+                                       * Level.groundAlign * leanAuthority, ForceMode2D.Force);
             }
 
             // 2. Подушка у грани вилли: мягко возвращает нос, начиная с wheelieZone и

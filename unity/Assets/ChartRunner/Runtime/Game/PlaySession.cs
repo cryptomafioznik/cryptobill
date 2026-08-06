@@ -36,6 +36,9 @@ namespace ChartRunner.Game
         /// </summary>
         public static TrackChoice Selected = TrackChoice.Chart;
 
+        /// <summary>Вариант фила управления. Как и трасса, переживает перезагрузку сцены.</summary>
+        public static Feel SelectedFeel = Feel.Balance;
+
         [Header("Данные (проставляются сборщиком сцены, чтобы попасть в билд)")]
         public BikeTuningProfile BikeProfile;
         public LevelPhysicsOverride LevelProfile;
@@ -76,6 +79,7 @@ namespace ChartRunner.Game
         private int _attempts;
         private bool _switchLatch;
         private bool _inputCompiledOut;
+        private float _feelBannerUntil;
         private GUIStyle _hud;
         private GUIStyle _big;
         private GUIStyle _zone;
@@ -122,6 +126,12 @@ namespace ChartRunner.Game
                 return;
             }
             if (LevelProfile == null) LevelProfile = LevelPhysicsOverride.CreateStock();
+
+            // РАБОТАЕМ С КОПИЕЙ профиля уровня. Пресет фила меняет его поля, а LevelProfile —
+            // это ссылка на АССЕТ: правка на лету записалась бы в файл на диске и тихо
+            // изменила бы то, что меряют тесты. Копия делает переключение обратимым.
+            LevelProfile = Instantiate(LevelProfile);
+            FeelPreset.Apply(LevelProfile, SelectedFeel);
 
             _sampler = new TerrainSampler(_track);
 
@@ -214,12 +224,14 @@ namespace ChartRunner.Game
 #if ENABLE_LEGACY_INPUT_MANAGER
             if (UnityEngine.Input.GetKeyDown(KeyCode.R)) Restart(true);
             if (UnityEngine.Input.GetKeyDown(KeyCode.T)) SwitchTrack();
+            if (UnityEngine.Input.GetKeyDown(KeyCode.F)) SwitchFeel();
 
             // Четыре пальца — переключение трассы. Один и два заняты управлением, три —
             // оверлеем телеметрии, поэтому конфликта жестов нет.
             var touches = UnityEngine.Input.touchCount;
             if (touches >= 4 && !_switchLatch) { _switchLatch = true; SwitchTrack(); }
-            else if (touches < 4) _switchLatch = false;
+            else if (touches == 3 && !_switchLatch) { _switchLatch = true; SwitchFeel(); }
+            else if (touches < 3) _switchLatch = false;
 #endif
 
             if (_controller.Halted)
@@ -246,6 +258,19 @@ namespace ChartRunner.Game
                 : TrackChoice.Chart;
             UnityEngine.SceneManagement.SceneManager.LoadScene(
                 UnityEngine.SceneManagement.SceneManager.GetActiveScene().buildIndex);
+        }
+
+        /// <summary>
+        /// Смена варианта фила. На месте, без перезагрузки сцены: профиль уровня — копия,
+        /// контроллер читает его каждый кадр, поэтому разница чувствуется сразу и её можно
+        /// сравнить на одном и том же куске трассы. Перезагрузка сцены сбрасывала бы
+        /// положение и мешала сравнивать.
+        /// </summary>
+        private void SwitchFeel()
+        {
+            SelectedFeel = FeelPreset.Next(SelectedFeel);
+            FeelPreset.Apply(LevelProfile, SelectedFeel);
+            _feelBannerUntil = Time.time + 1.6f;
         }
 
         private void Restart(bool fromStart)
@@ -294,16 +319,29 @@ namespace ChartRunner.Game
 
             GUI.Label(new Rect(14f, 12f, 220f, 22f),
                 pct.ToString("0") + " %   " + (st.SpeedMPerS * 3.6f).ToString("0") + " км/ч", _hud);
-            GUI.Label(new Rect(14f, 32f, 260f, 22f),
-                "попытка " + _attempts + "   " + (Time.time - _runStartedAt).ToString("0.0") + " с"
-                + "   " + (Selected == TrackChoice.Chart ? "график"
-                    : Selected == TrackChoice.Crux30 ? "крукс-30" : "VS-315"), _hud);
+            // Две строки, а не одна: в одной строке шириной 260 название фила обрезалось,
+            // и переключение выглядело неработающим — ровно та же беда, что с невидимым
+            // управлением, только в отчёте о состоянии.
+            GUI.Label(new Rect(14f, 32f, 300f, 22f),
+                "попытка " + _attempts + "   " + (Time.time - _runStartedAt).ToString("0.0") + " с", _hud);
+            GUI.Label(new Rect(14f, 52f, 300f, 22f),
+                (Selected == TrackChoice.Chart ? "график"
+                    : Selected == TrackChoice.Crux30 ? "крукс-30" : "VS-315")
+                + "   фил: " + FeelPreset.Name(SelectedFeel), _hud);
+
+            // Баннер при смене: без него непонятно, переключилось ли, и сравнение
+            // превращается в угадывание.
+            if (Time.time < _feelBannerUntil)
+            {
+                GUI.Label(new Rect(0f, 932f * 0.30f, 430f, 40f),
+                    "ФИЛ: " + FeelPreset.Name(SelectedFeel), _big);
+            }
 
             // Индикатор переноса веса: игрок обязан видеть, что он реально приложил,
             // иначе «я же наклонял» и «наклон приложился» неразличимы, и учиться не на чем.
             var barW = 150f;
             var cx = 14f + barW * 0.5f;
-            var y = 60f;
+            var y = 78f;
             GUI.color = new Color(1f, 1f, 1f, 0.18f);
             GUI.DrawTexture(new Rect(14f, y, barW, 5f), Texture2D.whiteTexture);
             GUI.color = st.WeightShift < 0f
