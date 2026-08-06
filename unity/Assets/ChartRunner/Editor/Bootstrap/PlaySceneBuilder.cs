@@ -25,6 +25,7 @@ namespace ChartRunner.EditorTools
         private const string BikeProfilePath = "Assets/ChartRunner/Profiles/Default.BikeTuningProfile.asset";
         private const string LevelProfilePath = "Assets/ChartRunner/Profiles/VerticalSlice.LevelPhysicsOverride.asset";
         private const string TrackProfilePath = "Assets/ChartRunner/Profiles/VerticalSlice.TrackProfile.asset";
+        private const string CandleProfilePath = "Assets/ChartRunner/Profiles/Default.CandleTerrainProfile.asset";
 
         private static readonly List<string> Lines = new List<string>();
         private static readonly List<string> Failures = new List<string>();
@@ -52,6 +53,9 @@ namespace ChartRunner.EditorTools
             session.BikeProfile = bike;
             session.LevelProfile = level;
             session.Track = track;
+            var candle = AssetDatabase.LoadAssetAtPath<CandleTerrainProfile>(CandleProfilePath);
+            Check("candle_profile_found", candle != null, CandleProfilePath);
+            session.CandleProfile = candle;
 
             EditorSceneManager.MarkSceneDirty(scene);
             EditorSceneManager.SaveScene(scene, ScenePath);
@@ -102,6 +106,9 @@ namespace ChartRunner.EditorTools
                 Check("bike_ref_serialised", session.BikeProfile != null, "BikeProfile");
                 Check("level_ref_serialised", session.LevelProfile != null, "LevelProfile");
                 Check("track_ref_serialised", session.Track != null, "Track");
+                // Без этой ссылки трасса-график молча выродится в VS, и «вернули график»
+                // окажется неправдой при зелёной сборке.
+                Check("candle_ref_serialised", session.CandleProfile != null, "CandleProfile");
             }
 
             if (track != null)

@@ -21,6 +21,8 @@ namespace ChartRunner.Game
         /// <summary>Какая трасса под ногами. Переключается в игре клавишей T / четырьмя пальцами.</summary>
         public enum TrackChoice
         {
+            /// <summary>График из свечей — то, ради чего игра называется CHART RUNNER.</summary>
+            Chart,
             /// <summary>Рукотворный отрезок ~30 с: разгон, подъём, кикер, крукс, спуск.</summary>
             Crux30,
             /// <summary>Перенесённая 1:1 дизайн-трасса VS, 315 м. Содержит стену на 271 м.</summary>
@@ -32,7 +34,7 @@ namespace ChartRunner.Game
         /// само себя. Статика здесь оправдана: это единственное состояние, которое обязано
         /// жить дольше сцены, и оно принадлежит сессии игрока, а не объекту.
         /// </summary>
-        public static TrackChoice Selected = TrackChoice.Crux30;
+        public static TrackChoice Selected = TrackChoice.Chart;
 
         [Header("Данные (проставляются сборщиком сцены, чтобы попасть в билд)")]
         public BikeTuningProfile BikeProfile;
@@ -47,6 +49,16 @@ namespace ChartRunner.Game
 
         [Tooltip("Возрождать на последнем пройденном чекпоинте, а не в начале трассы.")]
         public bool RestartAtCheckpoint = true;
+
+        [Header("График")]
+        [Tooltip("Профиль свечей. Без него трасса-график построиться не может.")]
+        public CandleTerrainProfile CandleProfile;
+
+        [Tooltip("Семя генератора. Одно и то же семя = побитово та же трасса.")]
+        public int ChartSeed = 20260806;
+
+        [Tooltip("Сколько свечей в трассе. 700 × 26 px ≈ 515 м ≈ полторы минуты.")]
+        public int ChartCandles = 700;
 
         [Header("Композиция")]
         public float HeroScreenFraction = ChaseCamera.DefaultHeroFraction;
@@ -82,12 +94,27 @@ namespace ChartRunner.Game
 
         /// <summary>Трасса, действующая сейчас. Собирается по выбору, а не по полю сцены.</summary>
         private TrackProfile _track;
+        private System.Collections.Generic.List<CandleTrackGenerator.Candle> _candles;
 
         private void Start()
         {
-            _track = Selected == TrackChoice.Crux30
-                ? CruxSliceTrack.CreateProfile()
-                : (Track != null ? Track : VerticalSliceTrack.CreateProfile());
+            // Трасса выбирается ДО всего остального: от неё зависят и коллизия, и вид,
+            // и камера. Свечи хранятся отдельно — по ним рисуется земля.
+            _candles = null;
+            if (Selected == TrackChoice.Chart && CandleProfile != null)
+            {
+                var gen = CandleTrackGenerator.Generate(CandleProfile, ChartSeed, ChartCandles);
+                _track = gen.Profile;
+                _candles = gen.Candles;
+            }
+            else if (Selected == TrackChoice.Crux30)
+            {
+                _track = CruxSliceTrack.CreateProfile();
+            }
+            else
+            {
+                _track = Track != null ? Track : VerticalSliceTrack.CreateProfile();
+            }
             if (BikeProfile == null)
             {
                 Debug.LogError("PlaySession: не задан профиль байка — играть нечем.");
@@ -106,11 +133,20 @@ namespace ChartRunner.Game
             // между героем, землёй и фоном, на которой силуэт вообще может читаться.
             var world = new GameObject("World").transform;
             TrackBuilder.Build(_track, BikeProfile.tyreFriction).transform.SetParent(world, true);
-            TerrainView.Build(_track, world,
-                new Color(0.085f, 0.075f, 0.105f, 1f),   // гребень: чуть светлее подножия
-                new Color(0.028f, 0.026f, 0.042f, 1f),   // подножие: почти чёрное
-                new Color(1f, 0.68f, 0.34f, 1f),         // горячая кромка от солнца
-                0.11f);
+            if (_candles != null)
+            {
+                // Земля СОСТОИТ из свечей. Тела рисуются между теми же узлами, по которым
+                // построена коллизия, поэтому игрок едет ровно по тому, что видит.
+                CandleView.Build(_track, _candles, world);
+            }
+            else
+            {
+                TerrainView.Build(_track, world,
+                    new Color(0.085f, 0.075f, 0.105f, 1f),   // гребень: чуть светлее подножия
+                    new Color(0.028f, 0.026f, 0.042f, 1f),   // подножие: почти чёрное
+                    new Color(1f, 0.68f, 0.34f, 1f),         // горячая кромка от солнца
+                    0.11f);
+            }
             TerrainView.BuildMarkers(_track, world, new Color(1f, 0.80f, 0.42f, 1f));
 
             // ---- байк ----
@@ -204,9 +240,9 @@ namespace ChartRunner.Game
         /// </summary>
         private void SwitchTrack()
         {
-            Selected = Selected == TrackChoice.Crux30
-                ? TrackChoice.VerticalSlice
-                : TrackChoice.Crux30;
+            Selected = Selected == TrackChoice.Chart ? TrackChoice.Crux30
+                : Selected == TrackChoice.Crux30 ? TrackChoice.VerticalSlice
+                : TrackChoice.Chart;
             UnityEngine.SceneManagement.SceneManager.LoadScene(
                 UnityEngine.SceneManagement.SceneManager.GetActiveScene().buildIndex);
         }
@@ -259,7 +295,8 @@ namespace ChartRunner.Game
                 pct.ToString("0") + " %   " + (st.SpeedMPerS * 3.6f).ToString("0") + " км/ч", _hud);
             GUI.Label(new Rect(14f, 32f, 260f, 22f),
                 "попытка " + _attempts + "   " + (Time.time - _runStartedAt).ToString("0.0") + " с"
-                + "   " + (Selected == TrackChoice.Crux30 ? "крукс-30" : "VS-315"), _hud);
+                + "   " + (Selected == TrackChoice.Chart ? "график"
+                    : Selected == TrackChoice.Crux30 ? "крукс-30" : "VS-315"), _hud);
 
             // Индикатор переноса веса: игрок обязан видеть, что он реально приложил,
             // иначе «я же наклонял» и «наклон приложился» неразличимы, и учиться не на чем.
@@ -312,15 +349,27 @@ namespace ChartRunner.Game
         {
             const float h = 932f;
             const float w = 430f;
-            var zoneTop = h * 0.62f;
+            // Полоса зон занимает нижнюю пятую кадра, а не треть: в первой редакции
+            // полупрозрачная заливка на 38 % высоты выбеливала игровое поле и спорила
+            // со свечами. Зоны обязаны быть понятны и не обязаны быть заметны.
+            var zoneTop = h * 0.80f;
 
             var brakeOn = st.BrakeApplied > 0.01f;
             var gasOn = st.ThrottleApplied > 0.01f;
 
-            GUI.color = new Color(1f, 1f, 1f, brakeOn ? 0.16f : 0.05f);
-            GUI.DrawTexture(new Rect(0f, zoneTop, w * 0.5f, h - zoneTop), Texture2D.whiteTexture);
-            GUI.color = new Color(1f, 1f, 1f, gasOn ? 0.16f : 0.05f);
-            GUI.DrawTexture(new Rect(w * 0.5f, zoneTop, w * 0.5f, h - zoneTop), Texture2D.whiteTexture);
+            // В ПОКОЕ ЗАЛИВКИ НЕТ. Даже 3.5 % белого поверх почти чёрного грунта читались
+            // светлой плашкой на пятой части кадра — панель забирала себе низ композиции.
+            // Подсветка появляется только на нажатии, и тогда она несёт информацию.
+            if (brakeOn)
+            {
+                GUI.color = new Color(0.62f, 0.80f, 1f, 0.15f);
+                GUI.DrawTexture(new Rect(0f, zoneTop, w * 0.5f, h - zoneTop), Texture2D.whiteTexture);
+            }
+            if (gasOn)
+            {
+                GUI.color = new Color(1f, 0.78f, 0.34f, 0.15f);
+                GUI.DrawTexture(new Rect(w * 0.5f, zoneTop, w * 0.5f, h - zoneTop), Texture2D.whiteTexture);
+            }
             GUI.color = Color.white;
 
             EnsureStyles();
@@ -332,9 +381,10 @@ namespace ChartRunner.Game
             _zone.normal.textColor = new Color(0.86f, 0.93f, 0.98f, 0.40f);
             GUI.Label(new Rect(0f, h - 44f, w, 26f), "палец вверх/вниз — перенос веса", _zone);
 
-            // Разделитель половин: без него граница зон угадывается, а не видна.
-            GUI.color = new Color(1f, 1f, 1f, 0.10f);
-            GUI.DrawTexture(new Rect(w * 0.5f - 0.5f, zoneTop, 1f, h - zoneTop), Texture2D.whiteTexture);
+            // Разделитель половин — тонкая линия вместо заливки: границу зон надо ПОКАЗАТЬ,
+            // а не занять ею кадр.
+            GUI.color = new Color(1f, 1f, 1f, 0.14f);
+            GUI.DrawTexture(new Rect(w * 0.5f - 0.5f, h - 96f, 1f, 72f), Texture2D.whiteTexture);
             GUI.color = Color.white;
         }
 

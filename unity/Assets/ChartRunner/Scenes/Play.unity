@@ -119,7 +119,7 @@ NavMeshSettings:
     debug:
       m_Flags: 0
   m_NavMeshData: {fileID: 0}
---- !u!1 &1639721293
+--- !u!1 &1918832695
 GameObject:
   m_ObjectHideFlags: 0
   m_CorrespondingSourceObject: {fileID: 0}
@@ -127,8 +127,8 @@ GameObject:
   m_PrefabAsset: {fileID: 0}
   serializedVersion: 6
   m_Component:
-  - component: {fileID: 1639721295}
-  - component: {fileID: 1639721294}
+  - component: {fileID: 1918832697}
+  - component: {fileID: 1918832696}
   m_Layer: 0
   m_Name: PlaySession
   m_TagString: Untagged
@@ -136,13 +136,13 @@ GameObject:
   m_NavMeshLayer: 0
   m_StaticEditorFlags: 0
   m_IsActive: 1
---- !u!114 &1639721294
+--- !u!114 &1918832696
 MonoBehaviour:
   m_ObjectHideFlags: 0
   m_CorrespondingSourceObject: {fileID: 0}
   m_PrefabInstance: {fileID: 0}
   m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 1639721293}
+  m_GameObject: {fileID: 1918832695}
   m_Enabled: 1
   m_EditorHideFlags: 0
   m_Script: {fileID: 11500000, guid: 4e6b496c5d049489285a1afa89c88d38, type: 3}
@@ -153,14 +153,17 @@ MonoBehaviour:
   Track: {fileID: 11400000, guid: efb9133f6328041b080e020e217adafd, type: 2}
   RestartDelaySeconds: 1.1
   RestartAtCheckpoint: 1
+  CandleProfile: {fileID: 11400000, guid: e0a46546ff5794a979219ab1a3830594, type: 2}
+  ChartSeed: 20260806
+  ChartCandles: 700
   HeroScreenFraction: 0.125
---- !u!4 &1639721295
+--- !u!4 &1918832697
 Transform:
   m_ObjectHideFlags: 0
   m_CorrespondingSourceObject: {fileID: 0}
   m_PrefabInstance: {fileID: 0}
   m_PrefabAsset: {fileID: 0}
-  m_GameObject: {fileID: 1639721293}
+  m_GameObject: {fileID: 1918832695}
   serializedVersion: 2
   m_LocalRotation: {x: 0, y: 0, z: 0, w: 1}
   m_LocalPosition: {x: 0, y: 0, z: 0}
@@ -173,4 +176,4 @@ Transform:
 SceneRoots:
   m_ObjectHideFlags: 0
   m_Roots:
-  - {fileID: 1639721295}
+  - {fileID: 1918832697}

@@ -1,0 +1,30 @@
+Unity Editor version:    6000.3.20f1 (c9ba695d4f07)
+Branch:                  6000.3/staging
+Build type:              Release
+Batch mode:              YES
+macOS version:           Version 26.5.2 (Build 25F84)
+Darwin version:          25.5.0
+Architecture:            x86_64
+Running under Rosetta:   YES
+Available memory:        8192 MB
+Date:                    2026-08-06T15:16:37Z
+[Licensing::Module] Trying to connect to existing licensing client channel...
+[Licensing::IpcConnector] Channel LicenseClient-macbook doesn't exist
+Launching external process: /Applications/Unity/Hub/Editor/6000.3.20f1/Unity.app/Contents/Helpers/UnityLicensingClient.app/Contents/MacOS/Unity.Licensing.Client
+[Licensing::Module] Successfully launched the LicensingClient (PId: 12823)
+Launching external process: /Applications/Unity/Hub/Editor/6000.3.20f1/Unity.app/Contents/Resources/PackageManager/Server/UnityPackageManager
+
+COMMAND LINE ARGUMENTS:
+/Applications/Unity/Hub/Editor/6000.3.20f1/Unity.app/Contents/MacOS/Unity
+-batchmode
+-nographics
+-buildTarget
+OSXUniversal
+-projectPath
+/Users/macbook/project/cryptobill/unity/unity
+-executeMethod
+ChartRunner.EditorTools.DeviceBuilder.BuildMac
+-logFile
+/Users/macbook/project/cryptobill/unity/unity/Logs/mac9.log
+Couldn't set project path to: 
+[Package Manager] Server process was shutdown
