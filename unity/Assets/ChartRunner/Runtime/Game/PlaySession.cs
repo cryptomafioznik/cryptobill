@@ -142,6 +142,7 @@ namespace ChartRunner.Game
             // размер квада берётся из уже настроенного orthographicSize.
             SkyView.Attach(_camera, _track.EndM);
             ContactShadow.Attach(_controller, _sampler, world);
+            WheelDust.Attach(_controller, _sampler, world);
 
             _runStartedAt = Time.time;
             _attempts = 1;

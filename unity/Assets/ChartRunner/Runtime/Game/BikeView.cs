@@ -51,6 +51,8 @@ namespace ChartRunner.Game
         private Transform _riderHost;
         private MeshFilter _riderFilter;
         private Mesh _riderMesh;
+        private MeshFilter _linkageFilter;
+        private Mesh _linkageMesh;
 
         private float _halfWb;
         private float _wheelR;
@@ -78,6 +80,17 @@ namespace ChartRunner.Game
             BuildWheel(_rig.RearWheel.transform, _wheelR, "RearWheelView");
             BuildWheel(_rig.FrontWheel.transform, _wheelR, "FrontWheelView");
             BuildFrame(transform);
+
+            var linkHost = new GameObject("LinkageView");
+            linkHost.transform.SetParent(transform, false);
+            _linkageMesh = new Mesh { name = "Linkage" };
+            var lmf = linkHost.AddComponent<MeshFilter>();
+            lmf.sharedMesh = _linkageMesh;
+            var lmr = linkHost.AddComponent<MeshRenderer>();
+            lmr.sharedMaterial = Shapes.VertexColorMaterial;
+            // Между колёсами (10) и рамой (11): подвеска уходит ЗА раму и ПЕРЕД колесом.
+            lmr.sortingOrder = 10;
+            _linkageFilter = lmf;
 
             var host = new GameObject("RiderView");
             host.transform.SetParent(transform, false);
@@ -176,16 +189,12 @@ namespace ChartRunner.Game
             var mid = FrameMid;
 
             // ---- тело байка: почти чёрное, потому что оно в тени ----
-
-            // Маятник: от пивота к задней оси. Настоящая линия, а не «хвост» —
-            // именно её длина держит визуальную базу равной физической.
-            Shapes.AddBar(v, c, t, SwingPivot, RearAxle, 0.11f, mid);
-
-            // Вилка: от рулевой колонки к передней оси. Угол получается сам из точек,
-            // поэтому rake не приходится задавать отдельным числом и рассинхронизировать.
-            Shapes.AddBar(v, c, t, SteerHead, FrontAxle, 0.085f, mid);
-            Shapes.AddBar(v, c, t, SteerHead + new Vector2(0.02f, -0.02f),
-                Vector2.Lerp(SteerHead, FrontAxle, 0.55f), 0.13f, dark);
+            //
+            // МАЯТНИКА И ВИЛКИ ЗДЕСЬ НЕТ. Они пересобираются каждый кадр в RebuildLinkage,
+            // потому что целятся в ФАКТИЧЕСКОЕ положение колёс, а колёса ходят на подвеске.
+            // Нарисовать их от фиксированных точек шасси — это ровно тот дефект, на котором
+            // дважды развалился cutout-риг: «вилка и маятник растягивались между повёрнутым
+            // пивотом и неповёрнутой осью». Здесь точка крепления ВЫЧИСЛЯЕТСЯ, а не задаётся.
 
             // Двигатель и рама — сплошной объём, читается блоком на любом размере.
             Shapes.AddFan(v, c, t, new[]
@@ -260,7 +269,54 @@ namespace ChartRunner.Game
             // Поза следует за физическим переносом веса, а не за кнопкой: то, что видит
             // игрок, обязано быть тем, что реально приложено к телу.
             _poseShift = Mathf.MoveTowards(_poseShift, st.WeightShift, Time.deltaTime * 4.5f);
+            RebuildLinkage();
             RebuildRider(_poseShift, st);
+        }
+
+        /// <summary>
+        /// Маятник и вилка, нацеленные в ФАКТИЧЕСКИЕ оси колёс.
+        ///
+        /// Колёса — отдельные тела на WheelJoint2D, они ходят по подвеске независимо от
+        /// шасси. Поэтому их положение берётся из мира и переводится в локальные координаты
+        /// шасси КАЖДЫЙ кадр. Следствие, ради которого всё и делается: ход подвески видно.
+        /// Маятник поворачивается на кочке, вилка складывается на приземлении — то есть
+        /// игрок читает нагрузку, а не догадывается о ней.
+        /// </summary>
+        private void RebuildLinkage()
+        {
+            if (_linkageFilter == null || _rig == null) return;
+
+            var rear = (Vector2)transform.InverseTransformPoint(_rig.RearWheel.position);
+            var front = (Vector2)transform.InverseTransformPoint(_rig.FrontWheel.position);
+
+            var v = new List<Vector3>();
+            var c = new List<Color>();
+            var t = new List<int>();
+
+            var mid = FrameMid;
+
+            // Маятник: пивот → фактическая задняя ось.
+            Shapes.AddBar(v, c, t, SwingPivot, rear, 0.11f, mid);
+            Shapes.AddDisc(v, c, t, SwingPivot, 0.06f, mid, 10);
+
+            // Вилка: рулевая колонка → фактическая передняя ось. Угол наклона вилки
+            // получается сам из двух точек, поэтому rake не нужно задавать отдельным
+            // числом и незачем держать его в синхроне вручную.
+            Shapes.AddBar(v, c, t, SteerHead, front, 0.085f, mid);
+            Shapes.AddBar(v, c, t, SteerHead + new Vector2(0.02f, -0.02f),
+                Vector2.Lerp(SteerHead, front, 0.55f), 0.13f, FrameColor);
+
+            // Горячая кромка по задней стороне маятника — единственная обводка здесь:
+            // остальные линии подвески проходят внутри силуэта.
+            Shapes.AddBar(v, c, t, SwingPivot + new Vector2(0f, 0.055f),
+                rear + new Vector2(0f, 0.055f), RimWidthM * 0.8f, RimLight);
+
+            _linkageMesh.Clear();
+            _linkageMesh.SetVertices(v);
+            _linkageMesh.SetColors(c);
+            _linkageMesh.SetTriangles(t, 0);
+            _linkageMesh.RecalculateBounds();
+            _linkageFilter.sharedMesh = _linkageMesh;
         }
 
         private void RebuildRider(float shift, Bike.BikeState st)

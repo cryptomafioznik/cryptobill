@@ -50,6 +50,37 @@ namespace ChartRunner.Game
 
             var root = Shapes.Create("TerrainFill", parent, Shapes.Build("TerrainFill", v, c, t), -20);
 
+            // ---- слои породы ----
+            //
+            // Нижняя треть кадра без них — чёрная пустота: снятый кадр показал, что земля
+            // читается провалом, а не поверхностью. Слои идут ПАРАЛЛЕЛЬНО рельефу, а не
+            // горизонтально: так залегает осадочная порода на склоне, и заодно они
+            // подчёркивают форму рельефа вместо того, чтобы спорить с ней.
+            //
+            // Контраст намеренно на пределе различимости: задача — дать поверхности
+            // материал, а не рисунок. Всё, что ярче, начнёт конкурировать с силуэтом героя.
+            var sv = new List<Vector3>();
+            var sc = new List<Color>();
+            var stt = new List<int>();
+            var strata = new[] { 0.55f, 1.35f, 2.40f, 3.80f, 5.60f };
+            for (var s = 0; s < strata.Length; s++)
+            {
+                var depth = strata[s];
+                var fade = 1f - s / (float)strata.Length;
+                var band = new Color(fillTop.r * (1f + 0.55f * fade),
+                    fillTop.g * (1f + 0.45f * fade), fillTop.b * (1f + 0.40f * fade), 1f);
+                for (var i = 0; i < pts.Count - 1; i++)
+                {
+                    Shapes.AddBar(sv, sc, stt,
+                        pts[i] + new Vector2(0f, -depth),
+                        pts[i + 1] + new Vector2(0f, -depth),
+                        0.07f + s * 0.02f, band);
+                }
+            }
+            var strataGo = Shapes.Create("TerrainStrata", root.transform,
+                Shapes.Build("TerrainStrata", sv, sc, stt), -19);
+            strataGo.transform.localPosition = new Vector3(0f, 0f, -0.005f);
+
             // ---- кромка ----
             var ev = new List<Vector3>();
             var ec = new List<Color>();
