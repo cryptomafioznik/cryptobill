@@ -44,9 +44,15 @@ xcodebuild \
   -derivedDataPath "$DD" \
   -allowProvisioningUpdates \
   DEVELOPMENT_TEAM="$TEAM" \
-  PRODUCT_BUNDLE_IDENTIFIER="$BUNDLE" \
   CODE_SIGN_STYLE=Automatic \
   build 2>&1 | tail -25
+
+# PRODUCT_BUNDLE_IDENTIFIER здесь НЕ передаётся намеренно. Настройка в командной строке
+# xcodebuild применяется ко ВСЕМ таргетам проекта, поэтому UnityFramework.framework получал
+# тот же идентификатор, что и приложение, и установка падала:
+#   «The parent bundle has the same identifier as sub-bundle .../UnityFramework.framework»
+#   (MIInstallerErrorDomain 57, DuplicateIdentifier).
+# Идентификаторы по таргетам расставляет сам Unity из PlayerSettings — см. DeviceBuilder.
 
 APP="$(find "$DD/Build/Products" -maxdepth 2 -name "*.app" -type d | head -1)"
 if [ -z "$APP" ]; then
