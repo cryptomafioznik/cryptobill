@@ -1,0 +1,474 @@
+<?xml version="1.0" encoding="utf-8"?>
+<test-run id="2" testcasecount="30" result="Failed(Child)" total="30" passed="29" failed="1" inconclusive="0" skipped="0" asserts="0" engine-version="3.5.0.0" clr-version="4.0.30319.42000" start-time="2026-08-06 02:12:55Z" end-time="2026-08-06 02:21:02Z" duration="486.4600059">
+  <test-suite type="TestSuite" id="1043" name="2D_URP" fullname="2D_URP" runstate="Runnable" testcasecount="30" result="Failed" site="Child" start-time="2026-08-06 02:12:55Z" end-time="2026-08-06 02:21:02Z" duration="486.460006" total="30" passed="29" failed="1" inconclusive="0" skipped="0" asserts="0">
+    <properties>
+      <property name="platform" value="PlayMode" />
+    </properties>
+    <failure>
+      <message><![CDATA[One or more child tests had errors]]></message>
+    </failure>
+    <test-suite type="Assembly" id="1037" name="ChartRunner.Tests.PlayMode.dll" fullname="/Users/macbook/project/cryptobill/unity/Library/ScriptAssemblies/ChartRunner.Tests.PlayMode.dll" runstate="Runnable" testcasecount="30" result="Failed" site="Child" start-time="2026-08-06 02:12:55Z" end-time="2026-08-06 02:21:02Z" duration="486.441328" total="30" passed="29" failed="1" inconclusive="0" skipped="0" asserts="0">
+      <properties>
+        <property name="_PID" value="14584" />
+        <property name="_APPDOMAIN" value="Unity Child Domain" />
+        <property name="platform" value="PlayMode" />
+        <property name="EditorOnly" value="False" />
+      </properties>
+      <failure>
+        <message><![CDATA[One or more child tests had errors]]></message>
+      </failure>
+      <test-suite type="TestSuite" id="1038" name="ChartRunner" fullname="ChartRunner" runstate="Runnable" testcasecount="30" result="Failed" site="Child" start-time="2026-08-06 02:12:55Z" end-time="2026-08-06 02:21:02Z" duration="486.439214" total="30" passed="29" failed="1" inconclusive="0" skipped="0" asserts="0">
+        <properties />
+        <failure>
+          <message><![CDATA[One or more child tests had errors]]></message>
+        </failure>
+        <test-suite type="TestSuite" id="1039" name="Tests" fullname="ChartRunner.Tests" runstate="Runnable" testcasecount="30" result="Failed" site="Child" start-time="2026-08-06 02:12:55Z" end-time="2026-08-06 02:21:02Z" duration="486.438650" total="30" passed="29" failed="1" inconclusive="0" skipped="0" asserts="0">
+          <properties />
+          <failure>
+            <message><![CDATA[One or more child tests had errors]]></message>
+          </failure>
+          <test-suite type="TestFixture" id="1001" name="AcceptanceBattery" fullname="ChartRunner.Tests.AcceptanceBattery" classname="ChartRunner.Tests.AcceptanceBattery" runstate="Runnable" testcasecount="8" result="Failed" site="Child" start-time="2026-08-06 02:12:55Z" end-time="2026-08-06 02:15:52Z" duration="176.925816" total="8" passed="7" failed="1" inconclusive="0" skipped="0" asserts="0">
+            <properties />
+            <failure>
+              <message><![CDATA[One or more child tests had errors]]></message>
+            </failure>
+            <test-case id="1002" name="A_AccelerationOnFlat" fullname="ChartRunner.Tests.AcceptanceBattery.A_AccelerationOnFlat" methodname="A_AccelerationOnFlat" classname="ChartRunner.Tests.AcceptanceBattery" runstate="Runnable" seed="1186778622" result="Passed" start-time="2026-08-06 02:12:55Z" end-time="2026-08-06 02:13:05Z" duration="10.098335" asserts="0">
+              <properties>
+                <property name="_JOINTYPE" value="UnityCombinatorial" />
+                <property name="Timeout" value="180000" />
+                <property name="retryIteration" value="0" />
+                <property name="repeatIteration" value="0" />
+              </properties>
+            </test-case>
+            <test-case id="1003" name="B_StandingStartOnClimb" fullname="ChartRunner.Tests.AcceptanceBattery.B_StandingStartOnClimb" methodname="B_StandingStartOnClimb" classname="ChartRunner.Tests.AcceptanceBattery" runstate="Runnable" seed="17374190" result="Passed" start-time="2026-08-06 02:13:05Z" end-time="2026-08-06 02:13:16Z" duration="10.310518" asserts="0">
+              <properties>
+                <property name="_JOINTYPE" value="UnityCombinatorial" />
+                <property name="Timeout" value="180000" />
+                <property name="retryIteration" value="0" />
+                <property name="repeatIteration" value="0" />
+              </properties>
+            </test-case>
+            <test-case id="1004" name="C_JumpAndLanding" fullname="ChartRunner.Tests.AcceptanceBattery.C_JumpAndLanding" methodname="C_JumpAndLanding" classname="ChartRunner.Tests.AcceptanceBattery" runstate="Runnable" seed="1476975861" result="Passed" start-time="2026-08-06 02:13:16Z" end-time="2026-08-06 02:13:23Z" duration="7.048749" asserts="0">
+              <properties>
+                <property name="_JOINTYPE" value="UnityCombinatorial" />
+                <property name="Timeout" value="180000" />
+                <property name="retryIteration" value="0" />
+                <property name="repeatIteration" value="0" />
+              </properties>
+            </test-case>
+            <test-case id="1005" name="D_SmallBumps" fullname="ChartRunner.Tests.AcceptanceBattery.D_SmallBumps" methodname="D_SmallBumps" classname="ChartRunner.Tests.AcceptanceBattery" runstate="Runnable" seed="1386403894" result="Passed" start-time="2026-08-06 02:13:23Z" end-time="2026-08-06 02:13:35Z" duration="12.598324" asserts="0">
+              <properties>
+                <property name="_JOINTYPE" value="UnityCombinatorial" />
+                <property name="Timeout" value="180000" />
+                <property name="retryIteration" value="0" />
+                <property name="repeatIteration" value="0" />
+              </properties>
+            </test-case>
+            <test-case id="1006" name="E_CrashAndRestart" fullname="ChartRunner.Tests.AcceptanceBattery.E_CrashAndRestart" methodname="E_CrashAndRestart" classname="ChartRunner.Tests.AcceptanceBattery" runstate="Runnable" seed="1840014656" result="Passed" start-time="2026-08-06 02:13:35Z" end-time="2026-08-06 02:13:40Z" duration="5.012591" asserts="0">
+              <properties>
+                <property name="_JOINTYPE" value="UnityCombinatorial" />
+                <property name="Timeout" value="180000" />
+                <property name="retryIteration" value="0" />
+                <property name="repeatIteration" value="0" />
+              </properties>
+            </test-case>
+            <test-case id="1007" name="F_FrameRateIndependence" fullname="ChartRunner.Tests.AcceptanceBattery.F_FrameRateIndependence" methodname="F_FrameRateIndependence" classname="ChartRunner.Tests.AcceptanceBattery" runstate="Runnable" seed="2051499840" result="Passed" start-time="2026-08-06 02:13:40Z" end-time="2026-08-06 02:13:49Z" duration="9.058580" asserts="0">
+              <properties>
+                <property name="_JOINTYPE" value="UnityCombinatorial" />
+                <property name="Timeout" value="300000" />
+                <property name="retryIteration" value="0" />
+                <property name="repeatIteration" value="0" />
+              </properties>
+            </test-case>
+            <test-case id="1008" name="G_SkillWindow" fullname="ChartRunner.Tests.AcceptanceBattery.G_SkillWindow" methodname="G_SkillWindow" classname="ChartRunner.Tests.AcceptanceBattery" runstate="Runnable" seed="1794079389" result="Passed" start-time="2026-08-06 02:13:49Z" end-time="2026-08-06 02:15:11Z" duration="82.130859" asserts="0">
+              <properties>
+                <property name="_JOINTYPE" value="UnityCombinatorial" />
+                <property name="Timeout" value="600000" />
+                <property name="retryIteration" value="0" />
+                <property name="repeatIteration" value="0" />
+              </properties>
+            </test-case>
+            <test-case id="1009" name="H_RecoveryWindow" fullname="ChartRunner.Tests.AcceptanceBattery.H_RecoveryWindow" methodname="H_RecoveryWindow" classname="ChartRunner.Tests.AcceptanceBattery" runstate="Runnable" seed="1926580671" result="Failed" start-time="2026-08-06 02:15:11Z" end-time="2026-08-06 02:15:52Z" duration="40.576167" asserts="0">
+              <properties>
+                <property name="_JOINTYPE" value="UnityCombinatorial" />
+                <property name="Timeout" value="600000" />
+                <property name="retryIteration" value="0" />
+                <property name="repeatIteration" value="0" />
+              </properties>
+              <failure>
+                <message><![CDATA[  окно восстановления 0.53 с должно быть ≥ 1.5 с
+  Expected: greater than or equal to 1.5f
+  But was:  0.533325195f
+]]></message>
+                <stack-trace><![CDATA[at ChartRunner.Tests.AcceptanceBattery+<H_RecoveryWindow>d__19.MoveNext () [0x0033f] in /Users/macbook/project/cryptobill/unity/Assets/ChartRunner/Tests/PlayMode/AcceptanceBattery.cs:535
+at UnityEngine.TestTools.TestEnumerator+<Execute>d__7.MoveNext () [0x0003a] in ./Library/PackageCache/com.unity.test-framework@bd7f943e9647/UnityEngine.TestRunner/NUnitExtensions/Attributes/TestEnumerator.cs:44
+]]></stack-trace>
+              </failure>
+              <output><![CDATA[ACCEPTANCE REPORT записан: /Users/macbook/project/cryptobill/docs/unity-acceptance-report.md
+# ОТЧЁТ ПРИЁМОЧНОЙ БАТАРЕИ (Unity)
+
+Сгенерирован автоматически из `AcceptanceBattery` при прогоне
+`-runTests -testPlatform PlayMode`. Править руками бессмысленно — перезапишется.
+
+Unity 6000.3.20f1 · fixedDeltaTime 0.01667 · gravity -26.46 м/с²
+
+Тесты A-F — из хендоффа `docs/UNITY-MIGRATION-START-HERE.md` §3 пункт 8.
+Тесты G и H добавлены в `docs/TECH_DEBT.md` §4: батарея A-F проверяет только,
+что физика не сломана, и ни один её тест не проверяет, что она интересна.
+
+| Тест | Что мерится | Измерено | Гейт | Итог |
+|---|---|---|---|---|
+| A | крейсер на ровном, полный газ | 6.216 м/с (22.4 км/ч), 90 % за 0.38 с | эталон исходника 6.271 м/с ±10 % | прошёл |
+| B | заезд на 45° со стоячего старта | доехал, мин. скорость на подъёме 4.95 м/с | доехать и ни разу не съехать назад | прошёл |
+| C | отрыв с вогнутого липа и посадка | воздух 0.250 с, сел да, макс сжатие подвески 0.383 м, отказ None | воздух ≥ 0.2 с, посадка без краша | прошёл |
+| D | серия вупсов до −35.6° без застревания и краша | прошёл секцию, доля воздуха 0.001, макс тангаж к склону 11.7°, отказ None | пройти секцию без отказа | прошёл |
+| E | отказ, остановка, сброс и повторный ход | отказ получен, остановка да; после сброса скорость 6.22 м/с, контактов 2 | довести до отказа, сбросить, снова поехать | прошёл |
+| F | траектория при 30 / 60 / 120 Гц (расхождение с 60 Гц) | 30 Гц: 0.168 м, 120 Гц: 0.086 м — макс 0.168 м на 3 с прогона | < 2.5 м (ловит возврат к покадровой физике) | прошёл |
+
+**G — измерение, а не гейт.** Порог здесь НЕ назначен, и это осознанно.
+Прежнее «+46.2 %» из хендоффа §5 воспроизвести нельзя: «нейтраль» — это политика
+`gas`, и она воспроизводится точно (2468 / 2433 px на КРОСС 250), а «реактивная»
+политика, давшая 3053 / 3558, в поставленном коде отсутствует и её определение
+не записано нигде. Назначать порог по числу без метода — тот самоподтверждающийся
+критерий, который проекту уже дорого обошёлся. Здесь зафиксировано ПЕРВОЕ
+измерение своей политики WEIGHT на настоящей трассе; порог назначается после
+разговора с пользователем, от этого числа с запасом.
+
+| политика | дистанция | % трассы | время | отказ |
+|---|---|---|---|---|
+| NEUTRAL (газ, вес ≡ 0) | 271.9 м | 86.3 % | 40.53 с | Loop |
+| WEIGHT (газ, вес реактивно) | 271.9 м | 86.3 % | 41.57 с | Loop |
+| **выигрыш веса** | **0.0 %** | | | |
+
+| G | окно навыка на дизайн-трассе: WEIGHT против NEUTRAL | NEUTRAL 86.3 % трассы, WEIGHT 86.3 %, выигрыш 0.0 % | порог НЕ назначен — см. примечание | **измерено, окно НЕ продемонстрировано** |
+| H | окно от нос-вверх (20° к склону) до невозврата, газ зажат | 0.53 с (нос-вверх 40.00 с, отказ Loop на 271.7 м в 40.53 с) | ≥ 1.5 с (аудит §14.1) | **НЕ ПРОШЁЛ** |
+]]></output>
+            </test-case>
+          </test-suite>
+          <test-suite type="TestFixture" id="1010" name="BikePhysicsTests" fullname="ChartRunner.Tests.BikePhysicsTests" classname="ChartRunner.Tests.BikePhysicsTests" runstate="Runnable" testcasecount="8" result="Passed" start-time="2026-08-06 02:15:52Z" end-time="2026-08-06 02:16:17Z" duration="24.826703" total="8" passed="8" failed="0" inconclusive="0" skipped="0" asserts="0">
+            <properties />
+            <test-case id="1012" name="Bike_RestsOnFlatGround_WithoutSinkingOrDrifting" fullname="ChartRunner.Tests.BikePhysicsTests.Bike_RestsOnFlatGround_WithoutSinkingOrDrifting" methodname="Bike_RestsOnFlatGround_WithoutSinkingOrDrifting" classname="ChartRunner.Tests.BikePhysicsTests" runstate="Runnable" seed="1204535029" result="Passed" start-time="2026-08-06 02:15:52Z" end-time="2026-08-06 02:15:56Z" duration="4.016189" asserts="0">
+              <properties>
+                <property name="_JOINTYPE" value="UnityCombinatorial" />
+                <property name="retryIteration" value="0" />
+                <property name="repeatIteration" value="0" />
+              </properties>
+            </test-case>
+            <test-case id="1018" name="FailHold_GivesRecoveryWindow_NotInstantDeath" fullname="ChartRunner.Tests.BikePhysicsTests.FailHold_GivesRecoveryWindow_NotInstantDeath" methodname="FailHold_GivesRecoveryWindow_NotInstantDeath" classname="ChartRunner.Tests.BikePhysicsTests" runstate="Runnable" seed="397030311" result="Passed" start-time="2026-08-06 02:15:56Z" end-time="2026-08-06 02:15:57Z" duration="1.017865" asserts="0">
+              <properties>
+                <property name="_JOINTYPE" value="UnityCombinatorial" />
+                <property name="retryIteration" value="0" />
+                <property name="repeatIteration" value="0" />
+              </properties>
+            </test-case>
+            <test-case id="1011" name="Gravity_MatchesUnitsContract" fullname="ChartRunner.Tests.BikePhysicsTests.Gravity_MatchesUnitsContract" methodname="Gravity_MatchesUnitsContract" classname="ChartRunner.Tests.BikePhysicsTests" runstate="Runnable" seed="756007449" result="Passed" start-time="2026-08-06 02:15:57Z" end-time="2026-08-06 02:15:58Z" duration="0.514705" asserts="0">
+              <properties>
+                <property name="_JOINTYPE" value="UnityCombinatorial" />
+                <property name="retryIteration" value="0" />
+                <property name="repeatIteration" value="0" />
+              </properties>
+            </test-case>
+            <test-case id="1017" name="Reset_ClearsHiddenState_TrajectoriesMatch" fullname="ChartRunner.Tests.BikePhysicsTests.Reset_ClearsHiddenState_TrajectoriesMatch" methodname="Reset_ClearsHiddenState_TrajectoriesMatch" classname="ChartRunner.Tests.BikePhysicsTests" runstate="Runnable" seed="1700341615" result="Passed" start-time="2026-08-06 02:15:58Z" end-time="2026-08-06 02:16:06Z" duration="8.002142" asserts="0">
+              <properties>
+                <property name="_JOINTYPE" value="UnityCombinatorial" />
+                <property name="retryIteration" value="0" />
+                <property name="repeatIteration" value="0" />
+              </properties>
+            </test-case>
+            <test-case id="1013" name="RestingBike_CarriesFullWeightOnWheels" fullname="ChartRunner.Tests.BikePhysicsTests.RestingBike_CarriesFullWeightOnWheels" methodname="RestingBike_CarriesFullWeightOnWheels" classname="ChartRunner.Tests.BikePhysicsTests" runstate="Runnable" seed="1766590389" result="Passed" start-time="2026-08-06 02:16:06Z" end-time="2026-08-06 02:16:10Z" duration="3.999882" asserts="0">
+              <properties>
+                <property name="_JOINTYPE" value="UnityCombinatorial" />
+                <property name="retryIteration" value="0" />
+                <property name="repeatIteration" value="0" />
+              </properties>
+            </test-case>
+            <test-case id="1015" name="ThrottleInAir_ProducesNoForwardAcceleration" fullname="ChartRunner.Tests.BikePhysicsTests.ThrottleInAir_ProducesNoForwardAcceleration" methodname="ThrottleInAir_ProducesNoForwardAcceleration" classname="ChartRunner.Tests.BikePhysicsTests" runstate="Runnable" seed="713493580" result="Passed" start-time="2026-08-06 02:16:10Z" end-time="2026-08-06 02:16:11Z" duration="1.413033" asserts="0">
+              <properties>
+                <property name="_JOINTYPE" value="UnityCombinatorial" />
+                <property name="retryIteration" value="0" />
+                <property name="repeatIteration" value="0" />
+              </properties>
+            </test-case>
+            <test-case id="1016" name="ThrottleRamp_IsTimeBased_NotPerFrame" fullname="ChartRunner.Tests.BikePhysicsTests.ThrottleRamp_IsTimeBased_NotPerFrame" methodname="ThrottleRamp_IsTimeBased_NotPerFrame" classname="ChartRunner.Tests.BikePhysicsTests" runstate="Runnable" seed="2120356379" result="Passed" start-time="2026-08-06 02:16:11Z" end-time="2026-08-06 02:16:12Z" duration="0.600083" asserts="0">
+              <properties>
+                <property name="_JOINTYPE" value="UnityCombinatorial" />
+                <property name="retryIteration" value="0" />
+                <property name="repeatIteration" value="0" />
+              </properties>
+            </test-case>
+            <test-case id="1014" name="WeightShiftBack_IncreasesRearLoad_EmergentDriveTrade" fullname="ChartRunner.Tests.BikePhysicsTests.WeightShiftBack_IncreasesRearLoad_EmergentDriveTrade" methodname="WeightShiftBack_IncreasesRearLoad_EmergentDriveTrade" classname="ChartRunner.Tests.BikePhysicsTests" runstate="Runnable" seed="1342682717" result="Passed" start-time="2026-08-06 02:16:12Z" end-time="2026-08-06 02:16:17Z" duration="5.253446" asserts="0">
+              <properties>
+                <property name="_JOINTYPE" value="UnityCombinatorial" />
+                <property name="retryIteration" value="0" />
+                <property name="repeatIteration" value="0" />
+              </properties>
+            </test-case>
+          </test-suite>
+          <test-suite type="TestFixture" id="1019" name="CalibrationProbe" fullname="ChartRunner.Tests.CalibrationProbe" classname="ChartRunner.Tests.CalibrationProbe" runstate="Runnable" testcasecount="3" result="Passed" start-time="2026-08-06 02:16:17Z" end-time="2026-08-06 02:19:12Z" duration="174.813843" total="3" passed="3" failed="0" inconclusive="0" skipped="0" asserts="0">
+            <properties />
+            <test-case id="1022" name="Probe_BrakeReachesFrictionLimit" fullname="ChartRunner.Tests.CalibrationProbe.Probe_BrakeReachesFrictionLimit" methodname="Probe_BrakeReachesFrictionLimit" classname="ChartRunner.Tests.CalibrationProbe" runstate="Runnable" seed="894536093" result="Passed" start-time="2026-08-06 02:16:17Z" end-time="2026-08-06 02:17:30Z" duration="72.925201" asserts="0">
+              <properties>
+                <property name="_JOINTYPE" value="UnityCombinatorial" />
+                <property name="Timeout" value="600000" />
+                <property name="retryIteration" value="0" />
+                <property name="repeatIteration" value="0" />
+              </properties>
+              <output><![CDATA[PROBE BRAKE (разгон на ровном до крейсера, затем полный тормоз)
+  brake =    500 Н  →  путь 15.025 м с 6.22 м/с  (НЕ ОСТАНОВИЛСЯ)  замедление 1.3 м/с²  мин|ω| колеса 28.7°/с  макс.букс 0.02
+  brake =   1500 Н  →  путь 11.781 м с 6.22 м/с  замедление 1.6 м/с²  мин|ω| колеса 16.6°/с  макс.букс 0.05
+  brake =   3000 Н  →  путь 10.320 м с 6.22 м/с  замедление 1.9 м/с²  мин|ω| колеса 0.0°/с  макс.букс 1.00
+  brake =   6000 Н  →  путь 10.324 м с 6.22 м/с  замедление 1.9 м/с²  мин|ω| колеса 0.0°/с  макс.букс 1.00
+  brake =  12000 Н  →  путь 10.324 м с 6.22 м/с  замедление 1.9 м/с²  мин|ω| колеса 0.0°/с  макс.букс 1.00
+    трасса торможения при 6000 Н:
+      t=0.00  v=6.22  контактов=2  зад=2746  перед=2682  тангаж=0.1°
+      t=0.33  v=2.42  контактов=2  зад=2256  перед=3142  тангаж=-1.1°
+      t=0.67  v=2.29  контактов=2  зад=2694  перед=2730  тангаж=0.0°
+      t=1.00  v=2.13  контактов=2  зад=2698  перед=2726  тангаж=0.0°
+      t=1.33  v=1.98  контактов=2  зад=2698  перед=2724  тангаж=0.0°
+      t=1.67  v=1.84  контактов=2  зад=2699  перед=2724  тангаж=0.0°
+      t=2.00  v=1.71  контактов=2  зад=2700  перед=2724  тангаж=0.0°
+      t=2.33  v=1.58  контактов=2  зад=2704  перед=2726  тангаж=0.0°
+      t=2.67  v=1.47  контактов=2  зад=2696  перед=2717  тангаж=0.0°
+      t=3.00  v=1.36  контактов=2  зад=2700  перед=2721  тангаж=0.0°
+      t=3.33  v=1.25  контактов=2  зад=2705  перед=2725  тангаж=0.0°
+      t=3.67  v=1.15  контактов=2  зад=2703  перед=2722  тангаж=0.0°
+      t=4.00  v=1.06  контактов=2  зад=2704  перед=2723  тангаж=0.0°
+      t=4.33  v=0.97  контактов=2  зад=2704  перед=2721  тангаж=0.0°
+      t=4.67  v=0.89  контактов=2  зад=2706  перед=2723  тангаж=0.0°
+      t=5.00  v=0.81  контактов=2  зад=2704  перед=2721  тангаж=0.0°
+      t=5.33  v=0.73  контактов=2  зад=2704  перед=2720  тангаж=0.0°
+      t=5.67  v=0.66  контактов=2  зад=2705  перед=2720  тангаж=0.0°
+      t=6.00  v=0.59  контактов=2  зад=2705  перед=2720  тангаж=0.0°
+      t=6.33  v=0.53  контактов=2  зад=2705  перед=2719  тангаж=0.0°
+      t=6.67  v=0.47  контактов=2  зад=2705  перед=2719  тангаж=0.0°
+      t=7.00  v=0.42  контактов=2  зад=2704  перед=2718  тангаж=0.0°
+      t=7.33  v=0.36  контактов=2  зад=2706  перед=2719  тангаж=0.0°
+      t=7.67  v=0.31  контактов=2  зад=2706  перед=2718  тангаж=0.0°
+      t=8.00  v=0.27  контактов=2  зад=2706  перед=2718  тангаж=0.0°
+      t=8.33  v=0.22  контактов=2  зад=2706  перед=2718  тангаж=0.0°
+      t=8.67  v=0.18  контактов=2  зад=2706  перед=2718  тангаж=0.0°
+      t=9.00  v=0.14  контактов=2  зад=2707  перед=2718  тангаж=0.0°
+      t=9.33  v=0.10  контактов=2  зад=2707  перед=2718  тангаж=0.0°
+  предел сцепления по теории: µ·g = 1.2 × 26.46 = 31.8 м/с²
+
+]]></output>
+            </test-case>
+            <test-case id="1020" name="Probe_CruiseMatchesSourceReference" fullname="ChartRunner.Tests.CalibrationProbe.Probe_CruiseMatchesSourceReference" methodname="Probe_CruiseMatchesSourceReference" classname="ChartRunner.Tests.CalibrationProbe" runstate="Runnable" seed="971587602" result="Passed" start-time="2026-08-06 02:17:30Z" end-time="2026-08-06 02:17:40Z" duration="10.010919" asserts="0">
+              <properties>
+                <property name="_JOINTYPE" value="UnityCombinatorial" />
+                <property name="retryIteration" value="0" />
+                <property name="repeatIteration" value="0" />
+              </properties>
+              <output><![CDATA[PROBE CRUISE
+  установившийся крейсер = 6.216 м/с (22.4 км/ч)
+  эталон исходника (КРОСС 250) = 6.271 м/с (22.6 км/ч)
+  отклонение = -0.9 %
+]]></output>
+            </test-case>
+            <test-case id="1021" name="Probe_EngineAndFrictionGridOn45DegreeClimb" fullname="ChartRunner.Tests.CalibrationProbe.Probe_EngineAndFrictionGridOn45DegreeClimb" methodname="Probe_EngineAndFrictionGridOn45DegreeClimb" classname="ChartRunner.Tests.CalibrationProbe" runstate="Runnable" seed="239473581" result="Passed" start-time="2026-08-06 02:17:40Z" end-time="2026-08-06 02:19:12Z" duration="91.869794" asserts="0">
+              <properties>
+                <property name="_JOINTYPE" value="UnityCombinatorial" />
+                <property name="Timeout" value="600000" />
+                <property name="retryIteration" value="0" />
+                <property name="repeatIteration" value="0" />
+              </properties>
+              <output><![CDATA[PROBE 45° CLIMB GRID (площадка SteepClimb, уклон 45.0° по сетке)
+  engineN × friction → доехал до вершины / макс продвижение / мин скорость
+   3000 Н × 1.0  →  нет  x=  50.9 м из 63.6 м  vmin=-3.88  отказ=None
+   3000 Н × 1.2  →  нет  x=  50.9 м из 63.6 м  vmin=-3.89  отказ=None
+   4000 Н × 1.0  →  нет  x=  51.7 м из 63.6 м  vmin=-3.88  отказ=None
+   4000 Н × 1.2  →  ДА   x=  63.7 м из 63.6 м  vmin=4.95  отказ=None
+   6000 Н × 1.0  →  нет  x=  51.7 м из 63.6 м  vmin=-3.85  отказ=None
+   6000 Н × 1.2  →  ДА   x=  63.7 м из 63.6 м  vmin=2.59  отказ=None
+
+]]></output>
+            </test-case>
+          </test-suite>
+          <test-suite type="TestFixture" id="1023" name="LabScenarioTests" fullname="ChartRunner.Tests.LabScenarioTests" classname="ChartRunner.Tests.LabScenarioTests" runstate="Runnable" testcasecount="4" result="Passed" start-time="2026-08-06 02:19:12Z" end-time="2026-08-06 02:19:51Z" duration="39.755337" total="4" passed="4" failed="0" inconclusive="0" skipped="0" asserts="0">
+            <properties />
+            <test-case id="1025" name="Scenario_JumpAndLanding_GoesAirborneAndLandsCleanly" fullname="ChartRunner.Tests.LabScenarioTests.Scenario_JumpAndLanding_GoesAirborneAndLandsCleanly" methodname="Scenario_JumpAndLanding_GoesAirborneAndLandsCleanly" classname="ChartRunner.Tests.LabScenarioTests" runstate="Runnable" seed="808579086" result="Passed" start-time="2026-08-06 02:19:12Z" end-time="2026-08-06 02:19:19Z" duration="7.050080" asserts="0">
+              <properties>
+                <property name="_JOINTYPE" value="UnityCombinatorial" />
+                <property name="Timeout" value="180000" />
+                <property name="retryIteration" value="0" />
+                <property name="repeatIteration" value="0" />
+              </properties>
+              <output><![CDATA[SCENARIO jump and landing
+  макс.время в воздухе=0.250 с  был в воздухе=True  сел=True  макс|тангаж|=90.5°  отказ=None
+  макс.скорость=16.12 м/с при x=47.26 м
+  мин.контактов за прогон=0  кадров с 1 контактом=37  кадров с 0 контактов=18
+  трасса у липа (x 24..50 м):
+    x=24.3 y=7.79 v=13.2 vy=-7.7 контактов=2 уклон=-14.4°
+    x=25.8 y=7.35 v=12.8 vy=-1.2 контактов=2 уклон=0.0°
+    x=27.0 y=7.50 v=12.7 vy=2.5 контактов=2 уклон=0.0°
+    x=28.3 y=7.67 v=12.4 vy=0.7 контактов=2 уклон=0.0°
+    x=29.5 y=7.64 v=12.2 vy=-0.8 контактов=2 уклон=0.0°
+    x=30.7 y=7.58 v=12.0 vy=-0.3 контактов=2 уклон=0.0°
+    x=31.9 y=7.61 v=11.5 vy=0.9 контактов=2 уклон=5.1°
+    x=33.1 y=7.84 v=10.6 vy=3.0 контактов=2 уклон=23.0°
+    x=34.1 y=8.31 v=9.0 vy=5.0 контактов=2 уклон=33.3°
+    x=34.7 y=8.90 v=7.4 vy=5.5 контактов=2 уклон=42.7°
+    x=35.2 y=9.43 v=5.6 vy=4.4 контактов=2 уклон=42.7°
+    x=35.5 y=9.86 v=4.9 vy=3.7 контактов=1 уклон=51.5°
+    x=35.9 y=10.21 v=4.7 vy=3.5 контактов=1 уклон=51.5°
+    x=36.0 y=10.40 v=4.4 vy=3.0 контактов=0 уклон=51.5°
+    x=36.0 y=10.50 v=3.2 vy=-0.3 контактов=0 уклон=51.5°
+    x=36.2 y=10.39 v=4.2 vy=-2.8 контактов=0 уклон=-37.4°
+    x=36.5 y=9.97 v=5.6 vy=-5.0 контактов=0 уклон=-37.4°
+    x=36.9 y=9.45 v=7.3 vy=-5.4 контактов=2 уклон=-51.2°
+    x=37.5 y=8.95 v=8.6 vy=-5.5 контактов=2 уклон=-51.2°
+    x=38.2 y=8.25 v=10.3 vy=-7.4 контактов=2 уклон=-41.2°
+    x=39.0 y=7.43 v=11.8 vy=-8.2 контактов=2 уклон=-38.3°
+    x=40.0 y=6.61 v=13.1 vy=-7.8 контактов=2 уклон=-35.2°
+    x=41.2 y=5.84 v=14.2 vy=-7.3 контактов=2 уклон=-28.8°
+    x=42.6 y=5.12 v=15.1 vy=-6.5 контактов=2 уклон=-25.6°
+    x=44.0 y=4.52 v=15.7 vy=-5.2 контактов=2 уклон=-19.1°
+    x=45.6 y=4.09 v=16.0 vy=-3.4 контактов=2 уклон=-9.8°
+    x=47.3 y=3.87 v=16.1 vy=-1.5 контактов=2 уклон=-4.3°
+    x=48.9 y=3.81 v=16.0 vy=0.1 контактов=2 уклон=-0.1°
+
+]]></output>
+            </test-case>
+            <test-case id="1024" name="Scenario_LowSpeedClimb_ReachesTopWithoutSlidingBack" fullname="ChartRunner.Tests.LabScenarioTests.Scenario_LowSpeedClimb_ReachesTopWithoutSlidingBack" methodname="Scenario_LowSpeedClimb_ReachesTopWithoutSlidingBack" classname="ChartRunner.Tests.LabScenarioTests" runstate="Runnable" seed="2021664078" result="Passed" start-time="2026-08-06 02:19:19Z" end-time="2026-08-06 02:19:29Z" duration="10.315769" asserts="0">
+              <properties>
+                <property name="_JOINTYPE" value="UnityCombinatorial" />
+                <property name="Timeout" value="180000" />
+                <property name="retryIteration" value="0" />
+                <property name="repeatIteration" value="0" />
+              </properties>
+              <output><![CDATA[SCENARIO low-speed climb
+  доехал=True  мин.скорость на подъёме=4.95 м/с  макс.тангаж к склону=5.9°  отказ=None
+]]></output>
+            </test-case>
+            <test-case id="1027" name="Scenario_SafeRestartAfterFailure" fullname="ChartRunner.Tests.LabScenarioTests.Scenario_SafeRestartAfterFailure" methodname="Scenario_SafeRestartAfterFailure" classname="ChartRunner.Tests.LabScenarioTests" runstate="Runnable" seed="1060818833" result="Passed" start-time="2026-08-06 02:19:29Z" end-time="2026-08-06 02:19:34Z" duration="5.013125" asserts="0">
+              <properties>
+                <property name="_JOINTYPE" value="UnityCombinatorial" />
+                <property name="Timeout" value="180000" />
+                <property name="retryIteration" value="0" />
+                <property name="repeatIteration" value="0" />
+              </properties>
+              <output><![CDATA[SCENARIO safe restart
+  после сброса: x=23.53 м  скорость=6.22 м/с  контактов=2  отказ=None
+]]></output>
+            </test-case>
+            <test-case id="1026" name="Scenario_SteepDescentBraking_BrakingBeatsCoasting" fullname="ChartRunner.Tests.LabScenarioTests.Scenario_SteepDescentBraking_BrakingBeatsCoasting" methodname="Scenario_SteepDescentBraking_BrakingBeatsCoasting" classname="ChartRunner.Tests.LabScenarioTests" runstate="Runnable" seed="275751539" result="Passed" start-time="2026-08-06 02:19:34Z" end-time="2026-08-06 02:19:51Z" duration="17.372017" asserts="0">
+              <properties>
+                <property name="_JOINTYPE" value="UnityCombinatorial" />
+                <property name="Timeout" value="180000" />
+                <property name="retryIteration" value="0" />
+                <property name="repeatIteration" value="0" />
+              </properties>
+              <output><![CDATA[SCENARIO steep descent braking (уклон −44°)
+  скат без тормоза: скорость у подножия 30.76 м/с
+  с полным тормозом: 14.22 м/с
+  выигрыш тормоза: 53.8 %
+]]></output>
+            </test-case>
+          </test-suite>
+          <test-suite type="TestFixture" id="1028" name="SuspensionCalibrationProbe" fullname="ChartRunner.Tests.SuspensionCalibrationProbe" classname="ChartRunner.Tests.SuspensionCalibrationProbe" runstate="Runnable" testcasecount="1" result="Passed" start-time="2026-08-06 02:19:51Z" end-time="2026-08-06 02:20:21Z" duration="30.001161" total="1" passed="1" failed="0" inconclusive="0" skipped="0" asserts="0">
+            <properties />
+            <test-case id="1029" name="Probe_SagVersusFrequency" fullname="ChartRunner.Tests.SuspensionCalibrationProbe.Probe_SagVersusFrequency" methodname="Probe_SagVersusFrequency" classname="ChartRunner.Tests.SuspensionCalibrationProbe" runstate="Runnable" seed="495718939" result="Passed" start-time="2026-08-06 02:19:51Z" end-time="2026-08-06 02:20:21Z" duration="29.992952" asserts="0">
+              <properties>
+                <property name="_JOINTYPE" value="UnityCombinatorial" />
+                <property name="retryIteration" value="0" />
+                <property name="repeatIteration" value="0" />
+              </properties>
+              <output><![CDATA[PROBE SAG vs FREQUENCY (ход 0.30 м, цель просадки ≈0.10 м)
+  f =  3 Гц  →  просадка 0.5903 м  (jointTranslation 0.5912)
+  f =  5 Гц  →  просадка 0.2550 м  (jointTranslation 0.2550)
+  f =  8 Гц  →  просадка 0.0996 м  (jointTranslation 0.0996)
+  f = 12 Гц  →  просадка 0.0443 м  (jointTranslation 0.0443)
+  f = 16 Гц  →  просадка 0.0249 м  (jointTranslation 0.0249)
+  f = 22 Гц  →  просадка 0.0132 м  (jointTranslation 0.0132)
+
+]]></output>
+            </test-case>
+          </test-suite>
+          <test-suite type="TestFixture" id="1030" name="TelemetryTests" fullname="ChartRunner.Tests.TelemetryTests" classname="ChartRunner.Tests.TelemetryTests" runstate="Runnable" testcasecount="6" result="Passed" start-time="2026-08-06 02:20:21Z" end-time="2026-08-06 02:21:02Z" duration="40.110226" total="6" passed="6" failed="0" inconclusive="0" skipped="0" asserts="0">
+            <properties />
+            <test-case id="1035" name="Overlay_ShowsEveryFieldRequiredByTheHandoff" fullname="ChartRunner.Tests.TelemetryTests.Overlay_ShowsEveryFieldRequiredByTheHandoff" methodname="Overlay_ShowsEveryFieldRequiredByTheHandoff" classname="ChartRunner.Tests.TelemetryTests" runstate="Runnable" seed="245080674" result="Passed" start-time="2026-08-06 02:20:21Z" end-time="2026-08-06 02:20:24Z" duration="2.989795" asserts="0">
+              <properties>
+                <property name="_JOINTYPE" value="UnityCombinatorial" />
+                <property name="Timeout" value="180000" />
+                <property name="retryIteration" value="0" />
+                <property name="repeatIteration" value="0" />
+              </properties>
+              <output><![CDATA[TELEMETRY OVERLAY
+состояние   Neutral
+скорость    6.22 м/с  (22 км/ч)
+тангаж      0.1°  к склону 0.1°
+угл.скор.   0°/с
+уклон       0.0°
+колёс на з. 2   воздух 0.00 с
+газ 1.00   тормоз 0.00   вес  0.00
+подвеска    зад 0.101 м   перед 0.099 м
+прижим      зад 2739 Н   перед 2684 Н
+букс зада   0.01   выдержка отказа 0.00 с
+дистанция   10.9 м
+]]></output>
+            </test-case>
+            <test-case id="1031" name="Telemetry_DoesNotPerturbPhysics" fullname="ChartRunner.Tests.TelemetryTests.Telemetry_DoesNotPerturbPhysics" methodname="Telemetry_DoesNotPerturbPhysics" classname="ChartRunner.Tests.TelemetryTests" runstate="Runnable" seed="1913259335" result="Passed" start-time="2026-08-06 02:20:24Z" end-time="2026-08-06 02:20:40Z" duration="16.013198" asserts="0">
+              <properties>
+                <property name="_JOINTYPE" value="UnityCombinatorial" />
+                <property name="Timeout" value="180000" />
+                <property name="retryIteration" value="0" />
+                <property name="repeatIteration" value="0" />
+              </properties>
+              <output><![CDATA[TELEMETRY PERTURBATION
+  макс расхождение траекторий = 0.000000 на кадре -1 из 480
+  (площадка с прыжком выбрана намеренно: воздух и посадка усиливают любое расхождение)
+]]></output>
+            </test-case>
+            <test-case id="1032" name="Telemetry_ReadsControllerStateNotItsOwnCopy" fullname="ChartRunner.Tests.TelemetryTests.Telemetry_ReadsControllerStateNotItsOwnCopy" methodname="Telemetry_ReadsControllerStateNotItsOwnCopy" classname="ChartRunner.Tests.TelemetryTests" runstate="Runnable" seed="364514159" result="Passed" start-time="2026-08-06 02:20:40Z" end-time="2026-08-06 02:20:42Z" duration="2.001864" asserts="0">
+              <properties>
+                <property name="_JOINTYPE" value="UnityCombinatorial" />
+                <property name="Timeout" value="180000" />
+                <property name="retryIteration" value="0" />
+                <property name="repeatIteration" value="0" />
+              </properties>
+            </test-case>
+            <test-case id="1034" name="Telemetry_StateClassifierDistinguishesSituations" fullname="ChartRunner.Tests.TelemetryTests.Telemetry_StateClassifierDistinguishesSituations" methodname="Telemetry_StateClassifierDistinguishesSituations" classname="ChartRunner.Tests.TelemetryTests" runstate="Runnable" seed="1255210671" result="Passed" start-time="2026-08-06 02:20:42Z" end-time="2026-08-06 02:20:50Z" duration="7.080594" asserts="0">
+              <properties>
+                <property name="_JOINTYPE" value="UnityCombinatorial" />
+                <property name="Timeout" value="180000" />
+                <property name="retryIteration" value="0" />
+                <property name="repeatIteration" value="0" />
+              </properties>
+              <output><![CDATA[TELEMETRY STATES
+  встречены: Airborne, Climbing, Descending, Neutral, Stoppie, Wheelie
+]]></output>
+            </test-case>
+            <test-case id="1036" name="Telemetry_SummaryMatchesBufferContents" fullname="ChartRunner.Tests.TelemetryTests.Telemetry_SummaryMatchesBufferContents" methodname="Telemetry_SummaryMatchesBufferContents" classname="ChartRunner.Tests.TelemetryTests" runstate="Runnable" seed="1960964637" result="Passed" start-time="2026-08-06 02:20:50Z" end-time="2026-08-06 02:20:57Z" duration="7.016239" asserts="0">
+              <properties>
+                <property name="_JOINTYPE" value="UnityCombinatorial" />
+                <property name="Timeout" value="180000" />
+                <property name="retryIteration" value="0" />
+                <property name="repeatIteration" value="0" />
+              </properties>
+              <output><![CDATA[TELEMETRY SUMMARY
+  снимков 420  длительность 7.00 с  дистанция 60.9 м
+  скорость макс 16.12  средняя 9.38 м/с
+  доля воздуха 0.043  макс тангаж к склону 90.5°
+  макс сжатие зад 0.383 перед 0.399 м
+  макс прижим зада 8682 Н  макс букс 0.81
+]]></output>
+            </test-case>
+            <test-case id="1033" name="Telemetry_SuspensionCompressionIsFilledAndMatchesStaticSag" fullname="ChartRunner.Tests.TelemetryTests.Telemetry_SuspensionCompressionIsFilledAndMatchesStaticSag" methodname="Telemetry_SuspensionCompressionIsFilledAndMatchesStaticSag" classname="ChartRunner.Tests.TelemetryTests" runstate="Runnable" seed="2019258651" result="Passed" start-time="2026-08-06 02:20:57Z" end-time="2026-08-06 02:21:02Z" duration="4.999480" asserts="0">
+              <properties>
+                <property name="_JOINTYPE" value="UnityCombinatorial" />
+                <property name="Timeout" value="180000" />
+                <property name="retryIteration" value="0" />
+                <property name="repeatIteration" value="0" />
+              </properties>
+              <output><![CDATA[TELEMETRY SUSPENSION
+  сжатие: зад 0.100 м, перед 0.100 м
+  эталон статической просадки при 8 Гц = 0.0996 м
+Saving results to: /Users/macbook/Library/Application Support/DefaultCompany/2D_URP/TestResults.xml
+]]></output>
+            </test-case>
+          </test-suite>
+        </test-suite>
+      </test-suite>
+    </test-suite>
+  </test-suite>
+</test-run>
