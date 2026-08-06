@@ -109,12 +109,21 @@ namespace ChartRunner.Game
         /// </summary>
         private void BuildRidges(float trackLengthM)
         {
-            AddRidge("RidgeFar", 0.86f, 9.5f, 3.2f, 0.055f, 1.7f,
-                new Color(0.72f, 0.51f, 0.44f, 1f), -60, trackLengthM);
-            AddRidge("RidgeMid", 0.70f, 6.5f, 4.6f, 0.085f, 3.1f,
-                new Color(0.44f, 0.31f, 0.35f, 1f), -50, trackLengthM);
-            AddRidge("RidgeNear", 0.48f, 3.0f, 5.8f, 0.130f, 5.3f,
-                new Color(0.22f, 0.18f, 0.26f, 1f), -40, trackLengthM);
+            // ВЫСОТА И РАЗМЕР ИСПРАВЛЕНЫ ПО СНЯТОМУ КАДРУ. В первой редакции дальняя гряда
+            // стояла ВЫШЕ ближних (base 9.5 против 3.0) и была самой большой формой в кадре —
+            // то есть перспектива работала наоборот, и самым светлым и крупным пятном
+            // оказывался фон, а земля читалась чёрным провалом.
+            //
+            // Как правильно: далёкое собирается У ГОРИЗОНТА и мелкое, близкое — НИЖЕ горизонта
+            // и крупнее. Поэтому смещения идут от + к −, амплитуды растут к зрителю, а вся
+            // группа держится узкой полосой у линии глаз: гряды обязаны подпирать силуэт
+            // рельефа, а не спорить с ним за кадр.
+            AddRidge("RidgeFar", 0.90f, 2.2f, 1.5f, 0.048f, 1.7f,
+                new Color(0.62f, 0.42f, 0.38f, 1f), -60, trackLengthM);
+            AddRidge("RidgeMid", 0.76f, 0.4f, 2.3f, 0.078f, 3.1f,
+                new Color(0.38f, 0.25f, 0.30f, 1f), -50, trackLengthM);
+            AddRidge("RidgeNear", 0.58f, -1.6f, 3.1f, 0.115f, 5.3f,
+                new Color(0.19f, 0.14f, 0.21f, 1f), -40, trackLengthM);
         }
 
         private void AddRidge(string name, float parallax, float baseY, float amp,
@@ -173,8 +182,10 @@ namespace ChartRunner.Game
             {
                 var l = _layers[i];
                 // Слой смещается на долю хода камеры: чем дальше, тем меньше собственный ход.
-                l.T.position = new Vector3(camX * l.Parallax,
-                    l.BaseY + camY * l.Parallax * 0.55f, 0f);
+                // По вертикали гряды следуют за камерой ПОЧТИ полностью: иначе на подъёме
+                // 40° камера уезжает вверх на десятки метров и весь дальний план выпадает
+                // из кадра. Остаток (1 − 0.92) даёт лёгкий вертикальный параллакс.
+                l.T.position = new Vector3(camX * l.Parallax, l.BaseY + camY * 0.92f, 0f);
             }
         }
     }

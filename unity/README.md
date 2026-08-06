@@ -30,6 +30,51 @@ UNITY=/Applications/Unity/Hub/Editor/6000.3.20f1/Unity.app/Contents/MacOS/Unity
 `Verify` — exit 0 при успехе, exit 1 при любом провале.
 `NegativeControl` — exit 0 если подмена гравитации была **поймана**, exit 1 если нет.
 
+## Как ВЗЯТЬ В РУКИ (добавлено 2026-08-06)
+
+Автотест не умеет сказать «интересно». Поэтому есть играбельная сцена `Play` и сборки.
+
+```bash
+UNITY=/Applications/Unity/Hub/Editor/6000.3.20f1/Unity.app/Contents/MacOS/Unity
+```
+
+**1. Собрать сцену** (12 проверок, включая гейт композиции):
+
+```bash
+/Applications/Unity/Hub/Editor/6000.3.20f1/Unity.app/Contents/MacOS/Unity -batchmode -nographics -projectPath "$PWD/unity" -executeMethod ChartRunner.EditorTools.PlaySceneBuilder.Build -logFile -
+```
+
+**2. Мак-билд** — быстрый круг проверки, Mono, около четырёх минут:
+
+```bash
+/Applications/Unity/Hub/Editor/6000.3.20f1/Unity.app/Contents/MacOS/Unity -batchmode -nographics -buildTarget OSXUniversal -projectPath "$PWD/unity" -executeMethod ChartRunner.EditorTools.DeviceBuilder.BuildMac -logFile -
+```
+
+**3. Снять кадры из игры** и измерить композицию по фактическому кадру:
+
+```bash
+unity/build/mac/ChartRunner.app/Contents/MacOS/ChartRunner -shots -screen-width 430 -screen-height 932 -screen-fullscreen 0 -logFile -
+```
+
+Кадры ложатся в `unity/build/mac/Logs/shots/`, а в лог печатается измеренная доля героя
+в кадре. Приёмка визуала — только по этим кадрам: правило проекта запрещает судить
+композицию по кропам и по ландшафтному окну.
+
+**4. iOS на телефон** (Il2CPP, минуты; требует свободного места на диске):
+
+```bash
+/Applications/Unity/Hub/Editor/6000.3.20f1/Unity.app/Contents/MacOS/Unity -batchmode -nographics -buildTarget iOS -projectPath "$PWD/unity" -executeMethod ChartRunner.EditorTools.DeviceBuilder.BuildIos -logFile -
+```
+
+Затем `tools/ios-deploy.sh` — xcodebuild с автоподписью, установка и запуск на спаренном
+устройстве. Team ID и bundle id заданы в коде сборщика, а не в инспекторе: Unity
+перегенерирует Xcode-проект при каждой полной сборке и настройку в нём затирает.
+
+**Управление.** Клавиатура: ↑/W газ, ↓/S тормоз, ←→/A D перенос веса, R рестарт,
+F1 телеметрия. Тач: правая половина экрана газ, левая тормоз, вертикальный увод пальца
+от точки касания — перенос веса, вверх = вес назад. Наклон УДЕРЖИВАЕТСЯ, пока палец
+смещён, а не живёт один кадр — механика требует именно удержания.
+
 ## Почему проверки написаны именно так
 
 `-executeMethod` завершается кодом 0 при пустом теле метода, поэтому **компиляция не есть

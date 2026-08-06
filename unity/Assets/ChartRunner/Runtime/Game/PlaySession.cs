@@ -18,9 +18,27 @@ namespace ChartRunner.Game
     /// </summary>
     public class PlaySession : MonoBehaviour
     {
+        /// <summary>Какая трасса под ногами. Переключается в игре клавишей T / четырьмя пальцами.</summary>
+        public enum TrackChoice
+        {
+            /// <summary>Рукотворный отрезок ~30 с: разгон, подъём, кикер, крукс, спуск.</summary>
+            Crux30,
+            /// <summary>Перенесённая 1:1 дизайн-трасса VS, 315 м. Содержит стену на 271 м.</summary>
+            VerticalSlice
+        }
+
+        /// <summary>
+        /// Выбор трассы переживает перезагрузку сцены — иначе переключение сбрасывало бы
+        /// само себя. Статика здесь оправдана: это единственное состояние, которое обязано
+        /// жить дольше сцены, и оно принадлежит сессии игрока, а не объекту.
+        /// </summary>
+        public static TrackChoice Selected = TrackChoice.Crux30;
+
         [Header("Данные (проставляются сборщиком сцены, чтобы попасть в билд)")]
         public BikeTuningProfile BikeProfile;
         public LevelPhysicsOverride LevelProfile;
+
+        [Tooltip("Ассет трассы VS. Отрезок Crux30 строится кодом и ассета не требует.")]
         public TrackProfile Track;
 
         [Header("Рестарт")]
@@ -44,6 +62,7 @@ namespace ChartRunner.Game
         private float _runStartedAt;
         private float _spawnXM;
         private int _attempts;
+        private bool _switchLatch;
         private GUIStyle _hud;
         private GUIStyle _big;
 
@@ -59,9 +78,14 @@ namespace ChartRunner.Game
             Physics2D.gravity = new Vector2(0f, UnitsContract.GravityMPerS2);
         }
 
+        /// <summary>Трасса, действующая сейчас. Собирается по выбору, а не по полю сцены.</summary>
+        private TrackProfile _track;
+
         private void Start()
         {
-            if (Track == null) Track = VerticalSliceTrack.CreateProfile();
+            _track = Selected == TrackChoice.Crux30
+                ? CruxSliceTrack.CreateProfile()
+                : (Track != null ? Track : VerticalSliceTrack.CreateProfile());
             if (BikeProfile == null)
             {
                 Debug.LogError("PlaySession: не задан профиль байка — играть нечем.");
@@ -70,7 +94,7 @@ namespace ChartRunner.Game
             }
             if (LevelProfile == null) LevelProfile = LevelPhysicsOverride.CreateStock();
 
-            _sampler = new TerrainSampler(Track);
+            _sampler = new TerrainSampler(_track);
 
             // ---- мир ----
             //
@@ -79,13 +103,13 @@ namespace ChartRunner.Game
             // по верхней линии. Это даёт то, чего не было в первом кадре: разницу светлот
             // между героем, землёй и фоном, на которой силуэт вообще может читаться.
             var world = new GameObject("World").transform;
-            TrackBuilder.Build(Track, BikeProfile.tyreFriction).transform.SetParent(world, true);
-            TerrainView.Build(Track, world,
+            TrackBuilder.Build(_track, BikeProfile.tyreFriction).transform.SetParent(world, true);
+            TerrainView.Build(_track, world,
                 new Color(0.085f, 0.075f, 0.105f, 1f),   // гребень: чуть светлее подножия
                 new Color(0.028f, 0.026f, 0.042f, 1f),   // подножие: почти чёрное
                 new Color(1f, 0.68f, 0.34f, 1f),         // горячая кромка от солнца
                 0.11f);
-            TerrainView.BuildMarkers(Track, world, new Color(1f, 0.80f, 0.42f, 1f));
+            TerrainView.BuildMarkers(_track, world, new Color(1f, 0.80f, 0.42f, 1f));
 
             // ---- байк ----
             _input = new PlayInput();
@@ -116,7 +140,7 @@ namespace ChartRunner.Game
 
             // Небо и дальние планы приколачиваются к камере, поэтому создаются после Bind:
             // размер квада берётся из уже настроенного orthographicSize.
-            SkyView.Attach(_camera, Track.EndM);
+            SkyView.Attach(_camera, _track.EndM);
             ContactShadow.Attach(_controller, _sampler, world);
 
             _runStartedAt = Time.time;
@@ -141,6 +165,13 @@ namespace ChartRunner.Game
 
 #if ENABLE_LEGACY_INPUT_MANAGER
             if (UnityEngine.Input.GetKeyDown(KeyCode.R)) Restart(true);
+            if (UnityEngine.Input.GetKeyDown(KeyCode.T)) SwitchTrack();
+
+            // Четыре пальца — переключение трассы. Один и два заняты управлением, три —
+            // оверлеем телеметрии, поэтому конфликта жестов нет.
+            var touches = UnityEngine.Input.touchCount;
+            if (touches >= 4 && !_switchLatch) { _switchLatch = true; SwitchTrack(); }
+            else if (touches < 4) _switchLatch = false;
 #endif
 
             if (_controller.Halted)
@@ -153,6 +184,20 @@ namespace ChartRunner.Game
             {
                 _deadFor = -1f;
             }
+        }
+
+        /// <summary>
+        /// Смена трассы перезагрузкой сцены. Пересобирать мир на месте было бы дешевле по
+        /// кадрам и дороже по правильности: остались бы старые коллайдеры, тени и меши,
+        /// и разница между трассами читалась бы как разница между «чисто» и «после смены».
+        /// </summary>
+        private void SwitchTrack()
+        {
+            Selected = Selected == TrackChoice.Crux30
+                ? TrackChoice.VerticalSlice
+                : TrackChoice.Crux30;
+            UnityEngine.SceneManagement.SceneManager.LoadScene(
+                UnityEngine.SceneManagement.SceneManager.GetActiveScene().buildIndex);
         }
 
         private void Restart(bool fromStart)
@@ -175,9 +220,9 @@ namespace ChartRunner.Game
         private float LastCheckpointBefore(float xM)
         {
             var best = _spawnXM;
-            for (var i = 0; i < Track.checkpoints.Length; i++)
+            for (var i = 0; i < _track.checkpoints.Length; i++)
             {
-                var cx = Track.checkpoints[i].xPx * UnitsContract.PxToM;
+                var cx = _track.checkpoints[i].xPx * UnitsContract.PxToM;
                 if (cx < xM - 2f && cx > best) best = cx;
             }
             return best;
@@ -197,12 +242,13 @@ namespace ChartRunner.Game
 
             EnsureStyles();
             var st = _controller.State;
-            var pct = Mathf.Clamp01(st.PositionXM / Mathf.Max(1f, Track.EndM)) * 100f;
+            var pct = Mathf.Clamp01(st.PositionXM / Mathf.Max(1f, _track.EndM)) * 100f;
 
             GUI.Label(new Rect(14f, 12f, 220f, 22f),
                 pct.ToString("0") + " %   " + (st.SpeedMPerS * 3.6f).ToString("0") + " км/ч", _hud);
-            GUI.Label(new Rect(14f, 32f, 220f, 22f),
-                "попытка " + _attempts + "   " + (Time.time - _runStartedAt).ToString("0.0") + " с", _hud);
+            GUI.Label(new Rect(14f, 32f, 260f, 22f),
+                "попытка " + _attempts + "   " + (Time.time - _runStartedAt).ToString("0.0") + " с"
+                + "   " + (Selected == TrackChoice.Crux30 ? "крукс-30" : "VS-315"), _hud);
 
             // Индикатор переноса веса: игрок обязан видеть, что он реально приложил,
             // иначе «я же наклонял» и «наклон приложился» неразличимы, и учиться не на чем.

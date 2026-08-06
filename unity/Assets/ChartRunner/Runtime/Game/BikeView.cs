@@ -44,7 +44,7 @@ namespace ChartRunner.Game
         public Color SkyBounce = new Color(0.46f, 0.56f, 0.78f, 1f);
 
         /// <summary>Толщина обводки, метры. На 12.5 % высоты экрана это ~2 px — предел различимости.</summary>
-        public float RimWidthM = 0.055f;
+        public float RimWidthM = 0.045f;
 
         private BikeController _controller;
         private BikeRig _rig;
@@ -236,9 +236,10 @@ namespace ChartRunner.Game
             Shapes.AddBar(v, c, t, new Vector2(-0.58f, 0.56f), SeatBack, rw, RimLight);
             Shapes.AddBar(v, c, t, SeatBack, SeatFront, rw, RimLight);
             Shapes.AddBar(v, c, t, SeatFront, new Vector2(0.22f, 0.72f), rw * 0.85f, RimLight);
-            Shapes.AddBar(v, c, t, new Vector2(0.44f, 0.74f), new Vector2(0.90f, 0.88f),
+            Shapes.AddBar(v, c, t, new Vector2(0.44f, 0.76f), new Vector2(0.90f, 0.90f),
                 rw * 0.8f, RimLight);
-            Shapes.AddBar(v, c, t, SwingPivot, RearAxle, rw * 0.7f, RimLight);
+            // Обводки по маятнику здесь НЕТ намеренно: она проходила внутри силуэта и на
+            // конечном размере читалась палкой поперёк байка, а не светом по краю.
 
             // Холодная грань от неба сверху — вторая, слабее. Она отделяет руль от фона.
             Shapes.AddBar(v, c, t, Bar + new Vector2(-0.16f, 0.03f), Bar + new Vector2(0.13f, 0.05f),
@@ -303,8 +304,8 @@ namespace ChartRunner.Game
             }, RiderColor);
             // Спина ловит свет целиком: она обращена к солнцу. Это же и читаемый указатель
             // того, куда ушёл вес — линия спины наклоняется вместе с тазом.
-            Shapes.AddBar(v, c, t, hip + new Vector2(-0.12f, -0.01f),
-                shoulder + new Vector2(-0.11f, 0.01f), RimWidthM * 1.5f, RimLight);
+            Shapes.AddBar(v, c, t, hip + new Vector2(-0.155f, -0.02f),
+                shoulder + new Vector2(-0.145f, 0.02f), RimWidthM * 1.25f, RimLight);
 
             // Ближние конечности.
             Shapes.AddBar(v, c, t, hip, knee, 0.16f, RiderColor);
@@ -343,10 +344,8 @@ namespace ChartRunner.Game
                     RimWidthM * 1.2f, RimLight);
             }
             // Плечо и бедро — вторая и третья по важности точки контура.
-            Shapes.AddBar(v, c, t, shoulder + new Vector2(-0.10f, 0.06f),
-                shoulder + new Vector2(0.06f, 0.09f), RimWidthM, RimLight);
-            Shapes.AddBar(v, c, t, hip + new Vector2(-0.13f, 0.03f),
-                hip + new Vector2(0.05f, 0.05f), RimWidthM, RimLight);
+            Shapes.AddBar(v, c, t, shoulder + new Vector2(-0.13f, 0.085f),
+                shoulder + new Vector2(0.05f, 0.115f), RimWidthM, RimLight);
 
             _riderMesh.Clear();
             _riderMesh.SetVertices(v);
