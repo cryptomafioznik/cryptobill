@@ -68,12 +68,25 @@ namespace ChartRunner.Tests
             Assert.Greater(fields.Count, 30, "поля профиля не нашлись — тест не смог бы провалиться");
 
             var silent = new List<string>();
+
+            // ВТОРАЯ СТОРОНА ГЕЙТА. Поле, объявленное неиспользуемым, но на самом деле
+            // читаемое, обманывает ровно так же, как молчащее: конфиг утверждает про себя
+            // неправду. Проверка добавлена после того, как `climbGrip` была реализована —
+            // без неё пометка `notImplementedYet: climbGrip` осталась бы висеть и врать,
+            // и никакой тест бы этого не заметил.
+            var lyingUnused = new List<string>();
+
             foreach (var f in fields)
             {
                 // Ищем обращение вида `.<имя>` — то есть чтение через ссылку на профиль.
                 var read = Regex.IsMatch(runtimeText, @"\." + Regex.Escape(f) + @"\b");
                 if (!read && !declaredUnused.Contains(f)) silent.Add(f);
+                if (read && declaredUnused.Contains(f)) lyingUnused.Add(f);
             }
+
+            Assert.IsEmpty(lyingUnused,
+                "поля объявлены неиспользуемыми, но рантайм их ЧИТАЕТ — пометка врёт: "
+                + string.Join(", ", lyingUnused));
 
             Debug.Log("PROFILE HONESTY\n  полей (без мета): " + fields.Count
                       + "\n  объявлено эмерджентными: " + declaredUnused.Count

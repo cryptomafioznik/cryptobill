@@ -231,7 +231,7 @@ namespace ChartRunner.Bike
                 motor.motorSpeed = target;
                 motor.maxMotorTorque = alreadyFaster
                     ? 0f
-                    : Profile.engineForceN * Profile.wheelRadiusM * _throttle;
+                    : Profile.engineForceN * Profile.wheelRadiusM * _throttle * ClimbGripBoost();
             }
             else
             {
@@ -245,6 +245,36 @@ namespace ChartRunner.Bike
             // rollResist, а не аэродинамика). Прикладываем к колёсам, а не к шасси.
             ApplyRollResistance(_rig.RearWheel);
             ApplyRollResistance(_rig.FrontWheel);
+        }
+
+        /// <summary>
+        /// Эндуро-сцепление на подъёме. Порт строки 1562 исходника:
+        /// <c>FnDrive *= 1 + min(1,(up−climbFrom)/climbSpan) × climbGrip × climbTraction</c>.
+        ///
+        /// ПОЧЕМУ ЭТО ПОЯВИЛОСЬ ЗДЕСЬ ПОЗЖЕ ОСТАЛЬНОГО. При переносе `climbGrip` попала в
+        /// `notImplementedYet` — честно, но следствие не отследили, и оно оказалось тяжёлым:
+        /// без буста дизайн-трасса становится физически непроходимой. Измерено трассировкой
+        /// (docs/wall-diagnosis.md): байк встаёт на 271.0 м, уклон 50.5°, скорость падает до
+        /// 2.42 м/с и дальше он не едет НИКОГДА и ни при какой политике пилота.
+        ///
+        /// Арифметика совпадает с замером: удержаться на 50.5° требует
+        /// m·g·sin50.5° = 205 × 26.46 × 0.772 = 4187 Н, а мотор даёт 4000 Н при пределе
+        /// сцепления µ·Fn = 1.2 × 3436 = 4123 Н. Не хватает 64 Н — отсюда «ползёт и встаёт».
+        ///
+        /// Это ассист, а не физика, и в исходнике он ассистом и задуман: комментарий там
+        /// прямо говорит «заезжаемость = тяга, вызов = баланс» и требует climbGrip НЕ трогать
+        /// при настройке сложности. То есть крутое берётся тягой ПО ЗАМЫСЛУ, а испытанием
+        /// должен быть баланс, а не проходимость.
+        ///
+        /// Предел сцепления поднят соответственно в <see cref="BikeRig"/> — иначе поднятый
+        /// момент упёрся бы в старый потолок трения и буст не дошёл бы до земли.
+        /// </summary>
+        private float ClimbGripBoost()
+        {
+            var up = _terrain.SlopeAt(_rig.Chassis.position.x);
+            if (up <= Profile.climbFromRad) return 1f;
+            var k = Mathf.Clamp01((up - Profile.climbFromRad) / Profile.climbSpanRad);
+            return 1f + k * Profile.climbGrip * Level.climbTraction;
         }
 
         private float TargetMotorSpeed(float sign)

@@ -18,7 +18,6 @@ MonoBehaviour:
   - leanAir
   - airHold
   notImplementedYet:
-  - climbGrip
   - suspensionTravelM
   - mudRollResistance
   pendingCalibration:

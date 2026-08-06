@@ -45,7 +45,8 @@ namespace ChartRunner.Bike
         /// <summary>
         /// Создаёт байк в точке. Ось колёс лежит на y = 0 локально, ЦТ выше на cgAboveAxleM.
         /// </summary>
-        public static BikeRig Build(BikeTuningProfile profile, Vector2 rearAxleWorldPos, string name = "Bike")
+        public static BikeRig Build(BikeTuningProfile profile, Vector2 rearAxleWorldPos,
+            string name = "Bike", float rearGripCeilingScale = 1f)
         {
             var root = new GameObject(name);
             var rig = root.AddComponent<BikeRig>();
@@ -78,8 +79,21 @@ namespace ChartRunner.Bike
             body.offset = new Vector2(0f, profile.cgAboveAxleM);
 
             // ---- колёса ----
+            // ПОТОЛОК СЦЕПЛЕНИЯ ЗАДНЕГО поднят на множитель эндуро-буста.
+            //
+            // Почему статически, а не переменной трения: Box2D фиксирует трение в момент
+            // создания контакта, поэтому менять материал на катящемся колесе — значит менять
+            // его с непредсказуемым запаздыванием. Потолок ничего не делает, пока в него не
+            // упираются: фактическую тягу задаёт момент мотора (BikeController.ClimbGripBoost),
+            // а этот потолок лишь перестаёт её срезать на подъёме.
+            //
+            // Цена, которую надо знать: у ЗАДНЕГО колеса вместе с тягой растёт и предел
+            // ТОРМОЖЕНИЯ. Поэтому поднят только задний потолок — основное торможение идёт
+            // передним, и его предел не тронут. Влияние на тормозной путь проверяется
+            // тестом C приёмочной батареи, а не рассуждением.
             rig.RearWheel = CreateWheel(root, "RearWheel",
-                center + new Vector2(-halfWb, 0f), profile, out var rearCol);
+                center + new Vector2(-halfWb, 0f), profile, out var rearCol,
+                Mathf.Max(1f, rearGripCeilingScale));
             rig.FrontWheel = CreateWheel(root, "FrontWheel",
                 center + new Vector2(halfWb, 0f), profile, out var frontCol);
             rig.RearCollider = rearCol;
@@ -95,7 +109,7 @@ namespace ChartRunner.Bike
         }
 
         private static Rigidbody2D CreateWheel(GameObject parent, string name, Vector2 worldPos,
-            BikeTuningProfile profile, out CircleCollider2D collider)
+            BikeTuningProfile profile, out CircleCollider2D collider, float gripCeilingScale = 1f)
         {
             var go = new GameObject(name);
             go.transform.SetParent(parent.transform, true);
@@ -111,7 +125,7 @@ namespace ChartRunner.Bike
             collider.radius = profile.wheelRadiusM;
             collider.sharedMaterial = new PhysicsMaterial2D("Tyre")
             {
-                friction = profile.tyreFriction,
+                friction = profile.tyreFriction * gripCeilingScale,
                 bounciness = 0f
             };
             return rb;

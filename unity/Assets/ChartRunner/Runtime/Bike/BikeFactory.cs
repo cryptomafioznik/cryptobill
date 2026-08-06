@@ -15,7 +15,10 @@ namespace ChartRunner.Bike
             TerrainSampler terrain, IBikeInputSource input, Vector2 rearAxleWorldPos,
             bool withTelemetry = true)
         {
-            var rig = BikeRig.Build(profile, rearAxleWorldPos);
+            // Максимальный эндуро-буст на этом уровне: потолок сцепления заднего обязан быть
+            // не ниже, иначе поднятый момент мотора упрётся в трение и буст не дойдёт до земли.
+            var maxClimbBoost = 1f + profile.climbGrip * level.climbTraction;
+            var rig = BikeRig.Build(profile, rearAxleWorldPos, "Bike", maxClimbBoost);
             var controller = rig.gameObject.AddComponent<BikeController>();
 
             AttachRelay(rig.RearWheel, controller, true);

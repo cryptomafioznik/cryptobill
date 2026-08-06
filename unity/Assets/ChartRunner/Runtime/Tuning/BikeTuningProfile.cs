@@ -32,7 +32,6 @@ namespace ChartRunner.Tuning
                  "Это честный список пробелов, а не свалка.")]
         public string[] notImplementedYet =
         {
-            nameof(climbGrip),          // эндуро-бонус сцепления на крутом подъёме
             nameof(suspensionTravelM),  // ход подвески ничем не ограничен: замерено сжатие 0.383 м
             nameof(mudRollResistance)   // грязи как поверхности пока нет
         };
