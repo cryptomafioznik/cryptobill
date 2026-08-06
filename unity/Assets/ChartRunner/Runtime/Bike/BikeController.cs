@@ -425,6 +425,15 @@ namespace ChartRunner.Bike
         private void ClampAngularSpeed()
         {
             var maxDeg = Profile.maxAngularSpeedRadPerS * Mathf.Rad2Deg;
+
+            // КАП ТЕМПА ТАНГАЖА НА ВИЛЛИ. В исходнике (RB.wheelieAvMax) он существовал потому,
+            // что без него «angV −0.1 на −0.8 рад отрывал заднее колесо → воздух → флип → краш»:
+            // перед поднимался рывком и перелетал цель. Кап делает подъём переда медленным.
+            // Действует только когда игрок ДЕРЖИТ вес назад и байк на земле — обычная езда
+            // и воздух не тронуты.
+            if (_weightShift < -0.05f && _rearContacts + _frontContacts > 0)
+                maxDeg = Mathf.Min(maxDeg, Profile.maxWheelieAngularSpeedRadPerS * Mathf.Rad2Deg);
+
             var w = _rig.Chassis.angularVelocity;
 
             // Демпфер: 0.992 за кадр → эквивалент за dt.
@@ -548,11 +557,42 @@ namespace ChartRunner.Bike
                 RearNormalLoadN = _rearLoad,
                 FrontNormalLoadN = _frontLoad,
                 RearSlip = ComputeRearSlip(forwardSpeed),
+                RearCompressionM = _rig.RearJoint.jointTranslation,
+                FrontCompressionM = _rig.FrontJoint.jointTranslation,
                 AirTimeSeconds = _airTime,
                 FailHoldSeconds = _failHold,
                 Failure = _failure,
+                State = ClassifyState(grounded, rel, slope, forwardSpeed),
                 DistanceM = pos.x - _startX
             };
+        }
+
+        /// <summary>
+        /// Ярлык текущего состояния. Приоритет повторяет исходник (стр. 3132):
+        /// воздух → приземление → подъём → вилли → нейтраль. Это диагностика, а не физика:
+        /// ни одно решение решателя от ярлыка не зависит.
+        /// </summary>
+        private RidingState ClassifyState(bool grounded, float rel, float slope, float forwardSpeed)
+        {
+            if (_failure != BikeFailure.None) return RidingState.Failed;
+            if (!grounded) return RidingState.Airborne;
+
+            // Приземление: только что коснулись после существенного полёта.
+            if (!_wasGrounded && _airTime > Profile.landingCheckMinAirFrames * (1f / 60f))
+                return RidingState.Landing;
+
+            if (rel > 0.25f) return RidingState.Wheelie;
+            if (rel < -0.25f) return RidingState.Stoppie;
+
+            if (forwardSpeed < -0.05f) return RidingState.Reversing;
+
+            var braking = _input != null && _input.Read().Brake > 0.01f;
+            if (braking && forwardSpeed > 0.2f) return RidingState.Braking;
+
+            if (slope > Profile.climbFromRad) return RidingState.Climbing;
+            if (slope < -Profile.climbFromRad) return RidingState.Descending;
+
+            return RidingState.Neutral;
         }
 
         private float ComputeRearSlip(float forwardSpeed)

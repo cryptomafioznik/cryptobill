@@ -17,6 +17,26 @@ namespace ChartRunner.Tuning
     [CreateAssetMenu(menuName = "ChartRunner/Bike Tuning Profile", fileName = "BikeTuningProfile")]
     public class BikeTuningProfile : ScriptableObject
     {
+        [Header("ЧЕСТНОСТЬ ПРОФИЛЯ: поля, которые рантайм НЕ читает")]
+        [Tooltip("Поля, которые в Unity воспроизводятся САМИ и потому явно не применяются: " +
+                 "перечислять их здесь обязательно, иначе они выглядят настройкой, а ей не являются.")]
+        public string[] supersededByEmergentPhysics =
+        {
+            nameof(driveFloorFraction), // пол прижима: тягу ограничивает трение Box2D, а не формула
+            nameof(driveTrade),         // вес↔тяга: даёт сдвиг центра масс, измерено 5471/77 Н
+            nameof(leanAir),            // статический вес в полёте не крутит — нет опоры
+            nameof(airHold)             // и обязан оставаться нулём
+        };
+
+        [Tooltip("Поля, которые рантайм пока НЕ читает, хотя механика реальна и подлежит переносу. " +
+                 "Это честный список пробелов, а не свалка.")]
+        public string[] notImplementedYet =
+        {
+            nameof(climbGrip),          // эндуро-бонус сцепления на крутом подъёме
+            nameof(suspensionTravelM),  // ход подвески ничем не ограничен: замерено сжатие 0.383 м
+            nameof(mudRollResistance)   // грязи как поверхности пока нет
+        };
+
         [Header("ЧТО ЕЩЁ НЕ ОТКАЛИБРОВАНО")]
         [Tooltip("Имена полей, значения которых — плейсхолдеры, а не перенос из исходника. " +
                  "Список обязан быть непустым до пункта 5; ProjectBootstrap это проверяет.")]

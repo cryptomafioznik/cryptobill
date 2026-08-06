@@ -59,6 +59,7 @@ MonoBehaviour:
     name: "\u043F\u0435\u0440\u0435\u0434 \u0444\u0438\u043D\u0430\u043B\u044C\u043D\u044B\u043C
       \u043F\u043E\u0434\u044A\u0451\u043C\u043E\u043C"
   nodeStepPx: 26
+  sharpNodeIndices: 
   sections:
   - name: "1 \u0441\u0442\u0430\u0440\u0442 \u0438 \u0440\u0430\u0437\u0433\u043E\u043D"
     fromPx: 0

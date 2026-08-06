@@ -12,7 +12,8 @@ namespace ChartRunner.Bike
     public static class BikeFactory
     {
         public static BikeController Spawn(BikeTuningProfile profile, LevelPhysicsOverride level,
-            TerrainSampler terrain, IBikeInputSource input, Vector2 rearAxleWorldPos)
+            TerrainSampler terrain, IBikeInputSource input, Vector2 rearAxleWorldPos,
+            bool withTelemetry = true)
         {
             var rig = BikeRig.Build(profile, rearAxleWorldPos);
             var controller = rig.gameObject.AddComponent<BikeController>();
@@ -21,6 +22,17 @@ namespace ChartRunner.Bike
             AttachRelay(rig.FrontWheel, controller, false);
 
             controller.Initialise(profile, level, terrain, input);
+
+            if (withTelemetry)
+            {
+                // Телеметрия добавляется ПОСЛЕ Initialise и только читает State.
+                // Что она не влияет на физику — проверяется тестом сравнения траекторий,
+                // а не заявляется в комментарии.
+                var telemetry = rig.gameObject.AddComponent<Telemetry.BikeTelemetry>();
+                telemetry.Bind(controller);
+                rig.gameObject.AddComponent<Telemetry.TelemetryOverlay>();
+            }
+
             return controller;
         }
 

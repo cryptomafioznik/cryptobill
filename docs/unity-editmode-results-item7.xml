@@ -1,0 +1,50 @@
+<?xml version="1.0" encoding="utf-8"?>
+<test-run id="2" testcasecount="3" result="Passed" total="3" passed="3" failed="0" inconclusive="0" skipped="0" asserts="0" engine-version="3.5.0.0" clr-version="4.0.30319.42000" start-time="2026-08-06 01:24:27Z" end-time="2026-08-06 01:24:27Z" duration="0.1405791">
+  <test-suite type="TestSuite" id="1000" name="2D_URP" fullname="2D_URP" runstate="Runnable" testcasecount="3" result="Passed" start-time="2026-08-06 01:24:27Z" end-time="2026-08-06 01:24:27Z" duration="0.140579" total="3" passed="3" failed="0" inconclusive="0" skipped="0" asserts="0">
+    <properties>
+      <property name="platform" value="EditMode" />
+    </properties>
+    <test-suite type="Assembly" id="1005" name="ChartRunner.Tests.EditMode.dll" fullname="/Users/macbook/project/cryptobill/unity/Library/ScriptAssemblies/ChartRunner.Tests.EditMode.dll" runstate="Runnable" testcasecount="3" result="Passed" start-time="2026-08-06 01:24:27Z" end-time="2026-08-06 01:24:27Z" duration="0.120616" total="3" passed="3" failed="0" inconclusive="0" skipped="0" asserts="0">
+      <properties>
+        <property name="_PID" value="11821" />
+        <property name="_APPDOMAIN" value="Unity Child Domain" />
+        <property name="platform" value="EditMode" />
+        <property name="EditorOnly" value="True" />
+      </properties>
+      <test-suite type="TestSuite" id="1006" name="ChartRunner" fullname="ChartRunner" runstate="Runnable" testcasecount="3" result="Passed" start-time="2026-08-06 01:24:27Z" end-time="2026-08-06 01:24:27Z" duration="0.118923" total="3" passed="3" failed="0" inconclusive="0" skipped="0" asserts="0">
+        <properties />
+        <test-suite type="TestSuite" id="1007" name="Tests" fullname="ChartRunner.Tests" runstate="Runnable" testcasecount="3" result="Passed" start-time="2026-08-06 01:24:27Z" end-time="2026-08-06 01:24:27Z" duration="0.118608" total="3" passed="3" failed="0" inconclusive="0" skipped="0" asserts="0">
+          <properties />
+          <test-suite type="TestFixture" id="1001" name="ProfileHonestyTests" fullname="ChartRunner.Tests.ProfileHonestyTests" classname="ChartRunner.Tests.ProfileHonestyTests" runstate="Runnable" testcasecount="3" result="Passed" start-time="2026-08-06 01:24:27Z" end-time="2026-08-06 01:24:27Z" duration="0.115505" total="3" passed="3" failed="0" inconclusive="0" skipped="0" asserts="0">
+            <properties />
+            <test-case id="1003" name="DeclaredUnusedLists_ReferenceRealFields" fullname="ChartRunner.Tests.ProfileHonestyTests.DeclaredUnusedLists_ReferenceRealFields" methodname="DeclaredUnusedLists_ReferenceRealFields" classname="ChartRunner.Tests.ProfileHonestyTests" runstate="Runnable" seed="1383519817" result="Passed" start-time="2026-08-06 01:24:27Z" end-time="2026-08-06 01:24:27Z" duration="0.032163" asserts="0">
+              <properties>
+                <property name="retryIteration" value="0" />
+                <property name="repeatIteration" value="0" />
+              </properties>
+            </test-case>
+            <test-case id="1002" name="EverySerializedField_IsEitherRead_OrExplicitlyDeclaredUnused" fullname="ChartRunner.Tests.ProfileHonestyTests.EverySerializedField_IsEitherRead_OrExplicitlyDeclaredUnused" methodname="EverySerializedField_IsEitherRead_OrExplicitlyDeclaredUnused" classname="ChartRunner.Tests.ProfileHonestyTests" runstate="Runnable" seed="888669790" result="Passed" start-time="2026-08-06 01:24:27Z" end-time="2026-08-06 01:24:27Z" duration="0.051516" asserts="0">
+              <properties>
+                <property name="retryIteration" value="0" />
+                <property name="repeatIteration" value="0" />
+              </properties>
+              <output><![CDATA[PROFILE HONESTY
+  полей (без мета): 56
+  объявлено эмерджентными: 7
+  молчащих (ни чтения, ни объявления): 0
+]]></output>
+            </test-case>
+            <test-case id="1004" name="ProfileSource_DocumentsWhyNumbersAreNotPortableVerbatim" fullname="ChartRunner.Tests.ProfileHonestyTests.ProfileSource_DocumentsWhyNumbersAreNotPortableVerbatim" methodname="ProfileSource_DocumentsWhyNumbersAreNotPortableVerbatim" classname="ChartRunner.Tests.ProfileHonestyTests" runstate="Runnable" seed="1960316399" result="Passed" start-time="2026-08-06 01:24:27Z" end-time="2026-08-06 01:24:27Z" duration="0.001065" asserts="0">
+              <properties>
+                <property name="retryIteration" value="0" />
+                <property name="repeatIteration" value="0" />
+              </properties>
+              <output><![CDATA[Saving results to: /Users/macbook/Library/Application Support/DefaultCompany/2D_URP/TestResults.xml
+]]></output>
+            </test-case>
+          </test-suite>
+        </test-suite>
+      </test-suite>
+    </test-suite>
+  </test-suite>
+</test-run>

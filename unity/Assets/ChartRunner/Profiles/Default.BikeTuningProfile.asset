@@ -12,6 +12,15 @@ MonoBehaviour:
   m_Script: {fileID: 11500000, guid: 1fe1bfee45e84477e848f09e6c74b74e, type: 3}
   m_Name: Default.BikeTuningProfile
   m_EditorClassIdentifier: ChartRunner.Runtime::ChartRunner.Tuning.BikeTuningProfile
+  supersededByEmergentPhysics:
+  - driveFloorFraction
+  - driveTrade
+  - leanAir
+  - airHold
+  notImplementedYet:
+  - climbGrip
+  - suspensionTravelM
+  - mudRollResistance
   pendingCalibration:
   - suspensionDamping
   - suspensionTravelM

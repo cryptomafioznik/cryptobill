@@ -173,6 +173,10 @@ namespace ChartRunner.EditorTools
             // suspensionFrequency ОТКАЛИБРОВАНЫ измерением на полигоне против сформулированных
             // требований (см. docs/IMPLEMENTATION_LOG.md, итерация 6) и из списка убраны.
             // Остаются те, для которых требование ещё не сформулировано или не измерено.
+            // Списки честности (supersededByEmergentPhysics / notImplementedYet) заданы
+            // ДЕФОЛТАМИ КЛАССА, а не здесь: это утверждения о КОДЕ, и держать их в данных
+            // значило бы иметь два источника истины. Тест ProfileHonestyTests читает именно
+            // дефолты класса — на этом первая редакция теста и упала.
             b.pendingCalibration = new[]
             {
                 nameof(BikeTuningProfile.suspensionDamping),
