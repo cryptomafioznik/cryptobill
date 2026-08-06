@@ -13,27 +13,18 @@ namespace ChartRunner.Game
     /// удержать вес физически нельзя, надо бесконечно возить пальцем.
     /// Здесь наклон = положение пальца относительно точки касания, и он ДЕРЖИТСЯ.
     ///
-    /// Раскладка (портрет):
-    ///   правая половина — газ, левая — тормоз, зона определяется каждый кадр по текущей
-    ///   позиции пальца (соскользнул с газа на тормоз — команда честно поменялась);
-    ///   вертикальный увод пальца от точки касания — перенос веса, ВВЕРХ = вес НАЗАД.
+    /// РАСКЛАДКА — схема `btn4` исходника: четыре кнопки, ГАЗ и ТОРМОЗ справа, НОС↑ и
+    /// НОС↓ парой слева. Подробности и причина выбора — в <see cref="TouchButtons"/>.
     ///
-    /// Вверх = назад, потому что это жест «потянуть на себя»: подъём носа на руле.
-    /// Если фил окажется обратным, менять здесь одну строку <see cref="LeanSign"/>.
+    /// Первая редакция делила экран пополам и брала наклон драгом пальца. Это была моя
+    /// выдумка при том, что схема уже была выбрана пользователем и записана в исходнике
+    /// как дефолт. Вердикт живого теста: «управление очень неудобное, старое намного
+    /// удобнее». Схему нельзя изобретать заново, если она уже выбрана.
     /// </summary>
     public class PlayInput : IBikeInputSource
     {
-        /// <summary>Сколько пикселей увода пальца = полный перенос веса.</summary>
-        public float LeanTravelPx = 110f;
-
-        /// <summary>+1: палец вверх = вес назад (нос вверх). −1 — обратная схема.</summary>
-        public float LeanSign = 1f;
-
-        /// <summary>Мёртвая зона у точки касания, px: чтобы газ не давал случайного наклона.</summary>
-        public float LeanDeadZonePx = 14f;
-
-        private readonly float[] _startY = new float[8];
-        private readonly bool[] _active = new bool[8];
+        /// <summary>Кнопки схемы btn4. Общие с HUD: он рисует ровно то, что опрашивается.</summary>
+        public readonly TouchButtons Buttons = new TouchButtons();
 
         public BikeInputState Read()
         {
@@ -52,52 +43,42 @@ namespace ChartRunner.Game
             s.Lean = kLean;
             s.JumpPressed = UnityEngine.Input.GetKeyDown(KeyCode.Space);
 
-            // ---- тач (телефон) ----
+            // ---- тач (телефон): схема btn4 из исходника ----
+            //
+            // Раскладка и зоны — в TouchButtons. Здесь только опрос: каждый палец
+            // проверяется против КАЖДОЙ кнопки, поэтому нажатия складываются (газ + наклон
+            // одновременно) и палец, соскользнувший с кнопки, честно её отпускает.
             var touches = UnityEngine.Input.touchCount;
-            // Три пальца зарезервированы под переключение оверлея телеметрии — управление игнорируем,
-            // иначе жест диагностики попутно давал бы газ.
-            if (touches > 0 && touches < 3)
+            if (touches > 0)
             {
-                var half = Screen.width * 0.5f;
-                var lean = 0f;
-                var leanSources = 0;
-
-                for (var i = 0; i < touches && i < _startY.Length; i++)
+                var gas = false; var brake = false; var up = false; var down = false;
+                for (var i = 0; i < touches; i++)
                 {
                     var t = UnityEngine.Input.GetTouch(i);
-                    var slot = Mathf.Clamp(t.fingerId, 0, _startY.Length - 1);
-
-                    if (t.phase == TouchPhase.Began || !_active[slot])
-                    {
-                        _startY[slot] = t.position.y;
-                        _active[slot] = true;
-                    }
-
-                    if (t.position.x >= half) s.Throttle = 1f;
-                    else s.Brake = 1f;
-
-                    var dy = t.position.y - _startY[slot];
-                    var mag = Mathf.Abs(dy);
-                    if (mag > LeanDeadZonePx)
-                    {
-                        var eff = (mag - LeanDeadZonePx) * Mathf.Sign(dy);
-                        lean += Mathf.Clamp(eff / LeanTravelPx, -1f, 1f);
-                        leanSources++;
-                    }
-
-                    if (t.phase == TouchPhase.Ended || t.phase == TouchPhase.Canceled)
-                        _active[slot] = false;
+                    if (t.phase == TouchPhase.Ended || t.phase == TouchPhase.Canceled) continue;
+                    var pos = t.position;
+                    if (TouchButtons.Hit(Buttons.Gas.R, pos)) gas = true;
+                    if (TouchButtons.Hit(Buttons.Brake.R, pos)) brake = true;
+                    if (TouchButtons.Hit(Buttons.NoseUp.R, pos)) up = true;
+                    if (TouchButtons.Hit(Buttons.NoseDown.R, pos)) down = true;
                 }
 
-                if (leanSources > 0)
-                {
-                    // Вес НАЗАД = отрицательный Lean в контракте BikeInputState.
-                    s.Lean = Mathf.Clamp(-LeanSign * lean / leanSources, -1f, 1f);
-                }
+                if (gas) s.Throttle = 1f;
+                if (brake) s.Brake = 1f;
+                // НОС↑ = вес НАЗАД = отрицательный Lean; НОС↓ = вес ВПЕРЁД.
+                // Удержание даёт плавный набор веса: рампа 0.55 с живёт в физике.
+                var lean = (down ? 1f : 0f) - (up ? 1f : 0f);
+                if (Mathf.Abs(lean) > 0f) s.Lean = lean;
+
+                Buttons.Gas.Active = gas;
+                Buttons.Brake.Active = brake;
+                Buttons.NoseUp.Active = up;
+                Buttons.NoseDown.Active = down;
             }
-            else if (touches == 0)
+            else
             {
-                for (var i = 0; i < _active.Length; i++) _active[i] = false;
+                Buttons.Gas.Active = false; Buttons.Brake.Active = false;
+                Buttons.NoseUp.Active = false; Buttons.NoseDown.Active = false;
             }
 #endif
             return s;

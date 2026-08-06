@@ -135,9 +135,10 @@ namespace ChartRunner.Game
             TrackBuilder.Build(_track, BikeProfile.tyreFriction).transform.SetParent(world, true);
             if (_candles != null)
             {
-                // Земля СОСТОИТ из свечей. Тела рисуются между теми же узлами, по которым
-                // построена коллизия, поэтому игрок едет ровно по тому, что видит.
-                CandleView.Build(_track, _candles, world);
+                // Земля СОСТОИТ из свечей, и верх заливки идёт по САМОЙ поверхности
+                // (сэмплер тот же, что у коллизии), поэтому игрок едет ровно по тому,
+                // что видит, а не проваливается внутрь нарисованных свечей.
+                CandleView.Build(_track, _candles, _sampler, world);
             }
             else
             {
@@ -314,7 +315,7 @@ namespace ChartRunner.Game
             GUI.Label(new Rect(14f, y + 8f, 220f, 20f),
                 st.WeightShift < -0.05f ? "вес НАЗАД" : st.WeightShift > 0.05f ? "вес ВПЕРЁД" : "", _hud);
 
-            DrawTouchZones(st);
+            DrawButtons();
 
             if (_inputCompiledOut)
             {
@@ -336,56 +337,43 @@ namespace ChartRunner.Game
         }
 
         /// <summary>
-        /// ВИДИМЫЕ ЗОНЫ УПРАВЛЕНИЯ. Отдельная ошибка, которую надо было чинить вместе с вводом:
-        /// раскладка «правая половина газ, левая тормоз» существовала только в моей голове и
-        /// в комментарии к коду. Игрок, впервые открывший приложение, не знает, куда нажимать,
-        /// и неотличимо от сломанного ввода получает «я жму, ничего не происходит».
+        /// ЧЕТЫРЕ КНОПКИ схемы `btn4`. Рисуются ИЗ ТОГО ЖЕ объекта, который опрашивает
+        /// ввод (<see cref="PlayInput.Buttons"/>), поэтому нарисованное и нажимаемое не
+        /// могут разъехаться: это одна структура, а не две копии координат.
         ///
-        /// Зоны подсвечиваются В МОМЕНТ нажатия по ФАКТИЧЕСКИ приложенной команде из
-        /// BikeState, а не по факту касания экрана. Это делает панель ещё и щупом: если
-        /// подсветка не загорается при нажатии, значит команда до физики не дошла.
+        /// Подсветка идёт по флагу, выставленному при ОПРОСЕ касания, а не по состоянию
+        /// физики — так кнопка отвечает мгновенно, а не через рампу газа, и остаётся щупом:
+        /// не загорелась при нажатии — палец не попал или ввод не дошёл.
         /// </summary>
-        private void DrawTouchZones(BikeState st)
+        private void DrawButtons()
         {
-            const float h = 932f;
-            const float w = 430f;
-            // Полоса зон занимает нижнюю пятую кадра, а не треть: в первой редакции
-            // полупрозрачная заливка на 38 % высоты выбеливала игровое поле и спорила
-            // со свечами. Зоны обязаны быть понятны и не обязаны быть заметны.
-            var zoneTop = h * 0.80f;
-
-            var brakeOn = st.BrakeApplied > 0.01f;
-            var gasOn = st.ThrottleApplied > 0.01f;
-
-            // В ПОКОЕ ЗАЛИВКИ НЕТ. Даже 3.5 % белого поверх почти чёрного грунта читались
-            // светлой плашкой на пятой части кадра — панель забирала себе низ композиции.
-            // Подсветка появляется только на нажатии, и тогда она несёт информацию.
-            if (brakeOn)
-            {
-                GUI.color = new Color(0.62f, 0.80f, 1f, 0.15f);
-                GUI.DrawTexture(new Rect(0f, zoneTop, w * 0.5f, h - zoneTop), Texture2D.whiteTexture);
-            }
-            if (gasOn)
-            {
-                GUI.color = new Color(1f, 0.78f, 0.34f, 0.15f);
-                GUI.DrawTexture(new Rect(w * 0.5f, zoneTop, w * 0.5f, h - zoneTop), Texture2D.whiteTexture);
-            }
-            GUI.color = Color.white;
-
             EnsureStyles();
-            _zone.normal.textColor = new Color(0.86f, 0.93f, 0.98f, brakeOn ? 0.95f : 0.45f);
-            GUI.Label(new Rect(0f, h - 74f, w * 0.5f, 30f), "ТОРМОЗ", _zone);
-            _zone.normal.textColor = new Color(0.98f, 0.80f, 0.42f, gasOn ? 0.95f : 0.45f);
-            GUI.Label(new Rect(w * 0.5f, h - 74f, w * 0.5f, 30f), "ГАЗ", _zone);
+            var b = _input.Buttons;
+            DrawButton(b.Gas, new Color(0.47f, 1f, 0.71f, 1f));
+            DrawButton(b.Brake, new Color(1f, 0.69f, 0.47f, 1f));
+            DrawButton(b.NoseUp, new Color(0.59f, 0.80f, 1f, 1f));
+            DrawButton(b.NoseDown, new Color(0.59f, 0.80f, 1f, 1f));
+        }
 
-            _zone.normal.textColor = new Color(0.86f, 0.93f, 0.98f, 0.40f);
-            GUI.Label(new Rect(0f, h - 44f, w, 26f), "палец вверх/вниз — перенос веса", _zone);
+        private void DrawButton(TouchButtons.Zone z, Color tint)
+        {
+            var r = z.R;
+            // Подложка: заметная, но не спорящая с игровым полем. Нажатая — заливка цветом.
+            GUI.color = z.Active
+                ? new Color(tint.r, tint.g, tint.b, 0.34f)
+                : new Color(1f, 1f, 1f, 0.075f);
+            GUI.DrawTexture(r, Texture2D.whiteTexture);
 
-            // Разделитель половин — тонкая линия вместо заливки: границу зон надо ПОКАЗАТЬ,
-            // а не занять ею кадр.
-            GUI.color = new Color(1f, 1f, 1f, 0.14f);
-            GUI.DrawTexture(new Rect(w * 0.5f - 0.5f, h - 96f, 1f, 72f), Texture2D.whiteTexture);
+            // Рамка в один пиксель опорного кадра: даёт кнопке край, не занимая площадь.
+            GUI.color = new Color(tint.r, tint.g, tint.b, z.Active ? 0.85f : 0.34f);
+            GUI.DrawTexture(new Rect(r.x, r.y, r.width, 1f), Texture2D.whiteTexture);
+            GUI.DrawTexture(new Rect(r.x, r.yMax - 1f, r.width, 1f), Texture2D.whiteTexture);
+            GUI.DrawTexture(new Rect(r.x, r.y, 1f, r.height), Texture2D.whiteTexture);
+            GUI.DrawTexture(new Rect(r.xMax - 1f, r.y, 1f, r.height), Texture2D.whiteTexture);
             GUI.color = Color.white;
+
+            _zone.normal.textColor = new Color(tint.r, tint.g, tint.b, z.Active ? 1f : 0.72f);
+            GUI.Label(r, z.Label, _zone);
         }
 
         private void EnsureStyles()
@@ -395,7 +383,8 @@ namespace ChartRunner.Game
             _hud.normal.textColor = new Color(0.86f, 0.93f, 0.98f, 0.92f);
             _big = new GUIStyle(GUI.skin.label) { fontSize = 26, alignment = TextAnchor.MiddleCenter };
             _big.normal.textColor = new Color(1f, 0.44f, 0.38f, 0.95f);
-            _zone = new GUIStyle(GUI.skin.label) { fontSize = 15, alignment = TextAnchor.MiddleCenter };
+            _zone = new GUIStyle(GUI.skin.label) { fontSize = 17, alignment = TextAnchor.MiddleCenter };
+            _zone.fontStyle = FontStyle.Bold;
         }
     }
 }
