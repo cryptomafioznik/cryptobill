@@ -93,7 +93,8 @@ namespace ChartRunner.Tests
                     for (var j = i - 2; j <= i + 2; j++)
                     {
                         if (j < 0 || j >= p.nodesPx.Length) continue;
-                        ctx += (j == i ? " >" : " ") + F(p.nodesPx[j].y, 0);
+                        var src = j < gen.NodeSource.Count ? gen.NodeSource[j] : "?";
+                        ctx += (j == i ? "  >" : "  ") + F(p.nodesPx[j].y, 0) + "[" + src + "]";
                     }
                     r.WorstContext = ctx;
                 }

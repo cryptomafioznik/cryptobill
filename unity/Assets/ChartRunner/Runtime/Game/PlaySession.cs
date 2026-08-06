@@ -83,6 +83,7 @@ namespace ChartRunner.Game
         private GUIStyle _hud;
         private GUIStyle _big;
         private GUIStyle _zone;
+        private GUIStyle _warn;
 
         private void Awake()
         {
@@ -99,6 +100,7 @@ namespace ChartRunner.Game
         /// <summary>Трасса, действующая сейчас. Собирается по выбору, а не по полю сцены.</summary>
         private TrackProfile _track;
         private System.Collections.Generic.List<CandleTrackGenerator.Candle> _candles;
+        private System.Collections.Generic.List<CandleTrackGenerator.EventSpan> _events;
 
         private void Start()
         {
@@ -110,6 +112,7 @@ namespace ChartRunner.Game
                 var gen = CandleTrackGenerator.Generate(CandleProfile, ChartSeed, ChartCandles);
                 _track = gen.Profile;
                 _candles = gen.Candles;
+                _events = gen.Events;
             }
             else if (Selected == TrackChoice.Crux30)
             {
@@ -148,7 +151,7 @@ namespace ChartRunner.Game
                 // Земля СОСТОИТ из свечей, и верх заливки идёт по САМОЙ поверхности
                 // (сэмплер тот же, что у коллизии), поэтому игрок едет ровно по тому,
                 // что видит, а не проваливается внутрь нарисованных свечей.
-                CandleView.Build(_track, _candles, _sampler, world);
+                CandleView.Build(_track, _candles, _sampler, world, _events);
             }
             else
             {
@@ -353,6 +356,7 @@ namespace ChartRunner.Game
             GUI.Label(new Rect(14f, y + 8f, 220f, 20f),
                 st.WeightShift < -0.05f ? "вес НАЗАД" : st.WeightShift > 0.05f ? "вес ВПЕРЁД" : "", _hud);
 
+            DrawEventWarning(st);
             DrawButtons();
 
             if (_inputCompiledOut)
@@ -372,6 +376,44 @@ namespace ChartRunner.Game
             }
 
             GUI.matrix = m;
+        }
+
+        /// <summary>
+        /// ПРЕДУПРЕЖДЕНИЕ О СОБЫТИИ. Сет-пьеса обязана быть ТЕЛЕГРАФИРУЕМОЙ: игрок должен
+        /// узнать о ней заранее и успеть подготовиться, иначе это не драма, а подстава.
+        /// Ровно тем же принципом живут разгоны перед препятствиями.
+        ///
+        /// Порог 22 метра выведен, а не назначен: на верхней скорости 6.27 м/с это 3.5 с —
+        /// заметно больше бюджета реакции 0.80 с, то есть времени хватает не только
+        /// среагировать, но и выбрать, как заходить.
+        /// </summary>
+        private void DrawEventWarning(BikeState st)
+        {
+            if (_events == null || _events.Count == 0) return;
+            EnsureStyles();
+
+            var stepM = _track.nodeStepPx * UnitsContract.PxToM;
+            for (var i = 0; i < _events.Count; i++)
+            {
+                var e = _events[i];
+                var fromM = e.FromNode * stepM;
+                var toM = e.ToNode * stepM;
+                var dist = fromM - st.PositionXM;
+
+                // Показываем на подлёте и пока едем внутри участка.
+                if (dist > 22f || st.PositionXM > toM) continue;
+
+                var rally = e.Type == CandleTrackGenerator.MarketEvent.Rally;
+                var col = rally
+                    ? new Color(0.42f, 0.94f, 0.62f, 1f)
+                    : new Color(1f, 0.46f, 0.36f, 1f);
+                // Внутри участка баннер тусклее: он уже сделал свою работу и не должен
+                // перетягивать внимание с рельефа.
+                var inside = dist <= 0f;
+                _warn.normal.textColor = new Color(col.r, col.g, col.b, inside ? 0.55f : 0.95f);
+                GUI.Label(new Rect(0f, 932f * 0.16f, 430f, 34f), e.Title, _warn);
+                return;
+            }
         }
 
         /// <summary>
@@ -423,6 +465,10 @@ namespace ChartRunner.Game
             _big.normal.textColor = new Color(1f, 0.44f, 0.38f, 0.95f);
             _zone = new GUIStyle(GUI.skin.label) { fontSize = 17, alignment = TextAnchor.MiddleCenter };
             _zone.fontStyle = FontStyle.Bold;
+            _warn = new GUIStyle(GUI.skin.label)
+            {
+                fontSize = 22, alignment = TextAnchor.MiddleCenter, fontStyle = FontStyle.Bold
+            };
         }
     }
 }

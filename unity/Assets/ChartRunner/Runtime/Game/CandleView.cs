@@ -53,10 +53,23 @@ namespace ChartRunner.Game
         /// <summary>Подстолбцов на свечу. Верх заливки идёт по поверхности этими шагами.</summary>
         private const int SubColumns = 4;
 
+        /// <summary>Свечи внутри события горят ярче: сет-пьеса обязана быть видна издалека.</summary>
+        public static readonly Color RallyTint = new Color(0.20f, 0.62f, 0.36f, 1f);
+        public static readonly Color FlashTint = new Color(0.58f, 0.20f, 0.16f, 1f);
+
         public static GameObject Build(TrackProfile profile,
             IReadOnlyList<CandleTrackGenerator.Candle> candles, TerrainSampler terrain,
-            Transform parent)
+            Transform parent, IReadOnlyList<CandleTrackGenerator.EventSpan> events = null)
         {
+            // Разметка событий по узлам: внутри сет-пьесы свечи окрашены её цветом,
+            // поэтому игрок видит участок ЗАРАНЕЕ, а не узнаёт о нём, влетев в него.
+            var evAt = new Dictionary<int, CandleTrackGenerator.MarketEvent>();
+            if (events != null)
+            {
+                foreach (var e in events)
+                    for (var n = e.FromNode; n <= e.ToNode; n++) evAt[n] = e.Type;
+            }
+
             var root = new GameObject("CandleTerrain");
             if (parent != null) root.transform.SetParent(parent, false);
 
@@ -81,6 +94,11 @@ namespace ChartRunner.Game
                 var x0 = i * step;
                 var body = cd.Up ? UpBody : DownBody;
                 var edge = cd.Up ? UpEdge : DownEdge;
+                if (evAt.TryGetValue(i, out var ev))
+                {
+                    body = ev == CandleTrackGenerator.MarketEvent.Rally ? RallyTint : FlashTint;
+                    edge = ev == CandleTrackGenerator.MarketEvent.Rally ? UpEdge : DownEdge;
+                }
 
                 // ---- ТЕЛО СВЕЧИ ----
                 //

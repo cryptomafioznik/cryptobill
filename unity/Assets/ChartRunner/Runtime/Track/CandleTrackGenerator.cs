@@ -31,7 +31,14 @@ namespace ChartRunner.Track
     /// перед фичей. Это то же правило структуры, что и принудительный flat: игрок обязан
     /// иметь возможность подготовиться, иначе сложность превращается в лотерею.
     ///
-    /// НЕ перенесены рыночные события (памп-ралли, кит, флеш-крах) — следующий шаг.
+    /// СОБЫТИЯ РЫНКА. Перенесены ДВА из трёх: `rally` (памп-ралли — затяжной зелёный
+    /// подъём) и `flash` (флеш-крах — пол уходит из-под колёс обрывом). Третье, `whale`,
+    /// НЕ перенесено намеренно: в исходнике его рельеф — обычная земля, а всю драму делает
+    /// догоняющая волна, механики которой здесь нет. Событие, которое ничего не меняет,
+    /// хуже отсутствующего: оно обещает игроку то, чего не произойдёт.
+    ///
+    /// События ПЕРЕБИВАЮТ и рельеф, и препятствия — как в исходнике (`if(!isEv)` вокруг
+    /// машин фич). Смысл в том, что событие — это сет-пьеса, а не добавка поверх шума.
     ///
     /// ДВА ОТСТУПЛЕНИЯ ОТ ИСХОДНИКА, ОБА НАМЕРЕННЫЕ:
     ///
@@ -77,6 +84,35 @@ namespace ChartRunner.Track
             /// и справедливо, но бессмысленно ругается на 87°.
             /// </summary>
             public List<int> GapNodes = new List<int>();
+
+            /// <summary>Участки событий рынка: где начинается и кончается сет-пьеса.</summary>
+            public List<EventSpan> Events = new List<EventSpan>();
+
+            /// <summary>
+            /// Какая ветка генератора поставила каждый узел. Нужен только диагностике:
+            /// когда гейт честности ловит выброс крутизны, вопрос «откуда он» решается
+            /// чтением этого списка, а не рассуждением о вероятных причинах.
+            /// </summary>
+            public List<string> NodeSource = new List<string>();
+        }
+
+        /// <summary>Тип рыночного события.</summary>
+        public enum MarketEvent
+        {
+            None,
+            /// <summary>Памп-ралли: затяжной зелёный подъём.</summary>
+            Rally,
+            /// <summary>Флеш-крах: пол уходит из-под колёс обрывом.</summary>
+            Flash
+        }
+
+        public struct EventSpan
+        {
+            public MarketEvent Type;
+            public int FromNode;
+            public int ToNode;
+
+            public string Title => Type == MarketEvent.Rally ? "ПАМП-РАЛЛИ" : "ФЛЕШ-КРАХ";
         }
 
         /// <summary>
@@ -129,6 +165,13 @@ namespace ChartRunner.Track
             float nextGapX = 1800f, nextKickX = 1700f, nextClimbX = 2400f, nextWhoopX = 2200f;
             var sharp = new List<int>();
 
+            // ---- события рынка ----
+            var evType = MarketEvent.None;
+            var evLeft = 0;
+            var evTotal = 0;
+            var nextEvX = 2600f;
+            var evStartNode = 0;
+
             for (var i = 0; i < nodeCount; i++)
             {
                 var genX = i * StepPx;
@@ -144,6 +187,34 @@ namespace ChartRunner.Track
                 regimeLeft--;
 
                 var prevC = close;
+
+                // Идёт ли сейчас препятствие. Вычисляется ДО планирования события,
+                // потому что событие не имеет права начаться посреди фичи.
+                var featureBusy = gapRunup > 0 || gapRampLeft > 0 || gapLeft > 0 || gapLandFlat > 0
+                                  || kickRunup > 0 || kickRampLeft > 0 || kickLandLeft > 0
+                                  || climbRunup > 0 || climbLeft > 0
+                                  || whoopRunup > 0 || whoopLeft > 0;
+
+                // ---- планирование события ----
+                // Событие начинается по расписанию и перебивает всё остальное на свою
+                // длину. Зона выбирается по пройденному пути: каждые 700 м «настроение»
+                // рынка меняется, поэтому эйфория и медвежий цикл идут волнами, а не
+                // ровной лотереей.
+                // Условие `!featureBusy` — не косметика, а починка унаследованного дефекта.
+                // Машины препятствий пропускаются во время события (как и в исходнике,
+                // где они стоят внутри `if(!isEv)`), поэтому событие, начавшееся посреди
+                // фичи, ЗАМОРАЖИВАЕТ её счётчики, а после события фича продолжается от
+                // базовой высоты, снятой давно и на другой высоте. Замерено гейтом:
+                // подъём 81.4° одним узлом ровно на границе flash → whoop, одинаково на
+                // четырёх семенах из четырёх.
+                if (evLeft <= 0 && !featureBusy && i > 40 && genX >= nextEvX)
+                {
+                    var zone = Mathf.FloorToInt(genX / 7000f) % 5;
+                    evType = PickEvent(zone, ref rng);
+                    evTotal = evType == MarketEvent.Rally ? 17 : 13;
+                    evLeft = evTotal;
+                    evStartNode = i;
+                }
 
                 // Макро-тренд: блуждание с дрейфом режима плюс его пила.
                 walk += regimeDrift * 0.5f + (rng.Next() - 0.5f) * regimeVol * 0.5f;
@@ -197,19 +268,59 @@ namespace ChartRunner.Track
                     walk = close - baseY - roll;
                 }
 
+                var tag = "natural";
+
+                // ================= СОБЫТИЕ =================
+                //
+                // Перебивает и рельеф, и препятствия: сет-пьеса, а не добавка поверх шума.
+                if (evLeft > 0)
+                {
+                    var kk = evTotal - evLeft;
+                    if (evType == MarketEvent.Rally)
+                    {
+                        // Бодрый, но заезжаемый зелёный подъём (~22°): вкатываешься на
+                        // мощности, у вершины приходится дозировать.
+                        close = Mathf.Clamp(prevC - (8f + rng.Next() * 5f), 78f, H * 0.92f);
+                    }
+                    else
+                    {
+                        // ФЛЕШ-КРАХ: на втором узле пол уходит обрывом, дальше дрожь.
+                        close = kk == 1
+                            ? Mathf.Clamp(prevC + (96f + rng.Next() * 40f), 90f, H * 0.95f)
+                            : Mathf.Clamp(prevC + (rng.Next() - 0.5f) * 14f, 90f, H * 0.95f);
+                        if (kk == 1) sharp.Add(i);   // кромка обрыва не сглаживается
+                    }
+                    walk = close - baseY;
+                    evLeft--;
+                    if (evLeft <= 0)
+                    {
+                        res.Events.Add(new EventSpan
+                        {
+                            Type = evType,
+                            FromNode = evStartNode,
+                            ToNode = i
+                        });
+                        nextEvX = genX + (evType == MarketEvent.Rally ? 2100f : 2900f)
+                                  + rng.Next() * 900f;
+                        evType = MarketEvent.None;
+                    }
+                    closes.Add(close);
+                    res.NodeSource.Add(evType == MarketEvent.Rally ? "rally" : "flash");
+                    AddCandle(res, prevC, close, baseY, regimeVol, regime, ref rng);
+                    continue;
+                }
+
                 // ================= ПРЕПЯТСТВИЯ =================
                 //
                 // Порядок веток и все числа — из исходника (стр. 202-236). Ветки взаимно
                 // исключающие: пока идёт одна фича, следующая не планируется, иначе они
                 // накладываются и рельеф становится непроходимым.
                 var densK = 1f - Mathf.Clamp01(genX / 12500f) * 0.42f;
-                var busy = gapRunup > 0 || gapRampLeft > 0 || gapLeft > 0 || gapLandFlat > 0
-                           || kickRunup > 0 || kickRampLeft > 0 || kickLandLeft > 0
-                           || climbRunup > 0 || climbLeft > 0
-                           || whoopRunup > 0 || whoopLeft > 0;
+                var busy = featureBusy;
 
                 if (gapRunup > 0)
                 {
+                    tag = "gapRunup";
                     // РАЗГОН-СПУСК: набрать скорость перед рампой.
                     var kk = 5 - gapRunup;
                     close = Mathf.Clamp(gapPrevY + kk * 13f, 70f, H * 0.82f);
@@ -219,6 +330,7 @@ namespace ChartRunner.Track
                 }
                 else if (gapRampLeft > 0)
                 {
+                    tag = "gapRamp";
                     // ВОГНУТЫЙ ЛИП: смещение растёт как степень 2.0 — гладкая база к кромке,
                     // поэтому вылет ЭМЕРДЖЕНТНЫЙ (∝ скорости), а не скриптовый пуск.
                     var kk = 5 - gapRampLeft;
@@ -236,6 +348,7 @@ namespace ChartRunner.Track
                 }
                 else if (gapLeft > 0)
                 {
+                    tag = "gapPit";
                     // ПРОВАЛ. Обычный — глубокий (медленно = не долетел). Step-up — мелкий
                     // дип, чтобы недолёт не был мгновенной смертью о стену.
                     close = gapStepNow > 0
@@ -252,6 +365,7 @@ namespace ChartRunner.Track
                 }
                 else if (gapLandFlat > 0)
                 {
+                    tag = "gapLand";
                     // ВСТРЕЧНЫЙ ДОВНСЛОП: ловит падающую дугу по касательной, а не плоским
                     // ударом. Щедрый — прощает разброс скорости.
                     var kk = 10 - gapLandFlat;
@@ -261,6 +375,7 @@ namespace ChartRunner.Track
                 }
                 else if (kickRunup > 0)
                 {
+                    tag = "kickRunup";
                     var kk = 6 - kickRunup;
                     close = Mathf.Clamp(kickBaseY + kk * 12f, 70f, H * 0.88f);
                     walk = close - baseY;
@@ -269,6 +384,7 @@ namespace ChartRunner.Track
                 }
                 else if (kickRampLeft > 0)
                 {
+                    tag = "kickRamp";
                     var kk = 5 - kickRampLeft;
                     var off = 62f * Mathf.Pow((kk + 1f) / 5f, 2.2f);
                     close = Mathf.Clamp(kickRampBot - off, 70f, H * 0.95f);
@@ -283,6 +399,7 @@ namespace ChartRunner.Track
                 }
                 else if (kickLandLeft > 0)
                 {
+                    tag = "kickLand";
                     var kk = 9 - kickLandLeft;
                     close = Mathf.Clamp(kickLandTopY + kk * 8f, 70f, H * 0.9f);
                     walk = close - baseY;
@@ -290,6 +407,7 @@ namespace ChartRunner.Track
                 }
                 else if (climbRunup > 0)
                 {
+                    tag = "climbRunup";
                     var kk = 6 - climbRunup;
                     close = Mathf.Clamp(climbBaseY + kk * 13f, 70f, H * 0.86f);
                     walk = close - baseY;
@@ -298,6 +416,7 @@ namespace ChartRunner.Track
                 }
                 else if (climbLeft > 0)
                 {
+                    tag = "climb";
                     // ЕСТЕСТВЕННЫЙ ХОЛМ по S-кривой: пологий вход, крутая середина, пологий
                     // гребень. Линейный подъём давал угловатые изломы низа и верха.
                     var pp = (6f - climbLeft + 1f) / 6f;
@@ -308,6 +427,7 @@ namespace ChartRunner.Track
                 }
                 else if (whoopRunup > 0)
                 {
+                    tag = "whoopRunup";
                     close = Mathf.Clamp(whoopBaseY, 70f, H * 0.86f);
                     walk = close - baseY;
                     whoopRunup--;
@@ -315,6 +435,7 @@ namespace ChartRunner.Track
                 }
                 else if (whoopLeft > 0)
                 {
+                    tag = "whoop";
                     // РИТМ-СЕКЦИЯ: на скорости срезаешь гребни и ловишь мелкий воздух,
                     // медленно — переваливаешься. Ямы нет, значит и смерти нет: динамика.
                     whoopPhase += 2.3f;
@@ -322,14 +443,21 @@ namespace ChartRunner.Track
                     walk = close - baseY;
                     whoopLeft--;
                 }
-                // ПРОВЕРКА МЕСТА СНИЗУ. У кикера и подъёма в исходнике есть условие
-                // `close > H*0.5` — «нужно место СВЕРХУ под рампу». Симметричного условия
-                // снизу там нет, и оно понадобилось: разгон-спуск гэпа зажат клампом
-                // H*0.82, поэтому запуск фичи на большой глубине мгновенно ДЁРГАЕТ землю
-                // вверх до этого клампа. Замерено гейтом честности: подъём 68.4° одним
-                // узлом, одинаково на шести семенах из шести — с 722 на 656.
+                // ПРОВЕРКА МЕСТА СНИЗУ, выведенная арифметикой, а не подобранная.
+                //
+                // У кикера и подъёма в исходнике есть условие `close > H*0.5` — «нужно
+                // место СВЕРХУ под рампу». Симметричного условия снизу там нет, и оно
+                // необходимо: у каждого разгона-спуска свой кламп, и запуск фичи слишком
+                // глубоко мгновенно ДЁРГАЕТ землю вверх до этого клампа. Гейт честности
+                // ловил это дважды: сначала 68.4° у гэпа, потом 55.8° у кикера.
+                //
+                // Условие: close + (глубина разгона) ≤ (кламп разгона).
+                //   гэп:    5 узлов × 13 = 52,  кламп H·0.82 = 656 → close ≤ 604 = H·0.755
+                //   кикер:  6 узлов × 12 = 60,  кламп H·0.88 = 704 → close ≤ 644 = H·0.805
+                //   подъём: 6 узлов × 13 = 65,  кламп H·0.86 = 688 → close ≤ 623 = H·0.779
+                //   вупсы:  разгон плоский,     кламп H·0.86 = 688 → close ≤ 688 = H·0.86
                 else if (!busy && i > 20 && genX >= nextGapX && genX > 2600f
-                         && close < H * 0.78f
+                         && close < H * 0.75f
                          && regime != CandleTerrainProfile.Regime.Pump
                          && regime != CandleTerrainProfile.Regime.Crash)
                 {
@@ -338,7 +466,8 @@ namespace ChartRunner.Track
                     gapStepNow = rng.Next() < 0.4f ? 20f : 0f;
                     nextGapX = genX + 3000f + rng.Next() * 1400f;
                 }
-                else if (!busy && i > 16 && genX >= nextKickX && genX > 1700f && close > H * 0.5f
+                else if (!busy && i > 16 && genX >= nextKickX && genX > 1700f
+                         && close > H * 0.5f && close < H * 0.80f
                          && regime != CandleTerrainProfile.Regime.Pump
                          && regime != CandleTerrainProfile.Regime.Crash)
                 {
@@ -346,7 +475,8 @@ namespace ChartRunner.Track
                     kickRunup = 6;
                     nextKickX = genX + 2700f * densK + rng.Next() * 1000f * densK;
                 }
-                else if (!busy && i > 16 && genX >= nextClimbX && genX > 3600f && close > H * 0.52f
+                else if (!busy && i > 16 && genX >= nextClimbX && genX > 3600f
+                         && close > H * 0.52f && close < H * 0.77f
                          && regime != CandleTerrainProfile.Regime.Pump
                          && regime != CandleTerrainProfile.Regime.Crash)
                 {
@@ -355,7 +485,7 @@ namespace ChartRunner.Track
                     nextClimbX = genX + 4200f * densK + rng.Next() * 1200f * densK;
                 }
                 else if (!busy && i > 16 && genX >= nextWhoopX && genX > 1900f
-                         && close < H * 0.82f
+                         && close < H * 0.86f
                          && regime != CandleTerrainProfile.Regime.Pump
                          && regime != CandleTerrainProfile.Regime.Crash)
                 {
@@ -365,20 +495,9 @@ namespace ChartRunner.Track
                 }
 
                 closes.Add(close);
+                res.NodeSource.Add(tag);
 
-                // Свеча узла. Фитили — небольшой выброс за тело, пропорциональный пиле
-                // режима: на волатильном рынке тени длиннее, и это видно глазом.
-                var openUp = -(prevC - baseY);
-                var closeUp = -(close - baseY);
-                var wick = Mathf.Max(2f, regimeVol * 0.9f);
-                res.Candles.Add(new Candle
-                {
-                    OpenPx = openUp,
-                    ClosePx = closeUp,
-                    HighPx = Mathf.Max(openUp, closeUp) + wick * rng.Range(0.2f, 1f),
-                    LowPx = Mathf.Min(openUp, closeUp) - wick * rng.Range(0.2f, 1f),
-                    Regime = regime
-                });
+                AddCandle(res, prevC, close, baseY, regimeVol, regime, ref rng);
             }
 
             // Перевод в профиль трассы: у нас высота вверх положительная, у исходника вниз.
@@ -400,6 +519,39 @@ namespace ChartRunner.Track
             profile.flowBoostEnabled = false;
             res.Profile = profile;
             return res;
+        }
+
+        /// <summary>
+        /// Свеча узла. Фитили — выброс за тело, пропорциональный пиле режима: на
+        /// волатильном рынке тени длиннее, и это видно глазом.
+        /// </summary>
+        private static void AddCandle(Result res, float prevC, float close, float baseY,
+            float regimeVol, CandleTerrainProfile.Regime regime, ref Rng rng)
+        {
+            var openUp = -(prevC - baseY);
+            var closeUp = -(close - baseY);
+            var wick = Mathf.Max(2f, regimeVol * 0.9f);
+            res.Candles.Add(new Candle
+            {
+                OpenPx = openUp,
+                ClosePx = closeUp,
+                HighPx = Mathf.Max(openUp, closeUp) + wick * rng.Range(0.2f, 1f),
+                LowPx = Mathf.Min(openUp, closeUp) - wick * rng.Range(0.2f, 1f),
+                Regime = regime
+            });
+        }
+
+        /// <summary>
+        /// Выбор события по зоне пути. Порт `pickEvent`: в зоне эйфории чаще памп,
+        /// в медвежьей — чаще обвал. `whale` заменён на `flash`, потому что его рельеф
+        /// в исходнике обычный, а драму делает догоняющая волна, которой здесь нет.
+        /// </summary>
+        private static MarketEvent PickEvent(int zone, ref Rng rng)
+        {
+            var r = rng.Next();
+            if (zone == 2) return r < 0.72f ? MarketEvent.Rally : MarketEvent.Flash;
+            if (zone == 4) return r < 0.70f ? MarketEvent.Flash : MarketEvent.Rally;
+            return r < 0.5f ? MarketEvent.Rally : MarketEvent.Flash;
         }
 
         /// <summary>
