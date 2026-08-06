@@ -20,9 +20,18 @@ namespace ChartRunner.Track
     /// и КЭП КРУТИЗНЫ ПОДЪЁМА с пересчётом walk — без последнего генератор «копит» долг
     /// и выдаёт его стеной через несколько узлов.
     ///
-    /// ЧТО НЕ ПЕРЕНЕСЕНО: отдельные системы препятствий (гэпы, уступы, кикеры, мега-рампа,
-    /// вупсы, грязь, обрывы) и рыночные события. Это ещё десяток машин состояний; они
-    /// накладываются поверх этого же ядра и переносятся отдельно.
+    /// ПРЕПЯТСТВИЯ. Перенесены ЧЕТЫРЕ, и ровно те, что включены в тюнинге исходника:
+    /// гэп (`gapEvery 300`), кикер (`kickEvery 270`), крутой подъём (`climbEvery 420`) и
+    /// вупсы (`whoopEvery 380`). Уступы и обрывы там стоят с `Every: 0`, то есть автором
+    /// выключены — переносить их значило бы добавить в игру то, чего он в ней не хотел.
+    /// Мега-рампа только в режиме «Отрыв», которого здесь пока нет. Грязь требует
+    /// `mudRollResistance`, а он не реализован.
+    ///
+    /// Каждое препятствие — машина состояний, потребляющая узлы, и у КАЖДОГО есть разгон
+    /// перед фичей. Это то же правило структуры, что и принудительный flat: игрок обязан
+    /// иметь возможность подготовиться, иначе сложность превращается в лотерею.
+    ///
+    /// НЕ перенесены рыночные события (памп-ралли, кит, флеш-крах) — следующий шаг.
     ///
     /// ДВА ОТСТУПЛЕНИЯ ОТ ИСХОДНИКА, ОБА НАМЕРЕННЫЕ:
     ///
@@ -102,6 +111,16 @@ namespace ChartRunner.Track
             var regimeVol = 0f;
             var regimeLeft = 0f;
 
+            // ---- состояние машин препятствий (имена как в исходнике) ----
+            float gapRunup = 0, gapRampLeft = 0, gapLeft = 0, gapLandFlat = 0;
+            float gapPrevY = 0, gapRampBot = 0, gapLandTopY = 0, gapBaseY = 0, gapStepNow = 0;
+            float kickRunup = 0, kickRampLeft = 0, kickLandLeft = 0;
+            float kickBaseY = 0, kickRampBot = 0, kickLipY = 0, kickLandTopY = 0;
+            float climbRunup = 0, climbLeft = 0, climbBaseY = 0, climbBotY = 0;
+            float whoopRunup = 0, whoopLeft = 0, whoopBaseY = 0, whoopPhase = 0;
+            float nextGapX = 1800f, nextKickX = 1700f, nextClimbX = 2400f, nextWhoopX = 2200f;
+            var sharp = new List<int>();
+
             for (var i = 0; i < nodeCount; i++)
             {
                 var genX = i * StepPx;
@@ -170,6 +189,160 @@ namespace ChartRunner.Track
                     walk = close - baseY - roll;
                 }
 
+                // ================= ПРЕПЯТСТВИЯ =================
+                //
+                // Порядок веток и все числа — из исходника (стр. 202-236). Ветки взаимно
+                // исключающие: пока идёт одна фича, следующая не планируется, иначе они
+                // накладываются и рельеф становится непроходимым.
+                var densK = 1f - Mathf.Clamp01(genX / 12500f) * 0.42f;
+                var busy = gapRunup > 0 || gapRampLeft > 0 || gapLeft > 0 || gapLandFlat > 0
+                           || kickRunup > 0 || kickRampLeft > 0 || kickLandLeft > 0
+                           || climbRunup > 0 || climbLeft > 0
+                           || whoopRunup > 0 || whoopLeft > 0;
+
+                if (gapRunup > 0)
+                {
+                    // РАЗГОН-СПУСК: набрать скорость перед рампой.
+                    var kk = 5 - gapRunup;
+                    close = Mathf.Clamp(gapPrevY + kk * 13f, 70f, H * 0.82f);
+                    walk = close - baseY;
+                    gapRunup--;
+                    if (gapRunup <= 0) { gapRampBot = close; gapRampLeft = 5; }
+                }
+                else if (gapRampLeft > 0)
+                {
+                    // ВОГНУТЫЙ ЛИП: смещение растёт как степень 2.0 — гладкая база к кромке,
+                    // поэтому вылет ЭМЕРДЖЕНТНЫЙ (∝ скорости), а не скриптовый пуск.
+                    var kk = 5 - gapRampLeft;
+                    var off = 80f * Mathf.Pow((kk + 1f) / 5f, 2.0f);
+                    close = Mathf.Clamp(gapRampBot - off, 70f, H * 0.9f);
+                    walk = close - baseY;
+                    if (gapRampLeft <= 1) sharp.Add(i);   // кромка липа не сглаживается
+                    gapRampLeft--;
+                    if (gapRampLeft <= 0)
+                    {
+                        gapLeft = gapStepNow > 0 ? 1 : 2;
+                        gapLandTopY = Mathf.Clamp(gapPrevY - gapStepNow, 70f, H * 0.9f);
+                        gapBaseY = gapLandTopY;
+                    }
+                }
+                else if (gapLeft > 0)
+                {
+                    // ПРОВАЛ. Обычный — глубокий (медленно = не долетел). Step-up — мелкий
+                    // дип, чтобы недолёт не был мгновенной смертью о стену.
+                    close = gapStepNow > 0
+                        ? Mathf.Clamp(gapLandTopY + 50f, 70f, H * 0.95f)
+                        : H * 0.99f;
+                    sharp.Add(i);
+                    gapLeft--;
+                    if (gapLeft <= 0) { walk = gapBaseY - baseY; gapLandFlat = 10; }
+                }
+                else if (gapLandFlat > 0)
+                {
+                    // ВСТРЕЧНЫЙ ДОВНСЛОП: ловит падающую дугу по касательной, а не плоским
+                    // ударом. Щедрый — прощает разброс скорости.
+                    var kk = 10 - gapLandFlat;
+                    close = Mathf.Clamp(gapLandTopY + kk * 10f, 70f, H * 0.9f);
+                    walk = close - baseY;
+                    gapLandFlat--;
+                }
+                else if (kickRunup > 0)
+                {
+                    var kk = 6 - kickRunup;
+                    close = Mathf.Clamp(kickBaseY + kk * 12f, 70f, H * 0.88f);
+                    walk = close - baseY;
+                    kickRunup--;
+                    if (kickRunup <= 0) { kickRampBot = close; kickRampLeft = 5; }
+                }
+                else if (kickRampLeft > 0)
+                {
+                    var kk = 5 - kickRampLeft;
+                    var off = 62f * Mathf.Pow((kk + 1f) / 5f, 2.2f);
+                    close = Mathf.Clamp(kickRampBot - off, 70f, H * 0.95f);
+                    walk = close - baseY;
+                    if (kickRampLeft <= 1) { sharp.Add(i); kickLipY = close; }
+                    kickRampLeft--;
+                    if (kickRampLeft <= 0)
+                    {
+                        kickLandLeft = 9;
+                        kickLandTopY = Mathf.Clamp(kickLipY + 20f, 70f, H * 0.9f);
+                    }
+                }
+                else if (kickLandLeft > 0)
+                {
+                    var kk = 9 - kickLandLeft;
+                    close = Mathf.Clamp(kickLandTopY + kk * 8f, 70f, H * 0.9f);
+                    walk = close - baseY;
+                    kickLandLeft--;
+                }
+                else if (climbRunup > 0)
+                {
+                    var kk = 6 - climbRunup;
+                    close = Mathf.Clamp(climbBaseY + kk * 13f, 70f, H * 0.86f);
+                    walk = close - baseY;
+                    climbRunup--;
+                    if (climbRunup <= 0) { climbBotY = close; climbLeft = 6; }
+                }
+                else if (climbLeft > 0)
+                {
+                    // ЕСТЕСТВЕННЫЙ ХОЛМ по S-кривой: пологий вход, крутая середина, пологий
+                    // гребень. Линейный подъём давал угловатые изломы низа и верха.
+                    var pp = (6f - climbLeft + 1f) / 6f;
+                    var e = pp * pp * (3f - 2f * pp);
+                    close = Mathf.Clamp(climbBotY - e * 6f * 15f, 70f, H * 0.95f);
+                    walk = close - baseY;
+                    climbLeft--;
+                }
+                else if (whoopRunup > 0)
+                {
+                    close = Mathf.Clamp(whoopBaseY, 70f, H * 0.86f);
+                    walk = close - baseY;
+                    whoopRunup--;
+                    if (whoopRunup <= 0) { whoopLeft = 7; whoopPhase = 0f; }
+                }
+                else if (whoopLeft > 0)
+                {
+                    // РИТМ-СЕКЦИЯ: на скорости срезаешь гребни и ловишь мелкий воздух,
+                    // медленно — переваливаешься. Ямы нет, значит и смерти нет: динамика.
+                    whoopPhase += 2.3f;
+                    close = Mathf.Clamp(whoopBaseY - Mathf.Sin(whoopPhase) * 15f, 70f, H * 0.88f);
+                    walk = close - baseY;
+                    whoopLeft--;
+                }
+                else if (!busy && i > 20 && genX >= nextGapX && genX > 2600f
+                         && regime != CandleTerrainProfile.Regime.Pump
+                         && regime != CandleTerrainProfile.Regime.Crash)
+                {
+                    gapPrevY = close;
+                    gapRunup = 5;
+                    gapStepNow = rng.Next() < 0.4f ? 20f : 0f;
+                    nextGapX = genX + 3000f + rng.Next() * 1400f;
+                }
+                else if (!busy && i > 16 && genX >= nextKickX && genX > 1700f && close > H * 0.5f
+                         && regime != CandleTerrainProfile.Regime.Pump
+                         && regime != CandleTerrainProfile.Regime.Crash)
+                {
+                    kickBaseY = close;
+                    kickRunup = 6;
+                    nextKickX = genX + 2700f * densK + rng.Next() * 1000f * densK;
+                }
+                else if (!busy && i > 16 && genX >= nextClimbX && genX > 3600f && close > H * 0.52f
+                         && regime != CandleTerrainProfile.Regime.Pump
+                         && regime != CandleTerrainProfile.Regime.Crash)
+                {
+                    climbBaseY = close;
+                    climbRunup = 6;
+                    nextClimbX = genX + 4200f * densK + rng.Next() * 1200f * densK;
+                }
+                else if (!busy && i > 16 && genX >= nextWhoopX && genX > 1900f
+                         && regime != CandleTerrainProfile.Regime.Pump
+                         && regime != CandleTerrainProfile.Regime.Crash)
+                {
+                    whoopBaseY = close;
+                    whoopRunup = 3;
+                    nextWhoopX = genX + 3800f * densK + rng.Next() * 900f * densK;
+                }
+
                 closes.Add(close);
 
                 // Свеча узла. Фитили — небольшой выброс за тело, пропорциональный пиле
@@ -199,6 +372,10 @@ namespace ChartRunner.Track
             profile.endPx = (closes.Count - 1) * StepPx;
             profile.nodeStepPx = StepPx;
             profile.checkpoints = BuildCheckpoints(profile.endPx);
+            // Кромки липов и края провалов НЕ сглаживаются: монотонная кубика гасит
+            // касательные на локальных максимумах, и острый лип превратился бы в бугор,
+            // а провал — в пологую ямку. Фича исчезла бы, оставшись в коде.
+            profile.sharpNodeIndices = sharp.ToArray();
             profile.flowBoostEnabled = false;
             res.Profile = profile;
             return res;
