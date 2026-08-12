@@ -1,72 +1,69 @@
 using System.Collections.Generic;
 using ChartRunner.Bike;
+using ChartRunner.Tuning;
 using UnityEngine;
 
 namespace ChartRunner.Game
 {
     /// <summary>
-    /// Видимый байк с райдером — ПАРАМЕТРИЧЕСКАЯ ГЕОМЕТРИЯ, не картинка.
+    /// Видимый байк: СПРАЙТЫ исходника + ЖИВОЙ райдер на двухкостном IK.
     ///
-    /// Главное решение здесь — райдер приколочен к байку ПРИЧИННО, а не нарисован в позе:
-    /// перенос веса двигает ТАЗ, а руки остаются на руле и ноги на подножках, потому что
-    /// конечности каждый кадр досчитываются двухкостным IK. Поэтому «вес назад» видно как
-    /// движение тела, а не как смену спрайта, и игрок читает своё действие в кадре.
+    /// Байк и колёса — арт браузерной игры, выгнанный её же функциями (bikeSprites,
+    /// КРОСС 250) в 4× разрешении. Это валидированная годами картинка; рисовать вместо
+    /// неё новую геометрию — ошибка того же класса, что выброшенная схема btn4.
     ///
-    /// Это прямой урок cutout-рига: две попытки собрать райдера из PNG-частей развалились,
-    /// потому что вилка и маятник растягивались между повёрнутым пивотом и неповёрнутой осью.
-    /// У геометрии этой проблемы нет — точки крепления вычисляются, а не подгоняются.
+    /// Правило «картинка входит в игру только РАЗОБРАННОЙ» соблюдено: корпус и каждое
+    /// колесо — отдельные части на физических костях. Колёса вращаются и ходят по
+    /// подвеске физикой (они отдельные тела на WheelJoint2D), поэтому ход подвески
+    /// виден: колесо-спрайт едет относительно вилки, запечённой в корпус, — ровно как
+    /// в исходнике (cmpF/cmpR).
     ///
-    /// Размеры сняты с колёсной базы 1.47 м, то есть с той же геометрии, что и физика.
-    /// Если менять пропорции — менять здесь, а не масштабом Transform: масштаб врёт
-    /// про толщину линий.
+    /// РАЙДЕР — не спрайт, а код: конечности каждый кадр досчитываются IK от таза до
+    /// руля и подножек (порт скелета b155). Перенос веса двигает таз, всё остальное
+    /// следует — игрок читает своё действие в кадре. Экип — порт b241/b243: райдер
+    /// СВЕТЛЫЙ доминантный (белое джерси пробивается на тёмных байках), цвет байка
+    /// живёт только в акцентах.
     /// </summary>
     public class BikeView : MonoBehaviour
     {
-        // ---- палитра: КОНТРАЖУР ----
-        //
-        // Солнце низко и ПОЗАДИ игрока (SkyView), поэтому герой обращён к камере теневой
-        // стороной. Отсюда два следствия, и оба причинные, а не декоративные:
-        //   1. собственные цвета байка и райдера почти чёрные — на свету они не находятся;
-        //   2. весь цвет уходит в ОБВОДКУ по верхним и задним кромкам, потому что именно
-        //      их задевает свет, идущий из-за спины.
-        // Это и есть тот контраст, которого не хватало первому кадру: герой — тёмный силуэт
-        // на самом светлом месте кадра, с тонкой горячей линией по краю.
-        public Color FrameColor = new Color(0.055f, 0.055f, 0.075f, 1f);
-        public Color FrameMid = new Color(0.10f, 0.10f, 0.13f, 1f);
-        public Color TyreColor = new Color(0.035f, 0.035f, 0.045f, 1f);
-        public Color RimColor = new Color(0.20f, 0.20f, 0.25f, 1f);
-        public Color RiderColor = new Color(0.075f, 0.075f, 0.10f, 1f);
-
-        /// <summary>Горячая кромка от низкого солнца сзади. Главный носитель силуэта.</summary>
-        public Color RimLight = new Color(1f, 0.72f, 0.38f, 1f);
-
-        /// <summary>Холодный отражённый свет неба сверху — вторая, слабая грань.</summary>
-        public Color SkyBounce = new Color(0.46f, 0.56f, 0.78f, 1f);
-
-        /// <summary>Толщина обводки, метры. На 12.5 % высоты экрана это ~2 px — предел различимости.</summary>
-        public float RimWidthM = 0.045f;
+        // ---- палитра райдера (b241/b243) ----
+        private static readonly Color Jersey = Hex(0xEE, 0xF2, 0xF7);
+        private static readonly Color JerseyFar = Hex(0xC4, 0xCD, 0xDC);
+        private static readonly Color Pants = Hex(0x25, 0x2B, 0x37);
+        private static readonly Color PantsFar = Hex(0x16, 0x1B, 0x24);
+        private static readonly Color Glove = Hex(0x2A, 0x31, 0x40);
+        private static readonly Color Boot = Hex(0x1A, 0x1F, 0x2A);
+        private static readonly Color GearPad = Hex(0xC2, 0xCC, 0xDB);
+        private static readonly Color Visor = Hex(0x14, 0x18, 0x1C);
+        /// <summary>Акцент КРОСС 250: мятный (80,255,170) — цвет байка на экипе.</summary>
+        private static readonly Color Accent = new Color(80 / 255f, 1f, 170 / 255f, 1f);
 
         private BikeController _controller;
         private BikeRig _rig;
-        private Transform _riderHost;
         private MeshFilter _riderFilter;
         private Mesh _riderMesh;
-        private MeshFilter _linkageFilter;
-        private Mesh _linkageMesh;
 
-        private float _halfWb;
-        private float _wheelR;
-
-        // Сглаженная поза: физический перенос веса уже отрампован (0.55 с), но телу нужен
-        // ещё чуть более мягкий ход, иначе поза дёргается на кадрах контакта.
         private float _poseShift;
+        private float _air;
+
+        // ---- геометрия исходника ----
+        private const float K = UnitsContract.PxToM;
+        /// <summary>Оси спрайта на ±27 px, физика на ±26 px: корпус поджимается на их отношение.</summary>
+        private const float FitScale = 26f / 27f;
+        /// <summary>Origin спрайта был на 15.5 px выше линии осей (CgAboveAxle исходника).</summary>
+        private const float OriginLiftM = 15.5f * K * FitScale;
+
+        /// <summary>Точка (px исходника, ось Y вниз) → локальные метры шасси (ось Y вверх).</summary>
+        private static Vector2 P(float px, float py)
+        {
+            return new Vector2(px * K * FitScale, OriginLiftM - py * K * FitScale);
+        }
 
         public static BikeView Attach(BikeController controller)
         {
-            var rig = controller.GetComponent<BikeRig>();
             var view = controller.gameObject.AddComponent<BikeView>();
             view._controller = controller;
-            view._rig = rig;
+            view._rig = controller.GetComponent<BikeRig>();
             view.BuildStatic();
             return view;
         }
@@ -74,189 +71,44 @@ namespace ChartRunner.Game
         private void BuildStatic()
         {
             var p = _rig.Profile;
-            _halfWb = p.halfWheelbaseM;
-            _wheelR = p.wheelRadiusM;
 
-            BuildWheel(_rig.RearWheel.transform, _wheelR, "RearWheelView");
-            BuildWheel(_rig.FrontWheel.transform, _wheelR, "FrontWheelView");
-            BuildFrame(transform);
+            // Колёса: спрайты на ФИЗИЧЕСКИХ телах колёс — вращение и ход подвески
+            // приходят из решателя, а не из анимации.
+            AttachSprite(_rig.RearWheel.transform, "Art/wheel-rear", 9,
+                p.wheelRadiusM / (13f * K));
+            AttachSprite(_rig.FrontWheel.transform, "Art/wheel-front", 10,
+                p.wheelRadiusM / (13f * K));
 
-            var linkHost = new GameObject("LinkageView");
-            linkHost.transform.SetParent(transform, false);
-            _linkageMesh = new Mesh { name = "Linkage" };
-            var lmf = linkHost.AddComponent<MeshFilter>();
-            lmf.sharedMesh = _linkageMesh;
-            var lmr = linkHost.AddComponent<MeshRenderer>();
-            lmr.sharedMaterial = Shapes.VertexColorMaterial;
-            // Между колёсами (10) и рамой (11): подвеска уходит ЗА раму и ПЕРЕД колесом.
-            lmr.sortingOrder = 10;
-            _linkageFilter = lmf;
+            // Корпус — на шасси, поднят так, чтобы оси спрайта легли на оси физики.
+            var body = AttachSprite(transform, "Art/bike-body", 11, FitScale);
+            if (body != null) body.transform.localPosition = new Vector3(0f, OriginLiftM, -0.01f);
 
             var host = new GameObject("RiderView");
             host.transform.SetParent(transform, false);
-            _riderHost = host.transform;
             _riderMesh = new Mesh { name = "Rider" };
-            var mf = host.AddComponent<MeshFilter>();
-            mf.sharedMesh = _riderMesh;
+            _riderFilter = host.AddComponent<MeshFilter>();
+            _riderFilter.sharedMesh = _riderMesh;
             var mr = host.AddComponent<MeshRenderer>();
             mr.sharedMaterial = Shapes.VertexColorMaterial;
             mr.sortingOrder = 12;
-            _riderFilter = mf;
         }
 
-        // ================= колесо =================
-
-        private void BuildWheel(Transform host, float radius, string name)
+        private GameObject AttachSprite(Transform host, string resource, int order, float scale)
         {
-            var v = new List<Vector3>();
-            var c = new List<Color>();
-            var t = new List<int>();
-
-            // Покрышка: кольцо. Ширина протектора — видимая доля радиуса, иначе колесо
-            // на конечном размере читается сплошным пятном.
-            AddRing(v, c, t, radius, radius * 0.72f, TyreColor, 26);
-
-            // Грунтозацепы: короткие штрихи по ободу. Их задача — сделать ВРАЩЕНИЕ видимым.
-            // Без них колесо крутится незаметно, и игрок не читает пробуксовку.
-            for (var i = 0; i < 10; i++)
+            var sprite = Resources.Load<Sprite>(resource);
+            if (sprite == null)
             {
-                var a = i / 10f * Mathf.PI * 2f;
-                var d = new Vector2(Mathf.Cos(a), Mathf.Sin(a));
-                Shapes.AddBar(v, c, t, d * (radius * 0.74f), d * (radius * 0.99f), radius * 0.14f,
-                    new Color(0.20f, 0.22f, 0.26f, 1f));
+                // Молчать нельзя: без спрайта герой невидим, а сборка «зелёная».
+                Debug.LogError("BikeView: спрайт не найден в Resources: " + resource);
+                return null;
             }
-
-            // Обод и спицы.
-            AddRing(v, c, t, radius * 0.70f, radius * 0.63f, RimColor, 22);
-            for (var i = 0; i < 6; i++)
-            {
-                var a = i / 6f * Mathf.PI * 2f;
-                var d = new Vector2(Mathf.Cos(a), Mathf.Sin(a));
-                Shapes.AddBar(v, c, t, d * (radius * 0.10f), d * (radius * 0.66f), radius * 0.045f,
-                    new Color(0.52f, 0.57f, 0.64f, 1f));
-            }
-            Shapes.AddDisc(v, c, t, Vector2.zero, radius * 0.16f, RimColor);
-
-            var go = Shapes.Create(name, host, Shapes.Build(name, v, c, t), 10);
-            go.transform.localPosition = new Vector3(0f, 0f, -0.02f);
-        }
-
-        private static void AddRing(List<Vector3> v, List<Color> c, List<int> t,
-            float outer, float inner, Color color, int segments)
-        {
-            var i0 = v.Count;
-            for (var i = 0; i < segments; i++)
-            {
-                var a = i / (float)segments * Mathf.PI * 2f;
-                var dx = Mathf.Cos(a);
-                var dy = Mathf.Sin(a);
-                v.Add(new Vector3(dx * outer, dy * outer, 0f));
-                v.Add(new Vector3(dx * inner, dy * inner, 0f));
-                c.Add(Shapes.V(color));
-                c.Add(Shapes.V(color));
-            }
-            for (var i = 0; i < segments; i++)
-            {
-                var o0 = i0 + i * 2;
-                var in0 = i0 + i * 2 + 1;
-                var o1 = i0 + (i * 2 + 2) % (segments * 2);
-                var in1 = i0 + (i * 2 + 3) % (segments * 2);
-                t.Add(o0); t.Add(o1); t.Add(in0);
-                t.Add(in0); t.Add(o1); t.Add(in1);
-            }
-        }
-
-        // ================= рама =================
-
-        // Опорные точки байка в локальных метрах шасси (нуль — середина между осями,
-        // y = 0 на линии осей). Сняты с пропорций YZ250F под базу 1.47 м.
-        private Vector2 RearAxle => new Vector2(-_halfWb, 0f);
-        private Vector2 FrontAxle => new Vector2(_halfWb, 0f);
-        private Vector2 SwingPivot => new Vector2(-0.10f, 0.17f);
-        private Vector2 Peg => new Vector2(-0.17f, 0.20f);
-        private Vector2 SeatBack => new Vector2(-0.62f, 0.60f);
-        private Vector2 SeatFront => new Vector2(-0.10f, 0.63f);
-        private Vector2 SteerHead => new Vector2(0.47f, 0.66f);
-        private Vector2 Bar => new Vector2(0.40f, 0.95f);
-
-        private void BuildFrame(Transform host)
-        {
-            var v = new List<Vector3>();
-            var c = new List<Color>();
-            var t = new List<int>();
-
-            var dark = FrameColor;
-            var mid = FrameMid;
-
-            // ---- тело байка: почти чёрное, потому что оно в тени ----
-            //
-            // МАЯТНИКА И ВИЛКИ ЗДЕСЬ НЕТ. Они пересобираются каждый кадр в RebuildLinkage,
-            // потому что целятся в ФАКТИЧЕСКОЕ положение колёс, а колёса ходят на подвеске.
-            // Нарисовать их от фиксированных точек шасси — это ровно тот дефект, на котором
-            // дважды развалился cutout-риг: «вилка и маятник растягивались между повёрнутым
-            // пивотом и неповёрнутой осью». Здесь точка крепления ВЫЧИСЛЯЕТСЯ, а не задаётся.
-
-            // Двигатель и рама — сплошной объём, читается блоком на любом размере.
-            Shapes.AddFan(v, c, t, new[]
-            {
-                new Vector2(-0.30f, 0.10f), new Vector2(0.16f, 0.12f), new Vector2(0.30f, 0.42f),
-                new Vector2(0.02f, 0.52f), new Vector2(-0.28f, 0.44f)
-            }, dark);
-
-            // Бак и сиденье: длинная горизонталь силуэта.
-            Shapes.AddFan(v, c, t, new[]
-            {
-                SeatBack, SeatFront, new Vector2(0.22f, 0.72f), SteerHead,
-                new Vector2(0.20f, 0.56f), new Vector2(-0.16f, 0.50f), new Vector2(-0.58f, 0.50f)
-            }, dark);
-
-            // Щитки — «уши» силуэта: по ним байк узнаётся мотоциклом, а не прямоугольником.
-            Shapes.AddFan(v, c, t, new[]
-            {
-                new Vector2(-0.58f, 0.56f), new Vector2(-0.94f, 0.74f),
-                new Vector2(-0.98f, 0.63f), new Vector2(-0.58f, 0.46f)
-            }, mid);
-            Shapes.AddFan(v, c, t, new[]
-            {
-                new Vector2(0.44f, 0.74f), new Vector2(0.90f, 0.88f),
-                new Vector2(0.92f, 0.77f), new Vector2(0.48f, 0.64f)
-            }, mid);
-
-            // Рулевая колонка и руль.
-            Shapes.AddBar(v, c, t, SteerHead, Bar, 0.075f, mid);
-            Shapes.AddBar(v, c, t, Bar + new Vector2(-0.16f, 0f), Bar + new Vector2(0.13f, 0.02f),
-                0.06f, mid);
-
-            // Подножка.
-            Shapes.AddBar(v, c, t, SwingPivot, Peg, 0.05f, mid);
-            Shapes.AddBar(v, c, t, Peg + new Vector2(-0.10f, 0f), Peg + new Vector2(0.10f, 0f),
-                0.05f, mid);
-
-            // Выхлоп.
-            Shapes.AddBar(v, c, t, new Vector2(0.10f, 0.30f), new Vector2(-0.72f, 0.52f), 0.08f, mid);
-
-            // ---- ГОРЯЧАЯ КРОМКА ----
-            //
-            // Солнце низко и позади (слева по ходу), поэтому свет задевает ЗАДНИЕ и ВЕРХНИЕ
-            // контуры. Обводка идёт только по ним — не по всему контуру: обводка по кругу
-            // читается как наклейка, обводка по одной стороне читается как свет.
-            var rw = RimWidthM;
-            Shapes.AddBar(v, c, t, new Vector2(-0.94f, 0.74f), new Vector2(-0.58f, 0.56f), rw, RimLight);
-            Shapes.AddBar(v, c, t, new Vector2(-0.58f, 0.56f), SeatBack, rw, RimLight);
-            Shapes.AddBar(v, c, t, SeatBack, SeatFront, rw, RimLight);
-            Shapes.AddBar(v, c, t, SeatFront, new Vector2(0.22f, 0.72f), rw * 0.85f, RimLight);
-            Shapes.AddBar(v, c, t, new Vector2(0.44f, 0.76f), new Vector2(0.90f, 0.90f),
-                rw * 0.8f, RimLight);
-            // Обводки по маятнику здесь НЕТ намеренно: она проходила внутри силуэта и на
-            // конечном размере читалась палкой поперёк байка, а не светом по краю.
-
-            // Холодная грань от неба сверху — вторая, слабее. Она отделяет руль от фона.
-            Shapes.AddBar(v, c, t, Bar + new Vector2(-0.16f, 0.03f), Bar + new Vector2(0.13f, 0.05f),
-                rw * 0.7f, SkyBounce);
-            Shapes.AddBar(v, c, t, new Vector2(0.22f, 0.74f), SteerHead + new Vector2(0f, 0.03f),
-                rw * 0.6f, SkyBounce);
-
-            Shapes.Create("FrameView", host, Shapes.Build("FrameView", v, c, t), 11);
+            var go = new GameObject(resource);
+            go.transform.SetParent(host, false);
+            go.transform.localScale = new Vector3(scale, scale, 1f);
+            var sr = go.AddComponent<SpriteRenderer>();
+            sr.sprite = sprite;
+            sr.sortingOrder = order;
+            return go;
         }
 
         // ================= райдер =================
@@ -266,142 +118,109 @@ namespace ChartRunner.Game
             if (_controller == null || _riderFilter == null) return;
 
             var st = _controller.State;
-            // Поза следует за физическим переносом веса, а не за кнопкой: то, что видит
-            // игрок, обязано быть тем, что реально приложено к телу.
             _poseShift = Mathf.MoveTowards(_poseShift, st.WeightShift, Time.deltaTime * 4.5f);
-            RebuildLinkage();
-            RebuildRider(_poseShift, st);
+            // Стойка в воздухе: привстаёт (b155 dynAir). Плавно, не рывком по кадру отрыва.
+            _air = Mathf.MoveTowards(_air, st.IsGrounded ? 0f : 1f, Time.deltaTime * 3.5f);
+            RebuildRider(_poseShift, _air);
         }
 
         /// <summary>
-        /// Маятник и вилка, нацеленные в ФАКТИЧЕСКИЕ оси колёс.
-        ///
-        /// Колёса — отдельные тела на WheelJoint2D, они ходят по подвеске независимо от
-        /// шасси. Поэтому их положение берётся из мира и переводится в локальные координаты
-        /// шасси КАЖДЫЙ кадр. Следствие, ради которого всё и делается: ход подвески видно.
-        /// Маятник поворачивается на кочке, вилка складывается на приземлении — то есть
-        /// игрок читает нагрузку, а не догадывается о ней.
+        /// Скелет b155 в позе dirt: таз → торс под углом → руки на руль, ноги на пеги.
+        /// Все опорные точки — координаты СПРАЙТА, поэтому кисти лежат на нарисованном
+        /// руле, а стопы на нарисованных подножках без подгонки на глаз.
         /// </summary>
-        private void RebuildLinkage()
-        {
-            if (_linkageFilter == null || _rig == null) return;
-
-            var rear = (Vector2)transform.InverseTransformPoint(_rig.RearWheel.position);
-            var front = (Vector2)transform.InverseTransformPoint(_rig.FrontWheel.position);
-
-            var v = new List<Vector3>();
-            var c = new List<Color>();
-            var t = new List<int>();
-
-            var mid = FrameMid;
-
-            // Маятник: пивот → фактическая задняя ось.
-            Shapes.AddBar(v, c, t, SwingPivot, rear, 0.11f, mid);
-            Shapes.AddDisc(v, c, t, SwingPivot, 0.06f, mid, 10);
-
-            // Вилка: рулевая колонка → фактическая передняя ось. Угол наклона вилки
-            // получается сам из двух точек, поэтому rake не нужно задавать отдельным
-            // числом и незачем держать его в синхроне вручную.
-            Shapes.AddBar(v, c, t, SteerHead, front, 0.085f, mid);
-            Shapes.AddBar(v, c, t, SteerHead + new Vector2(0.02f, -0.02f),
-                Vector2.Lerp(SteerHead, front, 0.55f), 0.13f, FrameColor);
-
-            // Горячая кромка по задней стороне маятника — единственная обводка здесь:
-            // остальные линии подвески проходят внутри силуэта.
-            Shapes.AddBar(v, c, t, SwingPivot + new Vector2(0f, 0.055f),
-                rear + new Vector2(0f, 0.055f), RimWidthM * 0.8f, RimLight);
-
-            _linkageMesh.Clear();
-            _linkageMesh.SetVertices(v);
-            _linkageMesh.SetColors(c);
-            _linkageMesh.SetTriangles(t, 0);
-            _linkageMesh.RecalculateBounds();
-            _linkageFilter.sharedMesh = _linkageMesh;
-        }
-
-        private void RebuildRider(float shift, Bike.BikeState st)
+        private void RebuildRider(float shift, float air)
         {
             var v = new List<Vector3>();
             var c = new List<Color>();
             var t = new List<int>();
 
-            // ТАЗ — единственная точка, которую двигает игрок. Всё остальное следует.
-            // Вперёд (положительный shift) = над баком; назад = за сиденье.
-            var hipNeutral = new Vector2(-0.20f, 0.92f);
-            var hip = hipNeutral + new Vector2(shift * 0.40f, -Mathf.Abs(shift) * 0.10f);
+            // Поза dirt из исходника: px -6, py -8.5, ta 0.34, руль (21,-18.6), пеги (-2/1.5, 8).
+            // riderShiftPx 2.5 — микро-сдвиг переноса веса (b148: райдер жёстко на байке).
+            var hipPx = -6f + shift * 2.5f - 2f * air;
+            var hipPy = -8.5f - 4f * air;
+            var ta = 0.34f + shift * 0.10f - 0.10f * air;
 
-            // Плечи следуют за тазом частично: корпус наклоняется, а не переносится целиком.
-            var shoulder = hip + new Vector2(0.34f + shift * 0.10f, 0.52f - Mathf.Abs(shift) * 0.06f);
+            var hip = P(hipPx, hipPy);
+            var shoulder = P(hipPx + Mathf.Sin(ta) * 13f, hipPy - Mathf.Cos(ta) * 13f);
+            var grip = P(21.3f, -19.6f);
+            var pegFar = P(-2f, 8f);
+            var pegNear = P(1.5f, 8f);
 
-            // Руки заканчиваются на руле ВСЕГДА — это и есть связь тела с байком.
-            var hand = Bar + new Vector2(0.02f, 0.03f);
-            // Ноги заканчиваются на подножке ВСЕГДА.
-            var foot = Peg + new Vector2(0f, 0.06f);
+            // Длины сегментов исходника: руки 7.6/8.2, ноги 9/9.6 px.
+            var armL1 = 7.6f * K; var armL2 = 8.2f * K;
+            var legL1 = 9.0f * K; var legL2 = 9.6f * K;
 
-            // Двухкостный IK: локоть выгибается назад, колено вперёд.
-            var elbow = Solve(shoulder, hand, 0.30f, 0.30f, -1f);
-            var knee = Solve(hip, foot, 0.42f, 0.42f, +1f);
+            var farSh = shoulder + new Vector2(-1.2f * K, 0f);
+            var farHip = hip + new Vector2(-1.5f * K, 0f);
+            var elbowF = Solve(farSh, grip + new Vector2(-1.5f * K, 0f), armL1, armL2, -1f);
+            var kneeF = Solve(farHip, pegFar, legL1, legL2, +1f);
+            var elbowN = Solve(shoulder, grip, armL1, armL2, -1f);
+            var kneeN = Solve(hip, pegNear, legL1, legL2, +1f);
 
-            var head = shoulder + new Vector2(0.14f, 0.20f);
+            // ---- дальняя сторона (до торса) ----
+            Limb(v, c, t, farSh, elbowF, grip + new Vector2(-1.5f * K, 0f),
+                4.2f * K, 3.8f * K, JerseyFar, Glove);
+            Limb(v, c, t, farHip, kneeF, pegFar, 5.0f * K, 4.4f * K, PantsFar, Boot);
 
-            // Дальняя сторона тела ещё темнее ближней. Двух планов хватает, чтобы силуэт
-            // читался объёмным, и это дешевле любого освещения.
-            var far = new Color(RiderColor.r * 0.55f, RiderColor.g * 0.55f, RiderColor.b * 0.60f, 1f);
-            Shapes.AddBar(v, c, t, hip + new Vector2(-0.04f, 0f), knee + new Vector2(-0.05f, 0f), 0.15f, far);
-            Shapes.AddBar(v, c, t, knee + new Vector2(-0.05f, 0f), foot + new Vector2(-0.05f, 0f), 0.12f, far);
-            Shapes.AddBar(v, c, t, shoulder + new Vector2(-0.03f, 0f), elbow + new Vector2(-0.04f, 0f), 0.11f, far);
-            Shapes.AddBar(v, c, t, elbow + new Vector2(-0.04f, 0f), hand + new Vector2(-0.04f, 0f), 0.095f, far);
+            // ---- торс: белое джерси, трапеция таз→плечи ----
+            var up = (shoulder - hip).normalized;
+            var side = new Vector2(-up.y, up.x);
+            Quad(v, c, t,
+                hip - side * 4.6f * K, hip + side * 4.6f * K,
+                shoulder + side * 4.2f * K, shoulder - side * 4.2f * K, Jersey);
+            // Акцент-полоса по спине — цвет байка на экипе (b243).
+            Shapes.AddBar(v, c, t, hip - side * 3.4f * K, shoulder - side * 3.2f * K,
+                1.4f * K, new Color(Accent.r, Accent.g, Accent.b, 0.85f));
+            // Тень под грудью — объём корпуса без света.
+            Shapes.AddBar(v, c, t, hip + side * 2.4f * K, shoulder + side * 2.8f * K,
+                1.6f * K, new Color(0f, 0f, 0.02f, 0.18f));
 
-            // Корпус.
+            // ---- ближняя нога: тёмные штаны, наколенник, ботинок ----
+            Limb(v, c, t, hip, kneeN, pegNear, 5.5f * K, 4.8f * K, Pants, Boot);
+            Shapes.AddDisc(v, c, t, kneeN, 2.4f * K, GearPad, 10);
+            // Ботинок: явный блок на пеге.
+            Quad(v, c, t,
+                pegNear + new Vector2(-3.4f * K, -1.6f * K), pegNear + new Vector2(4.4f * K, -1.6f * K),
+                pegNear + new Vector2(4.4f * K, 1.8f * K), pegNear + new Vector2(-3.4f * K, 1.8f * K),
+                Boot);
+
+            // ---- ближняя рука: джерси, перчатка на грипсе ----
+            Limb(v, c, t, shoulder, elbowN, grip, 4.8f * K, 4.2f * K, Jersey, Glove);
+            Shapes.AddDisc(v, c, t, grip, 2.2f * K, Glove, 8);
+
+            // ---- шлем: белый фулфейс с козырьком и визором (rcHead) ----
+            var head = P(hipPx + Mathf.Sin(ta) * 13f + 2.2f, hipPy - Mathf.Cos(ta) * 13f - 8.5f);
+            var hr = 6.2f * K;
+            // шея
+            Shapes.AddBar(v, c, t, shoulder, head, 3.4f * K, Jersey);
+            Shapes.AddDisc(v, c, t, head, hr, Hex(0xF4, 0xF7, 0xFB), 16);
+            // козырёк вперёд-вверх — силуэтная подпись кросса
             Shapes.AddFan(v, c, t, new[]
             {
-                hip + new Vector2(-0.13f, -0.02f), hip + new Vector2(0.13f, 0.02f),
-                shoulder + new Vector2(0.14f, 0.02f), shoulder + new Vector2(-0.12f, -0.02f)
-            }, RiderColor);
-            // Спина ловит свет целиком: она обращена к солнцу. Это же и читаемый указатель
-            // того, куда ушёл вес — линия спины наклоняется вместе с тазом.
-            Shapes.AddBar(v, c, t, hip + new Vector2(-0.155f, -0.02f),
-                shoulder + new Vector2(-0.145f, 0.02f), RimWidthM * 1.25f, RimLight);
-
-            // Ближние конечности.
-            Shapes.AddBar(v, c, t, hip, knee, 0.16f, RiderColor);
-            Shapes.AddBar(v, c, t, knee, foot, 0.125f, RiderColor);
-            Shapes.AddDisc(v, c, t, knee, 0.085f, RiderColor, 10);
-            Shapes.AddBar(v, c, t, shoulder, elbow, 0.115f, RiderColor);
-            Shapes.AddBar(v, c, t, elbow, hand, 0.10f, RiderColor);
-            Shapes.AddDisc(v, c, t, elbow, 0.065f, RiderColor, 10);
-            Shapes.AddDisc(v, c, t, shoulder, 0.10f, RiderColor, 12);
-
-            // Ботинок и перчатка — маленькие, но именно они «пришивают» райдера к байку.
+                head + new Vector2(hr * 0.2f, hr * 0.86f),
+                head + new Vector2(hr * 1.5f, hr * 0.62f),
+                head + new Vector2(hr * 1.2f, hr * 0.3f),
+                head + new Vector2(hr * 0.1f, hr * 0.5f)
+            }, Hex(0xE8, 0xED, 0xF5));
+            // визор: тёмное окно, смотрит вперёд
             Shapes.AddFan(v, c, t, new[]
             {
-                foot + new Vector2(-0.08f, -0.05f), foot + new Vector2(0.13f, -0.05f),
-                foot + new Vector2(0.13f, 0.04f), foot + new Vector2(-0.08f, 0.05f)
-            }, new Color(0.10f, 0.11f, 0.14f, 1f));
-            Shapes.AddDisc(v, c, t, hand, 0.065f, new Color(0.10f, 0.11f, 0.14f, 1f), 10);
-
-            // Шлем: козырёк задаёт направление взгляда, поэтому байк читается едущим вправо.
-            Shapes.AddDisc(v, c, t, head, 0.150f, RiderColor, 14);
-            Shapes.AddFan(v, c, t, new[]
+                head + new Vector2(hr * 0.05f, hr * 0.42f),
+                head + new Vector2(hr * 0.95f, hr * 0.22f),
+                head + new Vector2(hr * 0.88f, hr * -0.24f),
+                head + new Vector2(hr * 0.02f, hr * -0.10f)
+            }, Visor);
+            // акцент-дуга по затылку
+            for (var i = 0; i < 5; i++)
             {
-                head + new Vector2(0.05f, 0.06f), head + new Vector2(0.27f, 0.03f),
-                head + new Vector2(0.27f, -0.03f), head + new Vector2(0.05f, -0.02f)
-            }, RiderColor);
-
-            // Кромка по затылку и макушке — самая яркая точка героя. Голова на фоне неба:
-            // если она не отделена от фона, силуэт распадается именно здесь.
-            for (var i = 0; i < 9; i++)
-            {
-                var a0 = Mathf.PI * (0.28f + i * 0.10f);
-                var a1 = Mathf.PI * (0.28f + (i + 1) * 0.10f);
+                var a0 = Mathf.PI * (0.55f + i * 0.09f);
+                var a1 = Mathf.PI * (0.55f + (i + 1) * 0.09f);
                 Shapes.AddBar(v, c, t,
-                    head + new Vector2(Mathf.Cos(a0), Mathf.Sin(a0)) * 0.150f,
-                    head + new Vector2(Mathf.Cos(a1), Mathf.Sin(a1)) * 0.150f,
-                    RimWidthM * 1.2f, RimLight);
+                    head + new Vector2(Mathf.Cos(a0), Mathf.Sin(a0)) * (hr - 1.2f * K),
+                    head + new Vector2(Mathf.Cos(a1), Mathf.Sin(a1)) * (hr - 1.2f * K),
+                    1.4f * K, new Color(Accent.r, Accent.g, Accent.b, 0.9f));
             }
-            // Плечо и бедро — вторая и третья по важности точки контура.
-            Shapes.AddBar(v, c, t, shoulder + new Vector2(-0.13f, 0.085f),
-                shoulder + new Vector2(0.05f, 0.115f), RimWidthM, RimLight);
 
             _riderMesh.Clear();
             _riderMesh.SetVertices(v);
@@ -411,10 +230,29 @@ namespace ChartRunner.Game
             _riderFilter.sharedMesh = _riderMesh;
         }
 
-        /// <summary>
-        /// Двухкостный IK. bendSign задаёт, в какую сторону выгибается сустав — иначе
-        /// решение неоднозначно и колено начинает щёлкать между двумя позами.
-        /// </summary>
+        /// <summary>Конечность: два сегмента убывающей толщины + скругление сустава.</summary>
+        private static void Limb(List<Vector3> v, List<Color> c, List<int> t,
+            Vector2 root, Vector2 joint, Vector2 end, float w1, float w2, Color col, Color tip)
+        {
+            Shapes.AddBar(v, c, t, root, joint, w1, col);
+            Shapes.AddBar(v, c, t, joint, end, w2, col);
+            Shapes.AddDisc(v, c, t, joint, w1 * 0.52f, col, 8);
+            Shapes.AddDisc(v, c, t, root, w1 * 0.55f, col, 8);
+            Shapes.AddDisc(v, c, t, end, w2 * 0.5f, tip, 8);
+        }
+
+        private static void Quad(List<Vector3> v, List<Color> c, List<int> t,
+            Vector2 a, Vector2 b, Vector2 d, Vector2 e, Color col)
+        {
+            var i0 = v.Count;
+            v.Add(a); c.Add(Shapes.V(col));
+            v.Add(b); c.Add(Shapes.V(col));
+            v.Add(d); c.Add(Shapes.V(col));
+            v.Add(e); c.Add(Shapes.V(col));
+            t.Add(i0); t.Add(i0 + 2); t.Add(i0 + 1);
+            t.Add(i0); t.Add(i0 + 3); t.Add(i0 + 2);
+        }
+
         private static Vector2 Solve(Vector2 root, Vector2 target, float l1, float l2, float bendSign)
         {
             var delta = target - root;
@@ -429,6 +267,11 @@ namespace ChartRunner.Game
             var h = Mathf.Sqrt(Mathf.Max(0f, l1 * l1 - a * a));
             var n = new Vector2(-u.y, u.x) * bendSign;
             return root + u * a + n * h;
+        }
+
+        private static Color Hex(int r, int g, int b)
+        {
+            return new Color(r / 255f, g / 255f, b / 255f, 1f);
         }
     }
 }

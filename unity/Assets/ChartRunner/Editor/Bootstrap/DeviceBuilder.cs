@@ -103,13 +103,16 @@ namespace ChartRunner.EditorTools
             Lines.Add("сцены: " + string.Join(", ", scenes));
             Lines.Add("цель: " + path);
 
+            // Без BuildOptions.Development: плашка «Development Build» в углу читается
+            // прототипом, а мы судим картинку. Отладчик на девайсе не используется —
+            // диагностика идёт логами и кадрами.
             var opts = new BuildPlayerOptions
             {
                 scenes = scenes.ToArray(),
                 locationPathName = path,
                 target = target,
                 targetGroup = group,
-                options = options | BuildOptions.Development | BuildOptions.AllowDebugging
+                options = options
             };
 
             var report = BuildPipeline.BuildPlayer(opts);

@@ -336,8 +336,8 @@ namespace ChartRunner.Game
             // превращается в угадывание.
             if (Time.time < _feelBannerUntil)
             {
-                GUI.Label(new Rect(0f, 932f * 0.30f, 430f, 40f),
-                    "ФИЛ: " + FeelPreset.Name(SelectedFeel), _big);
+                DrawChip("ФИЛ: " + FeelPreset.Name(SelectedFeel), 215f, 932f * 0.30f,
+                    new Color(150 / 255f, 205 / 255f, 1f), _warn);
             }
 
             // Индикатор переноса веса: игрок обязан видеть, что он реально приложил,
@@ -371,8 +371,7 @@ namespace ChartRunner.Game
                     : st.Failure == BikeFailure.Endo ? "КЛЕВОК ВПЕРЁД"
                     : st.Failure == BikeFailure.Crash ? "ЖЁСТКАЯ ПОСАДКА"
                     : "ПАДЕНИЕ";
-                var r = new Rect(0f, 932f * 0.34f, 430f, 40f);
-                GUI.Label(r, reason, _big);
+                DrawChip(reason, 215f, 932f * 0.34f, new Color(1f, 64 / 255f, 86 / 255f), _big);
             }
 
             GUI.matrix = m;
@@ -410,8 +409,7 @@ namespace ChartRunner.Game
                 // Внутри участка баннер тусклее: он уже сделал свою работу и не должен
                 // перетягивать внимание с рельефа.
                 var inside = dist <= 0f;
-                _warn.normal.textColor = new Color(col.r, col.g, col.b, inside ? 0.55f : 0.95f);
-                GUI.Label(new Rect(0f, 932f * 0.16f, 430f, 34f), e.Title, _warn);
+                DrawChip(e.Title, 215f, 932f * 0.16f, col, _warn, inside ? 0.55f : 0.95f);
                 return;
             }
         }
@@ -424,50 +422,90 @@ namespace ChartRunner.Game
         /// Подсветка идёт по флагу, выставленному при ОПРОСЕ касания, а не по состоянию
         /// физики — так кнопка отвечает мгновенно, а не через рампу газа, и остаётся щупом:
         /// не загорелась при нажатии — палец не попал или ввод не дошёл.
+        ///
+        /// Стиль — порт ctlBtn исходника: скруглённая плашка, заливка цветом кнопки
+        /// (α .34 нажата / .12 нет), рамка тем же цветом, подпись моноширинным жирным.
+        /// Цвета кнопок — из раскладки btn4 (стр. 4453+).
         /// </summary>
         private void DrawButtons()
         {
             EnsureStyles();
             var b = _input.Buttons;
-            DrawButton(b.Gas, new Color(0.47f, 1f, 0.71f, 1f));
-            DrawButton(b.Brake, new Color(1f, 0.69f, 0.47f, 1f));
-            DrawButton(b.NoseUp, new Color(0.59f, 0.80f, 1f, 1f));
-            DrawButton(b.NoseDown, new Color(0.59f, 0.80f, 1f, 1f));
+            DrawButton(b.Gas, b.Gas.Active
+                ? new Color(120 / 255f, 1f, 180 / 255f)
+                : new Color(120 / 255f, 205 / 255f, 160 / 255f), 18);
+            DrawButton(b.Brake, b.Brake.Active
+                ? new Color(1f, 175 / 255f, 120 / 255f)
+                : new Color(200 / 255f, 155 / 255f, 135 / 255f), 14);
+            DrawButton(b.NoseUp, new Color(150 / 255f, 205 / 255f, 1f), 14);
+            DrawButton(b.NoseDown, new Color(150 / 255f, 205 / 255f, 1f), 14);
         }
 
-        private void DrawButton(TouchButtons.Zone z, Color tint)
+        private void DrawButton(TouchButtons.Zone z, Color col, int fontSize)
         {
             var r = z.R;
-            // Подложка: заметная, но не спорящая с игровым полем. Нажатая — заливка цветом.
-            GUI.color = z.Active
-                ? new Color(tint.r, tint.g, tint.b, 0.34f)
-                : new Color(1f, 1f, 1f, 0.075f);
-            GUI.DrawTexture(r, Texture2D.whiteTexture);
+            var radius = Vector4.one * 10f;
 
-            // Рамка в один пиксель опорного кадра: даёт кнопке край, не занимая площадь.
-            GUI.color = new Color(tint.r, tint.g, tint.b, z.Active ? 0.85f : 0.34f);
-            GUI.DrawTexture(new Rect(r.x, r.y, r.width, 1f), Texture2D.whiteTexture);
-            GUI.DrawTexture(new Rect(r.x, r.yMax - 1f, r.width, 1f), Texture2D.whiteTexture);
-            GUI.DrawTexture(new Rect(r.x, r.y, 1f, r.height), Texture2D.whiteTexture);
-            GUI.DrawTexture(new Rect(r.xMax - 1f, r.y, 1f, r.height), Texture2D.whiteTexture);
-            GUI.color = Color.white;
+            // Заливка.
+            GUI.DrawTexture(r, Texture2D.whiteTexture, ScaleMode.StretchToFill, true, 0f,
+                new Color(col.r, col.g, col.b, z.Active ? 0.34f : 0.12f), Vector4.zero, radius);
+            // Рамка.
+            GUI.DrawTexture(r, Texture2D.whiteTexture, ScaleMode.StretchToFill, true, 0f,
+                new Color(col.r, col.g, col.b, z.Active ? 1f : 0.5f),
+                Vector4.one * (z.Active ? 2.6f : 1.4f), radius);
 
-            _zone.normal.textColor = new Color(tint.r, tint.g, tint.b, z.Active ? 1f : 0.72f);
+            _zone.fontSize = fontSize;
+            _zone.normal.textColor = new Color(col.r, col.g, col.b, z.Active ? 1f : 0.82f);
             GUI.Label(r, z.Label, _zone);
+        }
+
+        /// <summary>
+        /// Чип-плашка (порт chipText): тёмная подложка + цветная рамка + светлый текст.
+        /// Единый стиль игровых меток — серый текст тонул на пёстром мире.
+        /// </summary>
+        private void DrawChip(string txt, float cx, float cy, Color col, GUIStyle style, float a = 1f)
+        {
+            var content = new GUIContent(txt);
+            var size = style.CalcSize(content);
+            var r = new Rect(cx - size.x / 2f - 8f, cy - size.y / 2f - 4f, size.x + 16f, size.y + 8f);
+            var radius = Vector4.one * 6f;
+            GUI.DrawTexture(r, Texture2D.whiteTexture, ScaleMode.StretchToFill, true, 0f,
+                new Color(9 / 255f, 10 / 255f, 24 / 255f, 0.78f * a), Vector4.zero, radius);
+            GUI.DrawTexture(r, Texture2D.whiteTexture, ScaleMode.StretchToFill, true, 0f,
+                new Color(col.r, col.g, col.b, 0.85f * a), Vector4.one * 1.4f, radius);
+            style.normal.textColor = new Color(236 / 255f, 243 / 255f, 253 / 255f, 0.95f * a);
+            GUI.Label(r, content, style);
         }
 
         private void EnsureStyles()
         {
             if (_hud != null) return;
-            _hud = new GUIStyle(GUI.skin.label) { fontSize = 15, alignment = TextAnchor.UpperLeft };
-            _hud.normal.textColor = new Color(0.86f, 0.93f, 0.98f, 0.92f);
-            _big = new GUIStyle(GUI.skin.label) { fontSize = 26, alignment = TextAnchor.MiddleCenter };
-            _big.normal.textColor = new Color(1f, 0.44f, 0.38f, 0.95f);
-            _zone = new GUIStyle(GUI.skin.label) { fontSize = 17, alignment = TextAnchor.MiddleCenter };
-            _zone.fontStyle = FontStyle.Bold;
-            _warn = new GUIStyle(GUI.skin.label)
+            // Моноширинный шрифт — голос исходника (ui-monospace). Menlo есть и на
+            // macOS, и на iOS; Courier — страховка.
+            var mono = Font.CreateDynamicFontFromOSFont(
+                new[] { "Menlo", "Menlo-Regular", "Courier", "Courier New" }, 15);
+
+            _hud = new GUIStyle(GUI.skin.label)
             {
-                fontSize = 22, alignment = TextAnchor.MiddleCenter, fontStyle = FontStyle.Bold
+                fontSize = 15, alignment = TextAnchor.UpperLeft, fontStyle = FontStyle.Bold
+            };
+            if (mono != null) _hud.font = mono;
+            _hud.normal.textColor = new Color(0.86f, 0.93f, 0.98f, 0.92f);
+
+            _big = new GUIStyle(_hud)
+            {
+                fontSize = 26, alignment = TextAnchor.MiddleCenter
+            };
+            _big.normal.textColor = new Color(1f, 0.44f, 0.38f, 0.95f);
+
+            _zone = new GUIStyle(_hud)
+            {
+                fontSize = 17, alignment = TextAnchor.MiddleCenter
+            };
+
+            _warn = new GUIStyle(_hud)
+            {
+                fontSize = 20, alignment = TextAnchor.MiddleCenter
             };
         }
     }
