@@ -68,6 +68,25 @@ namespace ChartRunner.Game
         }
 
         private static readonly int IntensityId = Shader.PropertyToID("_Intensity");
+        private static Material _additive;
+
+        /// <summary>
+        /// Аддитивный материал — для СВЕТА: god-rays, глоу горизонта, дорожка на воде.
+        /// Исходник рисовал это composite-режимом 'lighter'; аддитивный блендинг — то же.
+        /// </summary>
+        public static Material Additive
+        {
+            get
+            {
+                if (_additive == null)
+                {
+                    var sh = Shader.Find("ChartRunner/VertexColorAdd");
+                    if (sh == null) sh = Shader.Find("Sprites/Default");
+                    _additive = new Material(sh) { name = "ChartRunnerAdditive" };
+                }
+                return _additive;
+            }
+        }
 
         private static Shader WorldShader
         {

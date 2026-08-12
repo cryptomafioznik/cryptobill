@@ -142,27 +142,13 @@ namespace ChartRunner.Game
 
             // ---- мир ----
             //
-            // Палитра подчинена ОДНОМУ источнику: низкое солнце позади игрока (SkyView).
-            // Поэтому рельеф почти чёрный — он в тени, — а весь цвет уходит в горячую кромку
-            // по верхней линии. Это даёт то, чего не было в первом кадре: разницу светлот
-            // между героем, землёй и фоном, на которой силуэт вообще может читаться.
+            // Идентичность браузерной версии (вердикт живого теста: моё контражурное
+            // направление — «вся стилистика не та», а картинку исходника пользователь
+            // принимал годами). Мир — порт drawCityWorld: закат Vice, город, вода.
+            // Трасса — приподнятая дека, с которой свисают свечи-колонны данных.
             var world = new GameObject("World").transform;
             TrackBuilder.Build(_track, BikeProfile.tyreFriction).transform.SetParent(world, true);
-            if (_candles != null)
-            {
-                // Земля СОСТОИТ из свечей, и верх заливки идёт по САМОЙ поверхности
-                // (сэмплер тот же, что у коллизии), поэтому игрок едет ровно по тому,
-                // что видит, а не проваливается внутрь нарисованных свечей.
-                CandleView.Build(_track, _candles, _sampler, world, _events);
-            }
-            else
-            {
-                TerrainView.Build(_track, world,
-                    new Color(0.085f, 0.075f, 0.105f, 1f),   // гребень: чуть светлее подножия
-                    new Color(0.028f, 0.026f, 0.042f, 1f),   // подножие: почти чёрное
-                    new Color(1f, 0.68f, 0.34f, 1f),         // горячая кромка от солнца
-                    0.11f);
-            }
+            TrackDeckView.Build(_track, _sampler, world, _candles, _events);
             TerrainView.BuildMarkers(_track, world, new Color(1f, 0.80f, 0.42f, 1f));
 
             // ---- байк ----
@@ -184,7 +170,7 @@ namespace ChartRunner.Game
             _camera.clearFlags = CameraClearFlags.SolidColor;
             // Фон камеры виден только если небо почему-то не построилось: держим его
             // близким к верху градиента, чтобы такая поломка не выглядела «задумкой».
-            _camera.backgroundColor = SkyView.SkyTop;
+            _camera.backgroundColor = WorldPalette.Eras[0].Sky0;
             _camera.nearClipPlane = 0.01f;
             _camera.farClipPlane = 100f;
             _chase = camGo.AddComponent<ChaseCamera>();
@@ -195,9 +181,9 @@ namespace ChartRunner.Game
             // Пост-обработка: HDR + bloom + виньетка + цветокоррекция. Включение движка.
             PostFX.Attach(_camera);
 
-            // Небо и дальние планы приколачиваются к камере, поэтому создаются после Bind:
-            // размер квада берётся из уже настроенного orthographicSize.
-            SkyView.Attach(_camera, _track.EndM);
+            // Мир приколачивается к камере, поэтому создаётся после Bind:
+            // размеры берутся из уже настроенного orthographicSize.
+            WorldView.Attach(_camera, _track.EndM);
             ContactShadow.Attach(_controller, _sampler, world);
             WheelDust.Attach(_controller, _sampler, world);
             AirMotes.Attach(_camera);

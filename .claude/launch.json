@@ -2,11 +2,10 @@
   "version": "0.0.1",
   "configurations": [
     {
-      "name": "static",
+      "name": "chartrider",
       "runtimeExecutable": "python3",
-      "runtimeArgs": ["-m", "http.server", "8123"],
-      "port": 8123,
-      "autoPort": false
+      "runtimeArgs": ["-m", "http.server", "8123", "--directory", "toys"],
+      "port": 8123
     }
   ]
 }
