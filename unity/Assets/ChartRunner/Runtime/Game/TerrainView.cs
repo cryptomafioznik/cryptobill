@@ -88,8 +88,9 @@ namespace ChartRunner.Game
             for (var i = 0; i < pts.Count - 1; i++)
                 Shapes.AddBar(ev, ec, et, pts[i], pts[i + 1], edgeWidthM, edge);
 
+            // Кромка светится: на рукотворных трассах она играет роль линии цены.
             var edgeGo = Shapes.Create("TerrainEdge", root.transform,
-                Shapes.Build("TerrainEdge", ev, ec, et), -19);
+                Shapes.Build("TerrainEdge", ev, ec, et), -19, Shapes.Emissive(2.1f));
             edgeGo.transform.localPosition = new Vector3(0f, 0f, -0.01f);
 
             return root;
@@ -111,7 +112,9 @@ namespace ChartRunner.Game
 
             AddFlag(v, c, t, sampler, profile.EndM, new Color(1f, 0.86f, 0.35f, 1f));
 
-            return Shapes.Create("TrackMarkers", parent, Shapes.Build("TrackMarkers", v, c, t), -18);
+            // Маркеры — навигационные данные, светятся: их и должно быть видно издалека.
+            return Shapes.Create("TrackMarkers", parent, Shapes.Build("TrackMarkers", v, c, t), -18,
+                Shapes.Emissive(1.8f));
         }
 
         private static void AddFlag(List<Vector3> v, List<Color> c, List<int> t,

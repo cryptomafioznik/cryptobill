@@ -17,6 +17,7 @@ namespace ChartRunner.Game
     public static class Shapes
     {
         private static Material _material;
+        private static readonly Dictionary<int, Material> _emissive = new Dictionary<int, Material>();
 
         /// <summary>
         /// Перевод авторского цвета в тот, который шейдер выведет как задумано.
@@ -42,23 +43,61 @@ namespace ChartRunner.Game
             {
                 if (_material == null)
                 {
-                    var sh = Shader.Find("Sprites/Default");
-                    if (sh == null) sh = Shader.Find("Unlit/Color");
-                    _material = new Material(sh) { name = "ChartRunnerVertexColor" };
+                    _material = new Material(WorldShader) { name = "ChartRunnerVertexColor" };
                 }
                 return _material;
+            }
+        }
+
+        /// <summary>
+        /// Материал-источник свечения: вершинный цвет × intensity. Вершинный цвет меша
+        /// 8-битный и не бывает больше 1.0, а bloom пост-обработки ловит только то, что
+        /// ярче 1.0 в HDR-буфере — поэтому яркость живёт в материале. Кэш по десятым
+        /// долям: сто разных интенсивностей = сто draw call, а глаз различает ~пять.
+        /// </summary>
+        public static Material Emissive(float intensity)
+        {
+            var key = Mathf.RoundToInt(intensity * 10f);
+            if (!_emissive.TryGetValue(key, out var m) || m == null)
+            {
+                m = new Material(WorldShader) { name = "ChartRunnerEmissive_" + key };
+                if (m.HasProperty(IntensityId)) m.SetFloat(IntensityId, key / 10f);
+                _emissive[key] = m;
+            }
+            return m;
+        }
+
+        private static readonly int IntensityId = Shader.PropertyToID("_Intensity");
+
+        private static Shader WorldShader
+        {
+            get
+            {
+                // Свой URP-шейдер лежит в Resources (иначе вырезается из билда).
+                // Фолбэки ниже — страховка от «розового мира», а не рабочий путь.
+                var sh = Shader.Find("ChartRunner/VertexColorHDR");
+                if (sh == null) sh = Shader.Find("Sprites/Default");
+                if (sh == null) sh = Shader.Find("Unlit/Color");
+                return sh;
             }
         }
 
         /// <summary>Создаёт объект с мешем, готовый к показу. sortingOrder — порядок в слое.</summary>
         public static GameObject Create(string name, Transform parent, Mesh mesh, int sortingOrder)
         {
+            return Create(name, parent, mesh, sortingOrder, VertexColorMaterial);
+        }
+
+        /// <summary>То же, но со своим материалом — для светящейся геометрии (Emissive).</summary>
+        public static GameObject Create(string name, Transform parent, Mesh mesh, int sortingOrder,
+            Material material)
+        {
             var go = new GameObject(name);
             if (parent != null) go.transform.SetParent(parent, false);
             var mf = go.AddComponent<MeshFilter>();
             mf.sharedMesh = mesh;
             var mr = go.AddComponent<MeshRenderer>();
-            mr.sharedMaterial = VertexColorMaterial;
+            mr.sharedMaterial = material;
             mr.shadowCastingMode = UnityEngine.Rendering.ShadowCastingMode.Off;
             mr.receiveShadows = false;
             mr.sortingOrder = sortingOrder;

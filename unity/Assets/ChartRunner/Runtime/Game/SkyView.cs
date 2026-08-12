@@ -36,9 +36,12 @@ namespace ChartRunner.Game
         // ---- палитра golden hour ----
         // Небо: от глубокого сине-фиолетового вверху к тёплому у горизонта. Значения
         // подобраны так, чтобы САМОЕ СВЕТЛОЕ место кадра было у линии горизонта.
-        public static readonly Color SkyTop = new Color(0.09f, 0.11f, 0.22f, 1f);
-        public static readonly Color SkyMid = new Color(0.33f, 0.24f, 0.34f, 1f);
-        public static readonly Color SkyHorizon = new Color(0.96f, 0.62f, 0.34f, 1f);
+        // Четыре остановки, а не три: на телефоне градиент из трёх остановок читается
+        // двумя плоскими заливками, тёплая половина неба требует своего перехода.
+        public static readonly Color SkyTop = new Color(0.07f, 0.09f, 0.20f, 1f);
+        public static readonly Color SkyMid = new Color(0.27f, 0.19f, 0.33f, 1f);
+        public static readonly Color SkyWarm = new Color(0.62f, 0.35f, 0.35f, 1f);
+        public static readonly Color SkyHorizon = new Color(0.98f, 0.62f, 0.31f, 1f);
         public static readonly Color SunCore = new Color(1f, 0.86f, 0.58f, 1f);
 
         public static SkyView Attach(Camera cam, float trackLengthM)
@@ -67,10 +70,22 @@ namespace ChartRunner.Game
             var c = new List<Color>();
             var t = new List<int>();
 
-            // Градиент по трём остановкам: верх, середина, горизонт. Две остановки дают
-            // плоскую заливку, четыре на этом размере уже неразличимы.
-            AddGradientBand(v, c, t, -w, w, 0f, h, SkyMid, SkyTop);
-            AddGradientBand(v, c, t, -w, w, -h, 0f, SkyHorizon, SkyMid);
+            // Градиент по семи остановкам. Меньше — виден стык полос (полоса Маха):
+            // на стыке скорость изменения цвета меняется скачком, и глаз рисует там
+            // горизонтальную линию, которой нет в данных, — снято кадром.
+            var ys = new[] { -1.00f, -0.55f, -0.10f, 0.10f, 0.30f, 0.62f, 1.00f };
+            var cs = new[]
+            {
+                SkyHorizon,
+                new Color(0.82f, 0.49f, 0.33f, 1f),
+                SkyWarm,
+                new Color(0.44f, 0.27f, 0.34f, 1f),
+                SkyMid,
+                new Color(0.16f, 0.13f, 0.26f, 1f),
+                SkyTop
+            };
+            for (var i = 0; i < ys.Length - 1; i++)
+                AddGradientBand(v, c, t, -w, w, h * ys[i], h * ys[i + 1], cs[i], cs[i + 1]);
 
             var go = Shapes.Create("SkyQuad", transform, Shapes.Build("SkyQuad", v, c, t), -100);
             go.transform.SetParent(_cam, false);
@@ -78,14 +93,60 @@ namespace ChartRunner.Game
 
             // Солнце у горизонта — источник, из которого следует вся остальная светотень.
             // Оно СЗАДИ игрока (слева по ходу), поэтому герой оказывается против света.
+            // Высота выставлена ПО КАДРУ: при −0.16h диск целиком прятался за городом
+            // и рельефом, и в кадре не было самого источника — остальная светотень
+            // становилась беспричинной. Теперь диск висит у верхней кромки города,
+            // частично перекрывается башнями — это и есть закат в городе.
+            var sunPos = new Vector2(-halfW * 0.55f, halfH * 0.30f);
+            var sunR = halfH * 0.14f;
+
+            // Ореол: радиальное затухание вершинным цветом (центр тёплый, край прозрачный).
+            // Это воздух вокруг источника; сам диск ниже светится через Emissive + bloom.
+            var gv = new List<Vector3>();
+            var gc = new List<Color>();
+            var gt = new List<int>();
+            AddGlowDisc(gv, gc, gt, sunPos, sunR * 5.2f,
+                new Color(SkyHorizon.r, SkyHorizon.g, SkyHorizon.b, 0.55f), 36);
+            AddGlowDisc(gv, gc, gt, sunPos, sunR * 2.3f,
+                new Color(SunCore.r, SunCore.g, SunCore.b, 0.50f), 28);
+            var glow = Shapes.Create("SunGlow", transform, Shapes.Build("SunGlow", gv, gc, gt), -99);
+            glow.transform.SetParent(_cam, false);
+            glow.transform.localPosition = new Vector3(0f, 0f, 59.5f);
+
             var sv = new List<Vector3>();
             var sc = new List<Color>();
             var st = new List<int>();
-            Shapes.AddDisc(sv, sc, st, new Vector2(-halfW * 0.55f, -h * 0.16f), halfH * 0.14f,
-                SunCore, 24);
-            var sun = Shapes.Create("Sun", transform, Shapes.Build("Sun", sv, sc, st), -99);
+            Shapes.AddDisc(sv, sc, st, sunPos, sunR, SunCore, 32);
+            // Диск — источник для bloom: ярче диапазона обычных цветов, пост разольёт
+            // его свет по соседним пикселям, как разливается низкое солнце в оптике.
+            var sun = Shapes.Create("Sun", transform, Shapes.Build("Sun", sv, sc, st), -98,
+                Shapes.Emissive(2.6f));
             sun.transform.SetParent(_cam, false);
             sun.transform.localPosition = new Vector3(0f, 0f, 59f);
+
+        }
+
+        /// <summary>Диск с радиальным затуханием: центр — цвет, кромка — прозрачный ноль.</summary>
+        private static void AddGlowDisc(List<Vector3> v, List<Color> c, List<int> t,
+            Vector2 center, float radius, Color core, int segments)
+        {
+            var i0 = v.Count;
+            v.Add(new Vector3(center.x, center.y, 0f));
+            c.Add(Shapes.V(core));
+            var rim = new Color(core.r, core.g, core.b, 0f);
+            for (var i = 0; i < segments; i++)
+            {
+                var a = i / (float)segments * Mathf.PI * 2f;
+                v.Add(new Vector3(center.x + Mathf.Cos(a) * radius,
+                    center.y + Mathf.Sin(a) * radius, 0f));
+                c.Add(Shapes.V(rim));
+            }
+            for (var i = 0; i < segments; i++)
+            {
+                t.Add(i0);
+                t.Add(i0 + 1 + i);
+                t.Add(i0 + 1 + (i + 1) % segments);
+            }
         }
 
         private static void AddGradientBand(List<Vector3> v, List<Color> c, List<int> t,
@@ -122,10 +183,13 @@ namespace ChartRunner.Game
             // башнями весь верх экрана и не оставляла неба, а именно небо у горизонта —
             // самое светлое место кадра, на котором и читается контражурный силуэт героя.
             // Город обязан подпирать композицию, а не занимать её.
+            // Цвета и плотность выставлены по кадру: первая редакция дала сплошной
+            // бежевый частокол без неба в просветах — город обязан быть СИЛУЭТОМ на
+            // тёплом небе, тёмным и редким, а не светлой стеной вплотную к герою.
             AddCandleCity("CityFar", 0.90f, 1.0f, 1.9f, 0.50f,
-                new Color(0.44f, 0.30f, 0.31f, 1f), -62, trackLengthM, 7919);
+                new Color(0.34f, 0.22f, 0.28f, 1f), -62, trackLengthM, 7919);
             AddCandleCity("CityMid", 0.78f, -0.9f, 2.8f, 0.72f,
-                new Color(0.28f, 0.18f, 0.24f, 1f), -52, trackLengthM, 104729);
+                new Color(0.20f, 0.13f, 0.20f, 1f), -52, trackLengthM, 104729);
 
             // ВЫСОТА И РАЗМЕР ИСПРАВЛЕНЫ ПО СНЯТОМУ КАДРУ. В первой редакции дальняя гряда
             // стояла ВЫШЕ ближних (base 9.5 против 3.0) и была самой большой формой в кадре —
@@ -140,6 +204,41 @@ namespace ChartRunner.Game
             // а земле нужен сплошной тёмный подпор под силуэтом героя.
             AddRidge("RidgeNear", 0.58f, -1.8f, 3.1f, 0.115f, 5.3f,
                 new Color(0.17f, 0.13f, 0.20f, 1f), -42, trackLengthM);
+
+            // Дымка ПЕРЕД каждым планом: воздушная перспектива не только осветляет цвет
+            // слоя (это уже делают его вершинные цвета), но и кладёт слой тёплого воздуха
+            // МЕЖДУ планами. Чем дальше план, тем больше воздуха перед ним — поэтому
+            // перед дальним городом дымка плотнее, перед ближней грядой едва заметна.
+            AddHaze("HazeFar", -58, 0.24f);
+            AddHaze("HazeMid", -48, 0.13f);
+            AddHaze("HazeNear", -38, 0.06f);
+        }
+
+        /// <summary>
+        /// Слой тёплого воздуха на весь кадр: плотный у горизонта, растворяется кверху.
+        /// Ниже линии рельефа его закрывает непрозрачная земля, поэтому низ не важен.
+        /// </summary>
+        private void AddHaze(string name, int order, float alpha)
+        {
+            var cam = _cam.GetComponent<Camera>();
+            var halfH = cam.orthographicSize;
+            var halfW = halfH * Mathf.Max(cam.aspect, 1f);
+            var w = halfW * 3f;
+
+            var v = new List<Vector3>();
+            var c = new List<Color>();
+            var t = new List<int>();
+            var warm = SkyHorizon;
+            var lo = new Color(warm.r, warm.g, warm.b, alpha);
+            var mid = new Color(warm.r, warm.g, warm.b, alpha * 0.45f);
+            var none = new Color(warm.r, warm.g, warm.b, 0f);
+
+            AddGradientBand(v, c, t, -w, w, -halfH * 1.4f, -halfH * 0.10f, lo, mid);
+            AddGradientBand(v, c, t, -w, w, -halfH * 0.10f, halfH * 0.55f, mid, none);
+
+            var go = Shapes.Create(name, transform, Shapes.Build(name, v, c, t), order);
+            go.transform.SetParent(_cam, false);
+            go.transform.localPosition = new Vector3(0f, 0f, 45f + order * -0.01f);
         }
 
         /// <summary>
@@ -150,7 +249,9 @@ namespace ChartRunner.Game
             float width, Color color, int order, float trackLengthM, int seed)
         {
             var span = trackLengthM * (1f - parallax) + 140f;
-            var pitch = width * 1.75f;
+            // Шаг 2.6 ширины и случайные пропуски: городу нужны ПРОСВЕТЫ неба между
+            // башнями — сплошной ряд на шаге 1.75 читался стеной, а не горизонтом.
+            var pitch = width * 2.6f;
             var v = new List<Vector3>();
             var c = new List<Color>();
             var t = new List<int>();
@@ -170,6 +271,7 @@ namespace ChartRunner.Game
                 var wave = 0.5f + 0.5f * Mathf.Sin(x * 0.055f + seed * 0.001f);
                 var h = maxH * (0.22f + 0.78f * (0.55f * wave + 0.45f * Rand()));
                 var w = width * (0.7f + 0.6f * Rand());
+                if (Rand() > 0.80f) continue; // квартал с пустырём — просвет до неба
                 var top = baseY + h;
 
                 // Тело башни: к подножию темнеет, как и свечи под колёсами.

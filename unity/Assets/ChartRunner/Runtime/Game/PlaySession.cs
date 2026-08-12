@@ -192,11 +192,15 @@ namespace ChartRunner.Game
             _chase.TopSpeedMPerS = BikeProfile.topSpeedMPerS;
             _chase.Bind(_camera, _controller.transform);
 
+            // Пост-обработка: HDR + bloom + виньетка + цветокоррекция. Включение движка.
+            PostFX.Attach(_camera);
+
             // Небо и дальние планы приколачиваются к камере, поэтому создаются после Bind:
             // размер квада берётся из уже настроенного orthographicSize.
             SkyView.Attach(_camera, _track.EndM);
             ContactShadow.Attach(_controller, _sampler, world);
             WheelDust.Attach(_controller, _sampler, world);
+            AirMotes.Attach(_camera);
 
             _runStartedAt = Time.time;
             _attempts = 1;

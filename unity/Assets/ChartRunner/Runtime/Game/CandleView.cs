@@ -32,12 +32,14 @@ namespace ChartRunner.Game
     {
         // Светлоты подобраны по снятому кадру: насыщенные тела на 40 % экрана перетягивали
         // контраст с героя. Свечи темнее неба и светлее силуэта — узкая полоса между ними.
-        public static readonly Color UpBody = new Color(0.11f, 0.30f, 0.21f, 1f);
-        public static readonly Color DownBody = new Color(0.32f, 0.11f, 0.16f, 1f);
+        // Пересняты после включения bloom и цветокоррекции: рядом со светящейся кромкой
+        // прежние тела проваливались в черноту, и графика под линией не было видно.
+        public static readonly Color UpBody = new Color(0.14f, 0.38f, 0.26f, 1f);
+        public static readonly Color DownBody = new Color(0.40f, 0.14f, 0.19f, 1f);
         public static readonly Color UpEdge = new Color(0.38f, 0.86f, 0.58f, 1f);
         public static readonly Color DownEdge = new Color(0.94f, 0.36f, 0.40f, 1f);
-        public static readonly Color Wick = new Color(0.42f, 0.42f, 0.52f, 1f);
-        public static readonly Color Deep = new Color(0.030f, 0.028f, 0.048f, 1f);
+        public static readonly Color Wick = new Color(0.30f, 0.30f, 0.40f, 1f);
+        public static readonly Color Deep = new Color(0.042f, 0.038f, 0.066f, 1f);
         public static readonly Color Separator = new Color(0.015f, 0.014f, 0.028f, 1f);
 
         /// <summary>Насколько глубоко вниз уходит масса графика, метры.</summary>
@@ -110,7 +112,7 @@ namespace ChartRunner.Game
                 //
                 // Тело висит ПОД линией цены, поэтому перекрыть байка не может по построению.
                 var span = Mathf.Abs(cd.ClosePx - cd.OpenPx) * k;
-                var bodyDepth = Mathf.Clamp(span * 1.35f, step * 1.8f, FadeDepthM * 1.6f);
+                var bodyDepth = Mathf.Clamp(span * 1.35f, step * 2.4f, FadeDepthM * 1.6f);
 
                 for (var s = 0; s < SubColumns; s++)
                 {
@@ -189,8 +191,11 @@ namespace ChartRunner.Game
             strata.transform.localPosition = new Vector3(0f, 0f, -0.005f);
 
             Shapes.Create("CandleBodies", root.transform, Shapes.Build("CandleBodies", v, c, t), -20);
+            // Кромка — ЛИНИЯ ЦЕНЫ, единственные данные в кадре — светится через bloom.
+            // Правило «светятся только данные» выполняется конструкцией: Emissive-материал
+            // стоит на кромке и ни на чём другом в земле.
             var over = Shapes.Create("CandleEdges", root.transform,
-                Shapes.Build("CandleEdges", ov, oc, ot), -19);
+                Shapes.Build("CandleEdges", ov, oc, ot), -19, Shapes.Emissive(2.1f));
             over.transform.localPosition = new Vector3(0f, 0f, -0.01f);
 
             return root;
