@@ -22,7 +22,19 @@ namespace ChartRunner.Game
     {
         private const float Px = 0.0272f; // UnitsContract.PxToM — px исходника уже метричны
 
-        private static readonly Vector2 Oblique = new Vector2(-9f * Px, -34f * Px); // (TRV_X, TDECK)
+        /// <summary>
+        /// ПОЛОВИНА косоугольного вектора деки: (TRV_X, TDECK) / 2 = (−9, 34)/2 в px.
+        ///
+        /// ЛИНИЯ ЕЗДЫ — СЕРЕДИНА ДЕКИ, а не её кромка. В исходнике `pt = c − half`,
+        /// `pb = c + half`, а байк рисуется ровно на `c`: дорога видна косо, и герой
+        /// едет по её середине, дальняя половина уходит вверх-вправо, ближняя — вниз-влево.
+        ///
+        /// Первая редакция клала линию езды на ВЕРХНЮЮ кромку (дека целиком свисала вниз).
+        /// Вердикт живого теста был точным: «байк едет не по трассе, а по верхней линии
+        /// трассы» и «на склонах застревает в трассе» — колёса шли по яркому проводу,
+        /// а на склоне кромка соседнего узла оказывалась выше колеса.
+        /// </summary>
+        private static readonly Vector2 Half = new Vector2(4.5f * Px, 17f * Px);
 
         public static GameObject Build(TrackProfile profile, TerrainSampler terrain, Transform parent,
             IReadOnlyList<CandleTrackGenerator.Candle> candles = null,
@@ -81,8 +93,8 @@ namespace ChartRunner.Game
 
             for (var i = 0; i < pts.Count - 1; i++)
             {
-                var a = pts[i] + Oblique;
-                var b = pts[i + 1] + Oblique;
+                var a = pts[i] - Half;
+                var b = pts[i + 1] - Half;
                 var i0 = v.Count;
                 v.Add(new Vector3(a.x, a.y, 0f)); c.Add(Shapes.V(s0));
                 v.Add(new Vector3(b.x, b.y, 0f)); c.Add(Shapes.V(s0));
@@ -94,32 +106,53 @@ namespace ChartRunner.Game
             Shapes.Create("DeckShadow", parent, Shapes.Build("DeckShadow", v, c, t), -30);
         }
 
-        /// <summary>Тело деки: непрозрачный графит, верх чуть светлее низа.</summary>
+        /// <summary>
+        /// Тело деки: полотно между дальней и ближней кромкой. Тёплый верх ловит закат,
+        /// холодный низ уходит в тень (b221) — дека читается ОСВЕЩЁННОЙ поверхностью,
+        /// а не плоским силуэтом. Плюс ближняя торцевая грань: у дороги есть толщина,
+        /// и именно торец даёт объём.
+        /// </summary>
         private static void BuildBody(Transform parent, List<Vector2> pts)
         {
             var v = new List<Vector3>();
             var c = new List<Color>();
             var t = new List<int>();
-            var top = new Color(WorldPalette.DeckTop.r, WorldPalette.DeckTop.g,
-                WorldPalette.DeckTop.b, 0.97f);
-            var bot = new Color(WorldPalette.DeckBottom.r, WorldPalette.DeckBottom.g,
-                WorldPalette.DeckBottom.b, 0.97f);
+            // _trkBodyGold исходника: тёплый верх → холодная тень низ.
+            var warm = new Color(78 / 255f, 48 / 255f, 44 / 255f, 0.97f);
+            var mid = new Color(34 / 255f, 24 / 255f, 38 / 255f, 0.97f);
+            var cold = new Color(8 / 255f, 9 / 255f, 24 / 255f, 0.97f);
+            var edgeFace = new Color(6 / 255f, 6 / 255f, 16 / 255f, 0.97f);
+            var thickness = 7f * Px;
 
             for (var i = 0; i < pts.Count - 1; i++)
             {
-                var a = pts[i];
-                var b = pts[i + 1];
-                var a2 = a + Oblique;
-                var b2 = b + Oblique;
-                var i0 = v.Count;
-                v.Add(new Vector3(a.x, a.y, 0f)); c.Add(Shapes.V(top));
-                v.Add(new Vector3(b.x, b.y, 0f)); c.Add(Shapes.V(top));
-                v.Add(new Vector3(b2.x, b2.y, 0f)); c.Add(Shapes.V(bot));
-                v.Add(new Vector3(a2.x, a2.y, 0f)); c.Add(Shapes.V(bot));
-                t.Add(i0); t.Add(i0 + 1); t.Add(i0 + 2);
-                t.Add(i0); t.Add(i0 + 2); t.Add(i0 + 3);
+                var aF = pts[i] + Half;      // дальняя кромка
+                var bF = pts[i + 1] + Half;
+                var aC = pts[i];             // линия езды — середина
+                var bC = pts[i + 1];
+                var aN = pts[i] - Half;      // ближняя кромка
+                var bN = pts[i + 1] - Half;
+
+                Quad(v, c, t, aF, bF, bC, aC, warm, mid);
+                Quad(v, c, t, aC, bC, bN, aN, mid, cold);
+                // Торец ближней кромки — толщина полотна.
+                Quad(v, c, t, aN, bN,
+                    bN - new Vector2(0f, thickness), aN - new Vector2(0f, thickness),
+                    edgeFace, edgeFace);
             }
             Shapes.Create("DeckBody", parent, Shapes.Build("DeckBody", v, c, t), -28);
+        }
+
+        private static void Quad(List<Vector3> v, List<Color> c, List<int> t,
+            Vector2 a, Vector2 b, Vector2 d, Vector2 e, Color top, Color bottom)
+        {
+            var i0 = v.Count;
+            v.Add(new Vector3(a.x, a.y, 0f)); c.Add(Shapes.V(top));
+            v.Add(new Vector3(b.x, b.y, 0f)); c.Add(Shapes.V(top));
+            v.Add(new Vector3(d.x, d.y, 0f)); c.Add(Shapes.V(bottom));
+            v.Add(new Vector3(e.x, e.y, 0f)); c.Add(Shapes.V(bottom));
+            t.Add(i0); t.Add(i0 + 1); t.Add(i0 + 2);
+            t.Add(i0); t.Add(i0 + 2); t.Add(i0 + 3);
         }
 
         /// <summary>Сталь структуры: рёбра-шпалы по узлам + нижняя кромка.</summary>
@@ -132,20 +165,27 @@ namespace ChartRunner.Game
             var rib = new Color(steel.r, steel.g, steel.b, 0.38f);
             var edge = new Color(steel.r, steel.g, steel.b, 0.66f);
 
-            // Рёбра по узлам (~26 px исходника = шаг узла профиля).
+            // Шпалы по узлам (~26 px исходника = шаг узла профиля): от дальней кромки
+            // к ближней через всю ширину полотна. Они и читаются поверхностью, и дают
+            // скорость — по ним глаз считывает, как быстро едешь.
             var stepM = profile.nodeStepPx * Px;
             var endX = pts[pts.Count - 1].x;
             var sampler = new TerrainSampler(profile);
             for (var x = 0f; x <= endX; x += stepM)
             {
-                var y = sampler.HeightAt(x);
-                var a = new Vector2(x, y);
-                Shapes.AddBar(v, c, t, a, a + Oblique, 1.9f * Px, rib);
+                var p = new Vector2(x, sampler.HeightAt(x));
+                Shapes.AddBar(v, c, t, p + Half, p - Half, 1.9f * Px, rib);
             }
 
-            // Нижняя стальная кромка.
+            // Ближняя стальная кромка — вторая грань, задающая объём деки.
             for (var i = 0; i < pts.Count - 1; i++)
-                Shapes.AddBar(v, c, t, pts[i] + Oblique, pts[i + 1] + Oblique, 2.4f * Px, edge);
+                Shapes.AddBar(v, c, t, pts[i] - Half, pts[i + 1] - Half, 2.4f * Px, edge);
+
+            // Осевая разметка по линии езды: пунктир там, где реально катятся колёса.
+            // Без неё середина полотна пустая, и дорога не читается дорогой.
+            var dash = new Color(230 / 255f, 240 / 255f, 1f, 0.22f);
+            for (var i = 0; i < pts.Count - 1; i += 2)
+                Shapes.AddBar(v, c, t, pts[i], pts[i + 1], 1.2f * Px, dash);
 
             Shapes.Create("DeckSteel", parent, Shapes.Build("DeckSteel", v, c, t), -27);
         }
@@ -166,10 +206,12 @@ namespace ChartRunner.Game
             var steel = WorldPalette.Steel;
             var flatThreshold = 1f * Px; // порог исходника: ±1 px на узел
 
+            // Линия данных идёт по ДАЛЬНЕЙ кромке — как в исходнике (txA/tyA = верх ленты),
+            // а не по линии езды: иначе колёса катятся по светящемуся проводу.
             for (var i = 0; i < pts.Count - 1; i++)
             {
-                var a = pts[i];
-                var b = pts[i + 1];
+                var a = pts[i] + Half;
+                var b = pts[i + 1] + Half;
                 var climb = b.y > a.y + flatThreshold;
                 var drop = b.y < a.y - flatThreshold;
                 var col = climb ? WorldPalette.DataUp : drop ? WorldPalette.DataDown : steel;
@@ -230,9 +272,9 @@ namespace ChartRunner.Game
                     col = ev == CandleTrackGenerator.MarketEvent.Rally
                         ? WorldPalette.DataUp : WorldPalette.DataDown;
 
-                // Колонна: top = низ деки + 2 px, высота = |close − open|.
+                // Колонна свисает с БЛИЖНЕЙ кромки деки (byW = c.y + TDECK/2 + 2 в px).
                 var bodyH = Mathf.Max(2f * Px, Mathf.Abs(cd.ClosePx - cd.OpenPx) * Px);
-                var by = surfY + Oblique.y - 2f * Px;
+                var by = surfY - Half.y - 2f * Px;
                 var bo = by - bodyH;
 
                 // Фронт-тело (α 0.20).

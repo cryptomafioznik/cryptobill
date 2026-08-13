@@ -425,6 +425,26 @@ namespace ChartRunner.Bike
                 _rig.Chassis.AddTorque(acc * I * (1f - dh * Profile.designHardGuardAssist)
                                        * Level.wheelieGuardScale, ForceMode2D.Force);
             }
+            // 2б. ЗЕРКАЛЬНАЯ ПОДУШКА У ГРАНИ КЛЕВКА.
+            //
+            // Измерено (LeanBalanceProbe): без неё нос ВНИЗ отзывался ВДВОЕ сильнее носа
+            // вверх (перекос ×0.51 на филе БАЛАНС) — ровно то, что живой тест назвал
+            // «несбалансировано». Причина структурная: у носа вверх подушка была, у носа
+            // вниз — ничего до самого anti-loop, то есть одна сторона демпфирована,
+            // другая падает свободно.
+            //
+            // Зона клевка своя, а не отражение вилли: клевок опаснее по последствиям
+            // (через руль), поэтому подушка включается РАНЬШЕ по модулю угла. Множитель
+            // общий (wheelieGuardScale): один пресет фила правит обе стороны, иначе они
+            // снова разъедутся.
+            else if (rel < -Profile.endoZone)
+            {
+                var ed = Mathf.Clamp01((-rel - Profile.endoZone)
+                                       / Mathf.Max(1e-4f, Profile.endoEdge - Profile.endoZone));
+                var acc = ed * ed * Profile.endoGuard * PerFrame2ToPerS2
+                          - angV * 0.5f * PerFrameToPerS;
+                _rig.Chassis.AddTorque(acc * I * Level.wheelieGuardScale, ForceMode2D.Force);
+            }
 
             // 3. Задний тормоз опускает нос на вилли — НЕ гаснет никогда.
             //    Это главный инструмент спасения игрока, и он физически честный.

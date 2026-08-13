@@ -70,10 +70,18 @@ namespace ChartRunner.Game
             BuildStars();
             BuildSun();
             BuildRays();
+            // ЛЕСТНИЦА ПЛАНОВ. Между каждой парой планов — слой дымки: воздух между
+            // ними и есть то, из чего берётся объём. Порядок и плотности — из исходника
+            // (fogBandG на hz−95/hz−35/hz+8). Без них планы стоят в одной плоскости,
+            // и город читается плоскими прямоугольниками — вердикт живого теста
+            // «не хватает объёмности города».
             BuildFarSkyline(trackLengthM);
+            BuildFog("FogFar", -88, 95f, 120f, 0.34f);
             BuildCity(trackLengthM, 0.13f, false, -86);
+            BuildFog("FogMid", -84, 35f, 95f, 0.30f);
             BuildPalms(trackLengthM, 0.18f, -82);
             BuildCity(trackLengthM, 0.26f, true, -80);
+            BuildFog("FogNear", -79, -8f, 80f, 0.16f);
             BuildWater(trackLengthM);
             BuildVeil();
         }
@@ -540,6 +548,27 @@ namespace ChartRunner.Game
             Pin(sun, 52.5f);
         }
 
+        /// <summary>
+        /// Полоса дымки поперёк кадра: плотная в середине, растворяется к краям.
+        /// aboveHz — насколько выше горизонта её центр (в px исходника), h — высота.
+        /// </summary>
+        private void BuildFog(string name, int order, float aboveHz, float h, float alpha)
+        {
+            var w = _halfW * 3f;
+            var yc = _hz + aboveHz * _px;
+            var half = h * 0.5f * _px;
+            var col = _era.Bridge;
+            var mid = new Color(col.r * 1.35f, col.g * 1.3f, col.b * 1.4f, alpha);
+            var none = new Color(mid.r, mid.g, mid.b, 0f);
+
+            var v = new List<Vector3>();
+            var c = new List<Color>();
+            var t = new List<int>();
+            Band(v, c, t, -w, w, yc - half, yc, none, mid);
+            Band(v, c, t, -w, w, yc, yc + half, mid, none);
+            Pin(Shapes.Create(name, transform, Shapes.Build(name, v, c, t), order), 53.5f);
+        }
+
         private void BuildVeil()
         {
             // Вуаль-дымка над ВСЕМ задним планом (b209): светлее/мягче = уходит назад.
@@ -586,14 +615,18 @@ namespace ChartRunner.Game
             var line = _era.Line;
             var len = _halfH * 2f * 0.9f;
             var origin = new Vector2(_sunPos.x, _hz);
-            // t исходника — кадры при 60 fps: t*0.004 → *0.24 в секундах.
-            var tt = _time * 60f;
+            // ВЧЕТВЕРО МЕДЛЕННЕЕ исходника и вдвое тише. Причина — вердикт живого теста
+            // «солнце постоянно двигается, странно выглядит»: в Canvas лучи рисовались
+            // в SDR и их пульсация тонула, а в HDR + bloom те же альфы дают заметное
+            // мерцание, и глаз читает его как движущийся источник. Само солнце
+            // неподвижно — двигались только лучи.
+            var tt = _time * 15f;
 
             for (var k = 0; k < 12; k++)
             {
-                var a0 = -1.15f + k / 11f * 2.3f + Mathf.Sin(tt * 0.004f + k) * 0.04f;
-                var w = (4f + 4f * Mathf.Abs(Mathf.Sin(tt * 0.009f + k * 1.7f))) * _px;
-                var al = 0.02f + 0.018f * Mathf.Abs(Mathf.Sin(tt * 0.011f + k));
+                var a0 = -1.15f + k / 11f * 2.3f + Mathf.Sin(tt * 0.004f + k) * 0.02f;
+                var w = (4f + 2.5f * Mathf.Abs(Mathf.Sin(tt * 0.009f + k * 1.7f))) * _px;
+                var al = 0.010f + 0.006f * Mathf.Abs(Mathf.Sin(tt * 0.011f + k));
                 var dir = new Vector2(Mathf.Sin(a0), Mathf.Cos(a0)); // вверх, наклон a0
                 var n = new Vector2(-dir.y, dir.x);
                 var c0 = new Color(line.r, line.g, line.b, al);

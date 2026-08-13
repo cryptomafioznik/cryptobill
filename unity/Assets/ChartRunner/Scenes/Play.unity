@@ -156,7 +156,7 @@ MonoBehaviour:
   CandleProfile: {fileID: 11400000, guid: e0a46546ff5794a979219ab1a3830594, type: 2}
   ChartSeed: 20260806
   ChartCandles: 700
-  HeroScreenFraction: 0.125
+  HeroScreenFraction: 0.072
 --- !u!4 &205200013
 Transform:
   m_ObjectHideFlags: 0

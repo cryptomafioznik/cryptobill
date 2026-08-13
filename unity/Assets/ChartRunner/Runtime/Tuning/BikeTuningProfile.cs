@@ -157,6 +157,14 @@ namespace ChartRunner.Tuning
         public float wheelieGuard = 0.10f;
         public float wheelieZone = 0.60f;
         public float wheelieEdge = 0.78f;
+
+        [Tooltip("Зеркало подушки вилли для КЛЕВКА ВПЕРЁД. В исходнике её не было, и замер " +
+                 "LeanBalanceProbe показал перекос ×0.51: нос вниз отзывался вдвое сильнее " +
+                 "носа вверх. Зона раньше, чем у вилли (клевок опаснее по последствиям), " +
+                 "сила та же. Масштабируется общим Level.wheelieGuardScale.")]
+        public float endoGuard = 0.078f;
+        public float endoZone = 0.42f;
+        public float endoEdge = 0.62f;
         public float antiLoop = 0.07f;
         public float loopLimitRad = 0.95f;
         public float uprightAir = 0.028f;
