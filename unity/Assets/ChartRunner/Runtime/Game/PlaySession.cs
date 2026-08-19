@@ -53,6 +53,12 @@ namespace ChartRunner.Game
         [Tooltip("Возрождать на последнем пройденном чекпоинте, а не в начале трассы.")]
         public bool RestartAtCheckpoint = true;
 
+        /// <summary>Минимум, сколько держится экран итогов: иначе тап смерти его проглотит.</summary>
+        private const float SummaryMinSeconds = 0.55f;
+
+        /// <summary>Через сколько итог уходит сам, если игрок не тапнул.</summary>
+        private const float SummaryAutoSeconds = 6f;
+
         [Header("График")]
         [Tooltip("Профиль свечей. Без него трасса-график построиться не может.")]
         public CandleTerrainProfile CandleProfile;
@@ -82,6 +88,15 @@ namespace ChartRunner.Game
         private float _feelBannerUntil;
         private bool _prevAirborne;
         private float _prevVerticalSpeed;
+        private LiquidationWave _wave;
+        private CoinField _coinField;
+        private float _airAccum;
+        private float _wheelieAccum;
+        private float _bestLeadM;
+        private float _runBestDistM;
+        private bool _runCommitted;
+        private bool _levelUp;
+        private int _runCoins;
         private GUIStyle _hud;
         private GUIStyle _big;
         private GUIStyle _zone;
@@ -184,6 +199,17 @@ namespace ChartRunner.Game
             // Мир приколачивается к камере, поэтому создаётся после Bind:
             // размеры берутся из уже настроенного orthographicSize.
             WorldView.Attach(_camera, _track.EndM);
+
+            // ---- игровой слой ----
+            //
+            // Волна ликвидации — СТАВКА заезда. Разбор топов жанра дал один общий
+            // знаменатель: без давления заезд перестаёт быть заездом. У Hill Climb это
+            // топливо, у Alto's — погоня, у нас ставка уже была придумана и обкатана
+            // годами в браузерной версии, и в перенос она не попала. Именно поэтому
+            // сборка на движке проигрывала браузерной при лучшей физике: ехать было не за чем.
+            _wave = LiquidationWave.Attach(_controller, _camera, world);
+            _coinField = CoinField.Attach(_track, _sampler, _controller, world, ChartSeed);
+
             ContactShadow.Attach(_controller, _sampler, world);
             WheelDust.Attach(_controller, _sampler, world);
             AirMotes.Attach(_camera);
@@ -224,6 +250,8 @@ namespace ChartRunner.Game
             var travelled = st.PositionXM;
             if (travelled > _bestDistanceM) _bestDistanceM = travelled;
 
+            AccumulateGoals(st);
+
 #if ENABLE_LEGACY_INPUT_MANAGER
             if (UnityEngine.Input.GetKeyDown(KeyCode.R)) Restart(true);
             if (UnityEngine.Input.GetKeyDown(KeyCode.T)) SwitchTrack();
@@ -241,7 +269,26 @@ namespace ChartRunner.Game
             {
                 if (_deadFor < 0f) _deadFor = 0f;
                 _deadFor += Time.deltaTime;
-                if (_deadFor >= RestartDelaySeconds) Restart(false);
+
+                // Итог заезда фиксируется ОДИН раз: прогресс целей переживает смерть,
+                // и это главная причина начать следующую попытку.
+                if (!_runCommitted)
+                {
+                    _runCommitted = true;
+                    _runCoins = _coinField != null ? _coinField.Collected : 0;
+                    _levelUp = RunGoals.CommitRun();
+                }
+
+                // Итог показывается, пока игрок его читает. Тап или R — сразу заново:
+                // мгновенный рестарт держит петлю, длинная пауза её рвёт.
+#if ENABLE_LEGACY_INPUT_MANAGER
+                var tapped = UnityEngine.Input.GetMouseButtonDown(0)
+                             || UnityEngine.Input.touchCount > 0;
+#else
+                var tapped = false;
+#endif
+                if (_deadFor >= SummaryMinSeconds && (tapped || _deadFor >= SummaryAutoSeconds))
+                    Restart(false);
             }
             else
             {
@@ -254,6 +301,47 @@ namespace ChartRunner.Game
         /// кадрам и дороже по правильности: остались бы старые коллайдеры, тени и меши,
         /// и разница между трассами читалась бы как разница между «чисто» и «после смены».
         /// </summary>
+        /// <summary>
+        /// Вклад текущего заезда в цели. Считается ПО ФАКТУ состояния байка, а не по
+        /// нажатым кнопкам: цель «на заднем колесе» обязана засчитывать реальное вилли,
+        /// иначе её можно закрыть, просто держа кнопку в воздухе.
+        /// </summary>
+        private void AccumulateGoals(BikeState st)
+        {
+            if (_controller.Halted) return;
+            var dt = Time.deltaTime;
+
+            // Дистанция: только ПРИРОСТ рекорда заезда — иначе катание взад-вперёд
+            // накручивало бы цель.
+            if (st.DistanceM > _runBestDistM)
+            {
+                RunGoals.AddDistance(st.DistanceM - _runBestDistM);
+                _runBestDistM = st.DistanceM;
+            }
+
+            // Третья цель чередуется по уровню — считаем ту величину, которая нужна.
+            switch (RunGoals.Level % 3)
+            {
+                case 0: // время в воздухе
+                    if (!st.IsGrounded) { _airAccum += dt; RunGoals.AddSkill(dt); }
+                    break;
+                case 1: // время на заднем колесе
+                    if (st.IsGrounded && st.PitchRelRad > 0.45f)
+                    {
+                        _wheelieAccum += dt;
+                        RunGoals.AddSkill(dt);
+                    }
+                    break;
+                default: // максимальный отрыв от волны
+                    if (_wave != null && _wave.LeadM > _bestLeadM)
+                    {
+                        RunGoals.AddSkill(_wave.LeadM - _bestLeadM);
+                        _bestLeadM = _wave.LeadM;
+                    }
+                    break;
+            }
+        }
+
         private void SwitchTrack()
         {
             Selected = Selected == TrackChoice.Chart ? TrackChoice.Crux30
@@ -283,9 +371,17 @@ namespace ChartRunner.Game
 
             _controller.ResetTo(BikeFactory.RestingRearAxle(_sampler, BikeProfile, x));
             _chase.Snap();
+            if (_wave != null) _wave.Reset();
+            if (_coinField != null) _coinField.ResetRun();
             _deadFor = -1f;
             _runStartedAt = Time.time;
             _attempts++;
+            _airAccum = 0f;
+            _wheelieAccum = 0f;
+            _bestLeadM = 0f;
+            _runBestDistM = 0f;
+            _runCommitted = false;
+            _levelUp = false;
         }
 
         /// <summary>
@@ -320,17 +416,20 @@ namespace ChartRunner.Game
             var st = _controller.State;
             var pct = Mathf.Clamp01(st.PositionXM / Mathf.Max(1f, _track.EndM)) * 100f;
 
-            GUI.Label(new Rect(14f, 12f, 220f, 22f),
-                pct.ToString("0") + " %   " + (st.SpeedMPerS * 3.6f).ToString("0") + " км/ч", _hud);
-            // Две строки, а не одна: в одной строке шириной 260 название фила обрезалось,
-            // и переключение выглядело неработающим — ровно та же беда, что с невидимым
-            // управлением, только в отчёте о состоянии.
-            GUI.Label(new Rect(14f, 32f, 300f, 22f),
-                "попытка " + _attempts + "   " + (Time.time - _runStartedAt).ToString("0.0") + " с", _hud);
-            GUI.Label(new Rect(14f, 52f, 300f, 22f),
-                (Selected == TrackChoice.Chart ? "график"
-                    : Selected == TrackChoice.Crux30 ? "крукс-30" : "VS-315")
-                + "   фил: " + FeelPreset.Name(SelectedFeel), _hud);
+            // ---- строка состояния: дистанция, скорость, деньги ----
+            GUI.Label(new Rect(14f, 12f, 260f, 22f),
+                Mathf.FloorToInt(st.DistanceM) + " м    "
+                + (st.SpeedMPerS * 3.6f).ToString("0") + " км/ч", _hud);
+
+            // Монеты — справа, золотом: единственное золото в кадре, и это деньги.
+            if (_coinField != null)
+            {
+                var goldStyle = new GUIStyle(_hud) { alignment = TextAnchor.UpperRight };
+                goldStyle.normal.textColor = new Color(1f, 0.84f, 0.36f, 0.95f);
+                GUI.Label(new Rect(170f, 12f, 246f, 22f), "\u25C6 " + _coinField.Collected, goldStyle);
+            }
+            DrawGoals();
+            DrawDanger();
 
             // Баннер при смене: без него непонятно, переключилось ли, и сравнение
             // превращается в угадывание.
@@ -342,9 +441,11 @@ namespace ChartRunner.Game
 
             // Индикатор переноса веса: игрок обязан видеть, что он реально приложил,
             // иначе «я же наклонял» и «наклон приложился» неразличимы, и учиться не на чем.
-            var barW = 150f;
+            // Индикатор веса переехал ВНИЗ, к кнопкам наклона: обратная связь должна быть
+            // там, куда смотрит палец в момент действия, а не в углу с целями.
+            var barW = 174f;
             var cx = 14f + barW * 0.5f;
-            var y = 78f;
+            var y = 932f - 130f;
             GUI.color = new Color(1f, 1f, 1f, 0.18f);
             GUI.DrawTexture(new Rect(14f, y, barW, 5f), Texture2D.whiteTexture);
             GUI.color = st.WeightShift < 0f
@@ -353,8 +454,10 @@ namespace ChartRunner.Game
             var w = Mathf.Abs(st.WeightShift) * barW * 0.5f;
             GUI.DrawTexture(new Rect(st.WeightShift < 0f ? cx - w : cx, y, w, 5f), Texture2D.whiteTexture);
             GUI.color = Color.white;
-            GUI.Label(new Rect(14f, y + 8f, 220f, 20f),
-                st.WeightShift < -0.05f ? "вес НАЗАД" : st.WeightShift > 0.05f ? "вес ВПЕРЁД" : "", _hud);
+            var wl = new GUIStyle(_hud) { fontSize = 11 };
+            wl.normal.textColor = new Color(0.78f, 0.84f, 0.94f, 0.75f);
+            GUI.Label(new Rect(14f, y - 15f, 220f, 14f),
+                st.WeightShift < -0.05f ? "вес НАЗАД" : st.WeightShift > 0.05f ? "вес ВПЕРЁД" : "", wl);
 
             DrawEventWarning(st);
             DrawButtons();
@@ -365,14 +468,7 @@ namespace ChartRunner.Game
                     "ВВОД НЕ СОБРАН\nactiveInputHandler: 2", _big);
             }
 
-            if (_controller.Halted)
-            {
-                var reason = st.Failure == BikeFailure.Loop ? "ОПРОКИД НАЗАД"
-                    : st.Failure == BikeFailure.Endo ? "КЛЕВОК ВПЕРЁД"
-                    : st.Failure == BikeFailure.Crash ? "ЖЁСТКАЯ ПОСАДКА"
-                    : "ПАДЕНИЕ";
-                DrawChip(reason, 215f, 932f * 0.34f, new Color(1f, 64 / 255f, 86 / 255f), _big);
-            }
+            if (_controller.Halted) DrawSummary(st);
 
             GUI.matrix = m;
         }
@@ -475,6 +571,153 @@ namespace ChartRunner.Game
                 new Color(col.r, col.g, col.b, 0.85f * a), Vector4.one * 1.4f, radius);
             style.normal.textColor = new Color(236 / 255f, 243 / 255f, 253 / 255f, 0.95f * a);
             GUI.Label(r, content, style);
+        }
+
+        /// <summary>
+        /// ТРИ ЦЕЛИ — постоянно на экране. Модель Alto's Odyssey: маленькие достижимые
+        /// задачи, прогресс по которым переживает смерть. Именно они дают причину начать
+        /// следующий заезд, пока в игре нет магазина и прогрессии.
+        ///
+        /// Полоска прогресса обязательна: цель без видимого приближения к ней не работает
+        /// — игрок не может понять, стоит ли ещё один заезд.
+        /// </summary>
+        private void DrawGoals()
+        {
+            var y = 36f;
+            for (var i = 0; i < RunGoals.Active.Length; i++)
+            {
+                var g = RunGoals.Active[i];
+                var done = g.Done;
+                var col = done
+                    ? new Color(0.42f, 0.94f, 0.62f, 1f)
+                    : new Color(0.78f, 0.84f, 0.94f, 1f);
+
+                // Полоска-подложка во всю ширину плашки и заливка по прогрессу.
+                var r = new Rect(14f, y, 190f, 15f);
+                GUI.DrawTexture(r, Texture2D.whiteTexture, ScaleMode.StretchToFill, true, 0f,
+                    new Color(9 / 255f, 10 / 255f, 24 / 255f, 0.55f), Vector4.zero, Vector4.one * 4f);
+                var fill = new Rect(r.x, r.y, r.width * g.Fraction, r.height);
+                GUI.DrawTexture(fill, Texture2D.whiteTexture, ScaleMode.StretchToFill, true, 0f,
+                    new Color(col.r, col.g, col.b, done ? 0.34f : 0.20f), Vector4.zero, Vector4.one * 4f);
+
+                var st = new GUIStyle(_hud) { fontSize = 11, alignment = TextAnchor.MiddleLeft };
+                st.normal.textColor = new Color(col.r, col.g, col.b, 0.95f);
+                GUI.Label(new Rect(r.x + 6f, r.y, r.width - 8f, r.height),
+                    (done ? "\u2713 " : "") + g.Label, st);
+                y += 18f;
+            }
+
+            // Уровень целей: длинная петля видна одним числом.
+            var lv = new GUIStyle(_hud) { fontSize = 11 };
+            lv.normal.textColor = new Color(0.62f, 0.68f, 0.80f, 0.75f);
+            GUI.Label(new Rect(14f, y + 1f, 190f, 14f), "УРОВЕНЬ " + RunGoals.Level, lv);
+        }
+
+        /// <summary>
+        /// ТРЕВОГА ОТ ВОЛНЫ. Красная виньетка по левому краю ∝ близости ликвидации.
+        /// Смысл не в украшении: игрок смотрит вперёд, а смерть приходит сзади — без
+        /// индикации он узнаёт о ней в момент смерти, и это читается нечестностью.
+        /// </summary>
+        private void DrawDanger()
+        {
+            if (_wave == null || _controller.Halted) return;
+            var d = _wave.Danger;
+            if (d < 0.02f) return;
+
+            // Пульсация тем быстрее, чем ближе — темп сам сообщает степень опасности.
+            var pulse = 0.75f + 0.25f * Mathf.Sin(Time.time * (4f + 10f * d));
+            var a = d * d * 0.55f * pulse;
+            var w = 26f + 60f * d;
+            GUI.color = new Color(1f, 0.18f, 0.28f, a);
+            GUI.DrawTexture(new Rect(0f, 0f, w, 932f), Texture2D.whiteTexture);
+            GUI.color = Color.white;
+
+            if (d > 0.55f)
+            {
+                var st = new GUIStyle(_warn) { fontSize = 15 };
+                st.normal.textColor = new Color(1f, 0.42f, 0.42f, 0.55f + 0.45f * pulse);
+                GUI.Label(new Rect(0f, 932f * 0.10f, 430f, 20f), "ЛИКВИДАЦИЯ НАСТИГАЕТ", st);
+            }
+        }
+
+        /// <summary>
+        /// ЭКРАН ИТОГОВ. Отвечает на три вопроса, которые игрок задаёт после смерти:
+        /// что случилось, сколько я прошёл, приблизился ли я к чему-нибудь. Третий —
+        /// главный: именно он превращает поражение в причину сыграть ещё раз.
+        ///
+        /// Тап рестартит сразу: длинная пауза после смерти рвёт петлю, и это единственная
+        /// вещь, которую в разборах топов ругают чаще всего.
+        /// </summary>
+        private void DrawSummary(BikeState st)
+        {
+            // Затемнение кадра: итог обязан читаться поверх пёстрого мира.
+            GUI.color = new Color(0.02f, 0.02f, 0.06f, 0.62f);
+            GUI.DrawTexture(new Rect(0f, 0f, 430f, 932f), Texture2D.whiteTexture);
+            GUI.color = Color.white;
+
+            var reason = st.Failure == BikeFailure.Loop ? "ОПРОКИД НАЗАД"
+                : st.Failure == BikeFailure.Endo ? "КЛЕВОК ВПЕРЁД"
+                : st.Failure == BikeFailure.Crash ? "ЖЁСТКАЯ ПОСАДКА"
+                : st.Failure == BikeFailure.Liquidated ? "ЛИКВИДИРОВАН"
+                : "ПАДЕНИЕ";
+            var accent = st.Failure == BikeFailure.Liquidated
+                ? new Color(1f, 0.25f, 0.34f)
+                : new Color(1f, 0.55f, 0.32f);
+
+            DrawChip(reason, 215f, 932f * 0.26f, accent, _big);
+
+            // Дистанция крупно — это счёт заезда.
+            var dist = new GUIStyle(_big) { fontSize = 44 };
+            dist.normal.textColor = new Color(0.94f, 0.97f, 1f, 0.96f);
+            GUI.Label(new Rect(0f, 932f * 0.32f, 430f, 56f),
+                Mathf.FloorToInt(_runBestDistM) + " м", dist);
+
+            var sub = new GUIStyle(_hud) { fontSize = 14, alignment = TextAnchor.MiddleCenter };
+            sub.normal.textColor = new Color(1f, 0.84f, 0.36f, 0.95f);
+            GUI.Label(new Rect(0f, 932f * 0.32f + 56f, 430f, 22f), "\u25C6 " + _runCoins, sub);
+
+            // Рекорд — вторая причина ехать ещё раз.
+            var rec = new GUIStyle(_hud) { fontSize = 12, alignment = TextAnchor.MiddleCenter };
+            rec.normal.textColor = new Color(0.68f, 0.74f, 0.86f, 0.8f);
+            GUI.Label(new Rect(0f, 932f * 0.32f + 78f, 430f, 20f),
+                "рекорд " + Mathf.FloorToInt(_bestDistanceM) + " м   ·   попытка " + _attempts, rec);
+
+            // Цели с прогрессом — то, ради чего игрок нажмёт «ещё раз».
+            var y = 932f * 0.47f;
+            for (var i = 0; i < RunGoals.Active.Length; i++)
+            {
+                var g = RunGoals.Active[i];
+                var col = g.Done
+                    ? new Color(0.42f, 0.94f, 0.62f, 1f)
+                    : new Color(0.80f, 0.86f, 0.96f, 1f);
+                var r = new Rect(65f, y, 300f, 22f);
+                GUI.DrawTexture(r, Texture2D.whiteTexture, ScaleMode.StretchToFill, true, 0f,
+                    new Color(9 / 255f, 10 / 255f, 24 / 255f, 0.7f), Vector4.zero, Vector4.one * 5f);
+                GUI.DrawTexture(new Rect(r.x, r.y, r.width * g.Fraction, r.height),
+                    Texture2D.whiteTexture, ScaleMode.StretchToFill, true, 0f,
+                    new Color(col.r, col.g, col.b, g.Done ? 0.34f : 0.18f),
+                    Vector4.zero, Vector4.one * 5f);
+                var gs = new GUIStyle(_hud) { fontSize = 12, alignment = TextAnchor.MiddleCenter };
+                gs.normal.textColor = col;
+                GUI.Label(r, (g.Done ? "\u2713 " : "") + g.Label, gs);
+                y += 27f;
+            }
+
+            if (_levelUp)
+            {
+                DrawChip("УРОВЕНЬ " + RunGoals.Level + " ОТКРЫТ",
+                    215f, y + 22f, new Color(0.42f, 0.94f, 0.62f), _warn);
+                y += 34f;
+            }
+
+            // Призыв к действию — пульсирует, чтобы читался как кнопка, а не как надпись.
+            if (_deadFor >= SummaryMinSeconds)
+            {
+                var p = 0.6f + 0.4f * Mathf.Sin(Time.time * 4.5f);
+                var cta = new GUIStyle(_big) { fontSize = 20 };
+                cta.normal.textColor = new Color(0.47f, 1f, 0.71f, 0.55f + 0.45f * p);
+                GUI.Label(new Rect(0f, 932f * 0.70f, 430f, 30f), "ТАП — ЕЩЁ РАЗ", cta);
+            }
         }
 
         private void EnsureStyles()

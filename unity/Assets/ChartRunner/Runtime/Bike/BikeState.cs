@@ -15,7 +15,10 @@ namespace ChartRunner.Bike
         Crash,
 
         /// <summary>Упал в пропасть.</summary>
-        Void
+        Void,
+
+        /// <summary>Догнала волна ликвидации. Единственный отказ, приходящий ИЗВНЕ физики.</summary>
+        Liquidated
     }
 
     /// <summary>

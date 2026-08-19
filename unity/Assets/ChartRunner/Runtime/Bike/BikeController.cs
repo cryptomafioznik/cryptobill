@@ -614,6 +614,17 @@ namespace ChartRunner.Bike
             }
         }
 
+        /// <summary>
+        /// Отказ, назначенный ИЗВНЕ: волна ликвидации догнала игрока. Физика тут ни при
+        /// чём — это правило заезда, поэтому и вход отдельный, а не подмена внутреннего
+        /// состояния. Мотор глушится тем же путём, что при физическом отказе.
+        /// </summary>
+        public void Liquidate()
+        {
+            if (Halted) return;
+            Fail(BikeFailure.Liquidated);
+        }
+
         private void Fail(BikeFailure reason)
         {
             _failure = reason;
