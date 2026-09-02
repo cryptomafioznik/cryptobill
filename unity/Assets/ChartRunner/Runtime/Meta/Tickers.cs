@@ -122,6 +122,52 @@ namespace ChartRunner.Meta
             done(Fallback(), true);
         }
 
+        /// <summary>
+        /// Свечи с параметрами: исторический отрезок кампании (startTime+limit, b141) или
+        /// «вчерашние 288» для дейли (endTime = полночь UTC, b161). Кэш по ключу — история
+        /// неизменна, поэтому навсегда (PlayerPrefs, компактный CSV).
+        /// </summary>
+        public static IEnumerator LoadRange(string symbol, string cacheKey, string query, Action<List<Candle>, bool> done)
+        {
+            var cached = PlayerPrefs.GetString("cr_kl_" + cacheKey, "");
+            if (cached.Length > 0)
+            {
+                var d = ParseCsv(cached);
+                if (d.Count >= 20) { done(d, false); yield break; }
+            }
+            var url = "https://api.binance.com/api/v3/klines?symbol=" + symbol + "&interval=5m&" + query;
+            using (var req = UnityWebRequest.Get(url))
+            {
+                req.timeout = 10;
+                yield return req.SendWebRequest();
+                if (req.result == UnityWebRequest.Result.Success)
+                {
+                    var d = ParseKlines(req.downloadHandler.text);
+                    if (d != null && d.Count >= 20)
+                    {
+                        var sb = new System.Text.StringBuilder();
+                        foreach (var c in d) sb.Append(c.O.ToString("R", CultureInfo.InvariantCulture)).Append(',').Append(c.H.ToString("R", CultureInfo.InvariantCulture)).Append(',')
+                            .Append(c.L.ToString("R", CultureInfo.InvariantCulture)).Append(',').Append(c.C.ToString("R", CultureInfo.InvariantCulture)).Append('\n');
+                        PlayerPrefs.SetString("cr_kl_" + cacheKey, sb.ToString()); PlayerPrefs.Save();
+                        done(d, false); yield break;
+                    }
+                }
+            }
+            done(Fallback(), true);
+        }
+
+        private static List<Candle> ParseCsv(string csv)
+        {
+            var list = new List<Candle>();
+            foreach (var line in csv.Split('\n'))
+            {
+                var p = line.Split(','); if (p.Length != 4) continue;
+                if (TryNum(p[0], out var o) && TryNum(p[1], out var h) && TryNum(p[2], out var l) && TryNum(p[3], out var c))
+                    list.Add(new Candle { O = o, H = h, L = l, C = c });
+            }
+            return list;
+        }
+
         /// <summary>Фан-аут превью для терминала (b108): строки заполняются по мере прихода.</summary>
         public static IEnumerator LoadAllPreviews()
         {

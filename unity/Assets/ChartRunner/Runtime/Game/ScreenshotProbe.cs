@@ -88,7 +88,7 @@ namespace ChartRunner.Game
             var screens = new[]
             {
                 PlaySession.Screen.Howto, PlaySession.Screen.Title, PlaySession.Screen.Setup,
-                PlaySession.Screen.Garage, PlaySession.Screen.Bikes, PlaySession.Screen.Settings
+                PlaySession.Screen.Garage, PlaySession.Screen.Bikes, PlaySession.Screen.Path, PlaySession.Screen.Settings
             };
             var i = 0;
             foreach (var sc in screens)

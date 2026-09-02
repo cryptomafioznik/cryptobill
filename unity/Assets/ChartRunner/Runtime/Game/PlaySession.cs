@@ -1,3 +1,4 @@
+using System;
 using System.Collections;
 using System.Collections.Generic;
 using System.Globalization;
@@ -22,13 +23,16 @@ namespace ChartRunner.Game
     /// </summary>
     public class PlaySession : MonoBehaviour
     {
-        public enum Screen { Howto, Title, Setup, TickerLoad, Play, Dead, Paused, Garage, Bikes, Settings }
+        public enum Screen { Howto, Title, Setup, TickerLoad, Play, Dead, Paused, Garage, Bikes, Settings, Path }
 
         // ---- состояние потока, переживающее перезагрузку сцены ----
         public static Screen Flow = Screen.Title;
         public static List<Tickers.Candle> PendingCandles;
         public static int PendingTicker;
         public static bool PendingFallback;
+        /// <summary>Заезд — дейли «Рынок сегодня» (3 попытки, стрик). Переживает перезагрузку.</summary>
+        public static bool PendingDaily;
+        public static string PendingTitle = "";
         public static Feel SelectedFeel = Feel.Balance;
         private static bool _flowInit;
         private static int _setupSel;
@@ -75,6 +79,7 @@ namespace ChartRunner.Game
         private string _pop = ""; private float _popUntil;
         private bool _rankedUp; private Economy.Rank _newRank; private int _rankBonus;
         private string _onbMsg = "";
+        private int _dailyBonus;
         private float _airT;
 
         // ---- стили ----
@@ -120,7 +125,7 @@ namespace ChartRunner.Game
             FeelPreset.Apply(LevelProfile, SelectedFeel);
 
             // ---- трасса из реальных свечей ----
-            var shortRun = Economy.ShortMode;
+            var shortRun = Economy.ShortMode && !PendingDaily && Campaign.Active == null;
             _tt = TickerTrack.Build(PendingCandles, shortRun, ChartSeed + PendingTicker);
             _sampler = new TerrainSampler(_tt.Profile);
             _finishDistB = Mathf.FloorToInt((_tt.Profile.nodesPx.Length - 1) * TickerTrack.StepPx / 10f);
@@ -183,12 +188,50 @@ namespace ChartRunner.Game
 
         private void StartTicker(int idx)
         {
+            if (Campaign.Active != null && !Campaign.Active.Daily) Campaign.Active = null;
+            PendingDaily = false;
             Economy.LastTicker = idx; Economy.Save();
             Flow = Screen.TickerLoad;
             StartCoroutine(Tickers.Load(Tickers.All[idx], (d, fb) =>
             {
                 PendingCandles = d; PendingTicker = idx; PendingFallback = fb;
                 Reload(Screen.Play);
+            }));
+        }
+
+        private void StartCampaign(int idx)
+        {
+            var tr = Campaign.Tracks[idx];
+            Campaign.Active = Campaign.ForTrack(idx);
+            PendingDaily = false; PendingTitle = tr.Name;
+            Flow = Screen.TickerLoad;
+            var tkIdx = 0; for (var i = 0; i < Tickers.All.Length; i++) if (Tickers.All[i].Key == tr.Coin) tkIdx = i;
+            StartCoroutine(Tickers.LoadRange(tr.Symbol, "cmp_" + tr.Id + "_" + Campaign.Len(idx),
+                "startTime=" + tr.T + "&limit=" + Campaign.Len(idx), (d, fb) =>
+                { PendingCandles = d; PendingTicker = tkIdx; PendingFallback = fb; Reload(Screen.Play); }));
+        }
+
+        private void StartDailyChallenge()
+        {
+            var ch = Campaign.DailyChallenge(out var coin);
+            Campaign.Active = ch; PendingDaily = false; PendingTitle = "ВЫЗОВ ДНЯ";
+            var tkIdx = 0; for (var i = 0; i < Tickers.All.Length; i++) if (Tickers.All[i].Key == coin.Key) tkIdx = i;
+            StartTicker(tkIdx);
+        }
+
+        /// <summary>b161 «Рынок сегодня»: вчерашние 288 свечей монеты дня, одинаково у всех, 3 попытки.</summary>
+        private void StartDaily()
+        {
+            if (Campaign.TriesToday >= 3) { Pop("3/3 — завтра новая трасса"); return; }
+            var coin = Campaign.DailyCoin;
+            Campaign.Active = null; PendingDaily = true; PendingTitle = coin.Name + " · ДЕНЬ";
+            Flow = Screen.TickerLoad;
+            var tkIdx = 0; for (var i = 0; i < Tickers.All.Length; i++) if (Tickers.All[i].Key == coin.Key) tkIdx = i;
+            var end = DateTimeOffset.UtcNow.ToUnixTimeMilliseconds() / 86400000L * 86400000L;
+            StartCoroutine(Tickers.LoadRange(coin.Symbol, "daily_" + Campaign.DayUtc(), "limit=288&endTime=" + (end - 1), (d, fb) =>
+            {
+                if (fb) { PendingDaily = false; Flow = Screen.Title; Pop("нет связи — дейли недоступен"); return; }
+                PendingCandles = d; PendingTicker = tkIdx; PendingFallback = false; Reload(Screen.Play);
             }));
         }
 
@@ -280,6 +323,8 @@ namespace ChartRunner.Game
             if (_runGems > Economy.BestPnl) Economy.BestPnl = _runGems;
             if (_distB > Economy.Best) Economy.Best = _distB;
             OnbRunEnd();
+            Campaign.Finish(_distB, _finishDistB, _runGems);
+            if (PendingDaily) _dailyBonus = Campaign.DailyResolve(_runGems);
             Economy.Save();
             Pop("$ ЗАФИКСИРОВАНО  +$" + _runGems.ToString("N0", CultureInfo.InvariantCulture), 2.5f);
             Freeze();
@@ -295,6 +340,8 @@ namespace ChartRunner.Game
             _liqPen = Economy.Liquidate(); _runGems = -_liqPen;
             if (_distB > Economy.Best) Economy.Best = _distB;
             OnbRunEnd();
+            Campaign.Finish(_distB, _finishDistB, 0);
+            if (PendingDaily) _dailyBonus = Campaign.DailyResolve(0);
             Economy.Save();
             _wave.enabled = false;
             Flow = Screen.Dead; _deadFor = 0f;
@@ -356,6 +403,7 @@ namespace ChartRunner.Game
                 case Screen.Paused: DrawPlay(); DrawPaused(); break;
                 case Screen.Garage: DrawGarage(); break;
                 case Screen.Bikes: DrawBikes(); break;
+                case Screen.Path: DrawPath(); break;
                 case Screen.Settings: DrawSettings(); break;
             }
             GUI.matrix = m;
@@ -467,6 +515,11 @@ namespace ChartRunner.Game
             my += 88f;
             if (Btn(new Rect(18f, my, W - 36f, 44f), "≣ ТЕРМИНАЛ — монета · плечо · лонг/шорт", Ice, 13, 0.35f)) Flow = Screen.Setup;
             my += 54f;
+            var dTries = Campaign.TriesToday;
+            if (Btn(new Rect(18f, my, (W - 44f) / 2f, 54f), "⚑ ПУТЬ ТРЕЙДЕРА", new Color(1f, 0.78f, 0.47f), 13, 0.4f, "20 трасс · боссы-крахи")) Flow = Screen.Path;
+            if (Btn(new Rect(18f + (W - 44f) / 2f + 8f, my, (W - 44f) / 2f, 54f), "◷ РЫНОК СЕГОДНЯ", new Color(0.9f, 0.78f, 1f), 13, 0.4f,
+                    Campaign.DailyCoin.Name + " · попытки " + dTries + "/3" + (Campaign.StreakAlive > 1 ? " · стрик " + Campaign.StreakAlive : ""))) StartDaily();
+            my += 64f;
             if (Btn(new Rect(18f, my, (W - 44f) / 2f, 54f), "◆ ЗАКРЕПИТЬ", new Color(0.62f, 0.88f, 1f), 14, 0.4f, "$" + Economy.Bank + " → ◆ навсегда"))
                 DiamondHand();
             if (Btn(new Rect(18f + (W - 44f) / 2f + 8f, my, (W - 44f) / 2f, 54f), "? КАК ИГРАТЬ", Dimc, 14, 0.3f)) Flow = Screen.Howto;
@@ -542,7 +595,7 @@ namespace ChartRunner.Game
         private void DrawLoad()
         {
             Dim(0.8f);
-            var name = Tickers.All[Mathf.Clamp(Economy.LastTicker, 0, Tickers.All.Length - 1)].Name;
+            var name = string.IsNullOrEmpty(PendingTitle) ? Tickers.All[Mathf.Clamp(Economy.LastTicker, 0, Tickers.All.Length - 1)].Name : PendingTitle;
             Label(0, H * 0.44f, W, "ЗАГРУЖАЮ " + name + "…", Ice, 20, TextAnchor.MiddleCenter);
             Label(0, H * 0.44f + 30f, W, "реальные свечи · 5 минут · Binance", Dimc, 11, TextAnchor.MiddleCenter, false);
         }
@@ -561,8 +614,17 @@ namespace ChartRunner.Game
             Label(W - 160f, 10f, 146f, "$" + Economy.Bank, Gold, 14, TextAnchor.UpperRight);
             Label(W - 160f, 30f, 146f, (pnl >= 0 ? "+" : "") + (pnl * 100f).ToString("0.0") + "%  ×" + Economy.Leverage, pc, 13, TextAnchor.UpperRight);
 
+            if (Campaign.Active != null && Campaign.Active.Camp)
+            {
+                var pr = Mathf.Clamp01(_distB / (float)Mathf.Max(1, _finishDistB));
+                var bx = 65f; var bw = W - 130f;
+                GUI.DrawTexture(new Rect(bx, 66f, bw, 8f), Texture2D.whiteTexture, ScaleMode.StretchToFill, true, 0f, new Color(0.08f, 0.1f, 0.16f, 0.65f), Vector4.zero, Vector4.one * 4f);
+                GUI.DrawTexture(new Rect(bx, 66f, Mathf.Max(4f, bw * pr), 8f), Texture2D.whiteTexture, ScaleMode.StretchToFill, true, 0f, new Color(0.47f, 1f, 0.71f, 0.92f), Vector4.zero, Vector4.one * 4f);
+                Label(0, 50f, W, "⚑ " + Campaign.Active.Name + "  " + Mathf.Min(_distB, _finishDistB) + "/" + _finishDistB + "м", Mint, 11, TextAnchor.MiddleCenter);
+            }
+
             // Цели (3 миссии).
-            var y = 56f;
+            var y = Campaign.Active != null && Campaign.Active.Camp ? 80f : 56f;
             foreach (var mi in Missions.Active)
             {
                 Label(14f, y, 260f, (mi.Done ? "✓ " : "· ") + mi.Text + "  +◆" + mi.Reward, mi.Done ? Mint : new Color(0.7f, 0.76f, 0.88f, 0.85f), 10, TextAnchor.UpperLeft, false);
@@ -655,6 +717,18 @@ namespace ChartRunner.Game
                 + (_stakeIncome > 0 ? "  ◆+$" + _stakeIncome : ""), _cashedOut ? Mint : new Color(1f, 0.69f, 0.63f), 15, TextAnchor.MiddleCenter);
             if (_missionRew > 0) Label(0, H * 0.34f + 118f, W, "цели заезда  +◆" + _missionRew, Mint, 12, TextAnchor.MiddleCenter);
             if (!string.IsNullOrEmpty(_onbMsg)) Label(20f, H * 0.34f + 140f, W - 40f, _onbMsg, Gold, 12, TextAnchor.MiddleCenter);
+            var ch = Campaign.Active;
+            if (ch != null && ch.Resolved)
+            {
+                var md = ch.Medal;
+                Label(20f, H * 0.34f + 160f, W - 40f, md >= 0
+                    ? "⚑ ВЫЗОВ ПРОЙДЕН " + (md == 2 ? "◆◆◆" : md == 1 ? "◆◆" : "◆") + (ch.Paid > 0 ? "  +$" + ch.Paid : "")
+                    : "⚑ ВЫЗОВ НЕ ПРОЙДЕН — ещё разок", md >= 0 ? Gold : new Color(1f, 0.6f, 0.54f), 12, TextAnchor.MiddleCenter);
+            }
+            if (PendingDaily)
+                Label(20f, H * 0.34f + 180f, W - 40f, "РЫНОК СЕГОДНЯ · попытка " + Campaign.TriesToday + "/3 · лучшее $" + Campaign.BestToday
+                    + (Campaign.StreakAlive > 1 ? " · стрик " + Campaign.StreakAlive : "") + (_dailyBonus > 0 ? "  +$" + _dailyBonus + " за стрик" : ""),
+                    new Color(0.9f, 0.78f, 1f), 12, TextAnchor.MiddleCenter);
             var tip = _deathBy == "wave" ? "◈ качай ЩИТ ОТ ВОЛНЫ — оторвёшься от дампа"
                 : _deathBy == "loop" || _deathBy == "endo" ? "◎ качай СЦЕПЛЕНИЕ — прощает кувырки"
                 : _deathBy == "crash" ? "◎ качай СЦЕПЛЕНИЕ — мягче посадки" : "⚙ качай ДВИЖОК — быстрее волны";
@@ -663,7 +737,11 @@ namespace ChartRunner.Game
             var by = H * 0.62f;
             if (_deadFor > 0.5f)
             {
-                if (Btn(new Rect(W / 2f - 100f, by, 200f, 50f), "↻ ЕЩЁ РАЗ", Mint, 18)) Reload(Screen.Play);
+                if (Btn(new Rect(W / 2f - 100f, by, 200f, 50f), "↻ ЕЩЁ РАЗ", Mint, 18))
+                {
+                    if (PendingDaily && Campaign.TriesToday >= 3) { Pop("3/3 — завтра новая трасса"); }
+                    else { if (Campaign.Active != null) Campaign.Active = Campaign.Active.Daily ? Campaign.DailyChallenge(out _) : Campaign.ForTrack(CampaignIndex(Campaign.Active.Id)); Reload(Screen.Play); }
+                }
                 if (Btn(new Rect(24f, by + 60f, (W - 56f) / 2f, 44f), "▣ ГАРАЖ", new Color(0.75f, 0.88f, 1f), 14, 0.4f)) Flow = Screen.Garage;
                 if (Btn(new Rect(24f + (W - 56f) / 2f + 8f, by + 60f, (W - 56f) / 2f, 44f), "≡ МЕНЮ", Dimc, 14, 0.3f)) Reload(Screen.Title);
             }
@@ -802,6 +880,50 @@ namespace ChartRunner.Game
             GUI.DrawTexture(new Rect(bx, yy, bw * val, 7f), Texture2D.whiteTexture, ScaleMode.StretchToFill, true, 0f, new Color(col.r, col.g, col.b, 0.92f), Vector4.zero, Vector4.one * 3f);
         }
 
+        private static int CampaignIndex(string id) { for (var i = 0; i < Campaign.Tracks.Length; i++) if ("cmp_" + Campaign.Tracks[i].Id == id) return i; return 0; }
+
+        /// <summary>
+        /// ПУТЬ ТРЕЙДЕРА — порт b118/b125/b142: ряд «ВЫЗОВ ДНЯ» + сетка кампании 2×10
+        /// (последовательный анлок, боссы-крахи подсвечены, медали ◆◆◆).
+        /// </summary>
+        private void DrawPath()
+        {
+            Dim(0.94f);
+            Label(0, 30f, W, "⚑ ПУТЬ ТРЕЙДЕРА", Ice, 21, TextAnchor.MiddleCenter);
+            var rk = Economy.Ranks[Economy.RankIdx(Economy.Career)];
+            Label(0, 56f, W, "ранг " + rk.Emoji + " " + rk.Name + "  ·  ◆" + Economy.Career, Dimc, 10, TextAnchor.MiddleCenter, false);
+            if (Btn(new Rect(14f, 16f, 74f, 32f), "‹ НАЗАД", Ice, 12, 0.35f)) Flow = Screen.Title;
+
+            const float lx = 14f; var lw = W - 28f;
+            var dc = Campaign.DailyChallenge(out var dcoin); var dDone = Campaign.DailyChallengeDone;
+            var dr = new Rect(lx, 74f, lw, 42f);
+            Panel(dr, dDone ? new Color(0.47f, 1f, 0.71f, 0.8f) : new Color(0.47f, 0.78f, 1f, 0.92f), dDone ? new Color(0.12f, 0.28f, 0.2f, 0.3f) : new Color(0.11f, 0.26f, 0.45f, 0.32f));
+            Label(dr.x + 12f, dr.y + 6f, 260f, (dDone ? "✓ " : "◷ ") + "ВЫЗОВ ДНЯ · " + dcoin.Name, new Color(0.81f, 0.92f, 1f), 12);
+            Label(dr.x + 12f, dr.y + 24f, 300f, dDone ? "выполнен — завтра новый" : dc.Name + "  ·  раз в день", new Color(0.72f, 0.82f, 0.94f, 0.82f), 8, TextAnchor.UpperLeft, false);
+            if (!dDone) Label(dr.xMax - 90f, dr.y + 12f, 78f, "+$" + dc.Rew, Gold, 12, TextAnchor.UpperRight);
+            if (!dDone && GUI.Button(dr, GUIContent.none, GUIStyle.none)) { GameAudio.I.Click(); StartDailyChallenge(); }
+
+            var N = Campaign.Tracks.Length; const int cols = 2; var rows = Mathf.CeilToInt(N / (float)cols); const float cgap = 8f, top = 124f;
+            var cwid = Mathf.Floor((lw - cgap * (cols - 1)) / cols); var rh = Mathf.Clamp(Mathf.Floor((H - top - 12f) / rows) - cgap, 40f, 64f);
+            for (var i = 0; i < N; i++)
+            {
+                var tr = Campaign.Tracks[i]; var col = i % cols; var row = i / cols;
+                var r = new Rect(lx + col * (cwid + cgap), top + row * (rh + cgap), cwid, rh);
+                var unlocked = Campaign.Unlocked(i); var done = Campaign.Beaten(i); var med = done ? Campaign.Medal("cmp_" + tr.Id) : -1;
+                var fill = done ? new Color(0.12f, 0.28f, 0.2f, 0.36f) : !unlocked ? new Color(0.09f, 0.1f, 0.16f, 0.5f) : tr.Boss ? new Color(0.23f, 0.09f, 0.07f, 0.55f) : new Color(0.15f, 0.17f, 0.27f, 0.5f);
+                var line = done ? new Color(0.47f, 1f, 0.71f, 0.85f) : !unlocked ? new Color(0.34f, 0.36f, 0.44f, 0.28f) : tr.Boss ? new Color(1f, 0.48f, 0.29f, 0.95f) : new Color(0.59f, 0.71f, 0.86f, 0.65f);
+                Panel(r, line, fill, 10f, tr.Boss ? 2f : 1.4f);
+                var tc = !unlocked ? new Color(0.45f, 0.48f, 0.58f) : tr.Boss ? new Color(1f, 0.6f, 0.44f) : Ice;
+                Label(r.x + 8f, r.y + 5f, 30f, (tr.Boss ? "✱" : (i + 1).ToString()), tc, 15);
+                Label(r.x + 34f, r.y + 6f, r.width - 40f, tr.Short, tc, 11);
+                Label(r.x + 34f, r.y + 22f, r.width - 40f, tr.Sub, new Color(tc.r, tc.g, tc.b, 0.7f), 7, TextAnchor.UpperLeft, false);
+                if (done) Label(r.x + 6f, r.yMax - 16f, r.width - 12f, (med == 2 ? "◆◆◆" : med == 1 ? "◆◆" : "◆") + "  +$" + tr.Rew, Gold, 9, TextAnchor.UpperRight);
+                else if (unlocked) Label(r.x + 6f, r.yMax - 16f, r.width - 12f, "+$" + tr.Rew, new Color(1f, 0.84f, 0.47f, 0.8f), 9, TextAnchor.UpperRight);
+                else Label(r.x + 6f, r.yMax - 16f, r.width - 12f, "⊘", Dimc, 10, TextAnchor.UpperRight);
+                if (unlocked && GUI.Button(r, GUIContent.none, GUIStyle.none)) { GameAudio.I.Click(); StartCampaign(i); }
+            }
+        }
+
         private void DrawSettings()
         {
             Dim(0.96f);
@@ -811,7 +933,7 @@ namespace ChartRunner.Game
             y += 70f;
             if (Btn(new Rect(W / 2f - 146f, y, 292f, 56f), "ФИЛ: " + FeelPreset.Name(SelectedFeel), Ice, 15, 0.35f, "тап — переключить")) SwitchFeel();
             y += 70f;
-            if (Btn(new Rect(W / 2f - 146f, y, 292f, 56f), "✕ СБРОСИТЬ ПРОГРЕСС", Rose, 14, 0.3f)) { Economy.ResetProgress(); Pop("✅ ПРОГРЕСС ОБНУЛЁН"); }
+            if (Btn(new Rect(W / 2f - 146f, y, 292f, 56f), "✕ СБРОСИТЬ ПРОГРЕСС", Rose, 14, 0.3f)) { Economy.ResetProgress(); Campaign.ResetAll(); Pop("✅ ПРОГРЕСС ОБНУЛЁН"); }
             if (Btn(new Rect(W / 2f - 90f, H - 74f, 180f, 46f), "←  НАЗАД", Ice, 15, 0.35f)) Flow = Screen.Title;
             DrawPop();
         }
