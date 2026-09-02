@@ -473,6 +473,7 @@ namespace ChartRunner.Game
             }
             Label(0, y + 6f, W, "теряешь — только от волны/краша, не от цены", Dimc, 11, TextAnchor.MiddleCenter, false);
             Label(0, y + 24f, W, "$ — деньги заезда (риск)   ·   ◆ — гемы навсегда (ранг)", Dimc, 10, TextAnchor.MiddleCenter, false);
+            Label(0, y + 40f, W, "игра · вся валюта виртуальная · не финансовый совет", new Color(0.42f, 0.47f, 0.6f), 9, TextAnchor.MiddleCenter, false);
             if (Btn(new Rect(60f, y + 60f, W - 120f, 50f), "▶ ВЫБРАТЬ МОНЕТУ", Mint, 18))
             {
                 Economy.SeenHowto = true; Economy.Save(); Flow = Screen.Setup; StartCoroutine(Tickers.LoadAllPreviews());

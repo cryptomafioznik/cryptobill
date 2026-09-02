@@ -73,9 +73,21 @@ namespace ChartRunner.EditorTools
             PlayerSettings.useAnimatedAutorotation = false;
 
             PlayerSettings.SetScriptingBackend(NamedBuildTarget.iOS, ScriptingImplementation.IL2CPP);
+            // РЕЛИЗ: Il2CPP Release (App Store не примет Debug-конфигурацию как продукт,
+            // и она вдвое медленнее), стриппинг минимальный — рефлексии в проекте нет,
+            // но выигрыш размера не стоит риска тихо вырезанного типа.
             PlayerSettings.SetIl2CppCompilerConfiguration(NamedBuildTarget.iOS,
-                Il2CppCompilerConfiguration.Debug);
+                Il2CppCompilerConfiguration.Release);
             PlayerSettings.SetManagedStrippingLevel(NamedBuildTarget.iOS, ManagedStrippingLevel.Minimal);
+
+            // ---- App Store: версия, иконка, сплэш ----
+            PlayerSettings.bundleVersion = "1.0.0";
+            PlayerSettings.iOS.buildNumber = "1";
+            PlayerSettings.SplashScreen.show = false;               // Unity 6: сплэш опционален
+            PlayerSettings.iOS.requiresFullScreen = true;
+            PlayerSettings.statusBarHidden = true;
+            PlayerSettings.iOS.hideHomeButton = true;
+            ApplyIcon(NamedBuildTarget.iOS);
 
             // Инкрементальный Xcode-проект: append переиспользует прошлую сборку и режет
             // время повторного круга в разы. При первом заходе папки нет — тогда replace.
@@ -83,6 +95,29 @@ namespace ChartRunner.EditorTools
             Directory.CreateDirectory(outDir);
             Run(BuildTarget.iOS, BuildTargetGroup.iOS, outDir, "ios",
                 append ? BuildOptions.AcceptExternalModificationsToPlayer : BuildOptions.None);
+        }
+
+        /// <summary>
+        /// Иконка — та же, что у PWA (toys/assets/icon.svg → 1024 px): валидированный
+        /// знак игры, не новый рисунок. Unity сам масштабирует во все слоты iOS.
+        /// </summary>
+        private static void ApplyIcon(NamedBuildTarget target)
+        {
+            var tex = AssetDatabase.LoadAssetAtPath<Texture2D>("Assets/ChartRunner/Icon/app-icon-1024.png");
+            if (tex == null) { Lines.Add("ИКОНКА НЕ НАЙДЕНА: Assets/ChartRunner/Icon/app-icon-1024.png"); return; }
+            var kinds = PlayerSettings.GetSupportedIconKinds(target);
+            foreach (var kind in kinds)
+            {
+                var icons = PlayerSettings.GetPlatformIcons(target, kind);
+                foreach (var icon in icons)
+                {
+                    var arr = new Texture2D[icon.maxLayerCount];
+                    for (var i = 0; i < arr.Length; i++) arr[i] = tex;
+                    icon.SetTextures(arr);
+                }
+                PlayerSettings.SetPlatformIcons(target, kind, icons);
+            }
+            Lines.Add("иконка: app-icon-1024.png → все слоты iOS");
         }
 
         private static void Run(BuildTarget target, BuildTargetGroup group, string path, string tag,
