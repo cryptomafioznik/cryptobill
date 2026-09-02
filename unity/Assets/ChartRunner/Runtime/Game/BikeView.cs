@@ -35,8 +35,8 @@ namespace ChartRunner.Game
         private static readonly Color Boot = Hex(0x1A, 0x1F, 0x2A);
         private static readonly Color GearPad = Hex(0xC2, 0xCC, 0xDB);
         private static readonly Color Visor = Hex(0x14, 0x18, 0x1C);
-        /// <summary>Акцент КРОСС 250: мятный (80,255,170) — цвет байка на экипе.</summary>
-        private static readonly Color Accent = new Color(80 / 255f, 1f, 170 / 255f, 1f);
+        /// <summary>Акцент байка/скина на экипе райдера (b243) — из Economy.</summary>
+        private Color Accent = new Color(80 / 255f, 1f, 170 / 255f, 1f);
 
         private BikeController _controller;
         private BikeRig _rig;
@@ -71,16 +71,24 @@ namespace ChartRunner.Game
         private void BuildStatic()
         {
             var p = _rig.Profile;
+            Accent = Meta.Economy.AccentColor();
+
+            // Спрайты ВЫБРАННОГО байка и скина (b143/b176): выгнаны из браузерной игры
+            // её же функциями — 7 байков × 4 скина, имя = индекс + скин.
+            var bike = Meta.Economy.SelBike;
+            var skin = Meta.Economy.CurrentSkin;
+            var tag = bike + (string.IsNullOrEmpty(skin) ? "" : "-" + skin);
+            var wheelR = Meta.Economy.WheelSpriteR(Meta.Economy.Bikes[bike].Type);
 
             // Колёса: спрайты на ФИЗИЧЕСКИХ телах колёс — вращение и ход подвески
             // приходят из решателя, а не из анимации.
-            AttachSprite(_rig.RearWheel.transform, "Art/wheel-rear", 9,
-                p.wheelRadiusM / (13f * K));
-            AttachSprite(_rig.FrontWheel.transform, "Art/wheel-front", 10,
-                p.wheelRadiusM / (13f * K));
+            AttachSprite(_rig.RearWheel.transform, "Art/wheel-" + tag + "-rear", 9,
+                p.wheelRadiusM / (wheelR * K));
+            AttachSprite(_rig.FrontWheel.transform, "Art/wheel-" + tag + "-front", 10,
+                p.wheelRadiusM / (wheelR * K));
 
             // Корпус — на шасси, поднят так, чтобы оси спрайта легли на оси физики.
-            var body = AttachSprite(transform, "Art/bike-body", 11, FitScale);
+            var body = AttachSprite(transform, "Art/bike-" + tag + "-body", 11, FitScale);
             if (body != null) body.transform.localPosition = new Vector3(0f, OriginLiftM, -0.01f);
 
             var host = new GameObject("RiderView");
@@ -135,17 +143,27 @@ namespace ChartRunner.Game
             var c = new List<Color>();
             var t = new List<int>();
 
-            // Поза dirt из исходника: px -6, py -8.5, ta 0.34, руль (21,-18.6), пеги (-2/1.5, 8).
+            // ПОЗА ПО ТИПУ БАЙКА (PS исходника, стр. 4985-4988): dirt = MX-стойка,
+            // bike = педали, scooter/moped = городская посадка прямее, sport = глубокий тук.
             // riderShiftPx 2.5 — микро-сдвиг переноса веса (b148: райдер жёстко на байке).
-            var hipPx = -6f + shift * 2.5f - 2f * air;
-            var hipPy = -8.5f - 4f * air;
-            var ta = 0.34f + shift * 0.10f - 0.10f * air;
+            var type = Meta.Economy.Bikes[Mathf.Clamp(Meta.Economy.SelBike, 0, Meta.Economy.Bikes.Length - 1)].Type;
+            float px0, py0, ta0, bx, by, f1x, f2x;
+            switch (type)
+            {
+                case "bike": px0 = -8f; py0 = -11f; ta0 = 0.30f; bx = 16f; by = -15f; f1x = -2f; f2x = 1.5f; break;
+                case "scooter": case "moped": px0 = -4f; py0 = -8f; ta0 = 0.10f; bx = 10f; by = -15f; f1x = -6f; f2x = -2.5f; break;
+                case "sport": px0 = -5f; py0 = -6.5f; ta0 = 0.86f; bx = 15f; by = -11f; f1x = -7f; f2x = -3.5f; break;
+                default: px0 = -6f; py0 = -8.5f; ta0 = 0.34f; bx = 21f; by = -18f; f1x = -2f; f2x = 1.5f; break;
+            }
+            var hipPx = px0 + shift * 2.5f - 2f * air;
+            var hipPy = py0 - 4f * air;
+            var ta = ta0 + shift * 0.10f - 0.10f * air;
 
             var hip = P(hipPx, hipPy);
             var shoulder = P(hipPx + Mathf.Sin(ta) * 13f, hipPy - Mathf.Cos(ta) * 13f);
-            var grip = P(21.3f, -19.6f);
-            var pegFar = P(-2f, 8f);
-            var pegNear = P(1.5f, 8f);
+            var grip = P(bx + 0.3f, by - 1.6f);
+            var pegFar = P(f1x, 8f);
+            var pegNear = P(f2x, 8f);
 
             // Длины сегментов исходника: руки 7.6/8.2, ноги 9/9.6 px.
             var armL1 = 7.6f * K; var armL2 = 8.2f * K;

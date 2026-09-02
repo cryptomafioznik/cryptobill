@@ -67,16 +67,26 @@ namespace ChartRunner.Meta
         }
 
         // ---- b997: байки (цена, тир) — арт и физика подключаются срезом «гараж» ----
-        public struct BikeDef { public string Name, Type, Frame, Tag; public int Cost, ReqRank; public float Accel, Grip; }
+        public struct BikeDef { public string Name, Type, Frame, Tag, Accent; public int Cost, ReqRank; public float Accel, Grip; }
+        public struct SkinDef { public string Id, Name, Accent; public int Cost; }
+
+        /// <summary>b1010: скины — палитры за $, физика не меняется (спрайты выгнаны с палитрой).</summary>
+        public static readonly SkinDef[] Skins =
+        {
+            new SkinDef { Id = "gold", Name = "ЗОЛОТО", Cost = 1500, Accent = "255,228,150" },
+            new SkinDef { Id = "carbon", Name = "КАРБОН", Cost = 1100, Accent = "255,82,92" },
+            new SkinDef { Id = "neon", Name = "НЕОН", Cost = 1100, Accent = "150,255,238" },
+            new SkinDef { Id = "stealth", Name = "СТЕЛС", Cost = 800, Accent = "255,64,64" },
+        };
         public static readonly BikeDef[] Bikes =
         {
-            new BikeDef { Name = "ВЕЛИК", Type = "bike", Cost = 0, Accel = 0.30f, Grip = 1.30f, Tag = "учебка · медленный, лёгкий" },
-            new BikeDef { Name = "МОПЕД", Type = "moped", Cost = 150, Accel = 0.34f, Grip = 1.38f, Tag = "дворовый · цепкий, шустрее" },
-            new BikeDef { Name = "СКУТЕР", Type = "scooter", Cost = 400, Accel = 0.38f, Grip = 1.50f, Tag = "стабильный · прощает посадки" },
-            new BikeDef { Name = "ЭНДУРО 125", Type = "dirt", Frame = "enduro", Cost = 900, Accel = 0.42f, Grip = 1.46f, Tag = "резвый универсал" },
-            new BikeDef { Name = "КРОСС 250", Type = "dirt", Frame = "cross", Cost = 1800, Accel = 0.46f, Grip = 1.54f, Tag = "сбалансированный зверь" },
-            new BikeDef { Name = "МОТАРД 450", Type = "dirt", Frame = "motard", Cost = 3400, Accel = 0.49f, Grip = 1.44f, Tag = "тяга-монстр · нервный" },
-            new BikeDef { Name = "СУПЕРБАЙК 650", Type = "sport", Cost = 6500, Accel = 0.52f, Grip = 1.60f, Tag = "быстрый + вкопанный", ReqRank = 3 },
+            new BikeDef { Name = "ВЕЛИК", Type = "bike", Cost = 0, Accel = 0.30f, Grip = 1.30f, Tag = "учебка · медленный, лёгкий", Accent = "150,200,230" },
+            new BikeDef { Name = "МОПЕД", Type = "moped", Cost = 150, Accel = 0.34f, Grip = 1.38f, Tag = "дворовый · цепкий, шустрее", Accent = "110,235,160" },
+            new BikeDef { Name = "СКУТЕР", Type = "scooter", Cost = 400, Accel = 0.38f, Grip = 1.50f, Tag = "стабильный · прощает посадки", Accent = "255,205,90" },
+            new BikeDef { Name = "ЭНДУРО 125", Type = "dirt", Frame = "enduro", Cost = 900, Accel = 0.42f, Grip = 1.46f, Tag = "резвый универсал", Accent = "60,210,255" },
+            new BikeDef { Name = "КРОСС 250", Type = "dirt", Frame = "cross", Cost = 1800, Accel = 0.46f, Grip = 1.54f, Tag = "сбалансированный зверь", Accent = "80,255,170" },
+            new BikeDef { Name = "МОТАРД 450", Type = "dirt", Frame = "motard", Cost = 3400, Accel = 0.49f, Grip = 1.44f, Tag = "тяга-монстр · нервный", Accent = "255,90,150" },
+            new BikeDef { Name = "СУПЕРБАЙК 650", Type = "sport", Cost = 6500, Accel = 0.52f, Grip = 1.60f, Tag = "быстрый + вкопанный", ReqRank = 3, Accent = "200,255,255" },
         };
 
         // ---- состояние игрока (persist) ----
@@ -86,6 +96,42 @@ namespace ChartRunner.Meta
         public static bool ShortMode;
         public static int SelBike;
         public static readonly List<int> Owned = new List<int> { 0 };
+        /// <summary>Надетый скин по байку (id или пусто) и купленные скины по байку.</summary>
+        public static readonly Dictionary<int, string> SkinSel = new Dictionary<int, string>();
+        public static readonly Dictionary<int, HashSet<string>> SkinOwn = new Dictionary<int, HashSet<string>>();
+
+        public static string CurrentSkin => SkinSel.TryGetValue(SelBike, out var s) ? s : "";
+        public static bool SkinOwned(int bike, string id) => SkinOwn.TryGetValue(bike, out var h) && h.Contains(id);
+
+        /// <summary>Цвет акцента на экипе райдера: скин перебивает байк (b243).</summary>
+        public static Color AccentColor()
+        {
+            var rgb = Bikes[Mathf.Clamp(SelBike, 0, Bikes.Length - 1)].Accent;
+            foreach (var sk in Skins) if (sk.Id == CurrentSkin) rgb = sk.Accent;
+            var p = rgb.Split(',');
+            return new Color(int.Parse(p[0]) / 255f, int.Parse(p[1]) / 255f, int.Parse(p[2]) / 255f, 1f);
+        }
+
+        /// <summary>Радиус колеса-спрайта в px исходника по типу байка (spWheel R).</summary>
+        public static float WheelSpriteR(string type) => type == "scooter" ? 10f : type == "moped" ? 11.5f : 13f;
+
+        public static bool BuyBike(int i)
+        {
+            var b = Bikes[i];
+            var locked = b.ReqRank > 0 && RankIdx(Career) < b.ReqRank;
+            if (Owned.Contains(i) || locked || Bank < b.Cost) return false;
+            Bank -= b.Cost; Owned.Add(i); Save(); return true;
+        }
+
+        public static bool BuySkin(int bike, string id)
+        {
+            SkinDef sk = default; var found = false;
+            foreach (var k in Skins) if (k.Id == id) { sk = k; found = true; }
+            if (!found || !Owned.Contains(bike) || Bank < sk.Cost) return false;
+            Bank -= sk.Cost;
+            if (!SkinOwn.ContainsKey(bike)) SkinOwn[bike] = new HashSet<string>();
+            SkinOwn[bike].Add(id); SkinSel[bike] = id; Save(); return true;
+        }
         public static int Best;         // рекорд дистанции (браузерные метры)
         public static int BestPnl;
         public static int LastTicker;
@@ -187,6 +233,12 @@ namespace ChartRunner.Meta
             foreach (var kv in AllUpg)
                 foreach (var u in kv.Value) sb.Append(kv.Key).Append(':').Append(u.Key).Append('=').Append(u.Value).Append(';');
             PlayerPrefs.SetString(P + "upg", sb.ToString());
+            var ss = new System.Text.StringBuilder();
+            foreach (var kv in SkinSel) ss.Append(kv.Key).Append('=').Append(kv.Value).Append(';');
+            PlayerPrefs.SetString(P + "skinsel", ss.ToString());
+            var so = new System.Text.StringBuilder();
+            foreach (var kv in SkinOwn) foreach (var id in kv.Value) so.Append(kv.Key).Append('=').Append(id).Append(';');
+            PlayerPrefs.SetString(P + "skinown", so.ToString());
             PlayerPrefs.Save();
         }
 
@@ -208,6 +260,11 @@ namespace ChartRunner.Meta
             SeenHowto = PlayerPrefs.GetInt(P + "howto", 0) == 1;
             OnbIdx = PlayerPrefs.GetInt(P + "onb", 0);
             Muted = PlayerPrefs.GetInt(P + "muted", 0) == 1;
+            SkinSel.Clear(); SkinOwn.Clear();
+            foreach (var rec in PlayerPrefs.GetString(P + "skinsel", "").Split(';'))
+            { var a = rec.Split('='); if (a.Length == 2 && int.TryParse(a[0], out var b)) SkinSel[b] = a[1]; }
+            foreach (var rec in PlayerPrefs.GetString(P + "skinown", "").Split(';'))
+            { var a = rec.Split('='); if (a.Length == 2 && int.TryParse(a[0], out var b)) { if (!SkinOwn.ContainsKey(b)) SkinOwn[b] = new HashSet<string>(); SkinOwn[b].Add(a[1]); } }
             AllUpg.Clear();
             foreach (var rec in PlayerPrefs.GetString(P + "upg", "").Split(';'))
             {
@@ -224,7 +281,7 @@ namespace ChartRunner.Meta
         public static void ResetProgress()
         {
             Bank = 0; Career = 0; Leverage = 2; SelBike = 0; Best = 0; BestPnl = 0; OnbIdx = 0;
-            Owned.Clear(); Owned.Add(0); AllUpg.Clear();
+            Owned.Clear(); Owned.Add(0); AllUpg.Clear(); SkinSel.Clear(); SkinOwn.Clear();
             Save();
         }
     }

@@ -22,7 +22,7 @@ namespace ChartRunner.Game
     /// </summary>
     public class PlaySession : MonoBehaviour
     {
-        public enum Screen { Howto, Title, Setup, TickerLoad, Play, Dead, Paused, Garage, Settings }
+        public enum Screen { Howto, Title, Setup, TickerLoad, Play, Dead, Paused, Garage, Bikes, Settings }
 
         // ---- состояние потока, переживающее перезагрузку сцены ----
         public static Screen Flow = Screen.Title;
@@ -114,6 +114,9 @@ namespace ChartRunner.Game
             if (BikeProfile == null) { Debug.LogError("PlaySession: нет профиля байка"); enabled = false; return; }
             if (LevelProfile == null) LevelProfile = LevelPhysicsOverride.CreateStock();
             LevelProfile = Instantiate(LevelProfile);
+            // Копия профиля байка: тир и апгрейды применяются к КОПИИ, ассет и тесты не трогаются.
+            BikeProfile = Instantiate(BikeProfile);
+            UpgradeEffects.Apply(BikeProfile);
             FeelPreset.Apply(LevelProfile, SelectedFeel);
 
             // ---- трасса из реальных свечей ----
@@ -352,6 +355,7 @@ namespace ChartRunner.Game
                 case Screen.Dead: DrawPlay(); DrawDead(); break;
                 case Screen.Paused: DrawPlay(); DrawPaused(); break;
                 case Screen.Garage: DrawGarage(); break;
+                case Screen.Bikes: DrawBikes(); break;
                 case Screen.Settings: DrawSettings(); break;
             }
             GUI.matrix = m;
@@ -679,6 +683,7 @@ namespace ChartRunner.Game
             Dim(0.94f);
             Label(0, 28f, W, "▣ ГАРАЖ", Ice, 24, TextAnchor.MiddleCenter);
             Label(0, 60f, W, "$ " + Economy.Bank, Gold, 20, TextAnchor.MiddleCenter);
+            if (Btn(new Rect(W - 110f, 18f, 94f, 34f), "▣ БАЙКИ", new Color(0.75f, 0.88f, 1f), 13, 0.4f)) Flow = Screen.Bikes;
             var rk = Economy.Ranks[Economy.RankIdx(Economy.Career)];
             var ni = Economy.RankIdx(Economy.Career) + 1;
             var nr = ni < Economy.Ranks.Length ? "  до " + Economy.Ranks[ni].Emoji + " ◆" + Mathf.Max(0, Economy.Ranks[ni].At - Economy.Career) : "  ВЕРШИНА";
@@ -713,6 +718,88 @@ namespace ChartRunner.Game
             }
             if (Btn(new Rect(W / 2f - 90f, H - 74f, 180f, 46f), "←  НАЗАД", Ice, 15, 0.35f))
                 Flow = _controller.Halted || _cashedOut ? Screen.Dead : Screen.Title;
+        }
+
+        /// <summary>
+        /// БАЙКИ — порт экрана b108/b115/b176: превью-спрайт, ‹ › перебор, полоски
+        /// СКОР/ХВАТ (нормировка исходника: accel 0.28..0.62, grip 1.06..1.78), покупка за $,
+        /// замок по рангу ◆, ряд скинов (сток + 4 палитры). Смена байка/скина перестраивает
+        /// героя при следующем заезде (спрайты грузятся по выбору в BikeView).
+        /// </summary>
+        private static Texture2D _bikePreview; private static string _bikePreviewTag = "";
+        private void DrawBikes()
+        {
+            Dim(0.94f);
+            Label(0, 28f, W, "▣ БАЙКИ", Ice, 24, TextAnchor.MiddleCenter);
+            Label(0, 60f, W, "$ " + Economy.Bank, Gold, 16, TextAnchor.MiddleCenter);
+            if (Btn(new Rect(14f, 18f, 78f, 34f), "‹ НАЗАД", Ice, 13, 0.35f)) Flow = Screen.Garage;
+
+            var i = Economy.SelBike; var b = Economy.Bikes[i];
+            var own = Economy.Owned.Contains(i);
+            var locked = b.ReqRank > 0 && Economy.RankIdx(Economy.Career) < b.ReqRank;
+
+            // Превью: спрайт корпуса выбранного байка и скина.
+            var tag = i + (string.IsNullOrEmpty(Economy.CurrentSkin) ? "" : "-" + Economy.CurrentSkin);
+            if (_bikePreviewTag != tag) { var sp = Resources.Load<Sprite>("Art/bike-" + tag + "-body"); _bikePreview = sp != null ? sp.texture : null; _bikePreviewTag = tag; }
+            if (_bikePreview != null)
+            {
+                var pw = 300f; var ph = pw * _bikePreview.height / _bikePreview.width;
+                GUI.DrawTexture(new Rect(W / 2f - pw / 2f, H * 0.27f - ph / 2f, pw, ph), _bikePreview, ScaleMode.ScaleToFit, true);
+            }
+
+            var ay = H * 0.40f;
+            if (Btn(new Rect(W / 2f - 150f, ay - 30f, 50f, 64f), "‹", Ice, 30, 0.2f)) { Economy.SelBike = (i + Economy.Bikes.Length - 1) % Economy.Bikes.Length; Economy.Save(); }
+            if (Btn(new Rect(W / 2f + 100f, ay - 30f, 50f, 64f), "›", Ice, 30, 0.2f)) { Economy.SelBike = (i + 1) % Economy.Bikes.Length; Economy.Save(); }
+            Label(0, ay - 14f, W, b.Name, Ice, 26, TextAnchor.MiddleCenter);
+
+            var sp0 = Mathf.Clamp01((b.Accel - 0.28f) / (0.62f - 0.28f));
+            var gr0 = Mathf.Clamp01((b.Grip - 1.06f) / (1.78f - 1.06f));
+            StatBar("СКОР", sp0, new Color(0.47f, 1f, 0.71f), ay + 26f);
+            StatBar("ХВАТ", gr0, new Color(0.47f, 0.78f, 1f), ay + 42f);
+            Label(0, ay + 62f, W, b.Tag, new Color(0.65f, 0.73f, 0.84f), 11, TextAnchor.MiddleCenter, false);
+            if (own)
+            {
+                var lv = 0; var mx = 0;
+                foreach (var u in Economy.Upgrades) { lv += Economy.UpgLvl(u.Id); mx += u.Max; }
+                Label(0, ay + 80f, W, "⚙ прокачка этого байка: " + lv + "/" + mx + (lv > 0 ? " · качай в ГАРАЖЕ" : ""), new Color(0.47f, 1f, 0.71f, 0.7f), 9, TextAnchor.MiddleCenter, false);
+            }
+
+            var act = new Rect(W / 2f - 110f, ay + 96f, 220f, 50f);
+            var actCol = own ? Mint : locked ? new Color(0.73f, 0.78f, 0.93f) : Economy.Bank >= b.Cost ? Gold : new Color(0.56f, 0.57f, 0.65f);
+            var actTxt = own ? "✓ ВЫБРАН" : locked ? "⊘ РАНГ " + Economy.Ranks[b.ReqRank].Emoji + " " + Economy.Ranks[b.ReqRank].Name : "РАЗБЛОКИРОВАТЬ  $" + b.Cost;
+            if (Btn(act, actTxt, actCol, 15, 0.3f) && !own && !locked) Economy.BuyBike(i);
+            if (locked) Label(0, act.yMax + 2f, W, "закрепляй $→◆ до ранга " + Economy.Ranks[b.ReqRank].Name + " (◆" + Economy.Ranks[b.ReqRank].At + ")", new Color(0.59f, 0.71f, 0.9f, 0.7f), 9, TextAnchor.MiddleCenter, false);
+
+            // Ряд скинов: сток + 4 палитры (b176).
+            var sy = ay + 172f; var n = Economy.Skins.Length + 1; var spx = 52f; var x00 = W / 2f - (n - 1) * spx / 2f;
+            for (var k = 0; k < n; k++)
+            {
+                var x = x00 + k * spx;
+                var id = k > 0 ? Economy.Skins[k - 1].Id : "";
+                var cur = Economy.CurrentSkin == id;
+                var r = new Rect(x - 22f, sy - 22f, 44f, 56f);
+                var owned = k == 0 || Economy.SkinOwned(i, id);
+                var col = k == 0 ? Ice : Economy.Skins[k - 1].Accent.Split(',') is var pc
+                    ? new Color(int.Parse(pc[0]) / 255f, int.Parse(pc[1]) / 255f, int.Parse(pc[2]) / 255f) : Ice;
+                Panel(r, new Color(col.r, col.g, col.b, cur ? 1f : 0.4f), new Color(col.r * 0.2f, col.g * 0.2f, col.b * 0.2f, 0.6f), 9f, cur ? 2.4f : 1.2f);
+                Label(r.x, r.y + 4f, r.width, k == 0 ? "СТОК" : Economy.Skins[k - 1].Name, col, 8, TextAnchor.MiddleCenter);
+                Label(r.x, r.y + 30f, r.width, k == 0 ? "" : owned ? (cur ? "✓" : "надеть") : "$" + Economy.Skins[k - 1].Cost, owned ? col : Dimc, 8, TextAnchor.MiddleCenter, false);
+                if (GUI.Button(r, GUIContent.none, GUIStyle.none))
+                {
+                    GameAudio.I.Click();
+                    if (k == 0) { Economy.SkinSel.Remove(i); Economy.Save(); }
+                    else if (owned) { Economy.SkinSel[i] = id; Economy.Save(); }
+                    else if (!Economy.BuySkin(i, id)) Pop(own ? "мало $" : "сначала разблокируй байк");
+                }
+            }
+        }
+
+        private void StatBar(string lab, float val, Color col, float yy)
+        {
+            const float bw = 120f; var bx = W / 2f - 30f;
+            Label(bx - 96f, yy - 4f, 88f, lab, new Color(0.75f, 0.8f, 0.92f, 0.8f), 10, TextAnchor.UpperRight);
+            GUI.DrawTexture(new Rect(bx, yy, bw, 7f), Texture2D.whiteTexture, ScaleMode.StretchToFill, true, 0f, new Color(0.12f, 0.16f, 0.24f, 0.7f), Vector4.zero, Vector4.one * 3f);
+            GUI.DrawTexture(new Rect(bx, yy, bw * val, 7f), Texture2D.whiteTexture, ScaleMode.StretchToFill, true, 0f, new Color(col.r, col.g, col.b, 0.92f), Vector4.zero, Vector4.one * 3f);
         }
 
         private void DrawSettings()

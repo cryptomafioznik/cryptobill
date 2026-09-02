@@ -1,10 +1,10 @@
 fileFormatVersion: 2
-guid: 0e10e30b3e7dd4ee4bc113f0e17d7367
+guid: 73e0c973106794cfdb095741051c23fd
 TextureImporter:
   internalIDToNameTable:
   - first:
-      213: 1889008633999515200
-    second: wheel-rear_0
+      213: 3049466337502973892
+    second: bike-0-gold-body_0
   externalObjects: {}
   serializedVersion: 13
   mipmaps:
@@ -113,13 +113,13 @@ TextureImporter:
     serializedVersion: 2
     sprites:
     - serializedVersion: 2
-      name: wheel-rear_0
+      name: bike-0-gold-body_0
       rect:
         serializedVersion: 2
-        x: 19
+        x: 44
         y: 19
-        width: 346
-        height: 346
+        width: 736
+        height: 477
       alignment: 0
       pivot: {x: 0, y: 0}
       border: {x: 0, y: 0, z: 0, w: 0}
@@ -128,8 +128,8 @@ TextureImporter:
       physicsShape: []
       tessellationDetail: -1
       bones: []
-      spriteID: 04edf2f185b173a10800000000000000
-      internalID: 1889008633999515200
+      spriteID: 4cf40692a71e15a20800000000000000
+      internalID: 3049466337502973892
       vertices: []
       indices: 
       edges: []

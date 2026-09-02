@@ -1,10 +1,10 @@
 fileFormatVersion: 2
-guid: 803254814c5954b1fa92bd472d6a2117
+guid: 449eb9073378c40c7bca4be44ccf5cdc
 TextureImporter:
   internalIDToNameTable:
   - first:
-      213: -3364690915175577869
-    second: wheel-front_0
+      213: 4469711408733365545
+    second: bike-1-stealth-body_0
   externalObjects: {}
   serializedVersion: 13
   mipmaps:
@@ -113,13 +113,13 @@ TextureImporter:
     serializedVersion: 2
     sprites:
     - serializedVersion: 2
-      name: wheel-front_0
+      name: bike-1-stealth-body_0
       rect:
         serializedVersion: 2
-        x: 19
-        y: 19
-        width: 346
-        height: 346
+        x: 83
+        y: 60
+        width: 681
+        height: 487
       alignment: 0
       pivot: {x: 0, y: 0}
       border: {x: 0, y: 0, z: 0, w: 0}
@@ -128,8 +128,8 @@ TextureImporter:
       physicsShape: []
       tessellationDetail: -1
       bones: []
-      spriteID: 3f6c9f580773e41d0800000000000000
-      internalID: -3364690915175577869
+      spriteID: 925201e38da970e30800000000000000
+      internalID: 4469711408733365545
       vertices: []
       indices: 
       edges: []

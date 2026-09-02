@@ -4,7 +4,7 @@
     {
       "name": "chartrider",
       "runtimeExecutable": "python3",
-      "runtimeArgs": ["-m", "http.server", "8123", "--directory", "toys"],
+      "runtimeArgs": ["tools/sprite-sink.py", "8123"],
       "port": 8123
     }
   ]
