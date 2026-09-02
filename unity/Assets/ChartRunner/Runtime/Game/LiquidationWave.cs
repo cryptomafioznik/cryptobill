@@ -37,6 +37,20 @@ namespace ChartRunner.Game
         private Camera _camera;
         private float _eraWave = 1f;
 
+        /// <summary>
+        /// Множитель сложности — произведение из формулы исходника (стр. 1773):
+        /// волатильность монеты (tickerVolMul) × (1 − 0.07·ЩИТ) × (1 + 0.02·max(0, lev − safeLev)).
+        /// Плечо выше потолка железа разгоняет волну — маховик b77.
+        /// </summary>
+        public float DifficultyMul = 1f;
+
+        /// <summary>
+        /// Браузерный метр = 10 px исходника (dist = bike.x/10). Все дистанционные константы
+        /// формулы (150, 700, 620, 350) заданы В НИХ, и подставлять сюда реальные метры —
+        /// значит замедлить разгон волны в 3.5 раза и не заметить.
+        /// </summary>
+        public const float BrowserM = 10f * UnitsContract.PxToM;
+
         private Mesh _mesh;
         private MeshFilter _filter;
         private float _time;
@@ -105,10 +119,10 @@ namespace ChartRunner.Game
         {
             if (_bike == null || _bike.Halted) return;
 
-            var d = Mathf.Max(0f, _bike.State.DistanceM);
+            var d = Mathf.Max(0f, _bike.State.DistanceM) / BrowserM;
             var pxPerFrame = (WaveSpeedPxPerFrame
                               + (Mathf.Min(d / 150f, 4.8f) + Mathf.Max(0f, (d - 700f) / 620f)) * WaveAccel)
-                             * _eraWave
+                             * _eraWave * DifficultyMul
                              * Mathf.Lerp(0.6f, 1f, Mathf.Clamp01(d / EaseInDistM));
 
             PositionXM += pxPerFrame * UnitsContract.PxPerFrameToMPerS * Time.fixedDeltaTime;

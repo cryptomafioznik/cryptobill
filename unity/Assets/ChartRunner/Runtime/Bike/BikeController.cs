@@ -625,6 +625,17 @@ namespace ChartRunner.Bike
             Fail(BikeFailure.Liquidated);
         }
 
+        /// <summary>
+        /// PUMP (b1602): мягкий постоянный толчок вперёд во время рывка — исходник делал
+        /// `bike.vx += pumpForce` каждый кадр. Здесь — прибавка скорости шасси вдоль его оси.
+        /// </summary>
+        public void PushForward(float deltaMPerS)
+        {
+            if (Halted || _rig == null) return;
+            var fwd = (Vector2)_rig.Chassis.transform.right;
+            _rig.Chassis.linearVelocity += fwd * deltaMPerS;
+        }
+
         private void Fail(BikeFailure reason)
         {
             _failure = reason;
