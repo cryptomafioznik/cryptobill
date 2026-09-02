@@ -934,7 +934,14 @@ namespace ChartRunner.Game
             y += 70f;
             if (Btn(new Rect(W / 2f - 146f, y, 292f, 56f), "ФИЛ: " + FeelPreset.Name(SelectedFeel), Ice, 15, 0.35f, "тап — переключить")) SwitchFeel();
             y += 70f;
-            if (Btn(new Rect(W / 2f - 146f, y, 292f, 56f), "✕ СБРОСИТЬ ПРОГРЕСС", Rose, 14, 0.3f)) { Economy.ResetProgress(); Campaign.ResetAll(); Pop("✅ ПРОГРЕСС ОБНУЛЁН"); }
+            if (Btn(new Rect(W / 2f - 146f, y, 292f, 56f), "✕ СБРОСИТЬ ПРОГРЕСС", Rose, 14, 0.3f)) { Economy.ResetProgress(); Campaign.ResetAll(); Pop("✓ ПРОГРЕСС ОБНУЛЁН"); }
+            y += 74f;
+            // Дисклеймер исходника (строка 5206) + версия и источник котировок — App Store
+            // требует явного «не финансовый совет» для приложений про рынки.
+            var about = new GUIStyle(_small) { alignment = TextAnchor.UpperCenter, wordWrap = true };
+            about.normal.textColor = Dimc;
+            GUI.Label(new Rect(30f, y, W - 60f, 48f),
+                "CHART RUNNER v1.0\nигра · вся валюта виртуальная · не финансовый совет\nкотировки: Binance API", about);
             if (Btn(new Rect(W / 2f - 90f, H - 74f, 180f, 46f), "←  НАЗАД", Ice, 15, 0.35f)) Flow = Screen.Title;
             DrawPop();
         }

@@ -1,0 +1,46 @@
+Unity Editor version:    6000.3.20f1 (c9ba695d4f07)
+Branch:                  6000.3/staging
+Build type:              Release
+Batch mode:              YES
+macOS version:           Version 26.5.2 (Build 25F84)
+Darwin version:          25.5.0
+Architecture:            x86_64
+Running under Rosetta:   YES
+Available memory:        8192 MB
+Date:                    2026-09-02T23:08:22Z
+[Licensing::Module] Trying to connect to existing licensing client channel...
+[Licensing::IpcConnector] Successfully connected to: "LicenseClient-macbook" at "2026-09-02T23:08:22.792335Z"
+[Licensing::Client] Handshaking with LicensingClient:
+  Version:                 1.18.3+d7ffd15
+  Session Id:              1f54d111133b473aaf67c2fc4b3206d3
+  Correlation Id:          2c4c4e89b8ed6ff5a38fda4205d90655
+  External correlation Id: 3982770414890476185
+  Machine Id:              UxMXZZIFiIIfvda34svnN5UKfjk=
+[Licensing::Module] Successfully connected to LicensingClient on channel: "LicenseClient-macbook" (connect: 0.00s, validation: 0.01s, handshake: 0.38s)
+[Licensing::IpcConnector] Successfully connected to: "LicenseClient-macbook-notifications" at "2026-09-02T23:08:23.179989Z"
+[Licensing::Module] Error: Access token is unavailable; failed to update
+[Licensing::Client] Successfully resolved entitlement details
+[Licensing::Module] License group:
+  Id: 9072428601985-UnityPersXXXX
+  Product: Unity Personal
+  Type: Assigned
+  Expiration: Unlimited
+[Licensing::Client] Successfully updated license, isAsync: True, time: 0.00
+[Licensing::Client] Successfully resolved entitlement details
+[Licensing::Module] Licensing Background thread has ended after 0.40s
+Launching external process: /Applications/Unity/Hub/Editor/6000.3.20f1/Unity.app/Contents/Resources/PackageManager/Server/UnityPackageManager
+
+COMMAND LINE ARGUMENTS:
+/Applications/Unity/Hub/Editor/6000.3.20f1/Unity.app/Contents/MacOS/Unity
+-batchmode
+-quit
+-projectPath
+/Users/macbook/project/cryptobill
+-buildTarget
+iOS
+-executeMethod
+ChartRunner.EditorTools.DeviceBuilder.BuildIos
+-logFile
+Logs/ios7.log
+Couldn't set project path to: 
+[Package Manager] Server process was shutdown
