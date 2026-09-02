@@ -50,6 +50,13 @@
 Экспорт арта из браузера: `.claude/launch.json` → `tools/sprite-sink.py` (порт 8123),
 в консоли страницы `DPR=4; bikeSprites(B).body.toDataURL()` → `POST /save?name=…`.
 
+## СТАТУС РЕЛИЗА (2026-09-03)
+
+Игра v1.0 собрана в релизном профиле: `unity/build/ios-archive/ChartRunner.ipa`.
+Всё, что зависит от учётной записи Apple, — в `docs/APP-STORE-SUBMISSION.md` (App Store
+Connect, загрузка .ipa, Privacy Policy URL, скриншоты с устройства, анкеты). Кодовая часть
+релиза исчерпана; дальше — вердикт с телефона и правки по нему.
+
 ## КАК СОБИРАТЬ И ПРОВЕРЯТЬ
 
 ```bash
