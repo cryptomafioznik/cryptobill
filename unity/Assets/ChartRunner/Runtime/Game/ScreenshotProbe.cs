@@ -94,7 +94,8 @@ namespace ChartRunner.Game
             foreach (var sc in screens)
             {
                 PlaySession.Flow = sc;
-                yield return new WaitForSeconds(0.6f);
+                // Терминалу нужны превью с Binance — ждём сеть, иначе кадр покажет «загрузка…».
+                yield return new WaitForSeconds(sc == PlaySession.Screen.Setup ? 6f : 0.6f);
                 ScreenCapture.CaptureScreenshot(Path.Combine(_dir, "ui-" + (i++) + "-" + sc.ToString().ToLower() + ".png"));
                 yield return new WaitForEndOfFrame(); yield return null; yield return null;
             }

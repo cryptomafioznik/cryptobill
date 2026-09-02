@@ -88,7 +88,7 @@ namespace ChartRunner.Game
         private void Awake()
         {
             Application.targetFrameRate = 60;
-            Screen.sleepTimeout = SleepTimeout.NeverSleep;
+            UnityEngine.Screen.sleepTimeout = SleepTimeout.NeverSleep;
 #if UNITY_IOS || UNITY_ANDROID
             UnityEngine.Screen.orientation = ScreenOrientation.Portrait;
 #endif
@@ -97,6 +97,7 @@ namespace ChartRunner.Game
 
         private void Start()
         {
+            GameAudio.Ensure();
             if (!_flowInit)
             {
                 _flowInit = true;
@@ -161,11 +162,15 @@ namespace ChartRunner.Game
             AirMotes.Attach(_camera);
 
             if (Flow != Screen.Play) Freeze();
-            if (Flow == Screen.Title || Flow == Screen.Setup) StartCoroutine(Tickers.LoadAllPreviews());
-            if (ScreenshotProbe.Requested) { Flow = Screen.Play; Unfreeze(); ScreenshotProbe.Attach(this, _controller, _chase); }
+            if (Flow != Screen.Play) StartCoroutine(Tickers.LoadAllPreviews());
 
-            Pop(Tickers.All[PendingTicker].Name + " · " + (shortRun ? "📉 ШОРТ · " : "") + "ВОЛАТИЛЬНОСТЬ " + _tt.VolLabel
-                + (PendingFallback ? " (нет связи — BTC)" : ""), 3.5f);
+            // Сообщение о трассе — только в заезде: титульный мир строится из фолбэка
+            // по замыслу, и «нет связи» там было бы ложью.
+            if (Flow == Screen.Play)
+                Pop(Tickers.All[PendingTicker].Name + " · " + (shortRun ? "▼ ШОРТ · " : "") + "ВОЛАТИЛЬНОСТЬ " + _tt.VolLabel
+                    + (PendingFallback ? " (нет связи — BTC)" : ""), 3.5f);
+
+            if (ScreenshotProbe.Requested) { Flow = Screen.Play; Unfreeze(); ScreenshotProbe.Attach(this, _controller, _chase); }
         }
 
         private void Freeze() { _controller.SetInput(ScriptedBikeInput.HoldThrottle()); _controller.SetInput(new ScriptedBikeInput(() => BikeInputState.Neutral)); _wave.enabled = false; }
@@ -218,9 +223,12 @@ namespace ChartRunner.Game
                 else if (touches < 3) _switchLatch = false;
             }
 #endif
-            if (Flow != Screen.Play && Flow != Screen.Dead) return;
+            if (Flow != Screen.Play && Flow != Screen.Dead) { GameAudio.I.SetRun(false, 0f, false, false, false, 0f, 0f, 0f, null); return; }
 
             var st = _controller.State;
+            GameAudio.I.SetRun(Flow == Screen.Play && !_controller.Halted, st.SpeedMPerS, st.ThrottleApplied > 0.3f,
+                _pump.Active, !st.IsGrounded, Mathf.Clamp01(_airT / 1.2f), _wave != null ? _wave.Danger : 0f,
+                _pump.Active ? 1f : 0f, Economy.Bikes[Economy.SelBike].Type);
             if (st.IsGrounded && _prevAirborne) _chase.Impact(_prevVerticalSpeed);
             _prevAirborne = !st.IsGrounded; _prevVerticalSpeed = st.VerticalSpeedMPerS;
 
@@ -229,7 +237,7 @@ namespace ChartRunner.Game
                 _distB = Mathf.Max(_distB, Mathf.FloorToInt(st.PositionXM / UnitsContract.PxToM / 10f));
                 _maxKmh = Mathf.Max(_maxKmh, st.SpeedMPerS * 3.6f);
                 _position.Tick(st.PositionXM, _distB, _coinField.Collected);
-                if (_coinField.JustCollected > 0) _pump.Add(0.04f * _coinField.JustCollected);
+                if (_coinField.JustCollected > 0) { _pump.Add(0.04f * _coinField.JustCollected); GameAudio.I.Coin(); }
                 if (st.IsGrounded && st.PitchRelRad > 0.45f) _pump.Add(0.006f * 0.5f);
                 if (!st.IsGrounded) _airT += Time.deltaTime; else { if (_airT > 0.47f) _pump.Add(0.3f); _airT = 0f; }
 
@@ -237,12 +245,12 @@ namespace ChartRunner.Game
                 {
                     Dist = _distB, Coins = _coinField.Collected, Kmh = _maxKmh, Leverage = Economy.Leverage
                 }, out var done);
-                if (done != null) { _missionRew += rew; Pop("ЦЕЛЬ ✓  +◆" + rew); }
+                if (done != null) { _missionRew += rew; Pop("ЦЕЛЬ ✓  +◆" + rew); GameAudio.I.Lev(); }
 
                 // b1760: доехал до конца графика = финиш → фиксация по текущей цене.
                 if (_distB >= _finishDistB)
                 {
-                    Pop("🏁 ГРАФИК " + Tickers.All[PendingTicker].Name + " ПРОЙДЕН");
+                    Pop("⚑ ГРАФИК " + Tickers.All[PendingTicker].Name + " ПРОЙДЕН");
                     if (_position.Value(st.PositionXM) > 0) CashOut(); else Die("cashout");
                 }
             }
@@ -263,13 +271,14 @@ namespace ChartRunner.Game
             var val = _position.Value(_controller.State.PositionXM);
             if (val <= 0) return;
             _cashedOut = true; _committed = true; _deathBy = "cashout";
+            GameAudio.I.Lev();
             _runGems = val; Economy.Bank += _runGems;
             _stakeIncome = Economy.PayStaking();
             if (_runGems > Economy.BestPnl) Economy.BestPnl = _runGems;
             if (_distB > Economy.Best) Economy.Best = _distB;
             OnbRunEnd();
             Economy.Save();
-            Pop("💰 ЗАФИКСИРОВАНО  +$" + _runGems.ToString("N0", CultureInfo.InvariantCulture), 2.5f);
+            Pop("$ ЗАФИКСИРОВАНО  +$" + _runGems.ToString("N0", CultureInfo.InvariantCulture), 2.5f);
             Freeze();
             Flow = Screen.Dead; _deadFor = 0f;
         }
@@ -279,6 +288,7 @@ namespace ChartRunner.Game
         {
             if (_committed) return;
             _committed = true; _deathBy = reason;
+            GameAudio.I.Crash();
             _liqPen = Economy.Liquidate(); _runGems = -_liqPen;
             if (_distB > Economy.Best) Economy.Best = _distB;
             OnbRunEnd();
@@ -293,17 +303,17 @@ namespace ChartRunner.Game
             var onb = new (string txt, System.Func<bool> chk, int rew)[]
             {
                 ("проедь 300м", () => _distB >= 300, 60),
-                ("ЗАФИКСИРУЙ профит кнопкой 💰", () => _cashedOut, 80),
+                ("ЗАФИКСИРУЙ профит кнопкой $", () => _cashedOut, 80),
                 ("раскачай позицию до $40 — просто едь дальше", () => _position.MaxValue >= 40, 120),
             };
             if (Economy.OnbIdx >= onb.Length) return;
             var m = onb[Economy.OnbIdx];
             if (!m.chk()) return;
             Economy.Bank += m.rew; Economy.OnbIdx++;
-            _onbMsg = "🎓 МИССИЯ ✓ «" + m.txt + "» +$" + m.rew;
+            _onbMsg = "★ МИССИЯ ✓ «" + m.txt + "» +$" + m.rew;
         }
 
-        private void TryPump() { if (_pump.Activate()) Pop("⚡ PUMP!"); }
+        private void TryPump() { if (_pump.Activate()) { Pop("⚡ PUMP!"); GameAudio.I.Lev(); } }
 
         private void SwitchFeel()
         {
@@ -318,7 +328,8 @@ namespace ChartRunner.Game
             var amt = Economy.Bank; if (amt <= 0) return;
             Economy.Bank = 0;
             _rankBonus = Economy.CommitCareer(amt, out _rankedUp, out _newRank);
-            Pop("💎 ЗАКРЕПЛЕНО ◆+" + amt + " (навсегда)" + (_rankedUp ? "  " + _newRank.Emoji + " НОВЫЙ РАНГ: " + _newRank.Name : ""), 2.6f);
+            if (_rankedUp) GameAudio.I.RankUp(); else GameAudio.I.Lev();
+            Pop("◆ ЗАКРЕПЛЕНО ◆+" + amt + " (навсегда)" + (_rankedUp ? "  " + _newRank.Emoji + " НОВЫЙ РАНГ: " + _newRank.Name : ""), 2.6f);
         }
 
         // ================= GUI =================
@@ -369,7 +380,9 @@ namespace ChartRunner.Game
                 GUI.Label(new Rect(r.x, r.y + r.height * 0.55f, r.width, r.height * 0.4f), sub, ss);
             }
             else GUI.Label(r, label, st);
-            return GUI.Button(r, GUIContent.none, GUIStyle.none);
+            var hit = GUI.Button(r, GUIContent.none, GUIStyle.none);
+            if (hit) GameAudio.I.Click();
+            return hit;
         }
 
         private void Label(float x, float y, float w, string s, Color c, int fs, TextAnchor a = TextAnchor.UpperLeft, bool bold = true)
@@ -422,7 +435,7 @@ namespace ChartRunner.Game
         private void DrawTitle()
         {
             Dim(0.55f);
-            // Верхняя панель: ⚙ · $ ◆ ранг · 🔧 ГАРАЖ
+            // Верхняя панель: ⚙ · $ ◆ ранг · ▣ ГАРАЖ
             if (Btn(new Rect(16f, 16f, 46f, 38f), "⚙", Ice, 18, 0.35f)) Flow = Screen.Settings;
             var rk = Economy.Ranks[Economy.RankIdx(Economy.Career)];
             var chip = new Rect(66f, 18f, W - 184f, 34f);
@@ -431,7 +444,7 @@ namespace ChartRunner.Game
             Label(chip.x + chip.width * 0.45f, chip.y + 7f, chip.width * 0.42f, "◆" + Economy.Career, new Color(0.62f, 0.88f, 1f), 13, TextAnchor.MiddleCenter);
             Label(chip.x + chip.width * 0.84f, chip.y + 7f, chip.width * 0.16f, rk.Emoji, Ice, 13, TextAnchor.MiddleCenter);
             if (GUI.Button(chip, GUIContent.none, GUIStyle.none)) Flow = Screen.Garage;
-            if (Btn(new Rect(W - 112f, 16f, 96f, 38f), "🔧 ГАРАЖ", Mint, 13, 0.5f)) Flow = Screen.Garage;
+            if (Btn(new Rect(W - 112f, 16f, 96f, 38f), "▣ ГАРАЖ", Mint, 13, 0.5f)) Flow = Screen.Garage;
 
             Label(0, H * 0.085f + 14f, W, "CHART RUNNER", Ice, 33, TextAnchor.MiddleCenter);
             Label(0, H * 0.085f + 52f, W, "гоняй по РЕАЛЬНОМУ крипто-графику", Dimc, 11, TextAnchor.MiddleCenter, false);
@@ -448,11 +461,11 @@ namespace ChartRunner.Game
                 + "  ×" + Economy.Leverage, Dimc, 11, TextAnchor.UpperLeft, false);
             if (GUI.Button(play, GUIContent.none, GUIStyle.none)) StartTicker(Economy.LastTicker);
             my += 88f;
-            if (Btn(new Rect(18f, my, W - 36f, 44f), "📊 ТЕРМИНАЛ — монета · плечо · лонг/шорт", Ice, 13, 0.35f)) Flow = Screen.Setup;
+            if (Btn(new Rect(18f, my, W - 36f, 44f), "≣ ТЕРМИНАЛ — монета · плечо · лонг/шорт", Ice, 13, 0.35f)) Flow = Screen.Setup;
             my += 54f;
-            if (Btn(new Rect(18f, my, (W - 44f) / 2f, 54f), "💎 ЗАКРЕПИТЬ", new Color(0.62f, 0.88f, 1f), 14, 0.4f, "$" + Economy.Bank + " → ◆ навсегда"))
+            if (Btn(new Rect(18f, my, (W - 44f) / 2f, 54f), "◆ ЗАКРЕПИТЬ", new Color(0.62f, 0.88f, 1f), 14, 0.4f, "$" + Economy.Bank + " → ◆ навсегда"))
                 DiamondHand();
-            if (Btn(new Rect(18f + (W - 44f) / 2f + 8f, my, (W - 44f) / 2f, 54f), "❔ КАК ИГРАТЬ", Dimc, 14, 0.3f)) Flow = Screen.Howto;
+            if (Btn(new Rect(18f + (W - 44f) / 2f + 8f, my, (W - 44f) / 2f, 54f), "? КАК ИГРАТЬ", Dimc, 14, 0.3f)) Flow = Screen.Howto;
             my += 66f;
             Label(0, my, W, "рекорд " + Economy.Best + " м   ·   лучший фикс $" + Economy.BestPnl, Dimc, 11, TextAnchor.MiddleCenter, false);
 
@@ -490,7 +503,7 @@ namespace ChartRunner.Game
             var lb = Mathf.Min(y0 + Tickers.All.Length * (rowH + gap) + 6f, H - 56f);
             var lw = Mathf.Round(W * 0.33f); var sw2 = Mathf.Round(W * 0.24f);
             if (Btn(new Rect(x0, lb, lw, 48f), "⚡ ×" + Economy.Leverage, Gold, 15, 0.7f, "плечо · тап")) Economy.CycleLeverage();
-            if (Btn(new Rect(x0 + lw + 8f, lb, sw2, 48f), Economy.ShortMode ? "📉 ШОРТ" : "📈 ЛОНГ",
+            if (Btn(new Rect(x0 + lw + 8f, lb, sw2, 48f), Economy.ShortMode ? "▼ ШОРТ" : "▲ ЛОНГ",
                     Economy.ShortMode ? Rose : Mint, 14, 0.7f, Economy.ShortMode ? "профит на дампе" : "профит на пампе"))
             { Economy.ShortMode = !Economy.ShortMode; Economy.Save(); }
             if (Btn(new Rect(x0 + lw + sw2 + 16f, lb, w0 - lw - sw2 - 16f, 48f), "▶ ГОНКА", Mint, 15, 0.55f, Tickers.All[_setupSel].Name + " ×" + Economy.Leverage))
@@ -577,7 +590,7 @@ namespace ChartRunner.Game
                     var col = peak ? new Color(1f, 0.9f, 0.42f) : urge ? new Color(1f, 0.82f, 0.66f) : Mint;
                     var r = new Rect(W / 2f - 94f, 124f, 188f, 38f);
                     Panel(r, new Color(col.r, col.g, col.b, 0.5f + 0.5f * pulse), urge ? new Color(0.2f, 0.09f, 0.07f, 0.9f) : new Color(0.06f, 0.16f, 0.11f, 0.86f), 10f, urge ? 2.6f : 2f);
-                    Label(r.x, r.y + 10f, r.width, (peak ? "📈 ПИК! ЗАБЕРИ $" : urge ? "💰 ЗАБЕРИ $" : "💰 ЗАФИКСИТЬ $") + val + "  ×" + Economy.Leverage, col, 14, TextAnchor.MiddleCenter);
+                    Label(r.x, r.y + 10f, r.width, (peak ? "▲ ПИК! ЗАБЕРИ $" : urge ? "$ ЗАБЕРИ $" : "$ ЗАФИКСИТЬ $") + val + "  ×" + Economy.Leverage, col, 14, TextAnchor.MiddleCenter);
                     if (GUI.Button(r, GUIContent.none, GUIStyle.none)) CashOut();
                 }
             }
@@ -610,14 +623,15 @@ namespace ChartRunner.Game
             var a = Mathf.Clamp01((_popUntil - Time.time) * 2f);
             var st = new GUIStyle(_warn) { fontSize = 16, wordWrap = true };
             st.normal.textColor = new Color(Gold.r, Gold.g, Gold.b, a);
-            GUI.Label(new Rect(20f, H * 0.36f, W - 40f, 60f), _pop, st);
+            var py = Flow == Screen.Play || Flow == Screen.Dead ? H * 0.36f : H * 0.80f;
+            GUI.Label(new Rect(20f, py, W - 40f, 60f), _pop, st);
         }
 
         // ---- DEAD (b132 деклаттер: A = заголовок, B = деньги, C = дистанция/рекорд) ----
         private void DrawDead()
         {
             Dim(0.66f);
-            var title = _cashedOut ? "💰 ПРОФИТ ЗАФИКСИРОВАН" : _deathBy == "wave" ? "ЛИКВИДИРОВАН ДАМПОМ" : _deathBy == "loop" ? "ОПРОКИНУЛСЯ"
+            var title = _cashedOut ? "$ ПРОФИТ ЗАФИКСИРОВАН" : _deathBy == "wave" ? "ЛИКВИДИРОВАН ДАМПОМ" : _deathBy == "loop" ? "ОПРОКИНУЛСЯ"
                 : _deathBy == "endo" ? "ЧЕРЕЗ РУЛЬ" : _deathBy == "gap" ? "УПАЛ В ПРОПАСТЬ" : "РАЗБИЛСЯ";
             Label(0, H * 0.24f, W, title, _cashedOut ? Mint : Rose, 24, TextAnchor.MiddleCenter);
             if (!_cashedOut)
@@ -634,10 +648,10 @@ namespace ChartRunner.Game
                 _cashedOut ? (isBest ? Gold : Mint) : Rose, Mathf.RoundToInt(gf), TextAnchor.MiddleCenter);
             Label(0, H * 0.34f + 74f, W, _distB + "м  ·  рекорд " + Economy.Best + "м", new Color(0.8f, 0.75f, 0.94f), 15, TextAnchor.MiddleCenter);
             Label(0, H * 0.34f + 96f, W, (_cashedOut ? "$ " + Economy.Bank + "  ·  ◆ " + Economy.Career : "осталось  $ " + Economy.Bank)
-                + (_stakeIncome > 0 ? "  💎+$" + _stakeIncome : ""), _cashedOut ? Mint : new Color(1f, 0.69f, 0.63f), 15, TextAnchor.MiddleCenter);
+                + (_stakeIncome > 0 ? "  ◆+$" + _stakeIncome : ""), _cashedOut ? Mint : new Color(1f, 0.69f, 0.63f), 15, TextAnchor.MiddleCenter);
             if (_missionRew > 0) Label(0, H * 0.34f + 118f, W, "цели заезда  +◆" + _missionRew, Mint, 12, TextAnchor.MiddleCenter);
             if (!string.IsNullOrEmpty(_onbMsg)) Label(20f, H * 0.34f + 140f, W - 40f, _onbMsg, Gold, 12, TextAnchor.MiddleCenter);
-            var tip = _deathBy == "wave" ? "🛡 качай ЩИТ ОТ ВОЛНЫ — оторвёшься от дампа"
+            var tip = _deathBy == "wave" ? "◈ качай ЩИТ ОТ ВОЛНЫ — оторвёшься от дампа"
                 : _deathBy == "loop" || _deathBy == "endo" ? "◎ качай СЦЕПЛЕНИЕ — прощает кувырки"
                 : _deathBy == "crash" ? "◎ качай СЦЕПЛЕНИЕ — мягче посадки" : "⚙ качай ДВИЖОК — быстрее волны";
             if (!_cashedOut) Label(20f, H * 0.34f + 164f, W - 40f, tip, Dimc, 11, TextAnchor.MiddleCenter, false);
@@ -646,8 +660,8 @@ namespace ChartRunner.Game
             if (_deadFor > 0.5f)
             {
                 if (Btn(new Rect(W / 2f - 100f, by, 200f, 50f), "↻ ЕЩЁ РАЗ", Mint, 18)) Reload(Screen.Play);
-                if (Btn(new Rect(24f, by + 60f, (W - 56f) / 2f, 44f), "🔧 ГАРАЖ", new Color(0.75f, 0.88f, 1f), 14, 0.4f)) Flow = Screen.Garage;
-                if (Btn(new Rect(24f + (W - 56f) / 2f + 8f, by + 60f, (W - 56f) / 2f, 44f), "☰ МЕНЮ", Dimc, 14, 0.3f)) Reload(Screen.Title);
+                if (Btn(new Rect(24f, by + 60f, (W - 56f) / 2f, 44f), "▣ ГАРАЖ", new Color(0.75f, 0.88f, 1f), 14, 0.4f)) Flow = Screen.Garage;
+                if (Btn(new Rect(24f + (W - 56f) / 2f + 8f, by + 60f, (W - 56f) / 2f, 44f), "≡ МЕНЮ", Dimc, 14, 0.3f)) Reload(Screen.Title);
             }
         }
 
@@ -656,20 +670,20 @@ namespace ChartRunner.Game
             Dim(0.6f);
             Label(0, H * 0.36f, W, "ПАУЗА", Ice, 26, TextAnchor.MiddleCenter);
             if (Btn(new Rect(W / 2f - 100f, H * 0.46f, 200f, 48f), "▶ ПРОДОЛЖИТЬ", Mint, 16)) { Flow = Screen.Play; Unfreeze(); }
-            if (Btn(new Rect(W / 2f - 100f, H * 0.46f + 60f, 200f, 44f), "☰ МЕНЮ", Dimc, 14, 0.3f)) Reload(Screen.Title);
+            if (Btn(new Rect(W / 2f - 100f, H * 0.46f + 60f, 200f, 44f), "≡ МЕНЮ", Dimc, 14, 0.3f)) Reload(Screen.Title);
         }
 
         // ---- GARAGE (b88/b143: 7 апгрейдов, прокачка у каждого байка отдельная) ----
         private void DrawGarage()
         {
             Dim(0.94f);
-            Label(0, 28f, W, "🔧 ГАРАЖ", Ice, 24, TextAnchor.MiddleCenter);
+            Label(0, 28f, W, "▣ ГАРАЖ", Ice, 24, TextAnchor.MiddleCenter);
             Label(0, 60f, W, "$ " + Economy.Bank, Gold, 20, TextAnchor.MiddleCenter);
             var rk = Economy.Ranks[Economy.RankIdx(Economy.Career)];
             var ni = Economy.RankIdx(Economy.Career) + 1;
             var nr = ni < Economy.Ranks.Length ? "  до " + Economy.Ranks[ni].Emoji + " ◆" + Mathf.Max(0, Economy.Ranks[ni].At - Economy.Career) : "  ВЕРШИНА";
             Label(0, 86f, W, rk.Emoji + " " + rk.Name + nr, new Color(0.62f, 0.88f, 0.78f), 11, TextAnchor.MiddleCenter);
-            Label(0, 106f, W, "🏍 качаешь: " + Economy.Bikes[Economy.SelBike].Name, new Color(0.59f, 0.86f, 1f), 13, TextAnchor.MiddleCenter);
+            Label(0, 106f, W, "▣ качаешь: " + Economy.Bikes[Economy.SelBike].Name, new Color(0.59f, 0.86f, 1f), 13, TextAnchor.MiddleCenter);
 
             const float rowH = 60f, gap = 6f, x0 = 18f, w0 = W - 36f, y0 = 136f;
             for (var i = 0; i < Economy.Upgrades.Length; i++)
@@ -706,11 +720,11 @@ namespace ChartRunner.Game
             Dim(0.96f);
             Label(0, H * 0.065f, W, "⚙ НАСТРОЙКИ", Ice, 23, TextAnchor.MiddleCenter);
             var y = H * 0.14f;
-            if (Btn(new Rect(W / 2f - 146f, y, 292f, 56f), Economy.Muted ? "🔇 ЗВУК ВЫКЛ" : "🔊 ЗВУК ВКЛ", Ice, 15, 0.35f)) { Economy.Muted = !Economy.Muted; Economy.Save(); }
+            if (Btn(new Rect(W / 2f - 146f, y, 292f, 56f), Economy.Muted ? "ЗВУК: ВЫКЛ" : "ЗВУК: ВКЛ", Ice, 15, 0.35f)) { Economy.Muted = !Economy.Muted; Economy.Save(); }
             y += 70f;
             if (Btn(new Rect(W / 2f - 146f, y, 292f, 56f), "ФИЛ: " + FeelPreset.Name(SelectedFeel), Ice, 15, 0.35f, "тап — переключить")) SwitchFeel();
             y += 70f;
-            if (Btn(new Rect(W / 2f - 146f, y, 292f, 56f), "🗑 СБРОСИТЬ ПРОГРЕСС", Rose, 14, 0.3f)) { Economy.ResetProgress(); Pop("✅ ПРОГРЕСС ОБНУЛЁН"); }
+            if (Btn(new Rect(W / 2f - 146f, y, 292f, 56f), "✕ СБРОСИТЬ ПРОГРЕСС", Rose, 14, 0.3f)) { Economy.ResetProgress(); Pop("✅ ПРОГРЕСС ОБНУЛЁН"); }
             if (Btn(new Rect(W / 2f - 90f, H - 74f, 180f, 46f), "←  НАЗАД", Ice, 15, 0.35f)) Flow = Screen.Title;
             DrawPop();
         }

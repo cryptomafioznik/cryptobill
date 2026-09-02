@@ -35,12 +35,12 @@ namespace ChartRunner.Meta
         public struct Rank { public string Name, Emoji; public int At, Reward; }
         public static readonly Rank[] Ranks =
         {
-            new Rank { Name = "КРЕВЕТКА", Emoji = "🦐", At = 0, Reward = 0 },
-            new Rank { Name = "КРАБ", Emoji = "🦀", At = 400, Reward = 80 },
-            new Rank { Name = "РЫБА", Emoji = "🐟", At = 1500, Reward = 180 },
-            new Rank { Name = "ДЕЛЬФИН", Emoji = "🐬", At = 5000, Reward = 400 },
-            new Rank { Name = "АКУЛА", Emoji = "🦈", At = 16000, Reward = 800 },
-            new Rank { Name = "КИТ", Emoji = "🐋", At = 45000, Reward = 1500 },
+            new Rank { Name = "КРЕВЕТКА", Emoji = "①", At = 0, Reward = 0 },
+            new Rank { Name = "КРАБ", Emoji = "②", At = 400, Reward = 80 },
+            new Rank { Name = "РЫБА", Emoji = "③", At = 1500, Reward = 180 },
+            new Rank { Name = "ДЕЛЬФИН", Emoji = "④", At = 5000, Reward = 400 },
+            new Rank { Name = "АКУЛА", Emoji = "⑤", At = 16000, Reward = 800 },
+            new Rank { Name = "КИТ", Emoji = "⑥", At = 45000, Reward = 1500 },
         };
 
         // ---- b844: апгрейды ----
@@ -49,9 +49,9 @@ namespace ChartRunner.Meta
         {
             new Upgrade { Id = "eng", Name = "ДВИЖОК", Max = 5, Icon = "⚙", Eff = l => "+" + 8 * l + "% к скорости" },
             new Upgrade { Id = "grip", Name = "СЦЕПЛЕНИЕ", Max = 5, Icon = "◎", Eff = l => "+" + 15 * l + "% хватка (подъём+посадка)" },
-            new Upgrade { Id = "susp", Name = "ПОДВЕСКА", Max = 4, Icon = "🔩", Eff = l => "+" + 22 * l + "% мягкая посадка" },
+            new Upgrade { Id = "susp", Name = "ПОДВЕСКА", Max = 4, Icon = "≡", Eff = l => "+" + 22 * l + "% мягкая посадка" },
             new Upgrade { Id = "pump", Name = "СИЛА PUMP", Max = 5, Icon = "⚡", Eff = l => "+" + 22 * l + "% длина рывка" },
-            new Upgrade { Id = "wave", Name = "ЩИТ ОТ ВОЛНЫ", Max = 5, Icon = "🛡", Eff = l => "−" + 7 * l + "% скорость дампа" },
+            new Upgrade { Id = "wave", Name = "ЩИТ ОТ ВОЛНЫ", Max = 5, Icon = "◈", Eff = l => "−" + 7 * l + "% скорость дампа" },
             new Upgrade { Id = "air", Name = "ВОЗД.КОНТРОЛЬ", Max = 4, Icon = "✦", Eff = l => "+" + 14 * l + "% верчение" },
             new Upgrade { Id = "mag", Name = "МАГНИТ", Max = 4, Icon = "◆", Eff = l => "+" + 40 * l + "% радиус сбора" },
         };
