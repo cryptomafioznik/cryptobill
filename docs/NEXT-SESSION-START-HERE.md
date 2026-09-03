@@ -1,7 +1,7 @@
 # СЛЕДУЮЩАЯ СЕССИЯ — ТОЧКА ВХОДА
 
 Переписано 2026-09-03 (конец сессии подачи). **Читать первым.** Ветка `codex/visual-v05`,
-HEAD `4c3bc07`, дерево чистое, всё запушено. `toys/chartrider.html` — спецификация, не трогать.
+HEAD см. `git log`, дерево чистое, всё запушено. `toys/chartrider.html` — спецификация, не трогать.
 
 ## СОСТОЯНИЕ ОДНИМ АБЗАЦЕМ
 
@@ -12,16 +12,20 @@ HEAD `4c3bc07`, дерево чистое, всё запушено. `toys/chartr
 процедурный звук, локализация EN/RU, «сок» (флипы, фонтан фиксации, ачивки, подсказки).
 **Релиз 1.0.0 (1) загружен в App Store Connect, обработан и привязан к версии; все
 метаданные, скриншоты, цена, территории, приватность, соглашение — заполнены.**
-Не сделано ровно одно: нажать «Submit for Review». Пользователь РАЗРЕШИЛ отправку.
+**2026-09-03 08:03 UTC: версия 1.0.0 ОТПРАВЛЕНА НА РЕВЬЮ**, заявка
+`ed327d52-ac5e-46d5-aa36-5fac35d3dcca`, состояние `WAITING_FOR_REVIEW`.
 
 ## ПЕРВОЕ ДЕЙСТВИЕ НОВОЙ СЕССИИ
 
 ```bash
-node tools/asc-submit.js      # отправка на ревью через ASC API (ключ на маке: ~/.appstoreconnect)
+cd ~/.appstoreconnect && node status.js   # состояние ревью (WAITING_FOR_REVIEW / IN_REVIEW / REJECTED / READY_FOR_DISTRIBUTION)
 ```
-Если классификатор блокирует — попросить пользователя разрешить команду или нажать
-«Add for Review → Submit» в App Store Connect (app id 6808117432, версия 1.0.0).
-Проверить состояние: `cd ~/.appstoreconnect && node status.js`.
+Если Apple вернула замечания — текст пользователь вставит в чат; исправить, поднять
+buildNumber в `Editor/Bootstrap/DeviceBuilder.cs`, `tools/ios-archive.sh && tools/ios-upload.sh`,
+привязать новый билд к версии и повторить `node tools/asc-submit.cjs` (скрипты ASC — `.cjs`,
+потому что package.json репо объявляет `"type": "module"`). Ловушка подачи: 409 «not in valid
+state» при добавлении версии в заявку — причина лежит в `meta.associatedErrors` ответа
+(у нас это был пустой `contentRightsDeclaration` приложения; скрипт теперь ставит его сам).
 
 ## РЕШЕНИЯ ПОЛЬЗОВАТЕЛЯ (действуют)
 
@@ -46,7 +50,7 @@ tools/unity-build-mac.sh                       # честная mac-сборка
 cd unity && build/mac/ChartRunner.app/Contents/MacOS/ChartRunner -screen-width 430 -screen-height 932 -screen-fullscreen 0 -shots        # кадры заезда
 …-shotsUi [-lang en] [-superSize 3]            # кадры экранов; superSize 3 при окне 440×956 = 1320×2868 для стора
 tools/ios-archive.sh && tools/ios-upload.sh    # .ipa → App Store Connect (при новом билде поднять buildNumber в DeviceBuilder!)
-tools/asc-upload-shots.js <locId> <dir>        # скриншоты в набор APP_IPHONE_67
+tools/asc-upload-shots.cjs <locId> <dir>        # скриншоты в набор APP_IPHONE_67
 ```
 Гейты: EditMode 8/8; PlayMode `-testFilter "ChartRunner.Tests.WaveGate|ChartRunner.Tests.AcceptanceBattery"`
 → 10/11 (падает только H_RecoveryWindow — известное открытое решение). Полный PlayMode не гонять.

@@ -33,8 +33,13 @@ tools/ios-archive.sh      # unity/build/ios-archive/ChartRunner.ipa
 Скриншоты 6.9" 1320×2868 (EN и RU по 6 штук) загружены из mac-сборки с `-superSize 3`
 (`unity/build/store-en`, `store-ru`), состояние COMPLETE. Release type: AFTER_APPROVAL.
 
-**Осталось одно действие — «Add for Review → Submit» в App Store Connect** (или
-`node /tmp/asc-submit.js`, если разрешить мне это действие). Всё остальное заполнено.
+**2026-09-03 08:03 UTC — ОТПРАВЛЕНО НА РЕВЬЮ** (`node tools/asc-submit.cjs`): заявка
+`ed327d52-ac5e-46d5-aa36-5fac35d3dcca`, состояние `WAITING_FOR_REVIEW`. Блокером был
+незаполненный `contentRightsDeclaration` у приложения (Apple отвечал 409 «not in valid
+state», причина — в `meta.associatedErrors`); выставлен `DOES_NOT_USE_THIRD_PARTY_CONTENT`,
+как у остальных приложений аккаунта. Осталась пустая заявка `b33a83ea-…` в состоянии
+READY_FOR_REVIEW без элементов (первый прогон) — можно отменить в web, на ревью не влияет.
+Проверка: `cd ~/.appstoreconnect && node status.js`.
 
 ## Что можешь сделать только ты (нужны твои учётные данные Apple)
 

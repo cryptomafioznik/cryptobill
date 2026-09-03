@@ -1,7 +1,7 @@
 // Загрузка скриншотов Chart Runner: для каждой локализации версии — набор APP_IPHONE_67, файлы по порядку.
 // Usage: node upload_shots_chartrunner.js <versionLocalizationId> <dir>
 const fs=require('fs'),path=require('path'),crypto=require('crypto'),https=require('https');
-const { request } = require('./asc');
+const { request } = require(require('os').homedir() + '/.appstoreconnect/asc.js');
 async function put(op, chunk){ const url=new URL(op.url); const headers={}; for(const h of op.requestHeaders||[]) headers[h.name]=h.value; headers['Content-Length']=chunk.length;
   await new Promise((res,rej)=>{ const q=https.request({hostname:url.hostname,path:url.pathname+url.search,method:op.method,headers},r=>{ r.resume(); r.on('end',()=>(r.statusCode>=200&&r.statusCode<300)?res():rej(new Error('upload HTTP '+r.statusCode))); }); q.on('error',rej); q.write(chunk); q.end(); }); }
 (async()=>{

@@ -1,11 +1,12 @@
 #!/usr/bin/env node
 // Отправка версии Chart Runner на ревью через App Store Connect API.
 // Всё остальное (метаданные, скриншоты, билд, цена, территории, приватность) уже заполнено.
-// Запуск: node tools/asc-submit.js
+// Запуск: node tools/asc-submit.cjs
 const { request } = require(require('os').homedir() + '/.appstoreconnect/asc.js');
 const APP = '6808117432', VER = 'd4be1bd2-f686-48f8-8941-305aeccc6bfd';
 const show = (n, x) => { let e = ''; try { const j = JSON.parse(x.body); if (j.errors) e = j.errors.map(z => z.title + ': ' + (z.detail || '')).join(' | '); } catch {} console.log(n, x.status, e); return x; };
 (async () => {
+  show('contentRights', await request('PATCH', `/v1/apps/${APP}`, { data: { type: 'apps', id: APP, attributes: { contentRightsDeclaration: 'DOES_NOT_USE_THIRD_PARTY_CONTENT' } } }));
   show('releaseType', await request('PATCH', `/v1/appStoreVersions/${VER}`, { data: { type: 'appStoreVersions', id: VER, attributes: { releaseType: 'AFTER_APPROVAL' } } }));
   const rs = show('reviewSubmission', await request('POST', '/v1/reviewSubmissions', { data: { type: 'reviewSubmissions', attributes: { platform: 'IOS' }, relationships: { app: { data: { type: 'apps', id: APP } } } } }));
   let sub = null; try { sub = JSON.parse(rs.body).data.id; } catch {}
