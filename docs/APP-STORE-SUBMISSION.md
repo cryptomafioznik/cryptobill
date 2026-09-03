@@ -21,6 +21,14 @@ cd unity && Unity -batchmode -quit -projectPath "$PWD" -buildTarget iOS -execute
 tools/ios-archive.sh      # unity/build/ios-archive/ChartRunner.ipa
 ```
 
+## Сделано через App Store Connect API (2026-09-03)
+
+Запись приложения `Chart Runner` (id 6808117432, SKU chartrunner-ios), версия 1.0.0,
+описания/ключевые слова/промо EN+RU, категория Игры → Гонки/Казуальные, возрастная анкета
+(всё «нет»), Privacy Policy URL, App Privacy «Data Not Collected» (опубликован), цена
+бесплатно (база USA), 175 территорий, контакт для ревью (из Keepframe), License Agreement
+принят. Загрузка билда: `tools/ios-upload.sh` (API-ключ ZBJUHM8454 на маке).
+
 ## Что можешь сделать только ты (нужны твои учётные данные Apple)
 
 1. **App Store Connect → новое приложение**: имя `Chart Runner`, Bundle ID `com.mathewk.chartrunner`, SKU `chartrunner-ios`.
