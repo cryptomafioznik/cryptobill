@@ -4,12 +4,15 @@
 # Порядок и флаги не декоративны:
 #   -allowProvisioningUpdates   — Xcode сам заводит профиль под устройство, иначе нужен
 #                                 ручной заход в портал разработчика на каждое новое устройство.
+#   -allowProvisioningDeviceRegistration + -destination id=UDID — регистрирует ИМЕННО этот
+#                                 телефон в профиле; с generic/platform=iOS профиль остаётся старым,
+#                                 и установка падает 0xe8008012 «profile cannot be installed on this device».
 #   -derivedDataPath            — фиксированный, чтобы путь к .app был предсказуем и чтобы
 #                                 повторные сборки переиспользовали кэш, а не начинали с нуля.
 #   CODE_SIGN_STYLE=Automatic   — подпись задаётся здесь, а не в проекте: Unity перегенерирует
 #                                 проект при каждой полной сборке и настройку в нём затрёт.
 #
-# Использование:  tools/ios-deploy.sh [udid]
+# Использование:  tools/ios-deploy.sh [udid]   (CONFIG=Debug для отладочной сборки; по умолчанию Release — как в сторе)
 set -euo pipefail
 
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
@@ -39,10 +42,11 @@ echo "== xcodebuild =="
 xcodebuild \
   -project "$PROJ" \
   -scheme Unity-iPhone \
-  -configuration Debug \
-  -destination "generic/platform=iOS" \
+  -configuration "${CONFIG:-Release}" \
+  -destination "id=$UDID" \
   -derivedDataPath "$DD" \
   -allowProvisioningUpdates \
+  -allowProvisioningDeviceRegistration \
   DEVELOPMENT_TEAM="$TEAM" \
   CODE_SIGN_STYLE=Automatic \
   build 2>&1 | tail -25
