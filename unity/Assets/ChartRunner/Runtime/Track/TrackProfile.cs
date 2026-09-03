@@ -79,6 +79,22 @@ namespace ChartRunner.Track
                  "то же — не сглаживал узлы фич (gap/drop/kick/step/climb/mega), стр. 248-249.")]
         public int[] sharpNodeIndices = Array.Empty<int>();
 
+        /// <summary>Узлы-липы (кикер, рампа гэпа, мега-рампа): на отрыве с них физика даёт импульс
+        /// вращения носом вверх (RB.lipKick исходника, chartrider.html:1662).</summary>
+        public int[] kickNodeIndices = Array.Empty<int>();
+
+        /// <summary>Процедурная трасса режима «Отрыв» (trackSource='proc' исходника): нет цены и плеча.</summary>
+        public bool proc;
+
+        /// <summary>Высота кромки (узел перед провалом) для гэпа, содержащего xPx; NaN если не гэп.</summary>
+        public float GapLipPx(float xPx)
+        {
+            for (var i = 0; i < gapsPx.Length; i++)
+                if (xPx >= gapsPx[i].fromPx && xPx <= gapsPx[i].toPx)
+                    return HeightPx(gapsPx[i].fromPx - nodeStepPx);
+            return float.NaN;
+        }
+
         private bool[] _sharpMask;
 
         /// <summary>Маска острых узлов, пересобирается при смене данных.</summary>

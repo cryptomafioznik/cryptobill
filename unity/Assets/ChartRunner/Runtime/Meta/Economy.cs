@@ -189,9 +189,12 @@ namespace ChartRunner.Meta
         }
 
         /// <summary>b1867: ликвидация = реальная потеря ∝ плечу, капана, пол ≥ 0.</summary>
-        public static int Liquidate()
+        public static int Liquidate() => Liquidate(Leverage);
+
+        /// <summary>В «Отрыве» плеча нет (chartrider.html:1867: _lev = ticker ? leverage : 1).</summary>
+        public static int Liquidate(int lev)
         {
-            var pen = Mathf.Min(Mathf.RoundToInt(Bank * Leverage * LiqPen), Mathf.RoundToInt(Bank * LiqPenMax));
+            var pen = Mathf.Min(Mathf.RoundToInt(Bank * lev * LiqPen), Mathf.RoundToInt(Bank * LiqPenMax));
             Bank = Mathf.Max(0, Bank - pen);
             Save();
             return pen;

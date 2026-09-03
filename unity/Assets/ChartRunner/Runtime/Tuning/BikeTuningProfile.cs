@@ -22,7 +22,7 @@ namespace ChartRunner.Tuning
                  "перечислять их здесь обязательно, иначе они выглядят настройкой, а ей не являются.")]
         public string[] supersededByEmergentPhysics =
         {
-            nameof(engineForceN), nameof(topSpeedMPerS), nameof(brakeForceN),   // тяга/тормоз/потолок — теперь по исходнику (specEngine/brakeAccel/rollDrag)
+            nameof(engineForceN), nameof(brakeForceN),   // тяга/тормоз — теперь по исходнику (specEngine/brakeAccel); topSpeedMPerS читает камера (масштаб зума)
             nameof(driveFloorFraction), // пол прижима: тягу ограничивает трение Box2D, а не формула
             nameof(driveTrade),         // вес↔тяга: даёт сдвиг центра масс, измерено 5471/77 Н
             nameof(leanAir),            // статический вес в полёте не крутит — нет опоры
@@ -162,6 +162,11 @@ namespace ChartRunner.Tuning
 
         [Tooltip("RB.leanYank = 0.55. Момент от РЫВКА веса на земле. Не занижать: вилли инициируется рывком.")]
         public float leanYank = 0.55f;
+
+        [Tooltip("RB.lipKick = 0.030 (рад/кадр на px/кадр скорости): отрыв с липа кикера/рампы даёт импульс носом вверх clamp(vx·lipKick, 0.14, lipKickMax).")]
+        public float lipKick = 0.030f;
+        [Tooltip("RB.lipKickMax = 0.24 рад/кадр.")]
+        public float lipKickMax = 0.24f;
 
         [Tooltip("RB.leanYankAir = 0.34. Импульс вращения за переброс веса в воздухе.")]
         public float leanYankAir = 0.34f;

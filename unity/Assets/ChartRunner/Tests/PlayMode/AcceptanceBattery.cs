@@ -144,14 +144,20 @@ namespace ChartRunner.Tests
             var frame90 = speeds.FindIndex(v => v >= target);
             var t90 = frame90 < 0 ? -1f : frame90 / 60f;
 
-            var pass = Mathf.Abs(cruise - profile.topSpeedMPerS) < profile.topSpeedMPerS * 0.1f
+            // Эталон — legacy-тяга исходника (b100–b266, принятая пользователем), а не «real» 0B:
+            // на ровном drive = min(engine·engScale, µ·0.85·g) уравновешивает качение 2·rollResist·v
+            // и драг (1−rollDrag)·v. Считается из профиля, чтобы эталон следовал за константами.
+            var aPx = Mathf.Min(profile.specEnginePxPerFrame2 * profile.engineScale,
+                profile.specMu * profile.gripScale * profile.driveFloorFrac * UnitsContract.SimGravityPxPerFrame2);
+            var refCruise = aPx / (2f * profile.rollResistance + (1f - profile.rollDragPerFrame)) * UnitsContract.PxPerFrameToMPerS;
+            var pass = Mathf.Abs(cruise - refCruise) < refCruise * 0.1f
                        && t90 > 0f && t90 < 3f;
             Row("A", "крейсер на ровном, полный газ",
                 F(cruise, 3) + " м/с (" + F(cruise * 3.6f, 1) + " км/ч), 90 % за " + F(t90) + " с",
-                "эталон исходника 6.271 м/с ±10 %", pass);
+                "эталон legacy-исходника " + F(refCruise, 3) + " м/с ±10 %", pass);
 
-            Assert.That(cruise, Is.EqualTo(profile.topSpeedMPerS).Within(profile.topSpeedMPerS * 0.1f),
-                "крейсер " + F(cruise, 3) + " м/с против эталона " + F(profile.topSpeedMPerS, 3));
+            Assert.That(cruise, Is.EqualTo(refCruise).Within(refCruise * 0.1f),
+                "крейсер " + F(cruise, 3) + " м/с против эталона " + F(refCruise, 3));
             Assert.Greater(t90, 0f, "90 % крейсера обязаны быть достигнуты");
             Assert.Less(t90, 3f, "и не позже 3 с: получено " + F(t90) + " с");
         }

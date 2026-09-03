@@ -36,6 +36,8 @@ namespace ChartRunner.Track
         public float VolMul, Vol;
         public string VolLabel;
         public bool Short;
+        /// <summary>Процедурный «Отрыв»: цены нет, PriceAt = 1.</summary>
+        public bool IsProc;
 
         // Нормализатор Y↔цена (b359): tkK, tkMid, tkFlipP.
         private float _k, _mid, _flipP;
@@ -44,12 +46,26 @@ namespace ChartRunner.Track
         /// <summary>Реальная цена монеты в точке трассы (b887 tkPrice).</summary>
         public float PriceAt(float xM)
         {
+            if (IsProc || _ys.Count < 2) return 1f;
             var xPx = xM / UnitsContract.PxToM;
             var i = Mathf.Clamp(Mathf.FloorToInt(xPx / StepPx), 0, _ys.Count - 2);
             var t = Mathf.Clamp01(xPx / StepPx - i);
             var y = Mathf.Lerp(_ys[i], _ys[i + 1], t);
             var g2 = _mid - (y - BaseY) / _k;
             return _flipP != 0f ? _flipP - g2 : g2;
+        }
+
+        /// <summary>Режим «Отрыв» исходника (trackSource='proc'): трасса из генератора рельефа, монеты
+        /// на 20 % узлов вне гэпов (chartrider.html:246), волатильность 1, без цены и плеча.</summary>
+        public static TickerTrack FromProc(CandleTrackGenerator.Result res, int seed)
+        {
+            var tt = new TickerTrack { IsProc = true, Profile = res.Profile, DeckCandles = res.Candles, VolMul = 1f, Vol = 0f, VolLabel = "ОТРЫВ", Short = false };
+            var rng = new System.Random(seed);
+            var gapSet = new HashSet<int>(res.GapNodes);
+            tt.CoinNodes = new List<int>();
+            for (var i = 12; i < res.Profile.nodesPx.Length - 4; i++)
+                if (!gapSet.Contains(i) && rng.NextDouble() < 0.2) tt.CoinNodes.Add(i);
+            return tt;
         }
 
         public static TickerTrack Build(List<Tickers.Candle> src, bool shortRun, int seed)

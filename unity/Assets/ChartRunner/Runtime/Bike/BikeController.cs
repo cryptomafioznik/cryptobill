@@ -162,6 +162,8 @@ namespace ChartRunner.Bike
             var rel = Mathf.DeltaAngle(slope * Mathf.Rad2Deg, pitch * Mathf.Rad2Deg) * Mathf.Deg2Rad;
             var angV = _rig.Chassis.angularVelocity * Mathf.Deg2Rad;
 
+            if (_wasGrounded && !grounded) OnTakeoff();
+
             if (grounded)
             {
                 _airTime = 0f;
@@ -207,6 +209,30 @@ namespace ChartRunner.Bike
                 _jumpBuf = 0; _jumpCd = 16;
             }
             else _jumpBuf--;
+        }
+
+        /// <summary>
+        /// Отрыв от земли (chartrider.html:1660-1662): с зажатым весом наземное вращение не уносится
+        /// в полёт (кламп ±0.03 рад/кадр); с узла-липа (кикер/рампа гэпа/мега) — импульс носом вверх
+        /// clamp(vx·lipKick, 0.14, lipKickMax) рад/кадр. Это и есть «прыжки с трамплинов ∝ скорости».
+        /// </summary>
+        private void OnTakeoff()
+        {
+            var toPxPerFrame = UnitsContract.SimFrameSeconds / UnitsContract.PxToM;
+            if (Mathf.Abs(_weightShift) > 0.4f)
+            {
+                var cap = 0.03f * PerFrameToPerS * Mathf.Rad2Deg;
+                _rig.Chassis.angularVelocity = Mathf.Clamp(_rig.Chassis.angularVelocity, -cap, cap);
+            }
+            var kicks = _terrain.Profile != null ? _terrain.Profile.kickNodeIndices : null;
+            if (kicks == null || kicks.Length == 0) return;
+            var idx = Mathf.RoundToInt(_rig.Chassis.position.x / UnitsContract.PxToM / _terrain.Profile.nodeStepPx);
+            var onLip = false;
+            for (var i = 0; i < kicks.Length; i++) if (kicks[i] >= idx - 1 && kicks[i] <= idx + 1) { onLip = true; break; }
+            if (!onLip) return;
+            var vxPx = ForwardSpeed() * toPxPerFrame;
+            var kick = Mathf.Clamp(vxPx * Profile.lipKick, 0.14f, Profile.lipKickMax);   // рад/кадр, нос вверх = +
+            _rig.Chassis.angularVelocity += kick * PerFrameToPerS * Mathf.Rad2Deg;
         }
 
         private float ForwardSpeed()
@@ -623,6 +649,17 @@ namespace ChartRunner.Bike
             {
                 Fail(BikeFailure.Void);
                 return;
+            }
+            // Гэп исходника (chartrider.html:1716): недолёт = падение на 64 px ниже кромки → wipeout('gap').
+            if (_terrain.Profile != null && _terrain.Profile.gapsPx.Length > 0)
+            {
+                var xPx = _rig.Chassis.position.x / UnitsContract.PxToM;
+                var lipPx = _terrain.Profile.GapLipPx(xPx);
+                if (!float.IsNaN(lipPx) && _rig.Chassis.position.y < (lipPx - 64f) * UnitsContract.PxToM)
+                {
+                    Fail(BikeFailure.Void);
+                    return;
+                }
             }
 
             // КРАШ ПРИ ПОСАДКЕ. Проверяется на кадре касания после достаточного полёта.

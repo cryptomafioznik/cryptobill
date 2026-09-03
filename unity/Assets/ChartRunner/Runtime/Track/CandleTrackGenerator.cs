@@ -1,5 +1,6 @@
 using System;
 using System.Collections.Generic;
+using System.Linq;
 using UnityEngine;
 
 namespace ChartRunner.Track
@@ -84,6 +85,8 @@ namespace ChartRunner.Track
             /// и справедливо, но бессмысленно ругается на 87°.
             /// </summary>
             public List<int> GapNodes = new List<int>();
+            /// <summary>Узлы-липы (кромка кикера / рампы гэпа / мега-рампы).</summary>
+            public List<int> KickNodes = new List<int>();
 
             /// <summary>Участки событий рынка: где начинается и кончается сет-пьеса.</summary>
             public List<EventSpan> Events = new List<EventSpan>();
@@ -135,7 +138,7 @@ namespace ChartRunner.Track
             public float Range(float a, float b) => a + (b - a) * Next();
         }
 
-        public static Result Generate(CandleTerrainProfile tune, int seed, int nodeCount)
+        public static Result Generate(CandleTerrainProfile tune, int seed, int nodeCount, bool endless = false)
         {
             if (tune == null) throw new ArgumentNullException(nameof(tune));
 
@@ -163,6 +166,11 @@ namespace ChartRunner.Track
             float climbRunup = 0, climbLeft = 0, climbBaseY = 0, climbBotY = 0;
             float whoopRunup = 0, whoopLeft = 0, whoopBaseY = 0, whoopPhase = 0;
             float nextGapX = 1800f, nextKickX = 1700f, nextClimbX = 2400f, nextWhoopX = 2200f;
+            // b234/b246 МЕГА-РАМПА — только в «Отрыве» (TUNE.megaEvery 560, runup 7×20, рампа 7 узлов
+            // 104 px curve 2.6, gapDrop 44, посадка 16 узлов по 12): кинематографичный полёт ∝ скорости.
+            float megaRunup = 0, megaRampLeft = 0, megaLandLeft = 0;
+            float megaBaseY = 0, megaRampBot = 0, megaLipY = 0, megaLandTopY = 0;
+            var nextMegaX = 3000f;
             var sharp = new List<int>();
 
             // ---- события рынка ----
@@ -193,7 +201,8 @@ namespace ChartRunner.Track
                 var featureBusy = gapRunup > 0 || gapRampLeft > 0 || gapLeft > 0 || gapLandFlat > 0
                                   || kickRunup > 0 || kickRampLeft > 0 || kickLandLeft > 0
                                   || climbRunup > 0 || climbLeft > 0
-                                  || whoopRunup > 0 || whoopLeft > 0;
+                                  || whoopRunup > 0 || whoopLeft > 0
+                                  || megaRunup > 0 || megaRampLeft > 0 || megaLandLeft > 0;
 
                 // ---- планирование события ----
                 // Событие начинается по расписанию и перебивает всё остальное на свою
@@ -337,7 +346,7 @@ namespace ChartRunner.Track
                     var off = 80f * Mathf.Pow((kk + 1f) / 5f, 2.0f);
                     close = Mathf.Clamp(gapRampBot - off, 70f, H * 0.9f);
                     walk = close - baseY;
-                    if (gapRampLeft <= 1) sharp.Add(i);   // кромка липа не сглаживается
+                    if (gapRampLeft <= 1) { sharp.Add(i); res.KickNodes.Add(i); }   // кромка липа не сглаживается; лип = импульс вращения
                     gapRampLeft--;
                     if (gapRampLeft <= 0)
                     {
@@ -389,7 +398,7 @@ namespace ChartRunner.Track
                     var off = 62f * Mathf.Pow((kk + 1f) / 5f, 2.2f);
                     close = Mathf.Clamp(kickRampBot - off, 70f, H * 0.95f);
                     walk = close - baseY;
-                    if (kickRampLeft <= 1) { sharp.Add(i); kickLipY = close; }
+                    if (kickRampLeft <= 1) { sharp.Add(i); kickLipY = close; res.KickNodes.Add(i); }
                     kickRampLeft--;
                     if (kickRampLeft <= 0)
                     {
@@ -424,6 +433,37 @@ namespace ChartRunner.Track
                     close = Mathf.Clamp(climbBotY - e * 6f * 15f, 70f, H * 0.95f);
                     walk = close - baseY;
                     climbLeft--;
+                }
+                else if (megaRunup > 0)
+                {
+                    tag = "megaRunup";
+                    close = Mathf.Clamp(megaBaseY + (7f - megaRunup) * 20f, 70f, H * 0.92f);
+                    walk = close - baseY;
+                    megaRunup--;
+                    if (megaRunup <= 0) { megaRampBot = close; megaRampLeft = 7; }
+                }
+                else if (megaRampLeft > 0)
+                {
+                    tag = "megaRamp";
+                    var kk = 7 - megaRampLeft;
+                    var off = 104f * Mathf.Pow((kk + 1f) / 7f, 2.6f);
+                    close = Mathf.Clamp(megaRampBot - off, 70f, H * 0.95f);
+                    walk = close - baseY;
+                    if (megaRampLeft <= 1) { sharp.Add(i); megaLipY = close; res.KickNodes.Add(i); }
+                    megaRampLeft--;
+                    if (megaRampLeft <= 0)
+                    {
+                        megaLandLeft = 16;
+                        megaLandTopY = Mathf.Clamp(megaLipY + 44f, 70f, H * 0.95f);
+                    }
+                }
+                else if (megaLandLeft > 0)
+                {
+                    tag = "megaLand";
+                    var kk = 16 - megaLandLeft;
+                    close = Mathf.Clamp(megaLandTopY + kk * 12f, 70f, H * 0.95f);
+                    walk = close - baseY;
+                    megaLandLeft--;
                 }
                 else if (whoopRunup > 0)
                 {
@@ -484,6 +524,16 @@ namespace ChartRunner.Track
                     climbRunup = 6;
                     nextClimbX = genX + 4200f * densK + rng.Next() * 1200f * densK;
                 }
+                else if (endless && !busy && i > 16 && genX >= nextMegaX && genX > 2800f
+                         && close > H * 0.44f
+                         && regime != CandleTerrainProfile.Regime.Pump
+                         && regime != CandleTerrainProfile.Regime.Crash
+                         && lastRegime != CandleTerrainProfile.Regime.Bull)
+                {
+                    megaBaseY = close;
+                    megaRunup = 7;
+                    nextMegaX = genX + 5600f + rng.Next() * 1800f;
+                }
                 else if (!busy && i > 16 && genX >= nextWhoopX && genX > 1900f
                          && close < H * 0.86f
                          && regime != CandleTerrainProfile.Regime.Pump
@@ -502,13 +552,40 @@ namespace ChartRunner.Track
 
             // Перевод в профиль трассы: у нас высота вверх положительная, у исходника вниз.
             var nodes = new Vector2[closes.Count];
+            // b68 СГЛАЖИВАНИЕ ЛИНИИ ЕЗДЫ (chartrider.html:249): причинный 5-тап [0.10 0.22 0.36 0.22 0.10]
+            // по узлу n−3 при добавлении узла n, пропуская окна с гэпом/подъёмом/мега-рампой и сам лип.
+            // Без него вупсы (±15 px через узел) — пила периодом 26 px, в которой байк с базой 52 px
+            // клинит намертво (замер -proc -trace: остановка на 2375 px); в исходнике после блюра
+            // это лёгкая рябь ~2 px.
+            var kickSet = new HashSet<int>(res.KickNodes);
+            bool Skip(int k) { var t = res.NodeSource[k]; return t == "gapPit" || t == "climb" || t == "megaRamp"; }
+            for (var n = 5; n <= closes.Count; n++)
+            {
+                var w2 = n - 3;
+                var skip = kickSet.Contains(w2);
+                for (var k = n - 5; k < n && !skip; k++) skip = Skip(k);
+                if (skip) continue;
+                closes[w2] = closes[n - 5] * 0.10f + closes[n - 4] * 0.22f + closes[w2] * 0.36f + closes[n - 2] * 0.22f + closes[n - 1] * 0.10f;
+            }
             for (var i = 0; i < closes.Count; i++)
                 nodes[i] = new Vector2(i * StepPx, -(closes[i] - baseY));
 
             var profile = ScriptableObject.CreateInstance<TrackProfile>();
             profile.name = "CandleTrack_" + seed;
             profile.nodesPx = nodes;
-            profile.gapsPx = new TrackProfile.Gap[0];
+            // Провалы гэпов: диапазоны по узлам pit (в исходнике gap:true → падение ниже кромки на 64 px = смерть).
+            var gaps = new List<TrackProfile.Gap>();
+            var gs = res.GapNodes.Distinct().OrderBy(v => v).ToList();
+            for (var gi = 0; gi < gs.Count;)
+            {
+                var a = gs[gi]; var b = a;
+                while (gi + 1 < gs.Count && gs[gi + 1] == b + 1) { gi++; b = gs[gi]; }
+                gaps.Add(new TrackProfile.Gap { fromPx = a * StepPx, toPx = b * StepPx });
+                gi++;
+            }
+            profile.gapsPx = gaps.ToArray();
+            profile.kickNodeIndices = res.KickNodes.Distinct().OrderBy(v => v).ToArray();
+            profile.proc = true;
             profile.endPx = (closes.Count - 1) * StepPx;
             profile.nodeStepPx = StepPx;
             profile.checkpoints = BuildCheckpoints(profile.endPx);

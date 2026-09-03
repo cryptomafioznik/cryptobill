@@ -32,6 +32,11 @@ namespace ChartRunner.Game
         public static bool PendingFallback;
         /// <summary>Заезд — дейли «Рынок сегодня» (3 попытки, стрик). Переживает перезагрузку.</summary>
         public static bool PendingDaily;
+        /// <summary>Режим «Отрыв» исходника (trackSource='proc', gameMode='endless'): процедурная
+        /// трасса генератора (режимы рынка, кикеры, гэпы, вупсы, крутые подъёмы, мега-рампы,
+        /// события), без цены и плеча, волна ×0.9. На сайте это режим по умолчанию.</summary>
+        public static bool ProcMode;
+        public static int ProcSeed;
         public static string PendingTitle = "";
         public static Feel SelectedFeel = Feel.Stock;
         private static bool _flowInit;
@@ -77,6 +82,10 @@ namespace ChartRunner.Game
         private int _runGems, _stakeIncome, _liqPen, _missionRew;
         private string _deathBy = "";
         private float _maxKmh;
+        /// <summary>b233 ФЛОУ (chartrider.html:507, :1771): копилка чистых скилл-событий (посадка, сальто,
+        /// BIG AIR, гэп) → авто-разгон flowPush·(flow/flowMax) px/кадр с затуханием 0.986/кадр.</summary>
+        private float _flow;
+        private void FlowAdd(float a) => _flow = Mathf.Min(1f, _flow + a);
         /// <summary>Шкала спидометра исходника: km/h = vx(px/кадр)·12 (chartrider.html:4506, topKmh:1834).
         /// Не физические км/ч: миссии «Разгон до 150…230» и ачивки считаны в этой шкале.</summary>
         public const float KmhPerMPerS = 12f * UnitsContract.SimFrameSeconds / UnitsContract.PxToM;
@@ -140,8 +149,16 @@ namespace ChartRunner.Game
             LevelProfile.applyDesignHard = false;
 
             // ---- трасса из реальных свечей ----
-            var shortRun = Economy.ShortMode && !PendingDaily && Campaign.Active == null;
-            _tt = TickerTrack.Build(PendingCandles, shortRun, ChartSeed + PendingTicker);
+            foreach (var a in System.Environment.GetCommandLineArgs()) if (a == "-proc") { ProcMode = true; ProcSeed = 7; }
+            var shortRun = !ProcMode && Economy.ShortMode && !PendingDaily && Campaign.Active == null;
+            if (ProcMode)
+            {
+                var tune = CandleProfile;
+                if (tune == null) { tune = ScriptableObject.CreateInstance<CandleTerrainProfile>(); tune.regimes = CandleTerrainProfile.SourceRegimes(); }
+                _tt = TickerTrack.FromProc(CandleTrackGenerator.Generate(tune, ProcSeed, 2400, true), ProcSeed);
+            }
+            else
+                _tt = TickerTrack.Build(PendingCandles, shortRun, ChartSeed + PendingTicker);
             _sampler = new TerrainSampler(_tt.Profile);
             _finishDistB = Mathf.FloorToInt((_tt.Profile.nodesPx.Length - 1) * TickerTrack.StepPx / 10f);
 
@@ -175,8 +192,11 @@ namespace ChartRunner.Game
 
             // ---- игровой слой ----
             _wave = LiquidationWave.Attach(_controller, _camera, world);
-            _wave.DifficultyMul = _tt.VolMul * (1f - 0.07f * Economy.UpgLvl("wave"))
-                                  * (1f + Mathf.Max(0, Economy.Leverage - Economy.SafeLev()) * 0.02f);
+            // «Отрыв»: TUNE.endlessWave 0.9 и без плеча (chartrider.html:1773).
+            _wave.DifficultyMul = ProcMode
+                ? 0.9f * (1f - 0.07f * Economy.UpgLvl("wave"))
+                : _tt.VolMul * (1f - 0.07f * Economy.UpgLvl("wave"))
+                  * (1f + Mathf.Max(0, Economy.Leverage - Economy.SafeLev()) * 0.02f);
             _coinField = CoinField.Attach(_tt, _sampler, _controller, world);
             _position = new Position(_tt);
             Missions.Roll(ChartSeed + PendingTicker + _attempts);
@@ -191,8 +211,9 @@ namespace ChartRunner.Game
             // Сообщение о трассе — только в заезде: титульный мир строится из фолбэка
             // по замыслу, и «нет связи» там было бы ложью.
             if (Flow == Screen.Play)
-                Pop(Tickers.All[PendingTicker].Name + " · " + (shortRun ? Loc.T("▼ ШОРТ · ") : "") + Loc.T("ВОЛАТИЛЬНОСТЬ ") + _tt.VolLabel
-                    + (PendingFallback ? Loc.T(" (нет связи — BTC)") : ""), 3.5f);
+                Pop(ProcMode ? Loc.T("ОТРЫВ · оторвись от дампа")
+                    : Tickers.All[PendingTicker].Name + " · " + (shortRun ? Loc.T("▼ ШОРТ · ") : "") + Loc.T("ВОЛАТИЛЬНОСТЬ ") + _tt.VolLabel
+                      + (PendingFallback ? Loc.T(" (нет связи — BTC)") : ""), 3.5f);
 
             if (ScreenshotProbe.Requested) { Flow = Screen.Play; Unfreeze(); ScreenshotProbe.Attach(this, _controller, _chase); }
         }
@@ -202,8 +223,16 @@ namespace ChartRunner.Game
 
         // ================= переходы =================
 
+        private void StartProc()
+        {
+            ProcMode = true; ProcSeed = UnityEngine.Random.Range(1, 1 << 30);
+            Campaign.Active = null; PendingDaily = false; PendingTitle = Loc.T("ОТРЫВ");
+            Reload(Screen.Play);
+        }
+
         private void StartTicker(int idx)
         {
+            ProcMode = false;
             if (Campaign.Active != null && !Campaign.Active.Daily) Campaign.Active = null;
             PendingDaily = false;
             Economy.LastTicker = idx; Economy.Save();
@@ -217,6 +246,7 @@ namespace ChartRunner.Game
 
         private void StartCampaign(int idx)
         {
+            ProcMode = false;
             var tr = Campaign.Tracks[idx];
             Campaign.Active = Campaign.ForTrack(idx);
             PendingDaily = false; PendingTitle = tr.Name;
@@ -229,6 +259,7 @@ namespace ChartRunner.Game
 
         private void StartDailyChallenge()
         {
+            ProcMode = false;
             var ch = Campaign.DailyChallenge(out var coin);
             Campaign.Active = ch; PendingDaily = false; PendingTitle = Loc.T("ВЫЗОВ ДНЯ");
             var tkIdx = 0; for (var i = 0; i < Tickers.All.Length; i++) if (Tickers.All[i].Key == coin.Key) tkIdx = i;
@@ -238,6 +269,7 @@ namespace ChartRunner.Game
         /// <summary>b161 «Рынок сегодня»: вчерашние 288 свечей монеты дня, одинаково у всех, 3 попытки.</summary>
         private void StartDaily()
         {
+            ProcMode = false;
             if (Campaign.TriesToday >= 3) { Pop(Loc.T("3/3 — завтра новая трасса")); return; }
             var coin = Campaign.DailyCoin;
             Campaign.Active = null; PendingDaily = true; PendingTitle = coin.Name + Loc.T(" · ДЕНЬ");
@@ -266,6 +298,11 @@ namespace ChartRunner.Game
         private void FixedUpdate()
         {
             if (Flow == Screen.Play && _controller != null) _pump.FixedTick(_controller);
+            if (Flow == Screen.Play && _controller != null && _flow > 0f && !_controller.Halted)
+            {
+                _controller.PushForward(0.05f * _flow * UnitsContract.PxPerFrameToMPerS);
+                _flow *= 0.986f; if (_flow < 0.01f) _flow = 0f;
+            }
         }
 
         private void Update()
@@ -370,7 +407,7 @@ namespace ChartRunner.Game
             if (_committed) return;
             _committed = true; _deathBy = reason;
             GameAudio.I.Crash();
-            _liqPen = Economy.Liquidate(); _runGems = -_liqPen;
+            _liqPen = ProcMode ? Economy.Liquidate(1) : Economy.Liquidate(); _runGems = -_liqPen;
             if (_distB > Economy.Best) Economy.Best = _distB;
             OnbRunEnd();
             Campaign.Finish(_distB, _finishDistB, 0);
@@ -423,18 +460,18 @@ namespace ChartRunner.Game
             if (_flipAcc > 5.5f) _flipsLanding++;
             if (_airFrames > 28f)
             {
-                var ab = _airFrames * 0.1f; _bonusCoins += ab; _pump.Add(0.3f);
+                var ab = _airFrames * 0.1f; _bonusCoins += ab; _pump.Add(0.3f); FlowAdd(0.45f);
                 Pop("BIG AIR  +$" + Mathf.RoundToInt(ab)); Juice.I.FloatPop(pos, "+$" + Mathf.RoundToInt(ab), new Color(0.62f, 0.94f, 1f));
                 GameAudio.I.Air();
                 if (_airFrames > 60f) Juice.I.Achv("bigair", Loc.T("ОГРОМНЫЙ ПОЛЁТ"));
             }
             else if (diff < 0.16f && _airFrames > 10f)
             {
-                _bonusCoins += 2f; Juice.I.FloatPop(pos, "CLEAN +$2", new Color(0.68f, 0.94f, 1f));
+                _bonusCoins += 2f; Juice.I.FloatPop(pos, "CLEAN +$2", new Color(0.68f, 0.94f, 1f)); FlowAdd(0.28f);
             }
             if (_flipsLanding > 0)
             {
-                _flipsRun += _flipsLanding; _pump.Add(0.22f * _flipsLanding);
+                _flipsRun += _flipsLanding; _pump.Add(0.22f * _flipsLanding); FlowAdd(0.3f * _flipsLanding);
                 var gain = _flipsLanding * 2f; _bonusCoins += gain;
                 Pop("↻ " + Loc.T("САЛЬТО ×") + _flipsLanding + "   +$" + Mathf.RoundToInt(gain));
                 _chase.Impact(3f); GameAudio.I.Flip();
@@ -625,6 +662,10 @@ namespace ChartRunner.Game
             if (Btn(new Rect(18f + (W - 44f) / 2f + 8f, my, (W - 44f) / 2f, 54f), Loc.T("◷ РЫНОК СЕГОДНЯ"), new Color(0.9f, 0.78f, 1f), 13, 0.4f,
                     Campaign.DailyCoin.Name + Loc.T(" · попытки ") + dTries + "/3" + (Campaign.StreakAlive > 1 ? Loc.T(" · стрик ") + Campaign.StreakAlive : ""))) StartDaily();
             my += 64f;
+            // Исходник (титул): «ОТРЫВ · оторвись от дампа · как ДАЛЕКО уедешь · ∝ прокачке».
+            if (Btn(new Rect(18f, my, W - 36f, 54f), Loc.T("◎ ОТРЫВ"), new Color(0.75f, 0.86f, 1f), 14, 0.4f, Loc.T("оторвись от дампа · как ДАЛЕКО уедешь · трамплины · сальто")))
+                StartProc();
+            my += 64f;
             if (Btn(new Rect(18f, my, (W - 44f) / 2f, 54f), Loc.T("◆ ЗАКРЕПИТЬ"), new Color(0.62f, 0.88f, 1f), 14, 0.4f, "$" + Economy.Bank + Loc.T(" → ◆ навсегда")))
                 DiamondHand();
             if (Btn(new Rect(18f + (W - 44f) / 2f + 8f, my, (W - 44f) / 2f, 54f), Loc.T("? КАК ИГРАТЬ"), Dimc, 14, 0.3f)) Flow = Screen.Howto;
@@ -713,11 +754,11 @@ namespace ChartRunner.Game
             // Строка тикера: монета · цена · PnL позиции.
             var price = _tt.PriceAt(st.PositionXM);
             var pnl = _position.Pnl(st.PositionXM);
-            Label(14f, 10f, 300f, Tickers.All[PendingTicker].Name + "  " + Tickers.FmtPrice(price), Ice, 14);
+            Label(14f, 10f, 300f, ProcMode ? Loc.T("ОТРЫВ") + "  ×" + Position.ProcMult(_distB).ToString("0.0") : Tickers.All[PendingTicker].Name + "  " + Tickers.FmtPrice(price), Ice, 14);
             Label(14f, 30f, 300f, _distB + Loc.T(" м   ") + kmh.ToString("0") + Loc.T(" км/ч"), Ice, 13);
             var pc = pnl >= 0 ? Mint : Rose;
             Label(W - 160f, 10f, 146f, "$" + Economy.Bank, Gold, 14, TextAnchor.UpperRight);
-            Label(W - 160f, 30f, 146f, (pnl >= 0 ? "+" : "") + (pnl * 100f).ToString("0.0") + "%  ×" + Economy.Leverage, pc, 13, TextAnchor.UpperRight);
+            Label(W - 160f, 30f, 146f, ProcMode ? "◆ " + _position.Value(st.PositionXM) : (pnl >= 0 ? "+" : "") + (pnl * 100f).ToString("0.0") + "%  ×" + Economy.Leverage, pc, 13, TextAnchor.UpperRight);
 
             if (Campaign.Active != null && Campaign.Active.Camp)
             {
