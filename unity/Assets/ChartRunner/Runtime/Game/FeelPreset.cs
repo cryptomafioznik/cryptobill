@@ -1,3 +1,4 @@
+using ChartRunner.Meta;
 using ChartRunner.Tuning;
 
 namespace ChartRunner.Game
@@ -45,9 +46,9 @@ namespace ChartRunner.Game
         {
             switch (f)
             {
-                case Feel.Balance: return "БАЛАНС";
-                case Feel.Middle: return "СРЕДНЕ";
-                default: return "ОСТРО";
+                case Feel.Balance: return Loc.T("БАЛАНС");
+                case Feel.Middle: return Loc.T("СРЕДНЕ");
+                default: return Loc.T("ОСТРО");
             }
         }
 

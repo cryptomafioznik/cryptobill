@@ -42,7 +42,7 @@ namespace ChartRunner.Meta
         private static List<Candle> _fallback;
 
         // ---- b494/b495: тир и множитель волатильности ----
-        public static string VolTier(float v) => v < 0.0009f ? "НИЗК" : v < 0.0016f ? "СРЕД" : v < 0.0024f ? "ВЫС" : "ЭКСТРИМ";
+        public static string VolTier(float v) => v < 0.0009f ? Loc.T("НИЗК") : v < 0.0016f ? Loc.T("СРЕД") : v < 0.0024f ? Loc.T("ВЫС") : Loc.T("ЭКСТРИМ");
         public static float VolMulOf(float v) => Mathf.Clamp(v / 0.0008f, 0.85f, 2.4f);
 
         /// <summary>b274: реальная волатильность = средний |Δclose| / close.</summary>

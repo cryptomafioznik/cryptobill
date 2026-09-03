@@ -98,6 +98,28 @@ namespace ChartRunner.EditorTools
         }
 
         /// <summary>
+        /// -buildTarget iOS -executeMethod ChartRunner.EditorTools.DeviceBuilder.BuildIosSim —
+        /// сборка под СИМУЛЯТОР: скриншоты для App Store (iPhone 6.7") снимаются `simctl io`
+        /// с точным разрешением 1290×2796, без телефона в руках.
+        /// </summary>
+        public static void BuildIosSim()
+        {
+            var outDir = Path.Combine(Directory.GetCurrentDirectory(), "build", "ios-sim");
+            PlayerSettings.productName = ProductName;
+            PlayerSettings.SetApplicationIdentifier(NamedBuildTarget.iOS, BundleId);
+            PlayerSettings.iOS.sdkVersion = iOSSdkVersion.SimulatorSDK;
+            PlayerSettings.iOS.targetOSVersionString = "15.0";
+            PlayerSettings.defaultInterfaceOrientation = UIOrientation.Portrait;
+            PlayerSettings.SetScriptingBackend(NamedBuildTarget.iOS, ScriptingImplementation.IL2CPP);
+            PlayerSettings.SetIl2CppCompilerConfiguration(NamedBuildTarget.iOS, Il2CppCompilerConfiguration.Release);
+            PlayerSettings.SplashScreen.show = false;
+            PlayerSettings.statusBarHidden = true;
+            ApplyIcon(NamedBuildTarget.iOS);
+            Directory.CreateDirectory(outDir);
+            Run(BuildTarget.iOS, BuildTargetGroup.iOS, outDir, "ios-sim", BuildOptions.None);
+        }
+
+        /// <summary>
         /// Иконка — та же, что у PWA (toys/assets/icon.svg → 1024 px): валидированный
         /// знак игры, не новый рисунок. Unity сам масштабирует во все слоты iOS.
         /// </summary>

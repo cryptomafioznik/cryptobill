@@ -35,25 +35,25 @@ namespace ChartRunner.Meta
         public struct Rank { public string Name, Emoji; public int At, Reward; }
         public static readonly Rank[] Ranks =
         {
-            new Rank { Name = "КРЕВЕТКА", Emoji = "①", At = 0, Reward = 0 },
-            new Rank { Name = "КРАБ", Emoji = "②", At = 400, Reward = 80 },
-            new Rank { Name = "РЫБА", Emoji = "③", At = 1500, Reward = 180 },
-            new Rank { Name = "ДЕЛЬФИН", Emoji = "④", At = 5000, Reward = 400 },
-            new Rank { Name = "АКУЛА", Emoji = "⑤", At = 16000, Reward = 800 },
-            new Rank { Name = "КИТ", Emoji = "⑥", At = 45000, Reward = 1500 },
+            new Rank { Name = Loc.T("КРЕВЕТКА"), Emoji = "①", At = 0, Reward = 0 },
+            new Rank { Name = Loc.T("КРАБ"), Emoji = "②", At = 400, Reward = 80 },
+            new Rank { Name = Loc.T("РЫБА"), Emoji = "③", At = 1500, Reward = 180 },
+            new Rank { Name = Loc.T("ДЕЛЬФИН"), Emoji = "④", At = 5000, Reward = 400 },
+            new Rank { Name = Loc.T("АКУЛА"), Emoji = "⑤", At = 16000, Reward = 800 },
+            new Rank { Name = Loc.T("КИТ"), Emoji = "⑥", At = 45000, Reward = 1500 },
         };
 
         // ---- b844: апгрейды ----
         public struct Upgrade { public string Id, Name, Icon; public int Max; public Func<int, string> Eff; }
         public static readonly Upgrade[] Upgrades =
         {
-            new Upgrade { Id = "eng", Name = "ДВИЖОК", Max = 5, Icon = "⚙", Eff = l => "+" + 8 * l + "% к скорости" },
-            new Upgrade { Id = "grip", Name = "СЦЕПЛЕНИЕ", Max = 5, Icon = "◎", Eff = l => "+" + 15 * l + "% хватка (подъём+посадка)" },
-            new Upgrade { Id = "susp", Name = "ПОДВЕСКА", Max = 4, Icon = "≡", Eff = l => "+" + 22 * l + "% мягкая посадка" },
-            new Upgrade { Id = "pump", Name = "СИЛА PUMP", Max = 5, Icon = "⚡", Eff = l => "+" + 22 * l + "% длина рывка" },
-            new Upgrade { Id = "wave", Name = "ЩИТ ОТ ВОЛНЫ", Max = 5, Icon = "◈", Eff = l => "−" + 7 * l + "% скорость дампа" },
-            new Upgrade { Id = "air", Name = "ВОЗД.КОНТРОЛЬ", Max = 4, Icon = "✦", Eff = l => "+" + 14 * l + "% верчение" },
-            new Upgrade { Id = "mag", Name = "МАГНИТ", Max = 4, Icon = "◆", Eff = l => "+" + 40 * l + "% радиус сбора" },
+            new Upgrade { Id = "eng", Name = Loc.T("ДВИЖОК"), Max = 5, Icon = "⚙", Eff = l => "+" + 8 * l + Loc.T("% к скорости") },
+            new Upgrade { Id = "grip", Name = Loc.T("СЦЕПЛЕНИЕ"), Max = 5, Icon = "◎", Eff = l => "+" + 15 * l + Loc.T("% хватка (подъём+посадка)") },
+            new Upgrade { Id = "susp", Name = Loc.T("ПОДВЕСКА"), Max = 4, Icon = "≡", Eff = l => "+" + 22 * l + Loc.T("% мягкая посадка") },
+            new Upgrade { Id = "pump", Name = Loc.T("СИЛА PUMP"), Max = 5, Icon = "⚡", Eff = l => "+" + 22 * l + Loc.T("% длина рывка") },
+            new Upgrade { Id = "wave", Name = Loc.T("ЩИТ ОТ ВОЛНЫ"), Max = 5, Icon = "◈", Eff = l => "−" + 7 * l + Loc.T("% скорость дампа") },
+            new Upgrade { Id = "air", Name = Loc.T("ВОЗД.КОНТРОЛЬ"), Max = 4, Icon = "✦", Eff = l => "+" + 14 * l + Loc.T("% верчение") },
+            new Upgrade { Id = "mag", Name = Loc.T("МАГНИТ"), Max = 4, Icon = "◆", Eff = l => "+" + 40 * l + Loc.T("% радиус сбора") },
         };
         private const float UpgCurve = 2.6f; // b853
         private static readonly Dictionary<string, int> UpgBase = new Dictionary<string, int>
@@ -73,20 +73,20 @@ namespace ChartRunner.Meta
         /// <summary>b1010: скины — палитры за $, физика не меняется (спрайты выгнаны с палитрой).</summary>
         public static readonly SkinDef[] Skins =
         {
-            new SkinDef { Id = "gold", Name = "ЗОЛОТО", Cost = 1500, Accent = "255,228,150" },
-            new SkinDef { Id = "carbon", Name = "КАРБОН", Cost = 1100, Accent = "255,82,92" },
-            new SkinDef { Id = "neon", Name = "НЕОН", Cost = 1100, Accent = "150,255,238" },
-            new SkinDef { Id = "stealth", Name = "СТЕЛС", Cost = 800, Accent = "255,64,64" },
+            new SkinDef { Id = "gold", Name = Loc.T("ЗОЛОТО"), Cost = 1500, Accent = "255,228,150" },
+            new SkinDef { Id = "carbon", Name = Loc.T("КАРБОН"), Cost = 1100, Accent = "255,82,92" },
+            new SkinDef { Id = "neon", Name = Loc.T("НЕОН"), Cost = 1100, Accent = "150,255,238" },
+            new SkinDef { Id = "stealth", Name = Loc.T("СТЕЛС"), Cost = 800, Accent = "255,64,64" },
         };
         public static readonly BikeDef[] Bikes =
         {
-            new BikeDef { Name = "ВЕЛИК", Type = "bike", Cost = 0, Accel = 0.30f, Grip = 1.30f, Tag = "учебка · медленный, лёгкий", Accent = "150,200,230" },
-            new BikeDef { Name = "МОПЕД", Type = "moped", Cost = 150, Accel = 0.34f, Grip = 1.38f, Tag = "дворовый · цепкий, шустрее", Accent = "110,235,160" },
-            new BikeDef { Name = "СКУТЕР", Type = "scooter", Cost = 400, Accel = 0.38f, Grip = 1.50f, Tag = "стабильный · прощает посадки", Accent = "255,205,90" },
-            new BikeDef { Name = "ЭНДУРО 125", Type = "dirt", Frame = "enduro", Cost = 900, Accel = 0.42f, Grip = 1.46f, Tag = "резвый универсал", Accent = "60,210,255" },
-            new BikeDef { Name = "КРОСС 250", Type = "dirt", Frame = "cross", Cost = 1800, Accel = 0.46f, Grip = 1.54f, Tag = "сбалансированный зверь", Accent = "80,255,170" },
-            new BikeDef { Name = "МОТАРД 450", Type = "dirt", Frame = "motard", Cost = 3400, Accel = 0.49f, Grip = 1.44f, Tag = "тяга-монстр · нервный", Accent = "255,90,150" },
-            new BikeDef { Name = "СУПЕРБАЙК 650", Type = "sport", Cost = 6500, Accel = 0.52f, Grip = 1.60f, Tag = "быстрый + вкопанный", ReqRank = 3, Accent = "200,255,255" },
+            new BikeDef { Name = Loc.T("ВЕЛИК"), Type = "bike", Cost = 0, Accel = 0.30f, Grip = 1.30f, Tag = Loc.T("учебка · медленный, лёгкий"), Accent = "150,200,230" },
+            new BikeDef { Name = Loc.T("МОПЕД"), Type = "moped", Cost = 150, Accel = 0.34f, Grip = 1.38f, Tag = Loc.T("дворовый · цепкий, шустрее"), Accent = "110,235,160" },
+            new BikeDef { Name = Loc.T("СКУТЕР"), Type = "scooter", Cost = 400, Accel = 0.38f, Grip = 1.50f, Tag = Loc.T("стабильный · прощает посадки"), Accent = "255,205,90" },
+            new BikeDef { Name = Loc.T("ЭНДУРО 125"), Type = "dirt", Frame = "enduro", Cost = 900, Accel = 0.42f, Grip = 1.46f, Tag = Loc.T("резвый универсал"), Accent = "60,210,255" },
+            new BikeDef { Name = Loc.T("КРОСС 250"), Type = "dirt", Frame = "cross", Cost = 1800, Accel = 0.46f, Grip = 1.54f, Tag = Loc.T("сбалансированный зверь"), Accent = "80,255,170" },
+            new BikeDef { Name = Loc.T("МОТАРД 450"), Type = "dirt", Frame = "motard", Cost = 3400, Accel = 0.49f, Grip = 1.44f, Tag = Loc.T("тяга-монстр · нервный"), Accent = "255,90,150" },
+            new BikeDef { Name = Loc.T("СУПЕРБАЙК 650"), Type = "sport", Cost = 6500, Accel = 0.52f, Grip = 1.60f, Tag = Loc.T("быстрый + вкопанный"), ReqRank = 3, Accent = "200,255,255" },
         };
 
         // ---- состояние игрока (persist) ----

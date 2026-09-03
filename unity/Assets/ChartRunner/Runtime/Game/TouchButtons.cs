@@ -54,10 +54,10 @@ namespace ChartRunner.Game
             const float bw = 116f, lw = 84f;
             var gx = RefW - 14f - bw;
 
-            Gas = new Zone { R = new Rect(gx, RefH - 110f, bw, 62f), Label = "ГАЗ" };
-            Brake = new Zone { R = new Rect(gx, RefH - 178f, bw, 60f), Label = "ТОРМОЗ" };
-            NoseUp = new Zone { R = new Rect(14f, RefH - 110f, lw, 62f), Label = "НОС↑" };
-            NoseDown = new Zone { R = new Rect(14f + lw + 6f, RefH - 110f, lw, 62f), Label = "НОС↓" };
+            Gas = new Zone { R = new Rect(gx, RefH - 110f, bw, 62f), Label = Meta.Loc.T("ГАЗ") };
+            Brake = new Zone { R = new Rect(gx, RefH - 178f, bw, 60f), Label = Meta.Loc.T("ТОРМОЗ") };
+            NoseUp = new Zone { R = new Rect(14f, RefH - 110f, lw, 62f), Label = Meta.Loc.T("НОС↑") };
+            NoseDown = new Zone { R = new Rect(14f + lw + 6f, RefH - 110f, lw, 62f), Label = Meta.Loc.T("НОС↓") };
         }
 
         /// <summary>
