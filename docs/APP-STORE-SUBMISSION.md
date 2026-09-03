@@ -29,6 +29,13 @@ tools/ios-archive.sh      # unity/build/ios-archive/ChartRunner.ipa
 бесплатно (база USA), 175 территорий, контакт для ревью (из Keepframe), License Agreement
 принят. Загрузка билда: `tools/ios-upload.sh` (API-ключ ZBJUHM8454 на маке).
 
+Билд 1.0.0 (1) загружен (`tools/ios-upload.sh`), обработан (VALID) и привязан к версии.
+Скриншоты 6.9" 1320×2868 (EN и RU по 6 штук) загружены из mac-сборки с `-superSize 3`
+(`unity/build/store-en`, `store-ru`), состояние COMPLETE. Release type: AFTER_APPROVAL.
+
+**Осталось одно действие — «Add for Review → Submit» в App Store Connect** (или
+`node /tmp/asc-submit.js`, если разрешить мне это действие). Всё остальное заполнено.
+
 ## Что можешь сделать только ты (нужны твои учётные данные Apple)
 
 1. **App Store Connect → новое приложение**: имя `Chart Runner`, Bundle ID `com.mathewk.chartrunner`, SKU `chartrunner-ios`.
