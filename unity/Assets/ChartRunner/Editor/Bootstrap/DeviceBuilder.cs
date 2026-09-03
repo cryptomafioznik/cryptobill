@@ -82,7 +82,7 @@ namespace ChartRunner.EditorTools
 
             // ---- App Store: версия, иконка, сплэш ----
             PlayerSettings.bundleVersion = "1.0.0";
-            PlayerSettings.iOS.buildNumber = "1";
+            PlayerSettings.iOS.buildNumber = "2";
             PlayerSettings.SplashScreen.show = false;               // Unity 6: сплэш опционален
             PlayerSettings.iOS.requiresFullScreen = true;
             PlayerSettings.statusBarHidden = true;

@@ -3,6 +3,7 @@ using System.Globalization;
 using System.IO;
 using ChartRunner.Bike;
 using ChartRunner.Input;
+using ChartRunner.Tuning;
 using UnityEngine;
 
 namespace ChartRunner.Game
@@ -25,7 +26,7 @@ namespace ChartRunner.Game
             {
                 var args = System.Environment.GetCommandLineArgs();
                 for (var i = 0; i < args.Length; i++)
-                    if (args[i] == "-shots" || args[i] == "-shotsUi") return true;
+                    if (args[i] == "-shots" || args[i] == "-shotsUi" || args[i] == "-trace") return true;
                 return false;
             }
         }
@@ -79,8 +80,87 @@ namespace ChartRunner.Game
             }
         }
 
+        /// <summary>-trace: трасса фолбэка BTC, газ в пол, CSV состояния каждый физ-шаг.
+        /// Доп. аргументы: -hop T (секунда хопа), -hold N (кадров удержания наклона после хопа),
+        /// -lean ±1 (−1 = нос вверх), -dur S (длительность). Тот же протокол, что __mrun в браузере.</summary>
+        public static bool TraceRequested
+        {
+            get { foreach (var a in System.Environment.GetCommandLineArgs()) if (a == "-trace") return true; return false; }
+        }
+
+        private static float ArgF(string key, float def)
+        {
+            var a = System.Environment.GetCommandLineArgs();
+            for (var i = 0; i < a.Length - 1; i++)
+                if (a[i] == key && float.TryParse(a[i + 1], NumberStyles.Float, CultureInfo.InvariantCulture, out var v)) return v;
+            return def;
+        }
+
+        private IEnumerator RunTrace()
+        {
+            var hopAt = ArgF("-hop", -1f); var hold = ArgF("-hold", 0f); var lean = ArgF("-lean", -1f); var dur = ArgF("-dur", 25f);
+            // -leanAt T: удержание наклона N=-hold кадров с секунды T БЕЗ хопа (вилли/стоппи на земле);
+            // -brakeAt T: тормоз (газ отпущен) N=-hold кадров с секунды T.
+            var leanAt = ArgF("-leanAt", -1f); var brakeAt = ArgF("-brakeAt", -1f);
+            if (hopAt >= 0f) _controller.Profile.jumpButtonEnabled = true;
+            // Экспериментальные ручки для поиска потерь энергии вращения (не игровые).
+            var rig = _controller.GetComponent<BikeRig>();
+            var wheelMass = ArgF("-wheelMass", -1f);
+            if (wheelMass > 0f && rig != null) { rig.RearWheel.mass = wheelMass; rig.FrontWheel.mass = wheelMass; }
+            var chassisDamp = ArgF("-chassisAngDamp", -1f);
+            if (chassisDamp >= 0f && rig != null) rig.Chassis.angularDamping = chassisDamp;
+            Debug.Log("TRACE: wheelMass=" + (rig != null ? rig.RearWheel.mass.ToString("0.0", CultureInfo.InvariantCulture) : "?")
+                      + " chassisAngDamp=" + (rig != null ? rig.Chassis.angularDamping.ToString("0.000", CultureInfo.InvariantCulture) : "?")
+                      + " I=" + (rig != null ? rig.Chassis.inertia.ToString("0.0", CultureInfo.InvariantCulture) : "?"));
+            var t0 = Time.fixedTime; var jumped = false;
+            _controller.SetInput(new ScriptedBikeInput(() =>
+            {
+                var t = Time.fixedTime - t0;
+                var s = new BikeInputState { Throttle = 1f };
+                if (hopAt >= 0f && !jumped && t >= hopAt) { s.JumpPressed = true; jumped = true; }
+                if (hopAt >= 0f && t >= hopAt + 2f / 60f && t < hopAt + (2f + hold) / 60f) s.Lean = lean;
+                if (leanAt >= 0f && t >= leanAt && t < leanAt + hold / 60f) s.Lean = lean;
+                if (brakeAt >= 0f && t >= brakeAt && t < brakeAt + hold / 60f) { s.Brake = 1f; s.Throttle = 0f; }
+                return s;
+            }));
+            var K = UnitsContract.PxToM; var F = UnitsContract.SimFrameSeconds; var ci = CultureInfo.InvariantCulture;
+            var nodes = _session.TrackNodesPx;
+            if (nodes != null)
+            {
+                var nb = new System.Text.StringBuilder("i,x_px,y_px\n");
+                for (var i = 0; i < nodes.Length; i++) nb.Append(i).Append(',').Append(nodes[i].x.ToString("0.0", ci)).Append(',').Append(nodes[i].y.ToString("0.0", ci)).Append('\n');
+                File.WriteAllText(Path.Combine(_dir, "nodes.csv"), nb.ToString());
+            }
+            var sb = new System.Text.StringBuilder("t,x_px,y_px,vx_pxf,vy_pxf,grounded,pitch_deg,pitchRel_deg,rearN,frontN,throttle,state,fail,air_s,compR_px,compF_px,angV_dps\n");
+            while (Time.fixedTime - t0 < dur)
+            {
+                yield return new WaitForFixedUpdate();
+                var st = _controller.State;
+                sb.Append((Time.fixedTime - t0).ToString("0.0000", ci)).Append(',')
+                  .Append((st.PositionXM / K).ToString("0.00", ci)).Append(',')
+                  .Append((st.PositionYM / K).ToString("0.00", ci)).Append(',')
+                  .Append((st.SpeedMPerS * F / K).ToString("0.000", ci)).Append(',')
+                  .Append((st.VerticalSpeedMPerS * F / K).ToString("0.000", ci)).Append(',')
+                  .Append(st.GroundedWheelCount).Append(',')
+                  .Append((st.PitchRad * Mathf.Rad2Deg).ToString("0.0", ci)).Append(',')
+                  .Append((st.PitchRelRad * Mathf.Rad2Deg).ToString("0.0", ci)).Append(',')
+                  .Append(st.RearNormalLoadN.ToString("0", ci)).Append(',')
+                  .Append(st.FrontNormalLoadN.ToString("0", ci)).Append(',')
+                  .Append(st.ThrottleApplied.ToString("0.00", ci)).Append(',')
+                  .Append(st.State).Append(',').Append(st.Failure).Append(',')
+                  .Append(st.AirTimeSeconds.ToString("0.000", ci)).Append(',')
+                  .Append((st.RearCompressionM / K).ToString("0.00", ci)).Append(',')
+                  .Append((st.FrontCompressionM / K).ToString("0.00", ci)).Append(',')
+                  .Append((st.AngularVelocityRadPerS * Mathf.Rad2Deg).ToString("0.0", ci)).Append('\n');
+            }
+            File.WriteAllText(Path.Combine(_dir, "trace.csv"), sb.ToString());
+            Debug.Log("TRACE: готово, " + Path.Combine(_dir, "trace.csv"));
+            Application.Quit(0);
+        }
+
         private IEnumerator Run()
         {
+            if (TraceRequested) { yield return RunTrace(); yield break; }
             if (UiRequested) { yield return RunUi(); yield break; }
             // Скриптовый пилот: он НЕ доказывает играбельность и здесь не для этого —
             // ему нужно только провезти байк по трассе, чтобы кадры были не с места старта.

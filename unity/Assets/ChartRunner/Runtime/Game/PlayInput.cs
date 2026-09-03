@@ -51,7 +51,7 @@ namespace ChartRunner.Game
             var touches = UnityEngine.Input.touchCount;
             if (touches > 0)
             {
-                var gas = false; var brake = false; var up = false; var down = false;
+                var gas = false; var brake = false; var up = false; var down = false; var jumpHeld = false; var jumpTap = false;
                 for (var i = 0; i < touches; i++)
                 {
                     var t = UnityEngine.Input.GetTouch(i);
@@ -61,7 +61,11 @@ namespace ChartRunner.Game
                     if (TouchButtons.Hit(Buttons.Brake.R, pos)) brake = true;
                     if (TouchButtons.Hit(Buttons.NoseUp.R, pos)) up = true;
                     if (TouchButtons.Hit(Buttons.NoseDown.R, pos)) down = true;
+                    if (TouchButtons.Hit(Buttons.Jump.R, pos)) { jumpHeld = true; if (t.phase == TouchPhase.Began) jumpTap = true; }
                 }
+                // Прыжок — по касанию (tap), как в исходнике (chartrider.html:1339: hit → requestJump()).
+                // Буфер 14 кадров и кулдаун живут в физике (BikeController), не здесь.
+                if (jumpTap) s.JumpPressed = true;
 
                 if (gas) s.Throttle = 1f;
                 if (brake) s.Brake = 1f;
@@ -74,11 +78,12 @@ namespace ChartRunner.Game
                 Buttons.Brake.Active = brake;
                 Buttons.NoseUp.Active = up;
                 Buttons.NoseDown.Active = down;
+                Buttons.Jump.Active = jumpHeld;
             }
             else
             {
                 Buttons.Gas.Active = false; Buttons.Brake.Active = false;
-                Buttons.NoseUp.Active = false; Buttons.NoseDown.Active = false;
+                Buttons.NoseUp.Active = false; Buttons.NoseDown.Active = false; Buttons.Jump.Active = false;
             }
 #endif
             return s;

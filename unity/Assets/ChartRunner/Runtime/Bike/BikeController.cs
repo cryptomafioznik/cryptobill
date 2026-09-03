@@ -45,6 +45,7 @@ namespace ChartRunner.Bike
         private float _weightShift;
         private float _prevWeightShift;
         private float _airTime;
+        private int _jumpBuf, _jumpCd;
         private float _failHold;
         private float _rearLoad;
         private float _frontLoad;
@@ -86,6 +87,7 @@ namespace ChartRunner.Bike
             _frontLoad = 0f;
             _failure = BikeFailure.None;
             _wasGrounded = true;
+            _jumpBuf = 0; _jumpCd = 0;
             _rearContacts = 0;
             _frontContacts = 0;
             _rearNormalRaw = 0f;
@@ -148,10 +150,11 @@ namespace ChartRunner.Bike
 
             // --- перенос веса: сдвиг ЦТ + рывок ---
             ApplyWeightShift(cmd.Lean, dt);
+            ApplyJump(cmd, grounded);
 
             // --- тяга и тормоз ---
             var forwardSpeed = ForwardSpeed();
-            ApplyDrive(cmd, forwardSpeed);
+            ApplyDrive(cmd, forwardSpeed, grounded);
 
             // --- геометрия для помощников ---
             var slope = _terrain.SlopeAt(_rig.Chassis.position.x);
@@ -183,6 +186,29 @@ namespace ChartRunner.Bike
 
         // ================= тяга =================
 
+        /// <summary>
+        /// Хоп исходника (chartrider.html:1347 requestJump, :1643 update). Нажатие буферится
+        /// TUNE.jumpBuf = 14 кадров и срабатывает при касании земли, если прошёл кулдаун
+        /// jumpCd = 16; импульс RB.jump = 9 px/кадр прикладывается всему байку. Прежняя редакция
+        /// проверяла нажатие только в ветке «в воздухе» при airTime &lt; 0.05 с — с кнопки это
+        /// не срабатывало никогда, поэтому на телефоне не было ни воздуха, ни сальто.
+        /// </summary>
+        private void ApplyJump(BikeInputState cmd, bool grounded)
+        {
+            if (_jumpCd > 0) _jumpCd--;
+            if (cmd.JumpPressed && Profile.jumpButtonEnabled) _jumpBuf = 14;
+            if (_jumpBuf <= 0) return;
+            if (grounded && _jumpCd <= 0)
+            {
+                var dv = new Vector2(0f, Profile.jumpImpulseMPerS);
+                _rig.Chassis.linearVelocity += dv;
+                _rig.RearWheel.linearVelocity += dv;
+                _rig.FrontWheel.linearVelocity += dv;
+                _jumpBuf = 0; _jumpCd = 16;
+            }
+            else _jumpBuf--;
+        }
+
         private float ForwardSpeed()
         {
             // Скорость вдоль оси байка, а не по мировому x: на крутом склоне это разные вещи.
@@ -190,9 +216,20 @@ namespace ChartRunner.Bike
             return Vector2.Dot(_rig.Chassis.linearVelocity, fwd);
         }
 
-        private void ApplyDrive(BikeInputState cmd, float forwardSpeed)
+        private void ApplyDrive(BikeInputState cmd, float forwardSpeed, bool grounded)
         {
             var motor = _rig.RearJoint.motor;
+
+            // В ВОЗДУХЕ МОТОР ВЫКЛЮЧЕН. В исходнике тяга существует только в ветке onGround
+            // (chartrider.html:1548-1562); joint-мотор в полёте крутит колесо и РЕАКЦИЕЙ крутит
+            // шасси в обратную сторону — замерено: при удержании НОС↑ спин гас с 17°/кадр до 7
+            // за 8 кадров и сальто не набиралось. Колесо в полёте свободно докручивается.
+            if (!grounded)
+            {
+                motor.motorSpeed = 0f; motor.maxMotorTorque = 0f;
+                _rig.RearJoint.motor = motor;
+                return;
+            }
 
             var braking = cmd.Brake > 0.01f;
             var reversing = braking && cmd.Throttle < 0.01f
@@ -330,8 +367,17 @@ namespace ChartRunner.Bike
             // Вынесена в профиль уровня, потому что это ГЛАВНАЯ ручка отзывчивости: чем
             // короче рампа, тем сильнее ощущается короткое нажатие, то есть тем ближе
             // управление к «любое микродвижение чувствуется».
-            var rate = dt / Mathf.Max(0.05f, Level.leanRampSeconds);
-            _weightShift = Mathf.MoveTowards(_weightShift, Mathf.Clamp(lean, -1f, 1f), rate);
+            // ПОРТ ТОЧНЫЙ: исходник лерпит rShift к цели ЗА КАДР — на земле TUNE.leanRampGnd = 0.08
+            // (≈0.55 с до полного), в воздухе TUNE.leanRampAir = 0.30 (chartrider.html:678-679, :1621).
+            // Прежний линейный MoveTowards с одной рампой 0.55 с на землю и воздух давал в воздухе
+            // за 20 кадров лишь 0.6 переноса, а обратный ход при отпускании съедал рывок —
+            // сальто не набиралось (28° против 360°). Ручка уровня leanRampSeconds масштабирует
+            // наземную рампу относительно стоковых 0.55 с; воздушная — константа исходника.
+            var groundedNow = _rearContacts + _frontContacts > 0;
+            var rampK = groundedNow
+                ? Profile.leanRampGndPerFrame * (0.55f / Mathf.Max(0.05f, Level.leanRampSeconds))
+                : Profile.leanRampAirPerFrame;
+            _weightShift = Mathf.Lerp(_weightShift, Mathf.Clamp(lean, -1f, 1f), Mathf.Clamp01(rampK));
 
             // СДВИГ ЦЕНТРА МАСС. Это и есть перенос веса райдера: реально меняет нагрузку
             // на колёса, поэтому driveTrade (вес назад = больше тяги) получается сам.
@@ -352,7 +398,12 @@ namespace ChartRunner.Bike
             if (!(_rearContacts + _frontContacts > 0))
                 authority *= AirAuthority();
             // Вес ВПЕРЁД (положительный) должен опускать нос → отрицательный момент.
-            _rig.Chassis.AddTorque(-yank * authority * _rig.Chassis.inertia * Level.leanTorque,
+            // ЕДИНИЦЫ. В исходнике leanYank/leanYankAir — прирост angV в рад/КАДР на единицу
+            // переноса за кадр (chartrider.html:1571,1574: tq = dRS·leanYank·inertia → angV += tq/inertia
+            // за кадр). Здесь yank уже в 1/с, момент — ускорение в рад/с², поэтому нужен ещё
+            // множитель кадр→секунда. Без него рывок был в 60 раз слабее: удержание НОС↑ в
+            // воздухе давало 5° вместо 360° спецификации (замер -trace -hop 5 -hold 20).
+            _rig.Chassis.AddTorque(-yank * authority * PerFrameToPerS * _rig.TotalInertia() * Level.leanTorque,
                 ForceMode2D.Force);
 
             // Момент от ПОЛОЖЕНИЯ веса. На земле частично гасится на крутом подъёме
@@ -362,7 +413,7 @@ namespace ChartRunner.Bike
             {
                 var k = LeanScaleOnClimb();
                 _rig.Chassis.AddTorque(
-                    -_weightShift * Profile.leanGround * PerFrame2ToPerS2 * _rig.Chassis.inertia
+                    -_weightShift * Profile.leanGround * PerFrame2ToPerS2 * _rig.TotalInertia()
                     * k * Level.leanTorque, ForceMode2D.Force);
             }
         }
@@ -389,7 +440,7 @@ namespace ChartRunner.Bike
 
         private void ApplyGroundAssists(float rel, float angV, float slope, BikeInputState cmd)
         {
-            var I = _rig.Chassis.inertia;
+            var I = _rig.TotalInertia();
             var dh = DesignHardFactor();
 
             // 1. PD-стабилизатор переда к углу склона.
@@ -470,15 +521,18 @@ namespace ChartRunner.Bike
 
         private float AirAuthority()
         {
-            // Авторитет вращения ∝ времени полёта: в мелком подскоке байк не «бросить» телом,
-            // поэтому случайных переворотов с кочек нет; на большом полёте контроль полный.
+            // Исходник (chartrider.html:1573): _au = clamp(max(airAuthMin + (1−airAuthMin)·airT/airAuthT,
+            // |vy|/5), airAuthMin, 1). Второй член — намеренный прыжок: сразу после хопа
+            // (|vy| = 9 px/кадр) авторитет полный, кочки дают слабый ранний.
             var t = Mathf.Clamp01(_airTime / Mathf.Max(1e-4f, Profile.airAuthorityRampSeconds));
-            return Mathf.Lerp(Profile.airAuthorityMin, 1f, t);
+            var byTime = Mathf.Lerp(Profile.airAuthorityMin, 1f, t);
+            var vyPxPerFrame = Mathf.Abs(_rig.Chassis.linearVelocity.y) * UnitsContract.SimFrameSeconds / UnitsContract.PxToM;
+            return Mathf.Clamp(Mathf.Max(byTime, vyPxPerFrame / 5f), Profile.airAuthorityMin, 1f);
         }
 
         private void ApplyAirAssists(BikeInputState cmd, float angV)
         {
-            var I = _rig.Chassis.inertia;
+            var I = _rig.TotalInertia();
 
             if (Mathf.Abs(_weightShift) < 0.15f)
             {
@@ -502,11 +556,6 @@ namespace ChartRunner.Bike
                 _rig.Chassis.AddTorque(acc * I, ForceMode2D.Force);
             }
 
-            // Прыжок — только если профиль разрешает. По умолчанию выключен.
-            if (cmd.JumpPressed && Profile.jumpButtonEnabled && _airTime < 0.05f)
-            {
-                _rig.Chassis.linearVelocity += new Vector2(0f, Profile.jumpImpulseMPerS);
-            }
         }
 
         private void ClampAngularSpeed()
@@ -599,8 +648,20 @@ namespace ChartRunner.Bike
             var endoThreshold = Profile.loopCommitRad * Level.endoAngle;
             var onClimb = slope > Profile.climbFromRad;
 
-            var loopRisk = onClimb && rel > loopThreshold && angV > 0.9f * Mathf.Deg2Rad;
-            var endoRisk = rel < -endoThreshold && angV < -0.9f * Mathf.Deg2Rad;
+            // ИСХОДНИК (chartrider.html:1689-1696): два правила, оба ТОЛЬКО на земле.
+            // 1. «Улёгся вверх ногами»: |rel| > 2.4 рад при |angV| < 0.06 рад/кадр — во всех режимах.
+            // 2. Луп/эндо с удержанием failHoldT — только на авторских трассах (trackSource !== 'ticker');
+            //    на реальном графике угол не судят. В полёте угол не судят нигде: сальто 707°
+            //    садится чисто, а посадку проверяет crashAngle/spinCrash/spinHard выше.
+            // Прежняя проверка без grounded убивала передний флип на 27-м кадре полёта («Endo»).
+            if (grounded && Mathf.Abs(rel) > 2.4f && Mathf.Abs(angV) / PerFrameToPerS < 0.06f)
+            {
+                Fail(BikeFailure.Loop);
+                return;
+            }
+            var designTrack = Level.applyDesignHard;
+            var loopRisk = designTrack && grounded && onClimb && rel > loopThreshold && angV > 0.9f * Mathf.Deg2Rad;
+            var endoRisk = designTrack && grounded && rel < -endoThreshold && angV < -0.9f * Mathf.Deg2Rad;
 
             if (loopRisk || endoRisk)
             {

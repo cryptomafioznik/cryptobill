@@ -23,7 +23,11 @@ namespace ChartRunner.EditorTools
         private const string SceneDir = "Assets/ChartRunner/Scenes";
         private const string ScenePath = SceneDir + "/Play.unity";
         private const string BikeProfilePath = "Assets/ChartRunner/Profiles/Default.BikeTuningProfile.asset";
-        private const string LevelProfilePath = "Assets/ChartRunner/Profiles/VerticalSlice.LevelPhysicsOverride.asset";
+        // СПЕЦИФИКАЦИЯ = браузерная игра (решение пользователя 2026-09-02): уровень Stock.
+        // VerticalSlice — профиль «челленджа» C1 (без авто-выравнивания в воздухе, спин гасится
+        // при удержании, воздушный момент 0.35, сцепление на подъёме 0.35): с ним сальто
+        // невозможны (замер -trace -hop: 9° за 20 кадров против 360° спецификации).
+        private const string LevelProfilePath = "Assets/ChartRunner/Profiles/Stock.LevelPhysicsOverride.asset";
         private const string TrackProfilePath = "Assets/ChartRunner/Profiles/VerticalSlice.TrackProfile.asset";
         private const string CandleProfilePath = "Assets/ChartRunner/Profiles/Default.CandleTerrainProfile.asset";
 

@@ -48,6 +48,7 @@ namespace ChartRunner.Game
         public Zone Brake;
         public Zone NoseUp;
         public Zone NoseDown;
+        public Zone Jump;
 
         public TouchButtons()
         {
@@ -56,6 +57,8 @@ namespace ChartRunner.Game
 
             Gas = new Zone { R = new Rect(gx, RefH - 110f, bw, 62f), Label = Meta.Loc.T("ГАЗ") };
             Brake = new Zone { R = new Rect(gx, RefH - 178f, bw, 60f), Label = Meta.Loc.T("ТОРМОЗ") };
+            // btn4 исходника: ⤴ ПРЫЖОК над тормозом (chartrider.html:4456: y=H-246, h=48).
+            Jump = new Zone { R = new Rect(gx, RefH - 246f, bw, 48f), Label = Meta.Loc.T("⤴ ПРЫЖОК") };
             NoseUp = new Zone { R = new Rect(14f, RefH - 110f, lw, 62f), Label = Meta.Loc.T("НОС↑") };
             NoseDown = new Zone { R = new Rect(14f + lw + 6f, RefH - 110f, lw, 62f), Label = Meta.Loc.T("НОС↓") };
         }

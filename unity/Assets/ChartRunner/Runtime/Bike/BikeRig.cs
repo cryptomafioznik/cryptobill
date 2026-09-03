@@ -32,6 +32,10 @@ namespace ChartRunner.Bike
         public BikeTuningProfile Profile { get; private set; }
 
         public Rigidbody2D Chassis { get; private set; }
+        /// <summary>m·r² обоих колёс вокруг ЦТ (см. инерцию шасси в Build).</summary>
+        public float WheelInertiaTerm { get; private set; }
+        /// <summary>Инерция всего байка = RB.inertia исходника; на неё умножаются моменты управления.</summary>
+        public float TotalInertia() => Chassis.inertia + WheelInertiaTerm;
         public Rigidbody2D RearWheel { get; private set; }
         public Rigidbody2D FrontWheel { get; private set; }
         public WheelJoint2D RearJoint { get; private set; }
@@ -69,7 +73,13 @@ namespace ChartRunner.Bike
             rig.BaseCenterOfMass = new Vector2(0f, profile.cgAboveAxleM);
             rig.Chassis.centerOfMass = rig.BaseCenterOfMass;
             // Момент инерции задаём явно: он пересчитан из RB.inertia, а не выведен из коллайдера.
-            rig.Chassis.inertia = profile.chassisInertiaKgM2;
+            // RB.inertia = 230 в исходнике — инерция ВСЕГО байка (там он одно твёрдое тело).
+            // Здесь колёса — отдельные тела на соединениях и добавляют m·r² вокруг ЦТ, поэтому
+            // шасси получает остаток, а моменты управления считаются от TotalInertia().
+            // Плечо колеса до ЦТ: по горизонтали halfWb, по вертикали cgAboveAxle (ЦТ над осями).
+            var r2 = halfWb * halfWb + profile.cgAboveAxleM * profile.cgAboveAxleM;
+            rig.WheelInertiaTerm = 2f * profile.wheelMassKg * r2;
+            rig.Chassis.inertia = Mathf.Max(0.25f * profile.chassisInertiaKgM2, profile.chassisInertiaKgM2 - rig.WheelInertiaTerm);
 
             // Коллайдер рамы — НЕ несущий: колёса держат байк. Нужен, чтобы рама цеплялась
             // о рельеф при опрокидывании, а не проходила сквозь него.

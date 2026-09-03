@@ -149,7 +149,7 @@ MonoBehaviour:
   m_Name: 
   m_EditorClassIdentifier: ChartRunner.Runtime::ChartRunner.Game.PlaySession
   BikeProfile: {fileID: 11400000, guid: 325dc71c6e50a492e87eccd67a859403, type: 2}
-  LevelProfile: {fileID: 11400000, guid: 7084a603cb0d74b70815d78145935310, type: 2}
+  LevelProfile: {fileID: 11400000, guid: 1dca7e643a49544af885fb76847ca400, type: 2}
   Track: {fileID: 11400000, guid: efb9133f6328041b080e020e217adafd, type: 2}
   RestartDelaySeconds: 1.1
   RestartAtCheckpoint: 1

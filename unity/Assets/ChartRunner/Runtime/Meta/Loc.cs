@@ -53,7 +53,7 @@ namespace ChartRunner.Meta
             { "ОСЕДЛАЙ РЕАЛЬНЫЙ ГРАФИК", "RIDE THE REAL CHART" }, { "едешь по живому графику крипто-монеты", "you ride a live crypto price chart" },
             { "ПЛЕЧО МНОЖИТ ДВИЖЕНИЕ", "LEVERAGE MULTIPLIES THE MOVE" }, { "цена вверх × плечо = позиция растёт", "price up × leverage = position grows" },
             { "ЗАФИКСЬ ДО ВОЛНЫ", "CASH OUT BEFORE THE WAVE" }, { "фиксь на пампе, пока волна не догнала", "take profit on the pump before the wave catches you" },
-            { "УПРАВЛЕНИЕ", "CONTROLS" }, { "держи ГАЗ · НОС↑ = вилли · НОС↓ = прижать", "hold GAS · NOSE↑ = wheelie · NOSE↓ = tuck" },
+            { "УПРАВЛЕНИЕ", "CONTROLS" }, { "держи ГАЗ · прыжок · НОС↑ = сальто", "hold GAS · jump · NOSE↑ = flip" },
             { "теряешь — только от волны/краша, не от цены", "you only lose to the wave or a crash — never to price" },
             { "$ — деньги заезда (риск)   ·   ◆ — гемы навсегда (ранг)", "$ — run money (at risk)   ·   ◆ — gems forever (rank)" },
             { "игра · вся валюта виртуальная · не финансовый совет", "a game · all currency is virtual · not financial advice" },

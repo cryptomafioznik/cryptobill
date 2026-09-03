@@ -147,6 +147,12 @@ namespace ChartRunner.Tuning
         [Tooltip("RB.leanYankAir = 0.34. Импульс вращения за переброс веса в воздухе.")]
         public float leanYankAir = 0.34f;
 
+        [Tooltip("TUNE.leanRampGnd = 0.08: лерп переноса веса к цели за кадр на земле (≈0.55 с до полного).")]
+        public float leanRampGndPerFrame = 0.08f;
+
+        [Tooltip("TUNE.leanRampAir = 0.30: лерп переноса веса за кадр в воздухе — флипы резвые (сток исходника).")]
+        public float leanRampAirPerFrame = 0.30f;
+
         [Tooltip("RB.airHold = 0. ДЕРЖАТЬ 0: статичный вес в полёте не крутит — нет опоры. " +
                  "Любое ненулевое значение × длинный полёт = случайный оборот.")]
         public float airHold;

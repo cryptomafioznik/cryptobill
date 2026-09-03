@@ -30,6 +30,9 @@ namespace ChartRunner.Game
     /// </summary>
     public enum Feel
     {
+        /// <summary>Спецификация: значения Stock-ассета без правок (PHX исходника: все ручки = 1,
+        /// leanRampGnd 0.08/кадр ≈ 0.55 с, жёсткий порог стабилизатора 0.2). Дефолт с 2026-09-03.</summary>
+        Stock,
         /// <summary>Баланс: есть точка равновесия на заднем колесе, отклик быстрый.</summary>
         Balance,
 
@@ -46,6 +49,7 @@ namespace ChartRunner.Game
         {
             switch (f)
             {
+                case Feel.Stock: return Loc.T("СТОК");
                 case Feel.Balance: return Loc.T("БАЛАНС");
                 case Feel.Middle: return Loc.T("СРЕДНЕ");
                 default: return Loc.T("ОСТРО");
@@ -56,9 +60,10 @@ namespace ChartRunner.Game
         {
             switch (f)
             {
+                case Feel.Stock: return Feel.Balance;
                 case Feel.Balance: return Feel.Middle;
                 case Feel.Middle: return Feel.Raw;
-                default: return Feel.Balance;
+                default: return Feel.Stock;
             }
         }
 
@@ -71,6 +76,9 @@ namespace ChartRunner.Game
         {
             switch (f)
             {
+                case Feel.Stock:
+                    // Ничего не трогаем: ассет Stock = спецификация браузерной игры.
+                    break;
                 case Feel.Balance:
                     // Подушка включена заметно: она и создаёт точку равновесия, вокруг
                     // которой можно держать вилли. Рампа короткая — тап чувствуется.

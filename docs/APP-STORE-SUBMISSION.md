@@ -41,6 +41,12 @@ state», причина — в `meta.associatedErrors`); выставлен `DOE
 READY_FOR_REVIEW без элементов (первый прогон) — можно отменить в web, на ревью не влияет.
 Проверка: `cd ~/.appstoreconnect && node status.js`.
 
+**2026-09-03 12:00 UTC — вердикт пользователя с телефона: версия сырая** («ужасно выглядит,
+медленно, сальто не получаются, онбординг сливается, нет бесконечного режима»). Release type
+переведён в `MANUAL` (одобрение Apple НЕ опубликует билд само). Решение о снятии с ревью —
+за пользователем («Remove from Review» в App Store Connect). Найденные и исправленные
+расхождения со спецификацией — в `docs/NEXT-SESSION-START-HERE.md`; следующий билд = buildNumber 2.
+
 ## Что можешь сделать только ты (нужны твои учётные данные Apple)
 
 1. **App Store Connect → новое приложение**: имя `Chart Runner`, Bundle ID `com.mathewk.chartrunner`, SKU `chartrunner-ios`.

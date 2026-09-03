@@ -33,7 +33,7 @@ namespace ChartRunner.Game
         /// <summary>Заезд — дейли «Рынок сегодня» (3 попытки, стрик). Переживает перезагрузку.</summary>
         public static bool PendingDaily;
         public static string PendingTitle = "";
-        public static Feel SelectedFeel = Feel.Balance;
+        public static Feel SelectedFeel = Feel.Stock;
         private static bool _flowInit;
         private static int _setupSel;
 
@@ -53,6 +53,8 @@ namespace ChartRunner.Game
         private BikeController _controller;
         private ChaseCamera _chase;
         private TerrainSampler _sampler;
+        /// <summary>Узлы трассы в px исходника (для трассировки ScreenshotProbe -trace).</summary>
+        public Vector2[] TrackNodesPx => _tt != null ? _tt.Profile.nodesPx : null;
         private PlayInput _input;
         private Camera _camera;
         private LiquidationWave _wave;
@@ -75,6 +77,9 @@ namespace ChartRunner.Game
         private int _runGems, _stakeIncome, _liqPen, _missionRew;
         private string _deathBy = "";
         private float _maxKmh;
+        /// <summary>Шкала спидометра исходника: km/h = vx(px/кадр)·12 (chartrider.html:4506, topKmh:1834).
+        /// Не физические км/ч: миссии «Разгон до 150…230» и ачивки считаны в этой шкале.</summary>
+        public const float KmhPerMPerS = 12f * UnitsContract.SimFrameSeconds / UnitsContract.PxToM;
         private float _deadFor = -1f;
         private string _pop = ""; private float _popUntil;
         private bool _rankedUp; private Economy.Rank _newRank; private int _rankBonus;
@@ -126,7 +131,13 @@ namespace ChartRunner.Game
             // Копия профиля байка: тир и апгрейды применяются к КОПИИ, ассет и тесты не трогаются.
             BikeProfile = Instantiate(BikeProfile);
             UpgradeEffects.Apply(BikeProfile);
+            // Схема btn4 исходника всегда имеет кнопку ⤴ ПРЫЖОК (chartrider.html:4456): хоп — часть игры, не опция.
+            BikeProfile.jumpButtonEnabled = true;
             FeelPreset.Apply(LevelProfile, SelectedFeel);
+            // designHard в исходнике действует ТОЛЬКО на авторских (proc) трассах:
+            // dh = (trackSource !== 'ticker') ? designHard·ck : 0 (chartrider.html:1585). Все трассы
+            // 1.x — реальные свечи, поэтому прощение на крутом подъёме остаётся полным.
+            LevelProfile.applyDesignHard = false;
 
             // ---- трасса из реальных свечей ----
             var shortRun = Economy.ShortMode && !PendingDaily && Campaign.Active == null;
@@ -287,7 +298,7 @@ namespace ChartRunner.Game
             if (Flow == Screen.Play && !_controller.Halted && !_cashedOut)
             {
                 _distB = Mathf.Max(_distB, Mathf.FloorToInt(st.PositionXM / UnitsContract.PxToM / 10f));
-                _maxKmh = Mathf.Max(_maxKmh, st.SpeedMPerS * 3.6f);
+                _maxKmh = Mathf.Max(_maxKmh, st.SpeedMPerS * KmhPerMPerS);
                 _position.Tick(st.PositionXM, _distB, _coinField.Collected + _bonusCoins);
                 if (_coinField.JustCollected > 0)
                 {
@@ -453,6 +464,10 @@ namespace ChartRunner.Game
         {
             SelectedFeel = FeelPreset.Next(SelectedFeel);
             FeelPreset.Apply(LevelProfile, SelectedFeel);
+            // designHard в исходнике действует ТОЛЬКО на авторских (proc) трассах:
+            // dh = (trackSource !== 'ticker') ? designHard·ck : 0 (chartrider.html:1585). Все трассы
+            // 1.x — реальные свечи, поэтому прощение на крутом подъёме остаётся полным.
+            LevelProfile.applyDesignHard = false;
             _feelBannerUntil = Time.time + 1.6f;
         }
 
@@ -528,6 +543,11 @@ namespace ChartRunner.Game
             GUI.Label(new Rect(x, y, w, fs + 8f), s, st);
         }
 
+        /// <summary>Экраны меню исходника — сплошной #0a0a1a без мира (chartrider.html:3972).</summary>
+        /// <summary>Экраны меню исходника — сплошной #0a0a1a без мира (chartrider.html:3972).
+        /// Проект в Linear: IMGUI трактует GUI.color как линейный, поэтому sRGB-значение
+        /// переводится через .linear (иначе на экране #38385a — замерено по кадру ui-1-title).</summary>
+        private void Solid() { GUI.color = new Color(0x0a / 255f, 0x0a / 255f, 0x1a / 255f, 1f).linear; GUI.DrawTexture(new Rect(0, 0, W, H), Texture2D.whiteTexture); GUI.color = Color.white; }
         private void Dim(float a) { GUI.color = new Color(0.03f, 0.02f, 0.07f, a); GUI.DrawTexture(new Rect(0, 0, W, H), Texture2D.whiteTexture); GUI.color = Color.white; }
 
         private static readonly Color Mint = new Color(0.62f, 0.94f, 0.78f), Gold = new Color(1f, 0.84f, 0.47f),
@@ -536,14 +556,14 @@ namespace ChartRunner.Game
         // ---- HOWTO (b108, 4 карточки) ----
         private void DrawHowto()
         {
-            Dim(0.96f);
+            Solid();
             Label(0, H * 0.14f, W, Loc.T("КАК ИГРАТЬ"), Ice, 26, TextAnchor.MiddleCenter);
             var steps = new[]
             {
                 ("1", Loc.T("ОСЕДЛАЙ РЕАЛЬНЫЙ ГРАФИК"), Loc.T("едешь по живому графику крипто-монеты"), Mint),
                 ("2", Loc.T("ПЛЕЧО МНОЖИТ ДВИЖЕНИЕ"), Loc.T("цена вверх × плечо = позиция растёт"), Gold),
                 ("3", Loc.T("ЗАФИКСЬ ДО ВОЛНЫ"), Loc.T("фиксь на пампе, пока волна не догнала"), new Color(1f, 0.6f, 0.48f)),
-                ("4", Loc.T("УПРАВЛЕНИЕ"), Loc.T("держи ГАЗ · НОС↑ = вилли · НОС↓ = прижать"), new Color(0.6f, 0.8f, 1f)),
+                ("4", Loc.T("УПРАВЛЕНИЕ"), Loc.T("держи ГАЗ · прыжок · НОС↑ = сальто"), new Color(0.6f, 0.8f, 1f)),
             };
             var y = H * 0.20f;
             foreach (var s in steps)
@@ -571,7 +591,7 @@ namespace ChartRunner.Game
         // ---- TITLE (b108/b252 минимал-Главная) ----
         private void DrawTitle()
         {
-            Dim(0.55f);
+            Solid();
             // Верхняя панель: ⚙ · $ ◆ ранг · ▣ ГАРАЖ
             if (Btn(new Rect(16f, 16f, 46f, 38f), "⚙", Ice, 18, 0.35f)) Flow = Screen.Settings;
             var rk = Economy.Ranks[Economy.RankIdx(Economy.Career)];
@@ -617,7 +637,7 @@ namespace ChartRunner.Game
         // ---- SETUP (b107 терминал) ----
         private void DrawSetup()
         {
-            Dim(0.94f);
+            Solid();
             Label(0, 26f, W, Loc.T("ВЫБЕРИ МОНЕТУ"), Ice, 22, TextAnchor.MiddleCenter);
             Label(0, 54f, W, Loc.T("спарклайн = реальный график = превью трассы"), Dimc, 10, TextAnchor.MiddleCenter, false);
             if (Btn(new Rect(14f, 16f, 78f, 32f), Loc.T("‹ НАЗАД"), Ice, 13, 0.35f)) Flow = Screen.Title;
@@ -679,7 +699,7 @@ namespace ChartRunner.Game
 
         private void DrawLoad()
         {
-            Dim(0.8f);
+            Solid();
             var name = string.IsNullOrEmpty(PendingTitle) ? Tickers.All[Mathf.Clamp(Economy.LastTicker, 0, Tickers.All.Length - 1)].Name : PendingTitle;
             Label(0, H * 0.44f, W, Loc.T("ЗАГРУЖАЮ ") + name + "…", Ice, 20, TextAnchor.MiddleCenter);
             Label(0, H * 0.44f + 30f, W, Loc.T("реальные свечи · 5 минут · Binance"), Dimc, 11, TextAnchor.MiddleCenter, false);
@@ -689,7 +709,7 @@ namespace ChartRunner.Game
         private void DrawPlay()
         {
             var st = _controller.State;
-            var kmh = st.SpeedMPerS * 3.6f;
+            var kmh = st.SpeedMPerS * KmhPerMPerS;
             // Строка тикера: монета · цена · PnL позиции.
             var price = _tt.PriceAt(st.PositionXM);
             var pnl = _position.Pnl(st.PositionXM);
@@ -849,7 +869,7 @@ namespace ChartRunner.Game
         // ---- GARAGE (b88/b143: 7 апгрейдов, прокачка у каждого байка отдельная) ----
         private void DrawGarage()
         {
-            Dim(0.94f);
+            Solid();
             Label(0, 28f, W, Loc.T("▣ ГАРАЖ"), Ice, 24, TextAnchor.MiddleCenter);
             Label(0, 60f, W, "$ " + Economy.Bank, Gold, 20, TextAnchor.MiddleCenter);
             if (Btn(new Rect(W - 110f, 18f, 94f, 34f), Loc.T("▣ БАЙКИ"), new Color(0.75f, 0.88f, 1f), 13, 0.4f)) Flow = Screen.Bikes;
@@ -898,7 +918,7 @@ namespace ChartRunner.Game
         private static Texture2D _bikePreview; private static string _bikePreviewTag = "";
         private void DrawBikes()
         {
-            Dim(0.94f);
+            Solid();
             Label(0, 28f, W, Loc.T("▣ БАЙКИ"), Ice, 24, TextAnchor.MiddleCenter);
             Label(0, 60f, W, "$ " + Economy.Bank, Gold, 16, TextAnchor.MiddleCenter);
             if (Btn(new Rect(14f, 18f, 78f, 34f), Loc.T("‹ НАЗАД"), Ice, 13, 0.35f)) Flow = Screen.Garage;
@@ -980,7 +1000,7 @@ namespace ChartRunner.Game
         /// </summary>
         private void DrawPath()
         {
-            Dim(0.94f);
+            Solid();
             Label(0, 30f, W, Loc.T("⚑ ПУТЬ ТРЕЙДЕРА"), Ice, 21, TextAnchor.MiddleCenter);
             var rk = Economy.Ranks[Economy.RankIdx(Economy.Career)];
             Label(0, 56f, W, Loc.T("ранг ") + rk.Emoji + " " + rk.Name + "  ·  ◆" + Economy.Career, Dimc, 10, TextAnchor.MiddleCenter, false);
@@ -1018,7 +1038,7 @@ namespace ChartRunner.Game
 
         private void DrawSettings()
         {
-            Dim(0.96f);
+            Solid();
             Label(0, H * 0.065f, W, Loc.T("⚙ НАСТРОЙКИ"), Ice, 23, TextAnchor.MiddleCenter);
             var y = H * 0.14f;
             if (Btn(new Rect(W / 2f - 146f, y, 292f, 56f), Economy.Muted ? Loc.T("ЗВУК: ВЫКЛ") : Loc.T("ЗВУК: ВКЛ"), Ice, 15, 0.35f)) { Economy.Muted = !Economy.Muted; Economy.Save(); }
@@ -1043,6 +1063,7 @@ namespace ChartRunner.Game
             var b = _input.Buttons;
             DrawButton(b.Gas, b.Gas.Active ? new Color(120 / 255f, 1f, 180 / 255f) : new Color(120 / 255f, 205 / 255f, 160 / 255f), 18);
             DrawButton(b.Brake, b.Brake.Active ? new Color(1f, 175 / 255f, 120 / 255f) : new Color(200 / 255f, 155 / 255f, 135 / 255f), 14);
+            DrawButton(b.Jump, new Color(1f, 210 / 255f, 120 / 255f), 13);
             DrawButton(b.NoseUp, new Color(150 / 255f, 205 / 255f, 1f), 14);
             DrawButton(b.NoseDown, new Color(150 / 255f, 205 / 255f, 1f), 14);
         }
