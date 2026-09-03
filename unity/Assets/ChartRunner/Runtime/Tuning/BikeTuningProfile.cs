@@ -22,6 +22,7 @@ namespace ChartRunner.Tuning
                  "перечислять их здесь обязательно, иначе они выглядят настройкой, а ей не являются.")]
         public string[] supersededByEmergentPhysics =
         {
+            nameof(engineForceN), nameof(topSpeedMPerS), nameof(brakeForceN),   // тяга/тормоз/потолок — теперь по исходнику (specEngine/brakeAccel/rollDrag)
             nameof(driveFloorFraction), // пол прижима: тягу ограничивает трение Box2D, а не формула
             nameof(driveTrade),         // вес↔тяга: даёт сдвиг центра масс, измерено 5471/77 Н
             nameof(leanAir),            // статический вес в полёте не крутит — нет опоры
@@ -68,7 +69,25 @@ namespace ChartRunner.Tuning
         [Header("Тяга — ЯДРО ИГРЫ, docs/BIKE_PHYSICS_SPEC.md §3")]
         [Tooltip("ПЛЕЙСХОЛДЕР. Выводится из требования «заезжает на 45° со стоячего старта» §7.4, " +
                  "не из RB.engine. Определяет РАЗГОН и способность лезть, но не верхнюю скорость.")]
-        public float engineForceN = 4000f;   // ОТКАЛИБРОВАНО на полигоне: минимум, при котором байк заезжает на 45°
+        public float engineForceN = 4000f;
+
+        [Header("ТЯГА ПО ИСХОДНИКУ (legacy, b100–b266 — версия, принятая пользователем)")]
+        [Tooltip("RB.engine = 1.15 px/кадр² на единицу массы. Сила двигателя ДО ограничения сцеплением.")]
+        public float specEnginePxPerFrame2 = 1.15f;
+        [Tooltip("engScale исходника = (accel байка / 0.49)·(1 + 0.13·ур.ДВИЖОК). Ставит UpgradeEffects.")]
+        public float engineScale = 1f;
+        [Tooltip("RB.mu = 2.6. Конус сцепления/тяги: maxF = µ·Fn.")]
+        public float specMu = 2.6f;
+        [Tooltip("(grip байка / 1.40)·(1 + 0.15·ур.СЦЕПЛЕНИЕ). Ставит UpgradeEffects.")]
+        public float gripScale = 1f;
+        [Tooltip("b100: тяга опирается на max(Fn, floor·m·g) — стабильную нагрузку, а не на пульсирующий прижим. Legacy 0.85 (0B-real = 0.10 — НЕ принято пользователем).")]
+        public float driveFloorFrac = 0.85f;
+        [Tooltip("R.rollDrag = 0.997: vx *= за кадр на земле — потолок скорости исходника.")]
+        public float rollDragPerFrame = 0.997f;
+        [Tooltip("R.airDrag = 0.992: vx *= за кадр в воздухе.")]
+        public float airDragPerFrame = 0.992f;
+        [Tooltip("RB.brakeF = 0.5 px/кадр² на единицу массы, на каждом колесе в контакте.")]
+        public float brakeAccelPxPerFrame2 = 0.5f;   // ОТКАЛИБРОВАНО на полигоне: минимум, при котором байк заезжает на 45°
 
         [Tooltip("ВЕРХНЯЯ СКОРОСТЬ, м/с. Задаёт целевые обороты мотора, то есть крейсер на ровном. " +
                  "ИЗМЕРЕНО на исходнике для КРОСС 250: 3.6971 px/кадр = 6.271 м/с = 22.6 км/ч, " +
@@ -121,7 +140,7 @@ namespace ChartRunner.Tuning
         // ================= подвеска и качение =================
 
         [Header("Подвеска — ПЛЕЙСХОЛДЕРЫ: penalty-контакт исходника не переводится в ход подвески")]
-        public float suspensionFrequency = 8f;   // ИЗМЕРЕНО: даёт статическую просадку 0.0996 м = треть хода
+        public float suspensionFrequency = 16f;  // было 8 (просадка 0.0996 м = 3.5 px статически, 13.5 px на посадке); исходник — визуальный ход ≤ 6 px, рама не садится на деку
         public float suspensionDamping = 0.7f;
         public float suspensionTravelM = 0.30f;
 

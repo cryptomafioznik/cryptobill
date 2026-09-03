@@ -44,7 +44,7 @@ MonoBehaviour:
   reverseForceScale: 5.5
   reverseSpeedThresholdMPerS: 2.713846
   wheelieBrakeAuthority: 0.075
-  suspensionFrequency: 8
+  suspensionFrequency: 16
   suspensionDamping: 0.7
   suspensionTravelM: 0.3
   rollResistance: 0.05

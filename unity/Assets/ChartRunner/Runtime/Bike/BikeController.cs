@@ -216,72 +216,71 @@ namespace ChartRunner.Bike
             return Vector2.Dot(_rig.Chassis.linearVelocity, fwd);
         }
 
+        /// <summary>
+        /// ТЯГА ПО ИСХОДНИКУ (chartrider.html:1548-1571, ветка legacy DRV_ON=false — версия b100–b266,
+        /// которую пользователь принял; 0B «real» с полом 10 % mg НЕ принята: на сайте legacy даёт
+        /// 5.9 px/кадр против 3.6). Единицы исходника: масса 1, силы в px/кадр²; здесь F = a·A·m.
+        /// На каждом колесе в контакте: качение −vt·rollResist; на ведущем — двигатель
+        /// min(engine·engScale·газ, µ·max(Fn, 0.85·g)·climb); тормоз −sign(vt)·brakeF; задний ход;
+        /// кап [−loCap, maxFd]. Сила прикладывается к ШАССИ в точке ступицы вдоль касательной
+        /// склона — как в исходнике, это и даёт момент вилли на газу. Потолок скорости — драг
+        /// vx·=rollDrag/airDrag за кадр, а не «рев-лимит» мотора (его в исходнике нет).
+        /// Joint-мотор выключен навсегда: колёса раскручивает контакт.
+        /// </summary>
         private void ApplyDrive(BikeInputState cmd, float forwardSpeed, bool grounded)
         {
             var motor = _rig.RearJoint.motor;
-
-            // В ВОЗДУХЕ МОТОР ВЫКЛЮЧЕН. В исходнике тяга существует только в ветке onGround
-            // (chartrider.html:1548-1562); joint-мотор в полёте крутит колесо и РЕАКЦИЕЙ крутит
-            // шасси в обратную сторону — замерено: при удержании НОС↑ спин гас с 17°/кадр до 7
-            // за 8 кадров и сальто не набиралось. Колесо в полёте свободно докручивается.
-            if (!grounded)
-            {
-                motor.motorSpeed = 0f; motor.maxMotorTorque = 0f;
-                _rig.RearJoint.motor = motor;
-                return;
-            }
-
-            var braking = cmd.Brake > 0.01f;
-            var reversing = braking && cmd.Throttle < 0.01f
-                            && forwardSpeed < Profile.reverseSpeedThresholdMPerS;
-
-            if (reversing)
-            {
-                // Задний ход: тормоз на почти стоящем байке = сдать назад. Гейт «газ приоритетнее»
-                // и порог скорости — как в исходнике (RB.reverse / RB.reverseV).
-                motor.motorSpeed = TargetMotorSpeed(+1f);
-                motor.maxMotorTorque = Profile.reverseForceScale * Profile.wheelRadiusM
-                                       * Profile.chassisMassKg * 0.02f;
-            }
-            else if (braking)
-            {
-                motor.motorSpeed = 0f;
-                motor.maxMotorTorque = Profile.brakeForceN * Profile.wheelRadiusM * cmd.Brake;
-            }
-            else if (_throttle > 0.01f)
-            {
-                // Момент мотора. ТЯГУ ОГРАНИЧИВАЕТ НЕ ЭТО ЧИСЛО, а трение Box2D в точке
-                // контакта, которое само пропорционально нормальной реакции. Именно поэтому
-                // ручной cap по µ·Fn из исходника здесь не нужен: свойство «газ на разгруженном
-                // колесе не даёт тяги» получается из физики, а не из формулы.
-                var target = TargetMotorSpeed(-1f);
-
-                // МОТОР НЕ ИМЕЕТ ПРАВА ТОРМОЗИТЬ. Joint motor держит ЦЕЛЕВУЮ скорость, поэтому
-                // при вращении быстрее цели он тянет назад — то есть удержанный газ гасил бы
-                // всё, что набрала гравитация на спуске. Замерено на площадке JumpRamp: байк
-                // разгонялся до 15.30 м/с на разгонном спуске и приходил к липу снова на 6.2 м/с
-                // (ровно верхняя скорость), из-за чего не отрывался вообще — 0.017 с воздуха.
-                // Настоящий двигатель так не работает: закрытый газ даёт выбег, а открытый
-                // тем более не замедляет. Поэтому выше цели момент снимается.
-                var wheelSpeed = _rig.RearWheel.angularVelocity; // град/с, отрицательная = вперёд
-                var alreadyFaster = wheelSpeed <= target;        // «быстрее цели» в сторону движения
-                motor.motorSpeed = target;
-                motor.maxMotorTorque = alreadyFaster
-                    ? 0f
-                    : Profile.engineForceN * Profile.wheelRadiusM * _throttle * ClimbGripBoost();
-            }
-            else
-            {
-                motor.motorSpeed = 0f;
-                motor.maxMotorTorque = 0f;
-            }
-
+            motor.motorSpeed = 0f; motor.maxMotorTorque = 0f;
             _rig.RearJoint.motor = motor;
 
-            // Сопротивление качению — ГЛАВНЫЙ лимитер крейсера на ровном (в исходнике
-            // rollResist, а не аэродинамика). Прикладываем к колёсам, а не к шасси.
-            ApplyRollResistance(_rig.RearWheel);
-            ApplyRollResistance(_rig.FrontWheel);
+            var mTot = _rig.Chassis.mass + _rig.RearWheel.mass + _rig.FrontWheel.mass;
+            var braking = cmd.Brake > 0.01f;
+            WheelForce(_rig.RearWheel, _rearContacts > 0, _rearLoad, true, mTot, braking, forwardSpeed);
+            WheelForce(_rig.FrontWheel, _frontContacts > 0, _frontLoad, false, mTot, braking, forwardSpeed);
+
+            // Исходник: bike.vx *= drag — ТОЛЬКО горизонталь (chartrider.html:1595). Гасить vy нельзя:
+            // хоп 9 px/кадр терял высоту (замер: 70 px вместо 133).
+            var drag = Mathf.Pow(grounded ? Profile.rollDragPerFrame : Profile.airDragPerFrame, Time.fixedDeltaTime * 60f);
+            DragX(_rig.Chassis, drag); DragX(_rig.RearWheel, drag); DragX(_rig.FrontWheel, drag);
+        }
+
+        private static void DragX(Rigidbody2D b, float k)
+        {
+            var v = b.linearVelocity; v.x *= k; b.linearVelocity = v;
+        }
+
+        private void WheelForce(Rigidbody2D wheel, bool onGround, float loadN, bool drive, float mTot, bool braking, float forwardSpeed)
+        {
+            if (!onGround) return;
+            const float A = UnitsContract.PxPerFrame2ToMPerS2;
+            var toPxPerFrame = UnitsContract.SimFrameSeconds / UnitsContract.PxToM;
+            var slope = _terrain.SlopeAt(wheel.position.x);
+            var tangent = new Vector2(Mathf.Cos(slope), Mathf.Sin(slope));
+            var vt = Vector2.Dot(wheel.linearVelocity, tangent) * toPxPerFrame;
+            var fnPx = loadN / (mTot * A);
+            var muEff = Profile.specMu * Profile.gripScale;
+
+            var ft = -vt * Profile.rollResistance;
+            var maxF = muEff * fnPx;
+            var maxFd = maxF;
+            if (drive)
+            {
+                var fnDrive = Mathf.Max(fnPx, UnitsContract.SimGravityPxPerFrame2 * Profile.driveFloorFrac);
+                if (slope > Profile.climbFromRad)
+                    fnDrive *= 1f + Mathf.Min(1f, (slope - Profile.climbFromRad) / Profile.climbSpanRad) * Profile.climbGrip * Level.climbTraction;
+                maxFd = muEff * fnDrive;
+                if (_throttle > 0.02f)
+                    ft += Mathf.Min(Profile.specEnginePxPerFrame2 * Profile.engineScale * _throttle * Level.throttleTorque, maxFd);
+            }
+            if (braking)
+            {
+                ft += -Mathf.Sign(vt) * Profile.brakeAccelPxPerFrame2;
+                if (drive && _throttle < 0.01f && forwardSpeed < Profile.reverseSpeedThresholdMPerS)
+                    ft += -Profile.reverseForceScale * Profile.engineScale;
+            }
+            var loCap = drive ? maxFd : maxF;
+            ft = Mathf.Clamp(ft, -loCap, maxFd);
+            _rig.Chassis.AddForceAtPosition(tangent * (ft * A * mTot), wheel.position, ForceMode2D.Force);
         }
 
         /// <summary>

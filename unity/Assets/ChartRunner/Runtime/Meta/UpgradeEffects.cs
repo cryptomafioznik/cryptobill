@@ -29,12 +29,10 @@ namespace ChartRunner.Meta
             var susp = Economy.UpgLvl("susp");
             var air = Economy.UpgLvl("air");
 
-            var engMul = Mathf.Max(0.92f, b.Accel / 0.46f) * (1f + 0.13f * eng);
-            p.engineForceN *= engMul;
-            p.topSpeedMPerS *= 1f + 0.08f * eng;                 // «+8 % к скорости» из описания апгрейда
-
-            var muMul = b.Grip / 1.54f * (1f + 0.15f * grip);
-            p.tyreFriction = Mathf.Max(1.0f, p.tyreFriction * muMul);
+            // Исходник (chartrider.html:1510-1511): engScale = (accel/0.49)·(1+0.13·ур), muEff = 2.6·(grip/1.40)·(1+0.15·ур).
+            p.engineScale = b.Accel / 0.49f * (1f + 0.13f * eng);
+            p.gripScale = b.Grip / 1.40f * (1f + 0.15f * grip);
+            p.tyreFriction = Mathf.Max(1.0f, p.tyreFriction * (b.Grip / 1.54f) * (1f + 0.15f * grip));
 
             p.suspensionDamping *= 1f + 0.22f * susp;
             // Авторитет наклона в ПОЛЁТЕ — это leanYankAir (рывок телом без опоры), а не leanAir:
