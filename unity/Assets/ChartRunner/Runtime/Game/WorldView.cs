@@ -64,8 +64,25 @@ namespace ChartRunner.Game
             return w;
         }
 
+        private float _trackLengthM;
+
+        /// <summary>Биом исходника меняется по дистанции: zone = floor(dist/520 м), BIOMES[zone % 8]
+        /// (chartrider.html:1765-1766) с баннером. Мир перестраивается целиком в новой палитре.</summary>
+        public void SetEra(int eraIndex)
+        {
+            var era = WorldPalette.Eras[((eraIndex % WorldPalette.Eras.Length) + WorldPalette.Eras.Length) % WorldPalette.Eras.Length];
+            if (era.Name == _era.Name) return;
+            _era = era;
+            for (var i = transform.childCount - 1; i >= 0; i--) Destroy(transform.GetChild(i).gameObject);
+            _beacons.Clear(); _layers.Clear();
+            _raysMesh = null; _raysFilter = null; _beaconMesh = null; _beaconFilter = null;
+            if (_camera != null) _camera.backgroundColor = _era.Sky0;
+            BuildAll(_trackLengthM);
+        }
+
         private void BuildAll(float trackLengthM)
         {
+            _trackLengthM = trackLengthM;
             BuildSky();
             BuildStars();
             BuildSun();

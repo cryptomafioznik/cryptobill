@@ -82,6 +82,7 @@ namespace ChartRunner.Game
         private int _runGems, _stakeIncome, _liqPen, _missionRew;
         private string _deathBy = "";
         private float _maxKmh;
+        private WorldView _world; private int _biomeZone;
         /// <summary>b233 ФЛОУ (chartrider.html:507, :1771): копилка чистых скилл-событий (посадка, сальто,
         /// BIG AIR, гэп) → авто-разгон flowPush·(flow/flowMax) px/кадр с затуханием 0.986/кадр.</summary>
         private float _flow;
@@ -188,7 +189,8 @@ namespace ChartRunner.Game
             _chase.TopSpeedMPerS = BikeProfile.topSpeedMPerS;
             _chase.Bind(_camera, _controller.transform);
             PostFX.Attach(_camera);
-            WorldView.Attach(_camera, _tt.Profile.EndM, PendingTicker % WorldPalette.Eras.Length);
+            // Исходник: стартовый биом всегда zone 0 («НАКОПЛЕНИЕ»), дальше по дистанции — см. Update.
+            _world = WorldView.Attach(_camera, _tt.Profile.EndM, 0); _biomeZone = 0;
 
             // ---- игровой слой ----
             _wave = LiquidationWave.Attach(_controller, _camera, world);
@@ -335,6 +337,12 @@ namespace ChartRunner.Game
             if (Flow == Screen.Play && !_controller.Halted && !_cashedOut)
             {
                 _distB = Mathf.Max(_distB, Mathf.FloorToInt(st.PositionXM / UnitsContract.PxToM / 10f));
+                var zone = _distB / 520;
+                if (zone != _biomeZone && _world != null)
+                {
+                    _biomeZone = zone; _world.SetEra(zone % WorldPalette.Eras.Length);
+                    Pop(Loc.T(WorldPalette.Eras[zone % WorldPalette.Eras.Length].Name), 2.2f);
+                }
                 _maxKmh = Mathf.Max(_maxKmh, st.SpeedMPerS * KmhPerMPerS);
                 _position.Tick(st.PositionXM, _distB, _coinField.Collected + _bonusCoins);
                 if (_coinField.JustCollected > 0)
