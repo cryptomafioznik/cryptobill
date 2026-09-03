@@ -47,7 +47,13 @@ namespace ChartRunner.Game
 
         private void Start()
         {
+#if UNITY_IOS
+            // На устройстве текущая папка — «/», писать туда нельзя. Контейнер приложения
+            // читается снаружи: devicectl device copy from --domain-type appDataContainer.
+            _dir = Path.Combine(Application.persistentDataPath, "shots");
+#else
             _dir = Path.Combine(Directory.GetCurrentDirectory(), "Logs", "shots");
+#endif
             Directory.CreateDirectory(_dir);
             StartCoroutine(Run());
         }
@@ -59,6 +65,17 @@ namespace ChartRunner.Game
             {
                 foreach (var a in System.Environment.GetCommandLineArgs()) if (a == "-shotsUi") return true;
                 return false;
+            }
+        }
+
+        /// <summary>-superSize N: рендер кадра в N× разрешения (для скриншотов стора точного размера).</summary>
+        private static int SuperSize
+        {
+            get
+            {
+                var a = System.Environment.GetCommandLineArgs();
+                for (var i = 0; i < a.Length - 1; i++) if (a[i] == "-superSize" && int.TryParse(a[i + 1], out var n)) return Mathf.Clamp(n, 1, 4);
+                return 1;
             }
         }
 
@@ -96,7 +113,7 @@ namespace ChartRunner.Game
                 PlaySession.Flow = sc;
                 // Терминалу нужны превью с Binance — ждём сеть, иначе кадр покажет «загрузка…».
                 yield return new WaitForSeconds(sc == PlaySession.Screen.Setup ? 6f : 0.6f);
-                ScreenCapture.CaptureScreenshot(Path.Combine(_dir, "ui-" + (i++) + "-" + sc.ToString().ToLower() + ".png"));
+                ScreenCapture.CaptureScreenshot(Path.Combine(_dir, "ui-" + (i++) + "-" + sc.ToString().ToLower() + ".png"), SuperSize);
                 yield return new WaitForEndOfFrame(); yield return null; yield return null;
             }
             // Экран итога: даём проехать, потом ликвидируем.
@@ -105,7 +122,7 @@ namespace ChartRunner.Game
             yield return new WaitForSeconds(4f);
             _controller.Liquidate();
             yield return new WaitForSeconds(1.2f);
-            ScreenCapture.CaptureScreenshot(Path.Combine(_dir, "ui-9-dead.png"));
+            ScreenCapture.CaptureScreenshot(Path.Combine(_dir, "ui-9-dead.png"), SuperSize);
             yield return new WaitForEndOfFrame(); yield return null; yield return null;
             Debug.Log("SHOTS: UI готово, кадры в " + _dir);
             Application.Quit(0);
@@ -117,7 +134,7 @@ namespace ChartRunner.Game
 
             Measure(label);
             var path = Path.Combine(_dir, label + ".png");
-            ScreenCapture.CaptureScreenshot(path);
+            ScreenCapture.CaptureScreenshot(path, SuperSize);
             // Съёмка происходит в конце кадра, файл появляется на следующем — ждём его,
             // иначе Quit обгонит запись и половина кадров не доедет.
             yield return new WaitForEndOfFrame();
