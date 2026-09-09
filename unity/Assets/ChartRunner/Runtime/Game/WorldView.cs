@@ -166,11 +166,42 @@ namespace ChartRunner.Game
             var gv = new List<Vector3>();
             var gc = new List<Color>();
             var gt = new List<int>();
-            GlowDisc(gv, gc, gt, _sunPos, _sunR * 2.2f, new Color(1f, 0.75f, 0.5f, 0.18f), 36);
-            // Золотая заливка от солнца — умеренная: первая редакция (α .30, радиус 2.3
-            // полувысоты) коричневила всё небо, убивая розово-магентовую идентичность.
-            GlowDisc(gv, gc, gt, new Vector2(_sunPos.x, _hz), _halfH * 1.5f,
-                new Color(1f, 0.72f, 0.44f, 0.15f), 40);
+            // ОРЕОЛ БЕРЁТ ЦВЕТ ИЗ ПАЛИТРЫ ЭРЫ, а не фиксированный оранжевый (chartrider.html:1988):
+            // ti = BSKY[2] = Sky2 эры, зелёный +25, α .18, ядро плоское до 0.3 радиуса.
+            // Для «Накопления» Sky2 = (150,80,110) — розовый; захардкоженный (255,191,128)
+            // съедал синеву и давал вдвое меньшую насыщенность в средней части неба.
+            var halo = new Color(_era.Sky2.r, Mathf.Min(1f, _era.Sky2.g + 25f / 255f), _era.Sky2.b, 0.18f);
+            GlowRings(gv, gc, gt, _sunPos, _sunR * 2.2f, new[]
+            {
+                (0f, halo),
+                (0.3f / 2.2f, halo),
+                (1f, new Color(halo.r, halo.g, halo.b, 0f))
+            }, 36);
+            // ЗОЛОТОЙ СВЕТ ОТ СОЛНЦА — ровно числа исходника (chartrider.html:2067):
+            // радиус H·1.15 = 2.3 полувысоты, стопы 0 → rgba(255,184,112,.38),
+            // 0.4 → rgba(255,140,88,.16), 1 → rgba(255,120,80,0), режим 'lighter'.
+            // Прежняя редакция (радиус 1.5 полувысоты, один стоп α.15) была моим
+            // ослаблением «чтобы не коричневело» — симптом убрала, а небо сделала
+            // вдвое темнее и вчетверо бледнее браузера (замер по кадру старта).
+            GlowRings(gv, gc, gt, new Vector2(_sunPos.x, _hz), _halfH * 2.3f, new[]
+            {
+                (0f, new Color(1f, 184f / 255f, 112f / 255f, 0.38f)),
+                (0.4f, new Color(1f, 140f / 255f, 88f / 255f, 0.16f)),
+                (1f, new Color(1f, 120f / 255f, 80f / 255f, 0f))
+            }, 40);
+
+            // Общий тёплый флёр на ВЕСЬ кадр: rgba(255,146,96,0.07) поверх, тоже 'lighter'
+            // (chartrider.html:2067, следующая строка). В порте его не было вовсе — именно
+            // он у исходника делает «золотой час» доминантой всей сцены, а не пятном у солнца.
+            // Общий тёплый флёр на ВЕСЬ кадр: rgba(255,146,96,0.07), тоже 'lighter'
+            // (chartrider.html:2067). Проверен отключением: без него размах яркости неба растёт
+            // лишь с 55 до 63 (браузер 110), а насыщенность падает 56→47 и яркость 0.69→0.64.
+            // То есть плоскость картины даёт НЕ он — оставляем по исходнику.
+            {
+                var fw = _halfW * 3f; var fh = _halfH * 1.4f;
+                var warm = new Color(1f, 146f / 255f, 96f / 255f, 0.07f);
+                Band(gv, gc, gt, -fw, fw, -fh, fh, warm, warm);
+            }
             var glow = Shapes.Create("SunGlow", transform, Shapes.Build("SunGlow", gv, gc, gt),
                 -98, Shapes.Additive);
             Pin(glow, 59.5f);
@@ -642,8 +673,14 @@ namespace ChartRunner.Game
             for (var k = 0; k < 12; k++)
             {
                 var a0 = -1.15f + k / 11f * 2.3f + Mathf.Sin(tt * 0.004f + k) * 0.02f;
-                var w = (4f + 2.5f * Mathf.Abs(Mathf.Sin(tt * 0.009f + k * 1.7f))) * _px;
-                var al = 0.010f + 0.006f * Mathf.Abs(Mathf.Sin(tt * 0.011f + k));
+                // ЯРКОСТЬ ЛУЧЕЙ — по исходнику (chartrider.html:2074): w = 4+4·|sin|,
+                // α = 0.02+0.018·|sin|. Прежние 4+2.5 и 0.010+0.006 (вдвое тише) я поставил
+                // заодно с замедлением анимации, хотя вердикт живого теста был про ДВИЖЕНИЕ
+                // солнца, а не про яркость. Замедление (tt) оставлено — оно и лечило мерцание;
+                // приглушение стоило неба: 12 лучей цвета Line (228,250,255) аддитивно и есть
+                // та синева, которой порту не хватало (B на 30 % высоты: 93 против 166).
+                var w = (4f + 4f * Mathf.Abs(Mathf.Sin(tt * 0.009f + k * 1.7f))) * _px;
+                var al = 0.02f + 0.018f * Mathf.Abs(Mathf.Sin(tt * 0.011f + k));
                 var dir = new Vector2(Mathf.Sin(a0), Mathf.Cos(a0)); // вверх, наклон a0
                 var n = new Vector2(-dir.y, dir.x);
                 var c0 = new Color(line.r, line.g, line.b, al);
@@ -757,6 +794,63 @@ namespace ChartRunner.Game
             v.Add(new Vector3(x0, y1, 0f)); c.Add(Shapes.V(col));
             t.Add(i0); t.Add(i0 + 2); t.Add(i0 + 1);
             t.Add(i0); t.Add(i0 + 3); t.Add(i0 + 2);
+        }
+
+        /// <summary>
+        /// Радиальная заливка с ПРОИЗВОЛЬНЫМИ стопами — концентрическими кольцами.
+        /// Нужна потому, что у исходника золотой свет от солнца трёхстоповый
+        /// (0 → α.38, 0.4 → α.16, 1 → 0; chartrider.html:2067), а линейный спад
+        /// <see cref="GlowDisc"/> гасит его к 40 % радиуса вчетверо быстрее — небо
+        /// теряло и яркость, и тёплую доминанту.
+        /// </summary>
+        private static void GlowRings(List<Vector3> v, List<Color> c, List<int> t,
+            Vector2 center, float radius, (float t, Color col)[] stops, int segments)
+        {
+            var i0 = v.Count;
+            v.Add(new Vector3(center.x, center.y, 0f));
+            c.Add(Shapes.V(stops[0].col));
+
+            Color At(float k)
+            {
+                for (var j = 1; j < stops.Length; j++)
+                {
+                    if (k > stops[j].t) continue;
+                    var a = stops[j - 1]; var b = stops[j];
+                    var u = Mathf.InverseLerp(a.t, b.t, k);
+                    return Color.Lerp(a.col, b.col, u);
+                }
+                return stops[stops.Length - 1].col;
+            }
+
+            var rings = 12;
+            for (var r = 1; r <= rings; r++)
+            {
+                var k = r / (float)rings;
+                var col = At(k);
+                for (var i = 0; i < segments; i++)
+                {
+                    var a = i / (float)segments * Mathf.PI * 2f;
+                    v.Add(new Vector3(center.x + Mathf.Cos(a) * radius * k,
+                        center.y + Mathf.Sin(a) * radius * k, 0f));
+                    c.Add(Shapes.V(col));
+                }
+            }
+
+            for (var i = 0; i < segments; i++)
+            {
+                t.Add(i0); t.Add(i0 + 1 + i); t.Add(i0 + 1 + (i + 1) % segments);
+            }
+            for (var r = 1; r < rings; r++)
+            {
+                var a0 = i0 + 1 + (r - 1) * segments;
+                var a1 = i0 + 1 + r * segments;
+                for (var i = 0; i < segments; i++)
+                {
+                    var j = (i + 1) % segments;
+                    t.Add(a0 + i); t.Add(a1 + i); t.Add(a1 + j);
+                    t.Add(a0 + i); t.Add(a1 + j); t.Add(a0 + j);
+                }
+            }
         }
 
         private static void GlowDisc(List<Vector3> v, List<Color> c, List<int> t,
