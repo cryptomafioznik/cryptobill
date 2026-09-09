@@ -54,13 +54,16 @@ namespace ChartRunner.Game
         {
             const float bw = 116f, lw = 84f;
             var gx = RefW - 14f - bw;
+            // Нижняя небезопасная зона (home-индикатор): ряд кнопок поднимается над ней,
+            // иначе нижние ~33 ref-единицы перехватывает системный жест.
+            var lift = Game.PlaySession.SafeBottom;
 
-            Gas = new Zone { R = new Rect(gx, RefH - 110f, bw, 62f), Label = Meta.Loc.T("ГАЗ") };
-            Brake = new Zone { R = new Rect(gx, RefH - 178f, bw, 60f), Label = Meta.Loc.T("ТОРМОЗ") };
+            Gas = new Zone { R = new Rect(gx, RefH - 110f - lift, bw, 62f), Label = Meta.Loc.T("ГАЗ") };
+            Brake = new Zone { R = new Rect(gx, RefH - 178f - lift, bw, 60f), Label = Meta.Loc.T("ТОРМОЗ") };
             // btn4 исходника: ⤴ ПРЫЖОК над тормозом (chartrider.html:4456: y=H-246, h=48).
-            Jump = new Zone { R = new Rect(gx, RefH - 246f, bw, 48f), Label = Meta.Loc.T("⤴ ПРЫЖОК") };
-            NoseUp = new Zone { R = new Rect(14f, RefH - 110f, lw, 62f), Label = Meta.Loc.T("НОС↑") };
-            NoseDown = new Zone { R = new Rect(14f + lw + 6f, RefH - 110f, lw, 62f), Label = Meta.Loc.T("НОС↓") };
+            Jump = new Zone { R = new Rect(gx, RefH - 246f - lift, bw, 48f), Label = Meta.Loc.T("⤴ ПРЫЖОК") };
+            NoseUp = new Zone { R = new Rect(14f, RefH - 110f - lift, lw, 62f), Label = Meta.Loc.T("НОС↑") };
+            NoseDown = new Zone { R = new Rect(14f + lw + 6f, RefH - 110f - lift, lw, 62f), Label = Meta.Loc.T("НОС↓") };
         }
 
         /// <summary>
@@ -73,8 +76,10 @@ namespace ChartRunner.Game
         /// </summary>
         public static bool Hit(Rect refRect, Vector2 touchPx)
         {
+            // Тот же масштаб, что у матрицы OnGUI (единый по осям, от ширины): раздельные
+            // sx/sy расходились с отрисовкой на ~6 px по низу экрана.
             var sx = Screen.width / RefW;
-            var sy = Screen.height / RefH;
+            var sy = sx;
             var guiY = Screen.height - touchPx.y;
             var r = new Rect(refRect.x * sx, refRect.y * sy, refRect.width * sx, refRect.height * sy);
             // Расширение зоны попадания на 8 опорных точек по кругу: палец толще пикселя,

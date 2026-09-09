@@ -102,6 +102,10 @@ namespace ChartRunner.Game
             // -leanAt T: удержание наклона N=-hold кадров с секунды T БЕЗ хопа (вилли/стоппи на земле);
             // -brakeAt T: тормоз (газ отпущен) N=-hold кадров с секунды T.
             var leanAt = ArgF("-leanAt", -1f); var brakeAt = ArgF("-brakeAt", -1f);
+            // -pilot N: политика веса на КРУТОМ подъёме (slope > climbFrom), контр-приём исходника.
+            //   0 = не наклонять (газ-и-держи), +1 = вес ВПЕРЁД, −1 = вес НАЗАД.
+            // Меряет окно навыка: меняет ли ввод игрока исход на одной и той же трассе.
+            var pilot = ArgF("-pilot", 0f);
             if (hopAt >= 0f) _controller.Profile.jumpButtonEnabled = true;
             // Экспериментальные ручки для поиска потерь энергии вращения (не игровые).
             var rig = _controller.GetComponent<BikeRig>();
@@ -121,6 +125,11 @@ namespace ChartRunner.Game
                 if (hopAt >= 0f && t >= hopAt + 2f / 60f && t < hopAt + (2f + hold) / 60f) s.Lean = lean;
                 if (leanAt >= 0f && t >= leanAt && t < leanAt + hold / 60f) s.Lean = lean;
                 if (brakeAt >= 0f && t >= brakeAt && t < brakeAt + hold / 60f) { s.Brake = 1f; s.Throttle = 0f; }
+                if (Mathf.Abs(pilot) > 0.01f)
+                {
+                    var sl = _controller.Terrain.SlopeAt(_controller.transform.position.x);
+                    if (sl > _controller.Profile.climbFromRad) s.Lean = pilot;
+                }
                 return s;
             }));
             var K = UnitsContract.PxToM; var F = UnitsContract.SimFrameSeconds; var ci = CultureInfo.InvariantCulture;

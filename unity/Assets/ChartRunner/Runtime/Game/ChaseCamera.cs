@@ -64,10 +64,13 @@ namespace ChartRunner.Game
         public const float DefaultHeroFraction = 0.072f;
 
         /// <summary>Положение байка по ширине кадра на стоянке.</summary>
-        public const float DefaultBikeScreenXRest = 0.40f;
+        // Исходник: cam.x = bike.x − W·0.32, доля ФИКСИРОВАНА (chartrider.html:1821).
+        // Прежние 0.40→0.30 «по скорости» двигали якорь под байком: на каждом изменении
+        // скорости кадр подтягивался — вердикт «слишком резкие движения».
+        public const float DefaultBikeScreenXRest = 0.32f;
 
         /// <summary>Положение байка по ширине кадра на верхней скорости.</summary>
-        public const float DefaultBikeScreenXFast = 0.30f;
+        public const float DefaultBikeScreenXFast = 0.32f;
 
         [Tooltip("Высота силуэта героя (байк с райдером в стойке), метры. Измерена в кадре.")]
         public float HeroHeightM = DefaultHeroHeightM;
@@ -205,7 +208,11 @@ namespace ChartRunner.Game
             // и камера, повторяющая это один в один, вызывает тошноту и прячет собственный
             // тангаж байка — а тангаж здесь главный носитель информации.
             _y = Mathf.Lerp(_y, wantY, 1f - Mathf.Exp(-FollowLerpY * Time.deltaTime));
-            var x = Mathf.Lerp(transform.position.x, wantX, 1f - Mathf.Exp(-FollowLerpX * Time.deltaTime));
+            // ГОРИЗОНТАЛЬ БЕЗ СГЛАЖИВАНИЯ: в исходнике cam.x присваивается жёстко, сглаживается
+            // только cam.y (chartrider.html:1821, camFollow 0.08). Экспоненциальное слежение по X
+            // с постоянной 1/12 с давало дрейф байка внутри кадра ∝ ускорению — при разгоне он
+            // уползал назад, при торможении вперёд, и весь мир дёргался вместе с ним.
+            var x = wantX;
 
             // Тряска прибавляется ПОСЛЕ сглаживания: иначе демпфер камеры её же и съест,
             // и удар перестанет читаться.

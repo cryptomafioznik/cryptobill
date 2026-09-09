@@ -39,6 +39,10 @@ namespace ChartRunner.Bike
 
         private BikeRig _rig;
         private TerrainSampler _terrain;
+
+        /// <summary>Рельеф под байком — читает пробник (-pilot), чтобы политика веса зависела
+        /// от УКЛОНА, как контр-приём игрока в исходнике.</summary>
+        public TerrainSampler Terrain => _terrain;
         private IBikeInputSource _input;
 
         private float _throttle;
@@ -164,6 +168,13 @@ namespace ChartRunner.Bike
 
             if (_wasGrounded && !grounded) OnTakeoff();
 
+            // Время в воздухе НА МОМЕНТ КАСАНИЯ. Ниже _airTime обнуляется, а проверка посадки
+            // в EvaluateFailure идёт ПОСЛЕ — из-за этого условие `_airTime > minAir` на кадре
+            // касания читало ноль, и краш жёсткой посадки не срабатывал НИ РАЗУ. Это и есть
+            // «упасть невозможно»: в исходнике та же политика веса убивает за ~3000 px
+            // (замер на живом сайте), в порте байк проезжал 19000 px без единой смерти.
+            var airOnTouch = _airTime;
+
             if (grounded)
             {
                 _airTime = 0f;
@@ -176,7 +187,7 @@ namespace ChartRunner.Bike
             }
 
             ClampAngularSpeed();
-            EvaluateFailure(grounded, rel, angV, slope, dt);
+            EvaluateFailure(grounded, rel, angV, slope, dt, airOnTouch);
 
             PublishState(grounded, slope, pitch, rel, angV, forwardSpeed);
             _wasGrounded = grounded;
@@ -639,7 +650,7 @@ namespace ChartRunner.Bike
             }
         }
 
-        private void EvaluateFailure(bool grounded, float rel, float angV, float slope, float dt)
+        private void EvaluateFailure(bool grounded, float rel, float angV, float slope, float dt, float airOnTouch)
         {
             if (_failure != BikeFailure.None) return;
 
@@ -664,7 +675,7 @@ namespace ChartRunner.Bike
 
             // КРАШ ПРИ ПОСАДКЕ. Проверяется на кадре касания после достаточного полёта.
             var minAir = Profile.landingCheckMinAirFrames * (1f / 60f);
-            if (grounded && !_wasGrounded && _airTime > minAir)
+            if (grounded && !_wasGrounded && airOnTouch > minAir)
             {
                 var offCone = Mathf.Abs(rel);
                 var spin = Mathf.Abs(angV) / PerFrameToPerS; // рад/кадр, как в исходнике
@@ -696,8 +707,11 @@ namespace ChartRunner.Bike
                 return;
             }
             var designTrack = Level.applyDesignHard;
-            var loopRisk = designTrack && grounded && onClimb && rel > loopThreshold && angV > 0.9f * Mathf.Deg2Rad;
-            var endoRisk = designTrack && grounded && rel < -endoThreshold && angV < -0.9f * Mathf.Deg2Rad;
+            // Исходник: |angV| > 0.015 рад/КАДР = 0.9 рад/с (chartrider.html:1692).
+            // Здесь стояло 0.9° в радианах (0.0157 рад/с) — порог в 57 раз ниже задуманного.
+            const float spinGate = 0.9f;   // рад/с
+            var loopRisk = designTrack && grounded && onClimb && rel > loopThreshold && angV > spinGate;
+            var endoRisk = designTrack && grounded && rel < -endoThreshold && angV < -spinGate;
 
             if (loopRisk || endoRisk)
             {

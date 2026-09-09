@@ -144,10 +144,12 @@ namespace ChartRunner.Game
             // Схема btn4 исходника всегда имеет кнопку ⤴ ПРЫЖОК (chartrider.html:4456): хоп — часть игры, не опция.
             BikeProfile.jumpButtonEnabled = true;
             FeelPreset.Apply(LevelProfile, SelectedFeel);
-            // designHard в исходнике действует ТОЛЬКО на авторских (proc) трассах:
-            // dh = (trackSource !== 'ticker') ? designHard·ck : 0 (chartrider.html:1585). Все трассы
-            // 1.x — реальные свечи, поэтому прощение на крутом подъёме остаётся полным.
-            LevelProfile.applyDesignHard = false;
+            // designHard действует на АВТОРСКИХ (proc) трассах: dh = (trackSource!=='ticker')
+            // ? designHard·ck : 0 (chartrider.html:1585), и там же отказы луп/эндо (:1691).
+            // Здесь стояло безусловное false: в «Отрыве» прощение оставалось полным — стабилизатор
+            // переда и anti-loop не гасли на крутом подъёме, а луп/эндо не срабатывали никогда.
+            // Вердикт пользователя ровно об этом: «упасть невозможно, управление не контролируешь».
+            LevelProfile.applyDesignHard = ProcMode;
 
             // ---- трасса из реальных свечей ----
             foreach (var a in System.Environment.GetCommandLineArgs()) if (a == "-proc") { ProcMode = true; ProcSeed = 7; }
@@ -509,10 +511,12 @@ namespace ChartRunner.Game
         {
             SelectedFeel = FeelPreset.Next(SelectedFeel);
             FeelPreset.Apply(LevelProfile, SelectedFeel);
-            // designHard в исходнике действует ТОЛЬКО на авторских (proc) трассах:
-            // dh = (trackSource !== 'ticker') ? designHard·ck : 0 (chartrider.html:1585). Все трассы
-            // 1.x — реальные свечи, поэтому прощение на крутом подъёме остаётся полным.
-            LevelProfile.applyDesignHard = false;
+            // designHard действует на АВТОРСКИХ (proc) трассах: dh = (trackSource!=='ticker')
+            // ? designHard·ck : 0 (chartrider.html:1585), и там же отказы луп/эндо (:1691).
+            // Здесь стояло безусловное false: в «Отрыве» прощение оставалось полным — стабилизатор
+            // переда и anti-loop не гасли на крутом подъёме, а луп/эндо не срабатывали никогда.
+            // Вердикт пользователя ровно об этом: «упасть невозможно, управление не контролируешь».
+            LevelProfile.applyDesignHard = ProcMode;
             _feelBannerUntil = Time.time + 1.6f;
         }
 
@@ -579,6 +583,32 @@ namespace ChartRunner.Game
             var hit = GUI.Button(r, GUIContent.none, GUIStyle.none);
             if (hit) GameAudio.I.Click();
             return hit;
+        }
+
+        /// <summary>Единый масштаб ref→пиксели (по ширине) — тот же, что в матрице OnGUI.</summary>
+        public static float RefScale => UnityEngine.Screen.width / W;
+
+        /// <summary>Верхняя небезопасная зона (Dynamic Island) в ref-единицах. Без неё строка
+        /// «ОТРЫВ ×1,0 / $0» на iPhone 16 Pro Max уходит под остров.</summary>
+        public static float SafeTop
+        {
+            get
+            {
+                var sa = UnityEngine.Screen.safeArea;
+                if (sa.width <= 0f || sa.height <= 0f) return 0f;
+                return Mathf.Max(0f, UnityEngine.Screen.height - sa.yMax) / Mathf.Max(0.01f, RefScale);
+            }
+        }
+
+        /// <summary>Нижняя небезопасная зона (home-индикатор) в ref-единицах.</summary>
+        public static float SafeBottom
+        {
+            get
+            {
+                var sa = UnityEngine.Screen.safeArea;
+                if (sa.width <= 0f || sa.height <= 0f) return 0f;
+                return Mathf.Max(0f, sa.y) / Mathf.Max(0.01f, RefScale);
+            }
         }
 
         private void Label(float x, float y, float w, string s, Color c, int fs, TextAnchor a = TextAnchor.UpperLeft, bool bold = true)
@@ -758,6 +788,11 @@ namespace ChartRunner.Game
         private void DrawPlay()
         {
             var st = _controller.State;
+            // Верхний кластер HUD (счётчики, миссии, кнопка фикса) — ниже небезопасной зоны.
+            // Матрица IMGUI одна для отрисовки и для попадания по GUI.Button, поэтому кнопка
+            // фикса остаётся кликабельной ровно там, где нарисована.
+            var guiTop = GUI.matrix;
+            if (SafeTop > 0.5f) GUI.matrix = guiTop * Matrix4x4.Translate(new Vector3(0f, SafeTop, 0f));
             var kmh = st.SpeedMPerS * KmhPerMPerS;
             // Строка тикера: монета · цена · PnL позиции.
             var price = _tt.PriceAt(st.PositionXM);
@@ -804,21 +839,29 @@ namespace ChartRunner.Game
                 var val = _position.Value(st.PositionXM);
                 if (val >= 3)
                 {
-                    var peak = pnl > 0.006f;
+                    // Исходник: peak = ticker ? PnL позиции > 0.6 % : множитель ≥ 1.12
+                    // (chartrider.html:4335). В «Отрыве» pnl = множитель−1 и он > 0 почти сразу —
+                    // кнопка кричала «▲ ПИК!» весь заезд, то есть не значила ничего.
+                    var peak = ProcMode ? Position.ProcMult(_distB) >= 1.12f : pnl > 0.006f;
                     var urge = _wave.Danger > 0.4f;
                     var pulse = 0.5f + 0.5f * Mathf.Sin(Time.time * (3f + 8f * _wave.Danger));
                     var col = peak ? new Color(1f, 0.9f, 0.42f) : urge ? new Color(1f, 0.82f, 0.66f) : Mint;
-                    var r = new Rect(W / 2f - 94f, 124f, 188f, 38f);
+                    // 188 ref-единиц не вмещали «▲ ПИК! ЗАБЕРИ $122  ×2»: подпись переносилась
+                    // на вторую строку, а Label рисует высотой fs+8 — вторая строка обрезалась
+                    // в мусор. Отсюда «забрать деньги не видно».
+                    var r = new Rect(W / 2f - 115f, 124f, 230f, 38f);
                     Panel(r, new Color(col.r, col.g, col.b, 0.5f + 0.5f * pulse), urge ? new Color(0.2f, 0.09f, 0.07f, 0.9f) : new Color(0.06f, 0.16f, 0.11f, 0.86f), 10f, urge ? 2.6f : 2f);
-                    Label(r.x, r.y + 10f, r.width, (peak ? Loc.T("▲ ПИК! ЗАБЕРИ $") : urge ? Loc.T("$ ЗАБЕРИ $") : Loc.T("$ ЗАФИКСИТЬ $")) + val + "  ×" + Economy.Leverage, col, 14, TextAnchor.MiddleCenter);
+                    Label(r.x, r.y + 10f, r.width, (peak ? Loc.T("▲ ПИК! ЗАБЕРИ $") : urge ? Loc.T("$ ЗАБЕРИ $") : Loc.T("$ ЗАФИКСИТЬ $")) + val + (ProcMode ? "" : "  ×" + Economy.Leverage), col, 14, TextAnchor.MiddleCenter);
                     if (GUI.Button(r, GUIContent.none, GUIStyle.none)) CashOut();
                 }
             }
 
+            GUI.matrix = guiTop;   // конец верхнего кластера — низ экрана живёт в своей зоне
+
             // PUMP (btn4: слева над парой наклона, 174×48).
             if (Flow == Screen.Play)
             {
-                var r = new Rect(14f, H - 178f, 174f, 48f);
+                var r = new Rect(14f, H - 178f - SafeBottom, 174f, 48f);
                 var ready = _pump.Ready;
                 var col = ready ? Gold : new Color(0.7f, 0.62f, 0.4f);
                 Panel(r, new Color(col.r, col.g, col.b, ready ? 0.95f : 0.4f), new Color(0.16f, 0.13f, 0.06f, 0.75f), 10f, ready ? 2.4f : 1.4f);
@@ -827,7 +870,7 @@ namespace ChartRunner.Game
                 Label(r.x, r.y + 8f, r.width, _pump.Active ? Loc.T("⚡ РЫВОК") : ready ? "⚡ PUMP!" : "PUMP", col, 15, TextAnchor.MiddleCenter);
                 if (GUI.Button(r, GUIContent.none, GUIStyle.none)) TryPump();
 
-                if (Btn(new Rect(W - 58f, 62f, 44f, 34f), "II", Dimc, 14, 0.3f)) { Flow = Screen.Paused; Freeze(); }
+                if (Btn(new Rect(W - 58f, 62f + SafeTop, 44f, 34f), "II", Dimc, 14, 0.3f)) { Flow = Screen.Paused; Freeze(); }
             }
 
             if (Time.time < _feelBannerUntil)
