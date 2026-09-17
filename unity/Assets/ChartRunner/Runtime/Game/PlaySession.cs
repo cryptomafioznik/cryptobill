@@ -1024,8 +1024,13 @@ namespace ChartRunner.Game
             if (_bikePreviewTag != tag) { var sp = Resources.Load<Sprite>("Art/bike-" + tag + "-body"); _bikePreview = sp != null ? sp.texture : null; _bikePreviewTag = tag; }
             if (_bikePreview != null)
             {
-                var pw = 300f; var ph = pw * _bikePreview.height / _bikePreview.width;
-                GUI.DrawTexture(new Rect(W / 2f - pw / 2f, H * 0.27f - ph / 2f, pw, ph), _bikePreview, ScaleMode.ScaleToFit, true);
+                // Корпус 864×576 лежит по центру POT-холста 1024×1024 (иначе iOS не сжимает
+                // текстуру с мипмапами) — рисуем только исходную область.
+                const float cw = 864f, ch = 576f;
+                var tw = _bikePreview.width; var th = _bikePreview.height;
+                var uv = new Rect((tw - cw) / 2f / tw, (th - ch) / 2f / th, cw / tw, ch / th);
+                var pw = 300f; var ph = pw * ch / cw;
+                GUI.DrawTextureWithTexCoords(new Rect(W / 2f - pw / 2f, H * 0.27f - ph / 2f, pw, ph), _bikePreview, uv, true);
             }
 
             var ay = H * 0.40f;

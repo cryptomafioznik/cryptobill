@@ -82,9 +82,11 @@ namespace ChartRunner.Game
 
             // Колёса: спрайты на ФИЗИЧЕСКИХ телах колёс — вращение и ход подвески
             // приходят из решателя, а не из анимации.
-            AttachSprite(_rig.RearWheel.transform, "Art/wheel-" + tag + "-rear", 9,
+            // Колёса зависят только от байка: скин их не меняет (все 5 вариантов колеса
+            // были побайтовыми копиями — 56 лишних файлов в сборке).
+            AttachSprite(_rig.RearWheel.transform, "Art/wheel-" + bike + "-rear", 9,
                 p.wheelRadiusM / (wheelR * K));
-            AttachSprite(_rig.FrontWheel.transform, "Art/wheel-" + tag + "-front", 10,
+            AttachSprite(_rig.FrontWheel.transform, "Art/wheel-" + bike + "-front", 10,
                 p.wheelRadiusM / (wheelR * K));
 
             // Корпус — на шасси, поднят так, чтобы оси спрайта легли на оси физики.

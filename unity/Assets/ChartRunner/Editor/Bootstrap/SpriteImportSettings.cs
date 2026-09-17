@@ -29,6 +29,21 @@ namespace ChartRunner.EditorTools
             ti.alphaIsTransparency = true;
             ti.maxTextureSize = 2048;
 
+            // iOS — ASTC 4×4 (самый качественный из сжатых). ВАЖНО: Unity молча кладёт
+            // RGBA32, если у текстуры НЕ степень двойки И включены мипмапы (замерено:
+            // 864×576 с мипами → RGBA32, 512×512 с мипами → ASTC). Поэтому арт лежит на
+            // POT-холстах: корпус 864×576 по центру 1024×1024, колёса по центру 512×512 —
+            // центр совпадает, пивот (0.5, 0.5) не меняется. Проверка: SizeAudit.Report.
+            ti.SetPlatformTextureSettings(new TextureImporterPlatformSettings
+            {
+                name = "iPhone",
+                overridden = true,
+                maxTextureSize = 2048,
+                format = TextureImporterFormat.ASTC_4x4,
+                textureCompression = TextureImporterCompression.CompressedHQ,
+                compressionQuality = 100
+            });
+
             var s = ti.spritePivot;
             if (assetPath.Contains("bike-body"))
             {
