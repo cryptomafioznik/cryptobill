@@ -50,3 +50,6 @@ unity/sysinfo.txt
 # Временная сцена тест-раннера: остаётся, если прогон -runTests прерван на середине
 unity/Assets/InitTestScene*.unity
 unity/Assets/InitTestScene*.unity.meta
+
+# Finder
+.DS_Store
