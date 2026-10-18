@@ -8,7 +8,8 @@
 set -uo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 U="$ROOT/unity"
-UNITY=/Applications/Unity/Hub/Editor/6000.3.20f1/Unity.app/Contents/MacOS/Unity
+source "$ROOT/tools/unity-path.sh"
+UNITY="$(find_unity)" || exit 1
 BIN="$U/build/mac/ChartRunner.app/Contents/MacOS/ChartRunner"
 REPORT="$U/Logs/build-mac.txt"
 LOG="$U/Logs/build-mac-last.log"
